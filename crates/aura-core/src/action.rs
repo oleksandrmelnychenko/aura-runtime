@@ -176,6 +176,32 @@ pub fn decide_action_v2(
             )
         }
 
+        ThreatType::PiiLeakage => {
+            let action = if score >= 0.7 {
+                Action::Warn
+            } else if score >= 0.4 {
+                Action::Mark
+            } else {
+                decide_action(score, protection_level)
+            };
+            let parent_alert = if score >= 0.5 {
+                AlertPriority::High
+            } else {
+                AlertPriority::Medium
+            };
+            (
+                action,
+                ActionRecommendation {
+                    parent_alert,
+                    follow_ups: vec![
+                        FollowUpAction::MonitorConversation,
+                        FollowUpAction::ReviewContactProfile,
+                    ],
+                    crisis_resources: false,
+                },
+            )
+        }
+
         _ => {
             let action = decide_action(score, protection_level);
             let parent_alert = if score >= 0.7 {
@@ -375,6 +401,44 @@ mod tests {
         assert!(
             !rec.crisis_resources,
             "Bullying should not show crisis resources"
+        );
+    }
+
+    #[test]
+    fn pii_leakage_never_blocks() {
+        let (action, _) = decide_action_v2(ThreatType::PiiLeakage, 0.95, ProtectionLevel::High);
+        assert_ne!(
+            action,
+            Action::Block,
+            "PII leakage must NEVER block (child is sharing, not attacking)"
+        );
+        assert_eq!(action, Action::Warn);
+    }
+
+    #[test]
+    fn pii_leakage_warns_at_70() {
+        let (action, _) = decide_action_v2(ThreatType::PiiLeakage, 0.7, ProtectionLevel::Medium);
+        assert_eq!(action, Action::Warn, "PII ≥0.7 should warn");
+    }
+
+    #[test]
+    fn pii_leakage_marks_at_40() {
+        let (action, _) = decide_action_v2(ThreatType::PiiLeakage, 0.5, ProtectionLevel::Medium);
+        assert_eq!(action, Action::Mark, "PII ≥0.4 should mark");
+    }
+
+    #[test]
+    fn pii_leakage_parent_alert() {
+        let (_, rec) = decide_action_v2(ThreatType::PiiLeakage, 0.6, ProtectionLevel::Medium);
+        assert_eq!(
+            rec.parent_alert,
+            AlertPriority::High,
+            "PII ≥0.5 should alert parent at High"
+        );
+        assert!(
+            rec.follow_ups
+                .contains(&FollowUpAction::ReviewContactProfile),
+            "PII should recommend reviewing contact"
         );
     }
 }

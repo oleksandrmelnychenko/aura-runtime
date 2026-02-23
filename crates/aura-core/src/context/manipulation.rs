@@ -14,6 +14,14 @@ enum ManipulationTactic {
     Isolation,
     Darvo,
     Devaluation,
+    BlackmailThreat,
+    DareChallenge,
+    FalseConsensus,
+    NetworkPoisoning,
+    FakeVulnerability,
+    IdentityErosion,
+    ReputationThreat,
+    DebtCreation,
 }
 
 impl Default for ManipulationDetector {
@@ -54,6 +62,12 @@ impl ManipulationDetector {
         }
 
         if let Some(signal) = self.check_love_bomb_devalue_cycle(timeline, sender_id, window_start)
+        {
+            signals.push(signal);
+        }
+
+        if let Some(signal) =
+            self.check_screenshot_blackmail(timeline, sender_id, window_start)
         {
             signals.push(signal);
         }
@@ -232,6 +246,36 @@ impl ManipulationDetector {
         }
     }
 
+    fn check_screenshot_blackmail(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Option<DetectionSignal> {
+        let screenshot_count =
+            timeline.count_events(sender_id, &EventKind::ScreenshotThreat, window_start);
+
+        if screenshot_count >= 2 {
+            let score = (0.7 + (screenshot_count as f32 - 2.0) * 0.1).min(0.9);
+            Some(DetectionSignal {
+                threat_type: ThreatType::Manipulation,
+                score,
+                confidence: if screenshot_count >= 4 {
+                    Confidence::High
+                } else {
+                    Confidence::Medium
+                },
+                layer: DetectionLayer::ContextAnalysis,
+                explanation: format!(
+                    "Screenshot blackmail pattern detected: {} threats to share screenshots/recordings",
+                    screenshot_count
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
     fn classify_tactic(kind: &EventKind) -> Option<ManipulationTactic> {
         match kind {
             EventKind::Gaslighting => Some(ManipulationTactic::Gaslighting),
@@ -241,6 +285,14 @@ impl ManipulationDetector {
             EventKind::Exclusion => Some(ManipulationTactic::Isolation),
             EventKind::Darvo => Some(ManipulationTactic::Darvo),
             EventKind::Devaluation => Some(ManipulationTactic::Devaluation),
+            EventKind::ScreenshotThreat => Some(ManipulationTactic::BlackmailThreat),
+            EventKind::DareChallenge => Some(ManipulationTactic::DareChallenge),
+            EventKind::FalseConsensus => Some(ManipulationTactic::FalseConsensus),
+            EventKind::NetworkPoisoning => Some(ManipulationTactic::NetworkPoisoning),
+            EventKind::FakeVulnerability => Some(ManipulationTactic::FakeVulnerability),
+            EventKind::IdentityErosion => Some(ManipulationTactic::IdentityErosion),
+            EventKind::ReputationThreat => Some(ManipulationTactic::ReputationThreat),
+            EventKind::DebtCreation => Some(ManipulationTactic::DebtCreation),
             _ => None,
         }
     }
@@ -452,6 +504,55 @@ mod tests {
     }
 
     #[test]
+    fn screenshot_blackmail_detected() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("bully", EventKind::ScreenshotThreat, 1000),
+            ("bully", EventKind::ScreenshotThreat, 2000),
+        ]);
+        let signals = detector.analyze(&timeline, "bully", 0);
+        let blackmail = signals
+            .iter()
+            .find(|s| s.explanation.contains("Screenshot blackmail"));
+        assert!(
+            blackmail.is_some(),
+            "Expected screenshot blackmail, got: {signals:?}"
+        );
+        assert!(blackmail.unwrap().score >= 0.7);
+    }
+
+    #[test]
+    fn single_screenshot_not_blackmail() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![("bully", EventKind::ScreenshotThreat, 1000)]);
+        let signals = detector.analyze(&timeline, "bully", 0);
+        let blackmail = signals
+            .iter()
+            .find(|s| s.explanation.contains("Screenshot blackmail"));
+        assert!(
+            blackmail.is_none(),
+            "Single screenshot should not trigger blackmail pattern"
+        );
+    }
+
+    #[test]
+    fn dare_as_manipulation_tactic() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::Gaslighting, 1000),
+            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::DareChallenge, 3000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        assert!(
+            signals
+                .iter()
+                .any(|s| s.explanation.contains("Multi-tactic")),
+            "DareChallenge should count as manipulation tactic, got: {signals:?}"
+        );
+    }
+
+    #[test]
     fn darvo_classified_as_manipulation() {
         let detector = ManipulationDetector::new();
         let timeline = make_timeline(vec![
@@ -473,4 +574,74 @@ mod tests {
             .unwrap();
         assert!((darvo.score - 0.7).abs() < 0.01);
     }
+
+    #[test]
+    fn false_consensus_as_tactic() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::Gaslighting, 1000),
+            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::FalseConsensus, 3000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        assert!(
+            signals.iter().any(|s| s.explanation.contains("Multi-tactic")),
+            "FalseConsensus should count as manipulation tactic, got: {signals:?}"
+        );
+    }
+
+    #[test]
+    fn network_poisoning_as_tactic() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::Gaslighting, 1000),
+            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::NetworkPoisoning, 3000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        assert!(
+            signals.iter().any(|s| s.explanation.contains("Multi-tactic")),
+            "NetworkPoisoning should count as manipulation tactic, got: {signals:?}"
+        );
+    }
+
+    #[test]
+    fn reputation_threat_as_tactic() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::Gaslighting, 1000),
+            ("abuser", EventKind::DebtCreation, 2000),
+            ("abuser", EventKind::ReputationThreat, 3000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        assert!(
+            signals.iter().any(|s| s.explanation.contains("Multi-tactic")),
+            "ReputationThreat should count as manipulation tactic, got: {signals:?}"
+        );
+    }
+
+    #[test]
+    fn advanced_multi_tactic_combo() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::FalseConsensus, 1000),
+            ("abuser", EventKind::DebtCreation, 2000),
+            ("abuser", EventKind::ReputationThreat, 3000),
+            ("abuser", EventKind::NetworkPoisoning, 4000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        let control = signals
+            .iter()
+            .find(|s| s.explanation.contains("Multi-tactic"));
+        assert!(
+            control.is_some(),
+            "4 advanced tactics should trigger multi-tactic, got: {signals:?}"
+        );
+        assert!(
+            control.unwrap().score >= 0.7,
+            "4 tactics should score >= 0.7, got {}",
+            control.unwrap().score
+        );
+    }
+
 }

@@ -133,25 +133,59 @@ impl GroomingDetector {
             });
         }
 
+        // Secret Keeping Escalation: repeated secrecy requests from same sender
+        let secrecy_count = events
+            .iter()
+            .filter(|e| e.kind == EventKind::SecrecyRequest)
+            .count();
+        if secrecy_count >= 3 {
+            let secrecy_score =
+                (0.6 + (secrecy_count as f32 - 3.0) * 0.1).min(0.9);
+            let already_has_higher = signals.iter().any(|s| s.score >= secrecy_score);
+            if !already_has_higher {
+                signals.push(DetectionSignal {
+                    threat_type: ThreatType::Grooming,
+                    score: secrecy_score,
+                    confidence: if secrecy_count >= 5 {
+                        Confidence::High
+                    } else {
+                        Confidence::Medium
+                    },
+                    layer: DetectionLayer::ContextAnalysis,
+                    explanation: format!(
+                        "Repeated secrecy requests detected: {} instances of 'keep this secret' from the same sender",
+                        secrecy_count
+                    ),
+                });
+            }
+        }
+
         signals
     }
 
     fn classify_stage(&self, kind: &EventKind) -> Option<GroomingStage> {
         match kind {
-            EventKind::Flattery | EventKind::LoveBombing => Some(GroomingStage::TrustBuilding),
+            EventKind::Flattery
+            | EventKind::LoveBombing
+            | EventKind::IdentityErosion
+            | EventKind::FakeVulnerability => Some(GroomingStage::TrustBuilding),
             EventKind::GiftOffer | EventKind::MoneyOffer | EventKind::FinancialGrooming => {
                 Some(GroomingStage::FinancialDependency)
             }
-            EventKind::SecrecyRequest | EventKind::PlatformSwitch => Some(GroomingStage::Isolation),
+            EventKind::SecrecyRequest
+            | EventKind::PlatformSwitch
+            | EventKind::NetworkPoisoning => Some(GroomingStage::Isolation),
             EventKind::PersonalInfoRequest
             | EventKind::PhotoRequest
-            | EventKind::VideoCallRequest => Some(GroomingStage::BoundaryCrossing),
-            EventKind::SexualContent | EventKind::AgeInappropriate => {
-                Some(GroomingStage::Sexualization)
-            }
-            EventKind::EmotionalBlackmail | EventKind::GuildTripping => {
-                Some(GroomingStage::Control)
-            }
+            | EventKind::VideoCallRequest
+            | EventKind::CasualMeetingRequest => Some(GroomingStage::BoundaryCrossing),
+            EventKind::PiiSelfDisclosure => Some(GroomingStage::BoundaryCrossing),
+            EventKind::SexualContent
+            | EventKind::AgeInappropriate
+            | EventKind::FalseConsensus => Some(GroomingStage::Sexualization),
+            EventKind::EmotionalBlackmail
+            | EventKind::GuildTripping
+            | EventKind::DebtCreation => Some(GroomingStage::Control),
             _ => None,
         }
     }
@@ -510,6 +544,66 @@ mod tests {
     }
 
     #[test]
+    fn repeated_secrecy_escalates() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_timeline(vec![
+            (EventKind::SecrecyRequest, 1000),
+            (EventKind::SecrecyRequest, 2000),
+            (EventKind::SecrecyRequest, 3000),
+        ]);
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        let secrecy = signals
+            .iter()
+            .find(|s| s.explanation.contains("secrecy"));
+        assert!(
+            secrecy.is_some(),
+            "Expected secrecy escalation, got: {signals:?}"
+        );
+        assert!(secrecy.unwrap().score >= 0.6);
+    }
+
+    #[test]
+    fn casual_meeting_alone_low_score() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_timeline(vec![(EventKind::CasualMeetingRequest, 1000)]);
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        let max_score = signals.iter().map(|s| s.score).fold(0.0f32, f32::max);
+        assert!(
+            max_score < 0.4,
+            "Casual meeting alone should be low score, got {}",
+            max_score
+        );
+    }
+
+    #[test]
+    fn casual_meeting_with_grooming_context() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_timeline(vec![
+            (EventKind::Flattery, 1000),
+            (EventKind::SecrecyRequest, 2000),
+            (EventKind::PersonalInfoRequest, 3000),
+            (EventKind::CasualMeetingRequest, 4000),
+        ]);
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        assert!(!signals.is_empty());
+        let grooming = signals
+            .iter()
+            .find(|s| s.threat_type == ThreatType::Grooming);
+        assert!(grooming.is_some());
+        assert!(
+            grooming.unwrap().score >= 0.7,
+            "Casual meeting + grooming context should be high, got {}",
+            grooming.unwrap().score
+        );
+    }
+
+    #[test]
     fn minor_sender_no_age_boost() {
         let detector = GroomingDetector::new(true);
         let timeline = make_timeline(vec![
@@ -541,4 +635,79 @@ mod tests {
             signals_no_age[0].score
         );
     }
+
+    #[test]
+    fn identity_erosion_as_trust_building() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_timeline(vec![
+            (EventKind::IdentityErosion, 1000),
+            (EventKind::SecrecyRequest, 2000),
+        ]);
+        let profiler = ContactProfiler::new();
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        assert!(!signals.is_empty());
+        assert!(
+            signals[0].explanation.contains("trust building"),
+            "IdentityErosion should map to trust building stage, got: {}",
+            signals[0].explanation
+        );
+    }
+
+    #[test]
+    fn fake_vulnerability_as_trust_building() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_timeline(vec![
+            (EventKind::FakeVulnerability, 1000),
+            (EventKind::SecrecyRequest, 2000),
+        ]);
+        let profiler = ContactProfiler::new();
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        assert!(!signals.is_empty());
+        assert!(
+            signals[0].explanation.contains("trust building"),
+            "FakeVulnerability should map to trust building stage, got: {}",
+            signals[0].explanation
+        );
+    }
+
+    #[test]
+    fn network_poisoning_as_isolation() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_timeline(vec![
+            (EventKind::Flattery, 1000),
+            (EventKind::NetworkPoisoning, 2000),
+        ]);
+        let profiler = ContactProfiler::new();
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        assert!(!signals.is_empty());
+        assert!(
+            signals[0].explanation.contains("isolation"),
+            "NetworkPoisoning should map to isolation stage, got: {}",
+            signals[0].explanation
+        );
+    }
+
+    #[test]
+    fn full_advanced_grooming_pipeline() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_timeline(vec![
+            (EventKind::IdentityErosion, 1000),
+            (EventKind::FakeVulnerability, 2000),
+            (EventKind::NetworkPoisoning, 3000),
+            (EventKind::PlatformSwitch, 4000),
+        ]);
+        let profiler = ContactProfiler::new();
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        assert!(!signals.is_empty());
+        let grooming = signals
+            .iter()
+            .find(|s| s.threat_type == ThreatType::Grooming);
+        assert!(grooming.is_some());
+        assert!(
+            grooming.unwrap().score >= 0.55,
+            "4-stage advanced grooming should score >= 0.55, got {}",
+            grooming.unwrap().score
+        );
+    }
+
 }

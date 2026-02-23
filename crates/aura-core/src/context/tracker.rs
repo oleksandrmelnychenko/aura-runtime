@@ -5,13 +5,14 @@ use serde::{Deserialize, Serialize};
 use crate::error::AuraError;
 use crate::types::{ConversationType, DetectionSignal};
 
-const TRACKER_STATE_VERSION: u32 = 1;
+const TRACKER_STATE_VERSION: u32 = 2;
 
 fn default_state_version() -> u32 {
     1
 }
 
 use super::bullying::BullyingDetector;
+use super::coercion::CoercionDetector;
 use super::contact::ContactProfiler;
 use super::events::{ContextEvent, EventKind};
 use super::grooming::GroomingDetector;
@@ -158,6 +159,7 @@ pub struct ConversationTracker {
     bullying_detector: BullyingDetector,
     manipulation_detector: ManipulationDetector,
     selfharm_detector: SelfHarmDetector,
+    coercion_detector: CoercionDetector,
     raid_detector: RaidDetector,
     contact_profiler: ContactProfiler,
     call_count: u32,
@@ -170,6 +172,7 @@ impl ConversationTracker {
         let bullying_detector = BullyingDetector::new();
         let manipulation_detector = ManipulationDetector::new();
         let selfharm_detector = SelfHarmDetector::new();
+        let coercion_detector = CoercionDetector::new();
         let raid_detector = RaidDetector::new();
         let contact_profiler = ContactProfiler::new();
 
@@ -180,6 +183,7 @@ impl ConversationTracker {
             bullying_detector,
             manipulation_detector,
             selfharm_detector,
+            coercion_detector,
             raid_detector,
             contact_profiler,
             call_count: 0,
@@ -250,6 +254,11 @@ impl ConversationTracker {
             .analyze(timeline, &sender_id, window_start);
         signals.extend(selfharm_signals);
 
+        let coercion_signals = self
+            .coercion_detector
+            .analyze(timeline, &sender_id, window_start);
+        signals.extend(coercion_signals);
+
         let raid_signals = self
             .raid_detector
             .analyze(timeline, now_ms, &self.contact_profiler);
@@ -264,6 +273,9 @@ impl ConversationTracker {
             .contact_profiler
             .check_anomalies(&sender_id, self.config.is_child_account);
         signals.extend(contact_signals);
+
+        let shift_signals = self.contact_profiler.check_behavioral_shift(&sender_id);
+        signals.extend(shift_signals);
 
         signals
     }
@@ -471,7 +483,7 @@ mod tests {
 
         let state = tracker.export_state().unwrap();
         assert!(
-            state.contains("\"schema_version\":1"),
+            state.contains("\"schema_version\":2"),
             "Exported state should contain schema_version: {state}"
         );
     }
@@ -541,5 +553,90 @@ mod tests {
     fn auto_cleanup_disabled_by_default() {
         let config = TrackerConfig::default();
         assert_eq!(config.auto_cleanup_interval, 0);
+    }
+
+    #[test]
+    fn rating_updated_on_record_event() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            ..Default::default()
+        });
+
+        // Normal message first
+        tracker.record_event(make_event(
+            "conv_1",
+            "bully",
+            EventKind::NormalConversation,
+            1000,
+        ));
+        let rating_before = tracker.contact_profiler().profile("bully").unwrap().rating;
+
+        // Hostile message should decrease rating
+        tracker.record_event(make_event("conv_1", "bully", EventKind::Insult, 2000));
+        let rating_after = tracker.contact_profiler().profile("bully").unwrap().rating;
+
+        assert!(
+            rating_after < rating_before,
+            "Rating should decrease after insult: {rating_before} -> {rating_after}"
+        );
+    }
+
+    #[test]
+    fn behavioral_shift_signal_in_output() {
+        let week_ms = 7 * 24 * 60 * 60 * 1000u64;
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            ..Default::default()
+        });
+
+        // Weeks 1-3: supportive
+        for week in 0..3 {
+            for msg in 0..10 {
+                let kind = if msg < 6 {
+                    EventKind::NormalConversation
+                } else {
+                    EventKind::DefenseOfVictim
+                };
+                tracker.record_event(make_event(
+                    "conv_shift",
+                    "masha",
+                    kind,
+                    week * week_ms + msg * 1000,
+                ));
+            }
+        }
+
+        // Weeks 4-5: hostile
+        for week in 3..5 {
+            for msg in 0..10 {
+                let kind = if msg < 6 {
+                    EventKind::NormalConversation
+                } else {
+                    EventKind::Insult
+                };
+                tracker.record_event(make_event(
+                    "conv_shift",
+                    "masha",
+                    kind,
+                    week * week_ms + msg * 1000,
+                ));
+            }
+        }
+
+        // Week 6: trigger — should get behavioral shift signal
+        let _signals = tracker.record_event(make_event(
+            "conv_shift",
+            "masha",
+            EventKind::Insult,
+            5 * week_ms + 1000,
+        ));
+
+        let profile = tracker.contact_profiler().profile("masha").unwrap();
+        assert!(
+            profile.trend == super::contact::BehavioralTrend::RoleReversal
+                || profile.trend == super::contact::BehavioralTrend::RapidWorsening,
+            "Expected worsening/reversal trend, got {:?}",
+            profile.trend
+        );
     }
 }

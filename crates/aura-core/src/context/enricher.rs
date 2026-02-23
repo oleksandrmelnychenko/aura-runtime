@@ -37,6 +37,18 @@ enum EnricherCategory {
     Hopelessness,
     Isolation,
     Financial,
+    PiiSelfDisclosure,
+    DareChallenge,
+    Blackmail,
+    SuicideCoercion,
+    FalseConsensus,
+    DebtCreation,
+    ReputationThreat,
+    IdentityErosion,
+    NetworkPoisoning,
+    FakeVulnerability,
+    PlatformMigration,
+    EmotionalWithdrawal,
 }
 
 struct EnricherEntry {
@@ -90,6 +102,18 @@ impl SignalEnricher {
         let mut hopelessness_found = false;
         let mut isolation_found = false;
         let mut financial_found = false;
+        let mut pii_disclosure_count: usize = 0;
+        let mut dare_count: usize = 0;
+        let mut blackmail_found = false;
+        let mut suicide_coercion_count: usize = 0;
+        let mut false_consensus_count: usize = 0;
+        let mut debt_creation_count: usize = 0;
+        let mut reputation_threat_count: usize = 0;
+        let mut identity_erosion_count: usize = 0;
+        let mut network_poisoning_count: usize = 0;
+        let mut fake_vulnerability_count: usize = 0;
+        let mut platform_migration_found = false;
+        let mut emotional_withdrawal_found = false;
 
         for m in self.matcher.automaton.find_iter(&lower) {
             if !aho_match_at_boundary(&lower, m.start(), m.end()) {
@@ -106,6 +130,18 @@ impl SignalEnricher {
                 EnricherCategory::Hopelessness => hopelessness_found = true,
                 EnricherCategory::Isolation => isolation_found = true,
                 EnricherCategory::Financial => financial_found = true,
+                EnricherCategory::PiiSelfDisclosure => pii_disclosure_count += 1,
+                EnricherCategory::DareChallenge => dare_count += 1,
+                EnricherCategory::Blackmail => blackmail_found = true,
+                EnricherCategory::SuicideCoercion => suicide_coercion_count += 1,
+                EnricherCategory::FalseConsensus => false_consensus_count += 1,
+                EnricherCategory::DebtCreation => debt_creation_count += 1,
+                EnricherCategory::ReputationThreat => reputation_threat_count += 1,
+                EnricherCategory::IdentityErosion => identity_erosion_count += 1,
+                EnricherCategory::NetworkPoisoning => network_poisoning_count += 1,
+                EnricherCategory::FakeVulnerability => fake_vulnerability_count += 1,
+                EnricherCategory::PlatformMigration => platform_migration_found = true,
+                EnricherCategory::EmotionalWithdrawal => emotional_withdrawal_found = true,
             }
         }
 
@@ -206,6 +242,126 @@ impl SignalEnricher {
                 conversation_id: conversation_id.to_string(),
                 kind: EventKind::MoneyOffer,
                 confidence: 0.6,
+            });
+        }
+
+        if pii_disclosure_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::PiiSelfDisclosure,
+                confidence: (pii_disclosure_count as f32 * 0.4).min(1.0),
+            });
+        }
+
+        if dare_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::DareChallenge,
+                confidence: (dare_count as f32 * 0.35).min(1.0),
+            });
+        }
+
+        if blackmail_found {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::ScreenshotThreat,
+                confidence: 0.8,
+            });
+        }
+
+        if suicide_coercion_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::SuicideCoercion,
+                confidence: (suicide_coercion_count as f32 * 0.5).min(1.0),
+            });
+        }
+
+        if false_consensus_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::FalseConsensus,
+                confidence: (false_consensus_count as f32 * 0.35).min(1.0),
+            });
+        }
+
+        if debt_creation_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::DebtCreation,
+                confidence: (debt_creation_count as f32 * 0.4).min(1.0),
+            });
+        }
+
+        if reputation_threat_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::ReputationThreat,
+                confidence: (reputation_threat_count as f32 * 0.45).min(1.0),
+            });
+        }
+
+        if identity_erosion_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::IdentityErosion,
+                confidence: (identity_erosion_count as f32 * 0.4).min(1.0),
+            });
+        }
+
+        if network_poisoning_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::NetworkPoisoning,
+                confidence: (network_poisoning_count as f32 * 0.4).min(1.0),
+            });
+        }
+
+        if fake_vulnerability_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::FakeVulnerability,
+                confidence: (fake_vulnerability_count as f32 * 0.35).min(1.0),
+            });
+        }
+
+        if platform_migration_found {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::PlatformSwitch,
+                confidence: 0.7,
+            });
+        }
+
+        if emotional_withdrawal_found {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::Devaluation,
+                confidence: 0.5,
             });
         }
 
@@ -510,6 +666,334 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("тобі потрібні гроші", Financial),
         ("можу купити тобі", Financial),
         ("який твій пейпал", Financial),
+        // PII Self-Disclosure — child sharing own info
+        ("my number is", PiiSelfDisclosure),
+        ("my phone number", PiiSelfDisclosure),
+        ("text me at", PiiSelfDisclosure),
+        ("call me at", PiiSelfDisclosure),
+        ("i live at", PiiSelfDisclosure),
+        ("i live on", PiiSelfDisclosure),
+        ("my address is", PiiSelfDisclosure),
+        ("my school is", PiiSelfDisclosure),
+        ("i go to school at", PiiSelfDisclosure),
+        ("my real name is", PiiSelfDisclosure),
+        ("my full name is", PiiSelfDisclosure),
+        ("here's my number", PiiSelfDisclosure),
+        ("мій номер телефону", PiiSelfDisclosure),
+        ("мій номер", PiiSelfDisclosure),
+        ("напиши мені на", PiiSelfDisclosure),
+        ("зателефонуй мені на", PiiSelfDisclosure),
+        ("я живу на", PiiSelfDisclosure),
+        ("моя адреса", PiiSelfDisclosure),
+        ("моя школа", PiiSelfDisclosure),
+        ("я ходжу в школу", PiiSelfDisclosure),
+        ("мене насправді звуть", PiiSelfDisclosure),
+        ("моє справжнє ім'я", PiiSelfDisclosure),
+        ("ось мій номер", PiiSelfDisclosure),
+        ("мой номер телефона", PiiSelfDisclosure),
+        ("мой номер", PiiSelfDisclosure),
+        ("я живу на улице", PiiSelfDisclosure),
+        ("мой адрес", PiiSelfDisclosure),
+        ("моя школа это", PiiSelfDisclosure),
+        ("я хожу в школу", PiiSelfDisclosure),
+        ("меня на самом деле зовут", PiiSelfDisclosure),
+        ("вот мой номер", PiiSelfDisclosure),
+        // Dare / Challenge
+        ("i dare you", DareChallenge),
+        ("bet you can't", DareChallenge),
+        ("bet you won't", DareChallenge),
+        ("i challenge you", DareChallenge),
+        ("try this challenge", DareChallenge),
+        ("tiktok challenge", DareChallenge),
+        ("it's totally safe", DareChallenge),
+        ("nothing will happen", DareChallenge),
+        ("just try it", DareChallenge),
+        ("you're too scared", DareChallenge),
+        ("тобі слабо", DareChallenge),
+        ("спорим не зможеш", DareChallenge),
+        ("бери на слабо", DareChallenge),
+        ("челендж", DareChallenge),
+        ("це безпечно обіцяю", DareChallenge),
+        ("нічого не станеться", DareChallenge),
+        ("просто спробуй", DareChallenge),
+        ("тебе слабо", DareChallenge),
+        ("спорим не сможешь", DareChallenge),
+        ("челлендж", DareChallenge),
+        ("это безопасно обещаю", DareChallenge),
+        ("ничего не будет", DareChallenge),
+        ("просто попробуй", DareChallenge),
+        // Blackmail / Screenshot threats
+        ("i screenshotted this", Blackmail),
+        ("i took a screenshot", Blackmail),
+        ("i have screenshots", Blackmail),
+        ("i recorded you", Blackmail),
+        ("i'll post this everywhere", Blackmail),
+        ("i'll show everyone", Blackmail),
+        ("everyone will see", Blackmail),
+        ("i saved everything", Blackmail),
+        ("я заскрінив", Blackmail),
+        ("в мене є скріншоти", Blackmail),
+        ("я записав тебе", Blackmail),
+        ("я покажу це всім", Blackmail),
+        ("всі побачать", Blackmail),
+        ("я покажу всій школі", Blackmail),
+        ("я все зберіг", Blackmail),
+        ("я заскринил", Blackmail),
+        ("у меня есть скриншоты", Blackmail),
+        ("я записал тебя", Blackmail),
+        ("я покажу это всем", Blackmail),
+        ("все увидят", Blackmail),
+        ("я покажу всей школе", Blackmail),
+        ("я все сохранил", Blackmail),
+        // Suicide Coercion — manipulator threatens self-harm to control victim
+        // EN teen slang
+        ("if u leave ill kms", SuicideCoercion),
+        ("without u i have no reason to live", SuicideCoercion),
+        ("ill do smth to myself if u dont", SuicideCoercion),
+        ("ull regret it when im gone", SuicideCoercion),
+        ("do u even care if i die", SuicideCoercion),
+        ("if u block me ill end it", SuicideCoercion),
+        ("i cant live without u", SuicideCoercion),
+        ("my life is nothing without u", SuicideCoercion),
+        ("ill jump if u leave", SuicideCoercion),
+        ("youll be sorry when im dead", SuicideCoercion),
+        // UK teen slang
+        ("якщо ти підеш мені нема сенсу жити", SuicideCoercion),
+        ("без тебе я просто здохну", SuicideCoercion),
+        ("я зроблю щось з собою якщо ти не відпишеш", SuicideCoercion),
+        ("тобі буде пофіг коли мене не стане", SuicideCoercion),
+        ("якщо заблокуєш я закінчу це все", SuicideCoercion),
+        ("я не можу без тебе жити", SuicideCoercion),
+        ("без тебе мені кінець", SuicideCoercion),
+        ("ти навіть не думаєш шо зі мною буде", SuicideCoercion),
+        ("мені нема сенсу без тебе", SuicideCoercion),
+        // RU teen slang
+        ("если ты уйдешь мне нет смысла жить", SuicideCoercion),
+        ("без тебя я просто сдохну", SuicideCoercion),
+        ("тебе будет пофиг когда меня не станет", SuicideCoercion),
+        ("если заблокируешь я покончу с этим", SuicideCoercion),
+        ("я не могу без тебя жить", SuicideCoercion),
+        ("без тебя мне конец", SuicideCoercion),
+        // False Consensus / Normalization — "everyone does it"
+        // EN teen
+        ("everyone does it", FalseConsensus),
+        ("its totally normal", FalseConsensus),
+        ("all kids our age do this", FalseConsensus),
+        ("ur friends do it too", FalseConsensus),
+        ("its not a big deal", FalseConsensus),
+        ("everyone our age", FalseConsensus),
+        ("thats just how it is", FalseConsensus),
+        ("nobody cares about that", FalseConsensus),
+        ("its normal between friends", FalseConsensus),
+        ("all my friends do this", FalseConsensus),
+        // UK teen
+        ("всі так роблять", FalseConsensus),
+        ("в нашому віці всі так", FalseConsensus),
+        ("твої подруги теж просто не кажуть", FalseConsensus),
+        ("та нічо такого", FalseConsensus),
+        ("всі в класі так роблять", FalseConsensus),
+        ("це нормально між друзями", FalseConsensus),
+        ("та забий ніхто на це не зважає", FalseConsensus),
+        // RU teen
+        ("все так делают", FalseConsensus),
+        ("в нашем возрасте все так", FalseConsensus),
+        ("твои подруги тоже просто не говорят", FalseConsensus),
+        ("ничего такого", FalseConsensus),
+        ("это нормально между друзьями", FalseConsensus),
+        // Debt Creation / Obligation — "you owe me"
+        // EN teen
+        ("after everything i did for u", DebtCreation),
+        ("u owe me", DebtCreation),
+        ("i spent so much on u", DebtCreation),
+        ("i bought u that", DebtCreation),
+        ("this is how u repay me", DebtCreation),
+        ("i did so much for u", DebtCreation),
+        ("remember what i got u", DebtCreation),
+        ("i wasted my time on u", DebtCreation),
+        ("ungrateful", DebtCreation),
+        // UK teen
+        ("після всього що я для тебе зробив", DebtCreation),
+        ("ти мені винна", DebtCreation),
+        ("я стільки на тебе витратив", DebtCreation),
+        ("я тобі купив а ти", DebtCreation),
+        ("і це твоя подяка", DebtCreation),
+        ("я стільки для тебе зробив", DebtCreation),
+        ("невдячна", DebtCreation),
+        ("згадай що я тобі робив", DebtCreation),
+        ("я на тебе стільки часу витратив", DebtCreation),
+        // RU teen
+        ("после всего что я для тебя сделал", DebtCreation),
+        ("ты мне должна", DebtCreation),
+        ("я столько на тебя потратил", DebtCreation),
+        ("неблагодарная", DebtCreation),
+        ("и это твоя благодарность", DebtCreation),
+        // Social Reputation Threats — "ill tell everyone at school"
+        // EN teen
+        ("ill tell everyone at school", ReputationThreat),
+        ("everyone will know", ReputationThreat),
+        ("ill make sure no one talks to u", ReputationThreat),
+        ("ill spread it everywhere", ReputationThreat),
+        ("imagine what theyll say", ReputationThreat),
+        ("the whole school will know", ReputationThreat),
+        ("ill tell ur friends", ReputationThreat),
+        ("wait till everyone finds out", ReputationThreat),
+        ("no one will talk to u after this", ReputationThreat),
+        // UK teen
+        ("я розкажу всій школі", ReputationThreat),
+        ("всі дізнаються", ReputationThreat),
+        ("ніхто з тобою не буде дружити", ReputationThreat),
+        ("я зроблю так шо тебе будуть цькувати", ReputationThreat),
+        ("уяви шо про тебе скажуть", ReputationThreat),
+        ("вся школа дізнається", ReputationThreat),
+        ("я скажу твоїм подругам", ReputationThreat),
+        ("зачекай поки всі дізнаються", ReputationThreat),
+        ("ніхто з тобою не буде спілкуватись після цього", ReputationThreat),
+        // RU teen
+        ("я расскажу всей школе", ReputationThreat),
+        ("все узнают", ReputationThreat),
+        ("никто с тобой не будет дружить", ReputationThreat),
+        ("представь что скажут", ReputationThreat),
+        ("вся школа узнает", ReputationThreat),
+        // Identity Erosion — "ur so mature for ur age"
+        // EN teen
+        ("ur not like other kids", IdentityErosion),
+        ("ur so mature for ur age", IdentityErosion),
+        ("u dont need those friends", IdentityErosion),
+        ("ur parents just dont get u", IdentityErosion),
+        ("ur too smart for kids ur age", IdentityErosion),
+        ("u think differently than others", IdentityErosion),
+        ("ur friends are so childish", IdentityErosion),
+        ("u deserve better than them", IdentityErosion),
+        ("only i really understand u", IdentityErosion),
+        // UK teen
+        ("ти не як інші діти", IdentityErosion),
+        ("ти така доросла для свого віку", IdentityErosion),
+        ("тобі не потрібні ці друзі", IdentityErosion),
+        ("твої батьки тебе не розуміють", IdentityErosion),
+        ("ти занадто розумна для своїх ровесників", IdentityErosion),
+        ("ти думаєш не як всі", IdentityErosion),
+        ("твої друзі такі дитячі", IdentityErosion),
+        ("ти заслуговуєш на краще", IdentityErosion),
+        ("тільки я тебе реально розумію", IdentityErosion),
+        // RU teen
+        ("ты не как другие дети", IdentityErosion),
+        ("ты такая взрослая для своего возраста", IdentityErosion),
+        ("тебе не нужны эти друзья", IdentityErosion),
+        ("твои родители тебя не понимают", IdentityErosion),
+        ("только я тебя реально понимаю", IdentityErosion),
+        // Support Network Poisoning — "ur friend was talking shit about u"
+        // EN teen
+        ("was talking shit about u", NetworkPoisoning),
+        ("they dont really like u", NetworkPoisoning),
+        ("no one at school actually cares", NetworkPoisoning),
+        ("they laugh at u behind ur back", NetworkPoisoning),
+        ("i heard them say", NetworkPoisoning),
+        ("they were making fun of u", NetworkPoisoning),
+        ("ur friend is fake", NetworkPoisoning),
+        ("was talking behind ur back", NetworkPoisoning),
+        ("everyone talks about u", NetworkPoisoning),
+        ("they only pretend to like u", NetworkPoisoning),
+        // UK teen
+        ("про тебе таке казала", NetworkPoisoning),
+        ("тебе за очі всі обсирають", NetworkPoisoning),
+        ("знаєш шо про тебе в тому чаті пишуть", NetworkPoisoning),
+        ("ніхто в школі тебе не любить реально", NetworkPoisoning),
+        ("вони з тебе сміються за спиною", NetworkPoisoning),
+        ("твоя подруга фейкова", NetworkPoisoning),
+        ("за спиною таке про тебе каже", NetworkPoisoning),
+        ("вони тільки прикидаються що дружать", NetworkPoisoning),
+        ("я бачив шо вони про тебе писали", NetworkPoisoning),
+        // RU teen
+        ("про тебя такое говорила", NetworkPoisoning),
+        ("тебя за глаза все обсирают", NetworkPoisoning),
+        ("никто в школе тебя реально не любит", NetworkPoisoning),
+        ("они с тебя смеются за спиной", NetworkPoisoning),
+        ("они только притворяются что дружат", NetworkPoisoning),
+        ("знаешь что про тебя пишут", NetworkPoisoning),
+        // Fake Vulnerability / Sympathy Manipulation
+        // EN teen
+        ("im so sick u have no idea", FakeVulnerability),
+        ("my family is so messed up", FakeVulnerability),
+        ("ur the only one who gets me", FakeVulnerability),
+        ("i have no one else", FakeVulnerability),
+        ("promise ull take care of me", FakeVulnerability),
+        ("ur my only friend", FakeVulnerability),
+        ("no one else cares about me", FakeVulnerability),
+        ("i might not be around much longer", FakeVulnerability),
+        ("im going through so much rn", FakeVulnerability),
+        ("u have no idea what im dealing with", FakeVulnerability),
+        // UK teen
+        ("мені так погано ти навіть не уявляєш", FakeVulnerability),
+        ("в мене вдома такий жах", FakeVulnerability),
+        ("ти єдина хто мене розуміє", FakeVulnerability),
+        ("в мене нікого крім тебе немає", FakeVulnerability),
+        ("пообіцяй шо будеш поруч", FakeVulnerability),
+        ("ти мій єдиний друг", FakeVulnerability),
+        ("більше нікому на мене не пофіг", FakeVulnerability),
+        ("я може скоро зникну", FakeVulnerability),
+        ("в мене зараз таке діється", FakeVulnerability),
+        // RU teen
+        ("мне так плохо ты даже не представляешь", FakeVulnerability),
+        ("у меня дома такой ужас", FakeVulnerability),
+        ("ты единственная кто меня понимает", FakeVulnerability),
+        ("у меня никого кроме тебя нет", FakeVulnerability),
+        ("обещай что будешь рядом", FakeVulnerability),
+        ("ты мой единственный друг", FakeVulnerability),
+        // Platform Migration — teen slang for moving to other apps
+        // EN teen
+        ("add me on snap", PlatformMigration),
+        ("dm me on insta", PlatformMigration),
+        ("hmu on discord", PlatformMigration),
+        ("got discord", PlatformMigration),
+        ("lets talk on telegram", PlatformMigration),
+        ("delete this chat", PlatformMigration),
+        ("this app is trash lets go", PlatformMigration),
+        // UK teen
+        ("го в тг", PlatformMigration),
+        ("пиши в снеп", PlatformMigration),
+        ("є дс", PlatformMigration),
+        ("в інсті пиши", PlatformMigration),
+        ("давай в телегу", PlatformMigration),
+        ("тут палево", PlatformMigration),
+        ("видали чат", PlatformMigration),
+        ("го в дс", PlatformMigration),
+        // RU teen
+        ("го в тг", PlatformMigration),
+        ("пиши в снап", PlatformMigration),
+        ("есть дс", PlatformMigration),
+        ("давай в телегу", PlatformMigration),
+        ("тут палево", PlatformMigration),
+        ("удали чат", PlatformMigration),
+        // Emotional Withdrawal / Punishment
+        // EN teen
+        ("fine whatever", EmotionalWithdrawal),
+        ("i guess u dont care", EmotionalWithdrawal),
+        ("ill find someone who actually cares", EmotionalWithdrawal),
+        ("dont text me anymore", EmotionalWithdrawal),
+        ("ur just like everyone else", EmotionalWithdrawal),
+        // UK teen
+        ("ну ясно тобі пофіг", EmotionalWithdrawal),
+        ("добре знайду когось хто мене цінує", EmotionalWithdrawal),
+        ("не пиши мені більше", EmotionalWithdrawal),
+        ("ти як всі інші", EmotionalWithdrawal),
+        ("ок забий", EmotionalWithdrawal),
+        // RU teen
+        ("ну ясно тебе пофиг", EmotionalWithdrawal),
+        ("найду кого-то кто меня ценит", EmotionalWithdrawal),
+        ("не пиши мне больше", EmotionalWithdrawal),
+        // Gaming / Digital Currency Bribery (added to Financial)
+        ("ill get u vbucks", Financial),
+        ("free robux", Financial),
+        ("want free skins", Financial),
+        ("ill boost ur account", Financial),
+        ("i can get u followers", Financial),
+        ("я тобі робакси куплю", Financial),
+        ("хочеш безкоштовні скіни", Financial),
+        ("я можу накрутити підписників", Financial),
+        ("хочеш вібакси", Financial),
+        ("я тебе робуксы куплю", Financial),
+        ("хочешь бесплатные скины", Financial),
+        ("могу накрутить подписчиков", Financial),
     ];
 
     let patterns: Vec<&str> = all.iter().map(|(w, _)| *w).collect();
@@ -931,4 +1415,284 @@ mod tests {
             "Normal text should not trigger financial grooming: {events:?}"
         );
     }
+
+    #[test]
+    fn detects_pii_phone_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Hey, my number is 555-123-4567, text me!",
+            "child",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::PiiSelfDisclosure),
+            "Expected PII self-disclosure, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_pii_address_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "I live at 123 Main Street, come over!",
+            "child",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::PiiSelfDisclosure),
+            "Expected PII self-disclosure for address, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_pii_school_uk() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Моя школа номер 5 на Шевченка",
+            "child",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::PiiSelfDisclosure),
+            "Expected PII self-disclosure for school (UK), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_pii_name_ru() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Меня на самом деле зовут Иван Петров",
+            "child",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::PiiSelfDisclosure),
+            "Expected PII self-disclosure for name (RU), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn pii_not_triggered_by_question() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Where do you live? What school do you go to?",
+            "stranger",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|e| e.kind == EventKind::PiiSelfDisclosure),
+            "Asking questions should not trigger PII self-disclosure: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_dare_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "I dare you to do it, bet you can't!",
+            "peer",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::DareChallenge),
+            "Expected dare challenge, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_dare_uk() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Тобі слабо це зробити? Бери на слабо!",
+            "peer",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::DareChallenge),
+            "Expected dare challenge (UK), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_blackmail_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "I took a screenshot and everyone will see what you said",
+            "bully",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::ScreenshotThreat),
+            "Expected screenshot threat, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_blackmail_uk() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Я заскрінив і покажу це всім в школі",
+            "bully",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::ScreenshotThreat),
+            "Expected screenshot threat (UK), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_suicide_coercion_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "if u block me ill end it, i cant live without u",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::SuicideCoercion),
+            "Expected SuicideCoercion, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_suicide_coercion_uk() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "якщо ти підеш мені нема сенсу жити, без тебе мені кінець",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::SuicideCoercion),
+            "Expected SuicideCoercion (UK), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_false_consensus_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "everyone does it, its totally normal between friends",
+            "predator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::FalseConsensus),
+            "Expected FalseConsensus, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_reputation_threat_uk() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "я розкажу всій школі, всі дізнаються",
+            "bully", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::ReputationThreat),
+            "Expected ReputationThreat (UK), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_identity_erosion_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "ur so mature for ur age, u dont need those friends",
+            "predator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::IdentityErosion),
+            "Expected IdentityErosion, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_network_poisoning_uk() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "лол бро твоя Маша вчора про тебе таке казала шо ти тупа",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::NetworkPoisoning),
+            "Expected NetworkPoisoning (UK), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_fake_vulnerability_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "ur the only one who gets me, i have no one else",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::FakeVulnerability),
+            "Expected FakeVulnerability, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_platform_switch_teen_uk() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "го в тг тут палево",
+            "stranger", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::PlatformSwitch),
+            "Expected PlatformSwitch from teen slang, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_gaming_bribery_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "ill get u vbucks if u do what i say, want free skins?",
+            "stranger", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::MoneyOffer),
+            "Expected MoneyOffer from gaming bribery, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn false_positive_homework_not_consensus() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Everyone does their homework before class",
+            "teacher", "conv_1", 1000,
+        );
+        assert!(
+            !events.iter().any(|e| e.kind == EventKind::FalseConsensus),
+            "Normal homework message should not trigger FalseConsensus: {events:?}"
+        );
+    }
+
 }

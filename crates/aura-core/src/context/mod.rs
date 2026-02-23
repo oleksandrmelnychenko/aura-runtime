@@ -1,4 +1,5 @@
 pub mod bullying;
+pub mod coercion;
 pub mod contact;
 pub mod enricher;
 pub mod events;
@@ -10,6 +11,7 @@ pub mod timing;
 pub mod tracker;
 
 pub use bullying::BullyingDetector;
+pub use coercion::CoercionDetector;
 pub use contact::ContactProfiler;
 pub use enricher::SignalEnricher;
 pub use events::{ContextEvent, EventKind};

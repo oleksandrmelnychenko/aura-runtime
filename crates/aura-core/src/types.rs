@@ -16,6 +16,7 @@ pub enum ThreatType {
     Nsfw,
     HateSpeech,
     Doxxing,
+    PiiLeakage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

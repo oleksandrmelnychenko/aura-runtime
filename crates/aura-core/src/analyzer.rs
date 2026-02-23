@@ -474,7 +474,9 @@ impl Analyzer {
 
             ThreatType::Scam | ThreatType::Manipulation => self.config.enabled,
 
-            ThreatType::HateSpeech | ThreatType::Doxxing => self.config.enabled,
+            ThreatType::HateSpeech | ThreatType::Doxxing | ThreatType::PiiLeakage => {
+                self.config.enabled
+            }
             ThreatType::None => false,
         }
     }
@@ -685,6 +687,47 @@ fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKi
         return Some(EventKind::MoneyOffer);
     }
 
+    if rule_id.starts_with("pii_") {
+        return Some(EventKind::PiiSelfDisclosure);
+    }
+    if rule_id.starts_with("meeting_casual") {
+        return Some(EventKind::CasualMeetingRequest);
+    }
+    if rule_id.starts_with("dare_") || rule_id.starts_with("dangerous_") {
+        return Some(EventKind::DareChallenge);
+    }
+
+    if rule_id.starts_with("coercion_suicide") {
+        return Some(EventKind::SuicideCoercion);
+    }
+    if rule_id.starts_with("false_consensus") {
+        return Some(EventKind::FalseConsensus);
+    }
+    if rule_id.starts_with("debt_creation") {
+        return Some(EventKind::DebtCreation);
+    }
+    if rule_id.starts_with("reputation_threat") {
+        return Some(EventKind::ReputationThreat);
+    }
+    if rule_id.starts_with("identity_erosion") {
+        return Some(EventKind::IdentityErosion);
+    }
+    if rule_id.starts_with("network_poisoning") {
+        return Some(EventKind::NetworkPoisoning);
+    }
+    if rule_id.starts_with("fake_vulnerability") {
+        return Some(EventKind::FakeVulnerability);
+    }
+    if rule_id.starts_with("platform_switch_teen") {
+        return Some(EventKind::PlatformSwitch);
+    }
+    if rule_id.starts_with("gaming_bribery") {
+        return Some(EventKind::GiftOffer);
+    }
+    if rule_id.starts_with("emotional_withdrawal") {
+        return Some(EventKind::Devaluation);
+    }
+
     match threat_type {
         ThreatType::Grooming => Some(EventKind::SecrecyRequest),
         ThreatType::Bullying => Some(EventKind::Insult),
@@ -693,6 +736,7 @@ fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKi
         ThreatType::Manipulation => Some(EventKind::GuildTripping),
         ThreatType::Doxxing => Some(EventKind::DoxxingAttempt),
         ThreatType::HateSpeech => Some(EventKind::HateSpeech),
+        ThreatType::PiiLeakage => Some(EventKind::PiiSelfDisclosure),
         ThreatType::Phishing
         | ThreatType::Spam
         | ThreatType::Scam
@@ -725,6 +769,7 @@ fn parse_threat_type(s: &str) -> ThreatType {
         "nsfw" => ThreatType::Nsfw,
         "hate_speech" => ThreatType::HateSpeech,
         "doxxing" => ThreatType::Doxxing,
+        "pii_leakage" => ThreatType::PiiLeakage,
         _ => ThreatType::None,
     }
 }
@@ -736,14 +781,15 @@ fn threat_priority(tt: ThreatType) -> u8 {
         ThreatType::Explicit => 2,
         ThreatType::Threat => 3,
         ThreatType::Doxxing => 4,
-        ThreatType::Manipulation => 5,
-        ThreatType::HateSpeech => 6,
-        ThreatType::Bullying => 7,
-        ThreatType::Nsfw => 8,
-        ThreatType::Phishing => 9,
-        ThreatType::Scam => 10,
-        ThreatType::Spam => 11,
-        ThreatType::None => 12,
+        ThreatType::PiiLeakage => 5,
+        ThreatType::Manipulation => 6,
+        ThreatType::HateSpeech => 7,
+        ThreatType::Bullying => 8,
+        ThreatType::Nsfw => 9,
+        ThreatType::Phishing => 10,
+        ThreatType::Scam => 11,
+        ThreatType::Spam => 12,
+        ThreatType::None => 13,
     }
 }
 
@@ -1876,4 +1922,362 @@ mod tests {
         };
         assert!(config.validate().is_ok());
     }
+
+    #[test]
+    fn integration_pii_warns_not_blocks() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(10),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        let input = MessageInput {
+            content_type: ContentType::Text,
+            text: Some("my number is 0501234567, text me!".into()),
+            image_data: None,
+            sender_id: "child_1".into(),
+            conversation_id: "conv_pii".into(),
+            language: None,
+            conversation_type: ConversationType::Direct,
+            member_count: None,
+        };
+
+        let result = analyzer.analyze_with_context(&input, 1000);
+        // PII should never block
+        assert_ne!(
+            result.action,
+            Action::Block,
+            "PII leakage must NEVER block"
+        );
+    }
+
+    #[test]
+    fn integration_repeated_secrecy_escalates() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(10),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        // Send 4 secrecy requests from same sender
+        for i in 0..4 {
+            let input = MessageInput {
+                content_type: ContentType::Text,
+                text: Some("don't tell your parents about this".into()),
+                image_data: None,
+                sender_id: "stranger_1".into(),
+                conversation_id: "conv_secrecy".into(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            };
+            analyzer.analyze_with_context(&input, (i + 1) * 1000);
+        }
+
+        // Last one should have elevated score
+        let input = MessageInput {
+            content_type: ContentType::Text,
+            text: Some("just between us, ok?".into()),
+            image_data: None,
+            sender_id: "stranger_1".into(),
+            conversation_id: "conv_secrecy".into(),
+            language: None,
+            conversation_type: ConversationType::Direct,
+            member_count: None,
+        };
+        let result = analyzer.analyze_with_context(&input, 5000);
+        assert!(
+            result.score >= 0.5,
+            "Repeated secrecy should escalate score, got {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_casual_meeting_from_stranger_with_context() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(10),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        // Build grooming context: flattery + secrecy + probing
+        let msgs = vec![
+            ("you're so mature for your age", 1000u64),
+            ("don't tell your parents about our chats", 2000),
+            ("how old are you? what grade are you in?", 3000),
+        ];
+        for (text, ts) in msgs {
+            let input = MessageInput {
+                content_type: ContentType::Text,
+                text: Some(text.into()),
+                image_data: None,
+                sender_id: "predator".into(),
+                conversation_id: "conv_meet".into(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            };
+            analyzer.analyze_with_context(&input, ts);
+        }
+
+        // Now the casual meeting request with grooming context
+        let input = MessageInput {
+            content_type: ContentType::Text,
+            text: Some("you're so beautiful and special, can we meet?".into()),
+            image_data: None,
+            sender_id: "predator".into(),
+            conversation_id: "conv_meet".into(),
+            language: None,
+            conversation_type: ConversationType::Direct,
+            member_count: None,
+        };
+        let result = analyzer.analyze_with_context(&input, 4000);
+        assert!(
+            result.score >= 0.5,
+            "Casual meeting + grooming context should elevate score, got {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_screenshot_blackmail_accumulates() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        // Send 2 screenshot threats to trigger blackmail pattern
+        let texts = [
+            "I took a screenshot of everything you said",
+            "I have screenshots and everyone will see this",
+        ];
+        let mut last_result = None;
+        for (i, text) in texts.iter().enumerate() {
+            let input = MessageInput {
+                content_type: ContentType::Text,
+                text: Some((*text).into()),
+                image_data: None,
+                sender_id: "bully".into(),
+                conversation_id: "conv_ss".into(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            };
+            last_result = Some(analyzer.analyze_with_context(&input, (i as u64 + 1) * 1000));
+        }
+        let result = last_result.unwrap();
+        assert!(
+            result.score > 0.0,
+            "Repeated screenshot threats should produce a manipulation signal"
+        );
+    }
+
+    #[test]
+    fn integration_dare_with_gaslighting() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(11),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        // Build multi-tactic manipulation context: gaslighting + guilt + dare
+        let msgs = vec![
+            ("you're imagining things, that never happened", 1000u64),
+            ("after everything i've done for you, you owe me", 2000),
+            ("I dare you to do it, bet you can't! you're too scared", 3000),
+        ];
+        let mut last_result = None;
+        for (text, ts) in msgs {
+            let input = MessageInput {
+                content_type: ContentType::Text,
+                text: Some(text.into()),
+                image_data: None,
+                sender_id: "manipulator".into(),
+                conversation_id: "conv_dare".into(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            };
+            last_result = Some(analyzer.analyze_with_context(&input, ts));
+        }
+        let result = last_result.unwrap();
+        assert!(
+            result.score > 0.0,
+            "Dare + gaslighting + guilt should produce manipulation signals, got score {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_suicide_coercion_pattern() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(13),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some(
+                    "if u block me ill end it, i cant live without u".to_string(),
+                ),
+                image_data: None,
+                sender_id: "manipulator".to_string(),
+                conversation_id: "conv_sc".to_string(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1000,
+        );
+        assert!(
+            result.score > 0.0,
+            "Suicide coercion should produce a detection signal, got score {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_teen_slang_platform_switch() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(14),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("го в тг тут палево".to_string()),
+                image_data: None,
+                sender_id: "stranger".to_string(),
+                conversation_id: "conv_ps".to_string(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1000,
+        );
+        assert!(
+            result.score > 0.0,
+            "Teen slang platform switch should be detected, got score {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_network_poisoning() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some(
+                    "they dont really like u, they laugh at u behind ur back, ur friend is fake"
+                        .to_string(),
+                ),
+                image_data: None,
+                sender_id: "manipulator".to_string(),
+                conversation_id: "conv_np".to_string(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1000,
+        );
+        assert!(
+            result.score > 0.0,
+            "Network poisoning should produce a detection signal, got score {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_gaming_bribery() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(11),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some(
+                    "ill get u vbucks if u do what i say, want free skins?".to_string(),
+                ),
+                image_data: None,
+                sender_id: "stranger".to_string(),
+                conversation_id: "conv_gb".to_string(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1000,
+        );
+        assert!(
+            result.score > 0.0,
+            "Gaming bribery should be detected as grooming, got score {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_combined_advanced_scenario() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        // Identity erosion + network poisoning + reputation threat = multi-signal
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some(
+                    "ur not like other kids, ur friends are so childish. they dont really like u, they laugh at u behind ur back. ill tell everyone at school".to_string(),
+                ),
+                image_data: None,
+                sender_id: "predator".to_string(),
+                conversation_id: "conv_adv".to_string(),
+                language: None,
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1000,
+        );
+        assert!(
+            result.score > 0.0,
+            "Combined advanced scenario should produce detection, got score {}",
+            result.score
+        );
+        assert!(
+            result.detected_threats.len() >= 1,
+            "Should detect multiple threat types, got: {:?}",
+            result.detected_threats
+        );
+    }
+
 }
