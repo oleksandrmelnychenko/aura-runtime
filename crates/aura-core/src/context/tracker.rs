@@ -639,4 +639,141 @@ mod tests {
             profile.trend
         );
     }
+
+    #[test]
+    fn eviction_removes_oldest_conversation() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            max_conversations: 3,
+            ..Default::default()
+        });
+
+        tracker.record_event(make_event("conv_1", "alice", EventKind::NormalConversation, 1000));
+        tracker.record_event(make_event("conv_2", "bob", EventKind::NormalConversation, 2000));
+        tracker.record_event(make_event("conv_3", "charlie", EventKind::NormalConversation, 3000));
+        // This should evict conv_1 (oldest)
+        tracker.record_event(make_event("conv_4", "dave", EventKind::NormalConversation, 4000));
+
+        assert!(tracker.timeline("conv_1").is_none(), "Oldest conversation should be evicted");
+        assert!(tracker.timeline("conv_4").is_some(), "New conversation should exist");
+    }
+
+    #[test]
+    fn conversation_type_preserved() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(make_event("conv_1", "alice", EventKind::NormalConversation, 1000));
+        tracker.set_conversation_type("conv_1", crate::types::ConversationType::Group);
+
+        let timeline = tracker.timeline("conv_1").unwrap();
+        assert_eq!(timeline.conversation_type, crate::types::ConversationType::Group);
+    }
+
+    #[test]
+    fn full_pipeline_grooming_plus_coercion() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            ..Default::default()
+        });
+
+        // Grooming sequence
+        tracker.record_event(make_event("conv_1", "predator", EventKind::Flattery, 1000));
+        tracker.record_event(make_event("conv_1", "predator", EventKind::GiftOffer, 2000));
+        tracker.record_event(make_event("conv_1", "predator", EventKind::SecrecyRequest, 3000));
+        tracker.record_event(make_event("conv_1", "predator", EventKind::PersonalInfoRequest, 4000));
+
+        // Then coercion
+        tracker.record_event(make_event("conv_1", "predator", EventKind::SuicideCoercion, 5000));
+        tracker.record_event(make_event("conv_1", "predator", EventKind::ReputationThreat, 6000));
+
+        let signals = tracker.record_event(make_event(
+            "conv_1", "predator", EventKind::ScreenshotThreat, 7000,
+        ));
+
+        // Should detect both grooming and manipulation/coercion signals
+        let has_grooming = signals.iter().any(|s| s.threat_type == crate::types::ThreatType::Grooming);
+        let has_manipulation = signals.iter().any(|s| s.threat_type == crate::types::ThreatType::Manipulation);
+        assert!(has_grooming || has_manipulation, "Should detect grooming or manipulation in combined attack");
+    }
+
+    #[test]
+    fn state_roundtrip_preserves_behavioral_data() {
+        let week_ms = 7 * 24 * 60 * 60 * 1000u64;
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+
+        // Build behavioral history
+        for w in 0..4 {
+            for msg in 0..5 {
+                tracker.record_event(make_event(
+                    "conv_1", "alice", EventKind::NormalConversation,
+                    w * week_ms + msg * 1000,
+                ));
+            }
+        }
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 4 * week_ms));
+
+        let state = tracker.export_state().unwrap();
+        let orig = tracker.contact_profiler().profile("alice").unwrap();
+        let orig_rating = orig.rating;
+
+        let mut tracker2 = ConversationTracker::new(TrackerConfig::default());
+        tracker2.import_state(&state).unwrap();
+
+        let imported = tracker2.contact_profiler().profile("alice").unwrap();
+        assert_eq!(imported.rating, orig_rating, "Rating should survive roundtrip");
+    }
+
+    #[test]
+    fn multiple_detectors_produce_signals() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            ..Default::default()
+        });
+
+        // Bullying + self-harm pathway
+        for i in 0..5 {
+            tracker.record_event(make_event("conv_1", "bully", EventKind::Insult, i * 1000));
+        }
+        tracker.record_event(make_event("conv_1", "victim", EventKind::Hopelessness, 6000));
+        tracker.record_event(make_event("conv_1", "victim", EventKind::Hopelessness, 7000));
+        let signals = tracker.record_event(make_event(
+            "conv_1", "victim", EventKind::FarewellMessage, 8000,
+        ));
+
+        // Should have signals from bullying detector AND self-harm detector
+        let threat_types: Vec<_> = signals.iter().map(|s| s.threat_type).collect();
+        assert!(!threat_types.is_empty(), "Should detect threats in bullying->selfharm pathway");
+    }
+
+    #[test]
+    fn record_events_batch_processes_all() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        let events = vec![
+            make_event("conv_1", "alice", EventKind::NormalConversation, 1000),
+            make_event("conv_1", "alice", EventKind::NormalConversation, 2000),
+            make_event("conv_1", "alice", EventKind::NormalConversation, 3000),
+        ];
+        tracker.record_events(events);
+
+        assert_eq!(tracker.timeline("conv_1").unwrap().len(), 3);
+    }
+
+    #[test]
+    fn timeline_count_events_works() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 2000));
+        tracker.record_event(make_event("conv_1", "alice", EventKind::NormalConversation, 3000));
+
+        let timeline = tracker.timeline("conv_1").unwrap();
+        assert_eq!(timeline.count_events("alice", &EventKind::Insult, 0), 2);
+        assert_eq!(timeline.count_events("alice", &EventKind::NormalConversation, 0), 1);
+    }
+
+    #[test]
+    fn contact_profiler_accessible_from_tracker() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(make_event("conv_1", "alice", EventKind::NormalConversation, 1000));
+
+        assert!(tracker.contact_profiler().profile("alice").is_some());
+        assert!(tracker.contact_profiler().profile("bob").is_none());
+    }
 }

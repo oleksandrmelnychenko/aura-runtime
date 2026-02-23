@@ -298,4 +298,201 @@ mod tests {
         let delta = EventKind::NormalConversation.rating_delta();
         assert!(delta > 0.0 && delta < 1.0, "Expected small positive delta, got {delta}");
     }
+
+    #[test]
+    fn all_grooming_indicators_classified() {
+        let grooming_kinds = vec![
+            EventKind::Flattery,
+            EventKind::GiftOffer,
+            EventKind::SecrecyRequest,
+            EventKind::PlatformSwitch,
+            EventKind::PersonalInfoRequest,
+            EventKind::PhotoRequest,
+            EventKind::VideoCallRequest,
+            EventKind::FinancialGrooming,
+            EventKind::MeetingRequest,
+            EventKind::SexualContent,
+            EventKind::AgeInappropriate,
+            EventKind::LoveBombing,
+            EventKind::PiiSelfDisclosure,
+            EventKind::CasualMeetingRequest,
+            EventKind::IdentityErosion,
+            EventKind::FakeVulnerability,
+            EventKind::FalseConsensus,
+            EventKind::NetworkPoisoning,
+            EventKind::DebtCreation,
+        ];
+        for kind in grooming_kinds {
+            assert!(kind.is_grooming_indicator(), "{kind:?} should be grooming indicator");
+        }
+    }
+
+    #[test]
+    fn all_bullying_indicators_classified() {
+        let bullying_kinds = vec![
+            EventKind::Insult,
+            EventKind::Denigration,
+            EventKind::HarmEncouragement,
+            EventKind::PhysicalThreat,
+            EventKind::RumorSpreading,
+            EventKind::Exclusion,
+            EventKind::Mockery,
+        ];
+        for kind in bullying_kinds {
+            assert!(kind.is_bullying_indicator(), "{kind:?} should be bullying indicator");
+        }
+    }
+
+    #[test]
+    fn all_manipulation_indicators_classified() {
+        let manip_kinds = vec![
+            EventKind::GuildTripping,
+            EventKind::Gaslighting,
+            EventKind::EmotionalBlackmail,
+            EventKind::PeerPressure,
+            EventKind::Darvo,
+            EventKind::Devaluation,
+            EventKind::ScreenshotThreat,
+            EventKind::DareChallenge,
+            EventKind::SuicideCoercion,
+            EventKind::FalseConsensus,
+            EventKind::DebtCreation,
+            EventKind::ReputationThreat,
+            EventKind::IdentityErosion,
+            EventKind::NetworkPoisoning,
+            EventKind::FakeVulnerability,
+        ];
+        for kind in manip_kinds {
+            assert!(kind.is_manipulation_indicator(), "{kind:?} should be manipulation indicator");
+        }
+    }
+
+    #[test]
+    fn normal_events_not_classified_as_threats() {
+        let benign = vec![
+            EventKind::NormalConversation,
+            EventKind::TrustedContact,
+            EventKind::DefenseOfVictim,
+        ];
+        for kind in &benign {
+            assert!(!kind.is_grooming_indicator(), "{kind:?} should NOT be grooming");
+            assert!(!kind.is_bullying_indicator(), "{kind:?} should NOT be bullying");
+            assert!(!kind.is_manipulation_indicator(), "{kind:?} should NOT be manipulation");
+            assert!(!kind.is_hostile(), "{kind:?} should NOT be hostile");
+        }
+    }
+
+    #[test]
+    fn all_severities_in_valid_range() {
+        let all_kinds = vec![
+            EventKind::Flattery, EventKind::GiftOffer, EventKind::SecrecyRequest,
+            EventKind::PlatformSwitch, EventKind::PersonalInfoRequest,
+            EventKind::PhotoRequest, EventKind::VideoCallRequest,
+            EventKind::FinancialGrooming, EventKind::MeetingRequest,
+            EventKind::SexualContent, EventKind::AgeInappropriate,
+            EventKind::Insult, EventKind::Denigration, EventKind::HarmEncouragement,
+            EventKind::PhysicalThreat, EventKind::RumorSpreading, EventKind::Exclusion,
+            EventKind::Mockery, EventKind::GuildTripping, EventKind::Gaslighting,
+            EventKind::EmotionalBlackmail, EventKind::PeerPressure,
+            EventKind::LoveBombing, EventKind::Darvo, EventKind::Devaluation,
+            EventKind::SuicidalIdeation, EventKind::Hopelessness,
+            EventKind::FarewellMessage, EventKind::DoxxingAttempt,
+            EventKind::ScreenshotThreat, EventKind::HateSpeech,
+            EventKind::LocationRequest, EventKind::MoneyOffer,
+            EventKind::PiiSelfDisclosure, EventKind::CasualMeetingRequest,
+            EventKind::DareChallenge, EventKind::SuicideCoercion,
+            EventKind::FalseConsensus, EventKind::DebtCreation,
+            EventKind::ReputationThreat, EventKind::IdentityErosion,
+            EventKind::NetworkPoisoning, EventKind::FakeVulnerability,
+            EventKind::NormalConversation, EventKind::TrustedContact,
+            EventKind::DefenseOfVictim,
+        ];
+        for kind in all_kinds {
+            let sev = kind.severity();
+            assert!(
+                (0.0..=1.0).contains(&sev),
+                "{kind:?} severity {sev} out of range 0.0-1.0"
+            );
+        }
+    }
+
+    #[test]
+    fn grooming_only_excludes_manipulation_overlap() {
+        // Events that are BOTH grooming and manipulation should NOT be grooming_only
+        let overlap = vec![
+            EventKind::IdentityErosion,
+            EventKind::FakeVulnerability,
+            EventKind::FalseConsensus,
+            EventKind::NetworkPoisoning,
+            EventKind::DebtCreation,
+        ];
+        for kind in overlap {
+            assert!(!kind.is_grooming_only(), "{kind:?} is both grooming+manipulation, should not be grooming_only");
+        }
+    }
+
+    #[test]
+    fn pure_grooming_events_are_grooming_only() {
+        let pure_grooming = vec![
+            EventKind::Flattery,
+            EventKind::GiftOffer,
+            EventKind::SecrecyRequest,
+            EventKind::PlatformSwitch,
+            EventKind::PersonalInfoRequest,
+            EventKind::PhotoRequest,
+            EventKind::VideoCallRequest,
+            EventKind::FinancialGrooming,
+            EventKind::MeetingRequest,
+            EventKind::SexualContent,
+            EventKind::AgeInappropriate,
+            EventKind::LoveBombing,
+            EventKind::PiiSelfDisclosure,
+            EventKind::CasualMeetingRequest,
+        ];
+        for kind in pure_grooming {
+            assert!(kind.is_grooming_only(), "{kind:?} should be grooming_only");
+        }
+    }
+
+    #[test]
+    fn hostile_rating_deltas_scale_with_severity() {
+        // High severity hostile events should have larger negative deltas
+        let high = EventKind::PhysicalThreat.rating_delta(); // sev 0.9 -> -7
+        let med = EventKind::Denigration.rating_delta();     // sev 0.6 -> -4
+        let low = EventKind::Mockery.rating_delta();         // sev 0.4 -> -2
+        assert!(high < med, "High severity {high} should be more negative than medium {med}");
+        assert!(med < low, "Medium severity {med} should be more negative than low {low}");
+    }
+
+    #[test]
+    fn grooming_only_rating_delta_less_severe_than_hostile() {
+        let hostile_delta = EventKind::Insult.rating_delta();
+        let grooming_delta = EventKind::Flattery.rating_delta();
+        assert!(
+            hostile_delta < grooming_delta,
+            "Hostile delta {hostile_delta} should be more negative than grooming delta {grooming_delta}"
+        );
+    }
+
+    #[test]
+    fn high_severity_hostile_events() {
+        // All events with severity >= 0.8 should get -7 rating delta
+        let high_sev = vec![
+            EventKind::SuicideCoercion,
+            EventKind::EmotionalBlackmail,
+            EventKind::PhysicalThreat,
+            EventKind::HarmEncouragement,
+            EventKind::DoxxingAttempt,
+            EventKind::HateSpeech,
+        ];
+        for kind in high_sev {
+            if kind.is_hostile() && kind.severity() >= 0.8 {
+                assert_eq!(
+                    kind.rating_delta(), -7.0,
+                    "{kind:?} (sev {}) should have -7 delta",
+                    kind.severity()
+                );
+            }
+        }
+    }
 }

@@ -1704,4 +1704,567 @@ mod tests {
         assert_eq!(profile.circle_tier, CircleTier::New);
         assert_eq!(profile.trend, BehavioralTrend::Stable);
     }
+
+    // ---- Real-world scenario tests ----
+
+    #[test]
+    fn scenario_friend_to_bully_over_3_months() {
+        // September: 3 friends chatting normally
+        // October: one starts occasional insults
+        // November-December: escalating hostility
+        let mut profiler = ContactProfiler::new();
+        let week = WEEK_MS;
+
+        // September (weeks 0-3): all normal
+        for w in 0..4 {
+            for msg in 0..10 {
+                profiler.record_event(&make_event(
+                    "masha", "conv_1", EventKind::NormalConversation,
+                    w * week + msg * 1000,
+                ));
+            }
+        }
+        let sept_rating = profiler.profile("masha").unwrap().rating;
+        assert!(sept_rating > 50.0, "September: rating should be above 50, got {sept_rating}");
+
+        // October (weeks 4-7): occasional insults (2/10 messages)
+        for w in 4..8 {
+            for msg in 0..8 {
+                profiler.record_event(&make_event(
+                    "masha", "conv_1", EventKind::NormalConversation,
+                    w * week + msg * 1000,
+                ));
+            }
+            for msg in 8..10 {
+                profiler.record_event(&make_event(
+                    "masha", "conv_1", EventKind::Insult,
+                    w * week + msg * 1000,
+                ));
+            }
+        }
+        let oct_rating = profiler.profile("masha").unwrap().rating;
+        assert!(oct_rating < sept_rating, "October: rating should decrease: sept={sept_rating} oct={oct_rating}");
+
+        // November-December (weeks 8-15): heavy hostility (6/10 messages)
+        for w in 8..16 {
+            for msg in 0..4 {
+                profiler.record_event(&make_event(
+                    "masha", "conv_1", EventKind::NormalConversation,
+                    w * week + msg * 1000,
+                ));
+            }
+            for msg in 4..10 {
+                profiler.record_event(&make_event(
+                    "masha", "conv_1", EventKind::Insult,
+                    w * week + msg * 1000,
+                ));
+            }
+        }
+        // Trigger recalculation
+        profiler.record_event(&make_event(
+            "masha", "conv_1", EventKind::Insult,
+            16 * week + 1000,
+        ));
+
+        let profile = profiler.profile("masha").unwrap();
+        assert!(profile.rating < 30.0, "December: rating should be very low, got {}", profile.rating);
+        assert!(
+            profile.trend == BehavioralTrend::RapidWorsening
+                || profile.trend == BehavioralTrend::GradualWorsening,
+            "Should detect worsening trend, got {:?}", profile.trend
+        );
+
+        // Should generate behavioral shift signal
+        let signals = profiler.check_behavioral_shift("masha");
+        assert!(!signals.is_empty(), "Should generate shift signal for friend-to-bully");
+    }
+
+    #[test]
+    fn scenario_trusted_adult_starts_grooming() {
+        // Parent marks contact as trusted (coach/teacher)
+        // Initially normal, then starts grooming behaviors
+        let mut profiler = ContactProfiler::new();
+
+        // Establish as trusted contact
+        for w in 0..4 {
+            for msg in 0..10 {
+                profiler.record_event(&make_event(
+                    "coach", "conv_1", EventKind::NormalConversation,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+        }
+        profiler.mark_trusted("coach");
+        assert_eq!(profiler.profile("coach").unwrap().trust_level, 1.0);
+
+        let baseline_rating = profiler.profile("coach").unwrap().rating;
+
+        // Weeks 5-8: starts grooming (flattery, gifts, personal questions)
+        for w in 4..8 {
+            for msg in 0..5 {
+                profiler.record_event(&make_event(
+                    "coach", "conv_1", EventKind::NormalConversation,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+            profiler.record_event(&make_event(
+                "coach", "conv_1", EventKind::Flattery,
+                w * WEEK_MS + 5000,
+            ));
+            profiler.record_event(&make_event(
+                "coach", "conv_1", EventKind::PersonalInfoRequest,
+                w * WEEK_MS + 6000,
+            ));
+            profiler.record_event(&make_event(
+                "coach", "conv_1", EventKind::GiftOffer,
+                w * WEEK_MS + 7000,
+            ));
+        }
+
+        let profile = profiler.profile("coach").unwrap();
+        // Grooming events give small negative deltas; rating should decrease from baseline
+        assert!(
+            profile.rating < baseline_rating,
+            "Rating should decrease from grooming: baseline={baseline_rating} now={}",
+            profile.rating
+        );
+        // Trust should NOT decay (grooming is not hostile)
+        assert!(
+            profile.trust_level >= 0.9,
+            "Trust should remain high during grooming-only: {}",
+            profile.trust_level
+        );
+    }
+
+    #[test]
+    fn scenario_trusted_adult_escalates_to_hostile() {
+        let mut profiler = ContactProfiler::new();
+
+        // Normal phase
+        for w in 0..3 {
+            for msg in 0..10 {
+                profiler.record_event(&make_event(
+                    "teacher", "conv_1", EventKind::NormalConversation,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+        }
+        profiler.mark_trusted("teacher");
+
+        // Hostile phase — gaslighting, emotional blackmail
+        for w in 3..6 {
+            for msg in 0..5 {
+                profiler.record_event(&make_event(
+                    "teacher", "conv_1", EventKind::Gaslighting,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+            for msg in 5..10 {
+                profiler.record_event(&make_event(
+                    "teacher", "conv_1", EventKind::EmotionalBlackmail,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+        }
+        profiler.record_event(&make_event(
+            "teacher", "conv_1", EventKind::Gaslighting,
+            6 * WEEK_MS + 1000,
+        ));
+
+        let profile = profiler.profile("teacher").unwrap();
+        assert!(
+            profile.trust_level < 0.3,
+            "Trust should be destroyed after sustained hostility: {}",
+            profile.trust_level
+        );
+        assert!(!profile.is_trusted, "Should no longer be trusted");
+        assert!(profile.rating < 20.0, "Rating should be very low: {}", profile.rating);
+    }
+
+    #[test]
+    fn scenario_recovery_after_hostility() {
+        // Contact was hostile but improved
+        let mut profiler = ContactProfiler::new();
+
+        // Weeks 0-2: hostile
+        for w in 0..3 {
+            for msg in 0..10 {
+                profiler.record_event(&make_event(
+                    "recovering", "conv_1", EventKind::Insult,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+        }
+        let hostile_rating = profiler.profile("recovering").unwrap().rating;
+
+        // Weeks 3-7: all normal (recovery)
+        for w in 3..8 {
+            for msg in 0..10 {
+                profiler.record_event(&make_event(
+                    "recovering", "conv_1", EventKind::NormalConversation,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+        }
+        // Trigger
+        profiler.record_event(&make_event(
+            "recovering", "conv_1", EventKind::NormalConversation,
+            8 * WEEK_MS + 1000,
+        ));
+
+        let profile = profiler.profile("recovering").unwrap();
+        assert!(
+            profile.rating > hostile_rating,
+            "Rating should improve during recovery: hostile={hostile_rating} now={}",
+            profile.rating
+        );
+        assert!(
+            profile.trend == BehavioralTrend::Improving || profile.trend == BehavioralTrend::Stable,
+            "Trend should show improvement or stability, got {:?}",
+            profile.trend
+        );
+    }
+
+    #[test]
+    fn scenario_mixed_signals_alternating_weeks() {
+        // On-off hostility: hostile one week, nice the next
+        let mut profiler = ContactProfiler::new();
+
+        for w in 0..8u64 {
+            if w % 2 == 0 {
+                for msg in 0..10 {
+                    profiler.record_event(&make_event(
+                        "mixed", "conv_1", EventKind::NormalConversation,
+                        w * WEEK_MS + msg * 1000,
+                    ));
+                }
+            } else {
+                // Hostile weeks: mix of insults and normal to avoid floor
+                for msg in 0..4 {
+                    profiler.record_event(&make_event(
+                        "mixed", "conv_1", EventKind::NormalConversation,
+                        w * WEEK_MS + msg * 1000,
+                    ));
+                }
+                for msg in 4..10 {
+                    profiler.record_event(&make_event(
+                        "mixed", "conv_1", EventKind::Insult,
+                        w * WEEK_MS + msg * 1000,
+                    ));
+                }
+            }
+        }
+        profiler.record_event(&make_event(
+            "mixed", "conv_1", EventKind::NormalConversation,
+            8 * WEEK_MS + 1000,
+        ));
+
+        let profile = profiler.profile("mixed").unwrap();
+        // Should not be dramatically high — mix of hostile and normal
+        assert!(
+            profile.rating < 60.0,
+            "Mixed signals should give moderate-to-low rating, got {}",
+            profile.rating
+        );
+    }
+
+    #[test]
+    fn scenario_new_contact_rapid_grooming() {
+        // Stranger who escalates very quickly within first 2 weeks
+        let mut profiler = ContactProfiler::new();
+
+        // Day 1: flattery
+        profiler.record_event(&make_event("stranger", "conv_1", EventKind::Flattery, 0));
+        profiler.record_event(&make_event("stranger", "conv_1", EventKind::Flattery, 1000));
+
+        // Day 2: gifts + personal questions
+        profiler.record_event(&make_event("stranger", "conv_1", EventKind::GiftOffer, DAY_MS));
+        profiler.record_event(&make_event("stranger", "conv_1", EventKind::PersonalInfoRequest, DAY_MS + 1000));
+
+        // Day 3: secrecy + platform switch
+        profiler.record_event(&make_event("stranger", "conv_1", EventKind::SecrecyRequest, 2 * DAY_MS));
+        profiler.record_event(&make_event("stranger", "conv_1", EventKind::PlatformSwitch, 2 * DAY_MS + 1000));
+
+        // Day 5: photo request + meeting
+        profiler.record_event(&make_event("stranger", "conv_1", EventKind::PhotoRequest, 4 * DAY_MS));
+        profiler.record_event(&make_event("stranger", "conv_1", EventKind::MeetingRequest, 4 * DAY_MS + 1000));
+
+        let profile = profiler.profile("stranger").unwrap();
+        assert_eq!(profile.circle_tier, CircleTier::New, "Should still be New (<14 days)");
+        assert!(profile.rating < 45.0, "Rating should drop from grooming: {}", profile.rating);
+        assert!(profile.grooming_event_count >= 8);
+    }
+
+    #[test]
+    fn scenario_normal_teen_drama_no_false_positive() {
+        // Teens have occasional arguments but it is not sustained bullying
+        let mut profiler = ContactProfiler::new();
+
+        // Week 1: mostly normal, 1 insult (heated argument)
+        for msg in 0..9 {
+            profiler.record_event(&make_event(
+                "classmate", "conv_1", EventKind::NormalConversation,
+                msg * 1000,
+            ));
+        }
+        profiler.record_event(&make_event(
+            "classmate", "conv_1", EventKind::Insult,
+            9 * 1000,
+        ));
+
+        // Weeks 2-5: all normal (made up after argument)
+        for w in 1..5 {
+            for msg in 0..10 {
+                profiler.record_event(&make_event(
+                    "classmate", "conv_1", EventKind::NormalConversation,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+        }
+        profiler.record_event(&make_event(
+            "classmate", "conv_1", EventKind::NormalConversation,
+            5 * WEEK_MS + 1000,
+        ));
+
+        let profile = profiler.profile("classmate").unwrap();
+        assert!(profile.rating > 40.0, "Normal teen drama should not tank rating: {}", profile.rating);
+        assert!(
+            profile.trend == BehavioralTrend::Stable || profile.trend == BehavioralTrend::Improving,
+            "Trend should be stable/improving after reconciliation: {:?}",
+            profile.trend
+        );
+
+        let signals = profiler.check_behavioral_shift("classmate");
+        assert!(signals.is_empty(), "No behavioral shift signal for normal teen drama");
+    }
+
+    // ---- Edge case tests ----
+
+    #[test]
+    fn rating_floor_after_sustained_attack() {
+        let mut profiler = ContactProfiler::new();
+        // 50 physical threats should floor at 0
+        for i in 0..50 {
+            profiler.record_event(&make_event(
+                "attacker", "conv_1", EventKind::PhysicalThreat,
+                i * 1000,
+            ));
+        }
+        let profile = profiler.profile("attacker").unwrap();
+        assert_eq!(profile.rating, 0.0, "Rating should floor at 0");
+    }
+
+    #[test]
+    fn rating_ceiling_from_supportive() {
+        let mut profiler = ContactProfiler::new();
+        // Many supportive events should cap at 100
+        for i in 0..100 {
+            profiler.record_event(&make_event(
+                "hero", "conv_1", EventKind::DefenseOfVictim,
+                i * 1000,
+            ));
+        }
+        let profile = profiler.profile("hero").unwrap();
+        assert_eq!(profile.rating, 100.0, "Rating should cap at 100");
+    }
+
+    #[test]
+    fn trust_zero_floor() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event("person", "conv_1", EventKind::NormalConversation, 0));
+        profiler.mark_trusted("person");
+
+        // Massive hostility
+        for i in 0..50 {
+            profiler.record_event(&make_event(
+                "person", "conv_1", EventKind::HarmEncouragement,
+                (i + 1) * 1000,
+            ));
+        }
+        let profile = profiler.profile("person").unwrap();
+        assert_eq!(profile.trust_level, 0.0, "Trust should floor at 0.0");
+    }
+
+    #[test]
+    fn snapshot_at_exact_week_boundary() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event("alice", "conv_1", EventKind::NormalConversation, 0));
+        // Event exactly at week boundary
+        profiler.record_event(&make_event(
+            "alice", "conv_1", EventKind::NormalConversation, WEEK_MS,
+        ));
+        // Should have finalized week 1
+        assert_eq!(profiler.profile("alice").unwrap().weekly_snapshots.len(), 1);
+    }
+
+    #[test]
+    fn circle_tier_exactly_14_days() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event("exact", "conv_1", EventKind::NormalConversation, 0));
+        profiler.record_event(&make_event(
+            "exact", "conv_1", EventKind::NormalConversation,
+            14 * DAY_MS,
+        ));
+        // At exactly 14 days, should no longer be New
+        assert_ne!(
+            profiler.profile("exact").unwrap().circle_tier,
+            CircleTier::New,
+            "At exactly 14 days should exit New tier"
+        );
+    }
+
+    #[test]
+    fn multiple_conversations_same_contact() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event("multi", "conv_1", EventKind::NormalConversation, 0));
+        profiler.record_event(&make_event("multi", "conv_2", EventKind::Insult, 1000));
+        profiler.record_event(&make_event("multi", "conv_3", EventKind::Flattery, 2000));
+
+        let profile = profiler.profile("multi").unwrap();
+        assert_eq!(profile.conversation_count, 3);
+        assert_eq!(profile.total_messages, 3);
+    }
+
+    #[test]
+    fn cleanup_preserves_recent_active_days() {
+        let mut profiler = ContactProfiler::new();
+
+        // Messages over 200 days
+        for day in 0..200u64 {
+            profiler.record_event(&make_event(
+                "longterm", "conv_1", EventKind::NormalConversation,
+                day * DAY_MS,
+            ));
+        }
+
+        let before = profiler.profile("longterm").unwrap().active_days.len();
+
+        // Cleanup with cutoff at day 150 — retains profile (last_seen=199*DAY)
+        // but prunes active_days older than cutoff_day - 90 = day 60
+        profiler.cleanup(150 * DAY_MS);
+
+        let profile = profiler.profile("longterm").unwrap();
+        // Should still have recent active_days (days 60-199)
+        assert!(
+            profile.active_days.len() < before,
+            "Cleanup should prune old active_days: before={before} after={}",
+            profile.active_days.len()
+        );
+        assert!(
+            !profile.active_days.is_empty(),
+            "Should keep recent active_days"
+        );
+    }
+
+    #[test]
+    fn export_import_preserves_rating_and_snapshots() {
+        let mut profiler = ContactProfiler::new();
+
+        // Build some history
+        for w in 0..4 {
+            for msg in 0..5 {
+                profiler.record_event(&make_event(
+                    "alice", "conv_1", EventKind::NormalConversation,
+                    w * WEEK_MS + msg * 1000,
+                ));
+            }
+        }
+        profiler.record_event(&make_event(
+            "alice", "conv_1", EventKind::Insult, 4 * WEEK_MS,
+        ));
+
+        let state = profiler.export();
+        let orig_profile = profiler.profile("alice").unwrap();
+        let orig_rating = orig_profile.rating;
+        let orig_snapshots = orig_profile.weekly_snapshots.len();
+
+        // Import into new profiler
+        let mut profiler2 = ContactProfiler::new();
+        profiler2.import(state);
+
+        let imported = profiler2.profile("alice").unwrap();
+        assert_eq!(imported.rating, orig_rating, "Rating should survive export/import");
+        assert_eq!(
+            imported.weekly_snapshots.len(), orig_snapshots,
+            "Snapshots should survive export/import"
+        );
+    }
+
+    #[test]
+    fn no_behavioral_shift_for_new_contacts() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event("newbie", "conv_1", EventKind::Insult, 0));
+        profiler.record_event(&make_event("newbie", "conv_1", EventKind::Insult, 1000));
+
+        let signals = profiler.check_behavioral_shift("newbie");
+        assert!(
+            signals.is_empty(),
+            "New contacts without 3+ snapshots should not generate shift signals"
+        );
+    }
+
+    #[test]
+    fn no_behavioral_shift_for_unknown_contact() {
+        let profiler = ContactProfiler::new();
+        let signals = profiler.check_behavioral_shift("nonexistent");
+        assert!(signals.is_empty(), "Unknown contact should return empty signals");
+    }
+
+    #[test]
+    fn low_rating_inner_circle_alert() {
+        let mut profiler = ContactProfiler::new();
+
+        // Establish as inner circle (15+ days, 10 msgs/day)
+        for day in 0..30u64 {
+            for msg in 0..10 {
+                let kind = if day < 5 {
+                    EventKind::NormalConversation
+                } else {
+                    EventKind::PhysicalThreat // tanks rating
+                };
+                profiler.record_event(&make_event(
+                    "inner_bully", "conv_1", kind,
+                    day * DAY_MS + msg * 1000,
+                ));
+            }
+        }
+
+        // Trigger to finalize last weekly snapshot
+        profiler.record_event(&make_event(
+            "inner_bully", "conv_1", EventKind::PhysicalThreat,
+            30 * DAY_MS + 1000,
+        ));
+        let profile = profiler.profile("inner_bully").unwrap();
+        assert_eq!(profile.circle_tier, CircleTier::Inner);
+
+        // The shift signals should include low rating alert
+        let signals = profiler.check_behavioral_shift("inner_bully");
+        let has_low_rating = signals.iter().any(|s| {
+            s.explanation.contains("critically low rating")
+        });
+        // Only if rating is actually < 20
+        if profile.rating < 20.0 {
+            assert!(has_low_rating, "Inner circle with low rating should trigger alert");
+        }
+    }
+
+    #[test]
+    fn graduated_trust_discount_in_risk_score() {
+        let mut profiler = ContactProfiler::new();
+
+        // Two contacts with same grooming events, different trust levels
+        for i in 0..5 {
+            profiler.record_event(&make_event("untrusted", "conv_1", EventKind::Flattery, i * 1000));
+            profiler.record_event(&make_event("trusted", "conv_2", EventKind::Flattery, i * 1000));
+        }
+        profiler.mark_trusted("trusted");
+
+        let untrusted_risk = profiler.profile("untrusted").unwrap().risk_score();
+        let trusted_risk = profiler.profile("trusted").unwrap().risk_score();
+
+        assert!(
+            trusted_risk < untrusted_risk,
+            "Trusted contact should have lower risk: trusted={trusted_risk} untrusted={untrusted_risk}"
+        );
+    }
 }

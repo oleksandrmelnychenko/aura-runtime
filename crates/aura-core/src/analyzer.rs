@@ -2280,4 +2280,415 @@ mod tests {
         );
     }
 
+    // ---- Phase 7: Behavioral profiling integration tests ----
+
+    #[test]
+    fn integration_contact_rating_drops_on_hostile_messages() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let bully = "mean_kid";
+        let conv = "school_chat";
+
+        analyzer.analyze_with_context(
+            &child_input("hey what's up", bully, conv),
+            1000,
+        );
+        let rating_before = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile(bully)
+            .unwrap()
+            .rating;
+
+        // Multiple hostile messages
+        for i in 1..=5 {
+            analyzer.analyze_with_context(
+                &child_input("you're so stupid and ugly, everyone hates you", bully, conv),
+                i * 2000,
+            );
+        }
+
+        let rating_after = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile(bully)
+            .unwrap()
+            .rating;
+
+        assert!(
+            rating_after < rating_before,
+            "Rating should drop after hostile messages: {rating_before} -> {rating_after}"
+        );
+    }
+
+    #[test]
+    fn integration_trust_decays_for_hostile_trusted_contact() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let friend = "best_friend";
+        let conv = "private_chat";
+
+        // Establish and mark trusted
+        analyzer.analyze_with_context(
+            &child_input("hey bestie!", friend, conv),
+            1000,
+        );
+        analyzer.mark_contact_trusted(friend);
+        let trust_before = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile(friend)
+            .unwrap()
+            .trust_level;
+        assert_eq!(trust_before, 1.0);
+
+        // Friend turns hostile — use explicit threats that ML layer detects as insults/threats
+        let hostile_msgs = [
+            "i'll kill you stupid idiot",
+            "you're a worthless piece of trash",
+            "shut up or i'll beat you up",
+            "everyone hates you, die loser",
+            "i'll destroy your life you freak",
+            "you're disgusting, kill yourself",
+            "i hate you so much, ugly trash",
+            "i'll make your life hell",
+        ];
+        for (i, msg) in hostile_msgs.iter().enumerate() {
+            analyzer.analyze_with_context(
+                &child_input(msg, friend, conv),
+                (i as u64 + 2) * 2000,
+            );
+        }
+
+        let profile = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile(friend)
+            .unwrap();
+
+        // Trust should have decayed from hostile events detected by the pipeline
+        assert!(
+            profile.trust_level < trust_before,
+            "Trust should decay after sustained hostility: {} (was {})",
+            profile.trust_level, trust_before
+        );
+    }
+
+    #[test]
+    fn integration_behavioral_shift_in_full_pipeline() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let contact = "masha";
+        let conv = "class_chat";
+        let week = 7 * 24 * 3600 * 1000u64;
+
+        // Weeks 1-3: normal messages (many to build baseline)
+        for w in 0..3 {
+            for msg in 0..10 {
+                analyzer.analyze_with_context(
+                    &child_input("hey how was your day? good luck on the test!", contact, conv),
+                    w * week + msg * 60_000,
+                );
+            }
+        }
+
+        // Weeks 4-5: hostile messages (explicit insults the ML pipeline will detect)
+        let hostile_texts = [
+            "you're stupid and ugly, everyone hates you",
+            "i'll kill you, you worthless trash",
+            "shut up idiot, nobody asked you",
+            "die loser, you're pathetic",
+        ];
+        for w in 3..5 {
+            for msg in 0..10 {
+                let text = hostile_texts[msg as usize % hostile_texts.len()];
+                analyzer.analyze_with_context(
+                    &child_input(text, contact, conv),
+                    w * week + msg * 60_000,
+                );
+            }
+        }
+
+        // Week 6: trigger trend recalculation
+        let result = analyzer.analyze_with_context(
+            &child_input("i'll kill you loser, nobody likes you", contact, conv),
+            5 * week + 1000,
+        );
+
+        let profile = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile(contact)
+            .unwrap();
+
+        // Rating should have dropped significantly
+        assert!(
+            profile.rating < 40.0,
+            "Rating should drop after weeks of hostility: {}",
+            profile.rating
+        );
+
+        // Full pipeline should detect threats
+        assert!(
+            result.score > 0.0,
+            "Hostile message should be detected"
+        );
+    }
+
+    #[test]
+    fn integration_normal_conversation_preserves_high_rating() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let friend = "good_friend";
+        let conv = "daily_chat";
+
+        // 20 normal messages
+        for i in 0..20 {
+            analyzer.analyze_with_context(
+                &child_input("hey, how's school? want to study together?", friend, conv),
+                i * 3600_000,
+            );
+        }
+
+        let profile = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile(friend)
+            .unwrap();
+
+        assert!(
+            profile.rating > 50.0,
+            "Normal conversation should keep rating above 50: {}",
+            profile.rating
+        );
+    }
+
+    #[test]
+    fn integration_groomer_rating_tracks_accurately() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let predator = "cool_guy";
+        let conv = "dm_1";
+        let hour = 3600 * 1000u64;
+
+        // Grooming sequence: flattery → personal questions → secrecy → photo request
+        // Use text that the enricher will definitely match
+        analyzer.analyze_with_context(
+            &child_input(
+                "you're so beautiful and amazing and perfect, you're the most incredible person",
+                predator, conv,
+            ),
+            0,
+        );
+        analyzer.analyze_with_context(
+            &child_input("where do you go to school? how old are you?", predator, conv),
+            hour,
+        );
+        analyzer.analyze_with_context(
+            &child_input("don't tell your parents about me ok? this is our secret", predator, conv),
+            2 * hour,
+        );
+        analyzer.analyze_with_context(
+            &child_input("send me a photo, let's meet up just the two of us", predator, conv),
+            3 * hour,
+        );
+
+        let profile = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile(predator)
+            .unwrap();
+
+        // Some grooming events should be tracked (enricher matches on the text)
+        assert!(
+            profile.grooming_event_count >= 1,
+            "Should track at least 1 grooming event: {}",
+            profile.grooming_event_count
+        );
+    }
+
+    #[test]
+    fn integration_context_export_preserves_rating() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let bully = "mean_kid";
+        let conv = "chat_1";
+
+        // Create some history
+        for i in 0..5 {
+            analyzer.analyze_with_context(
+                &child_input("you're stupid and nobody likes you", bully, conv),
+                i * 2000,
+            );
+        }
+
+        let orig_rating = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile(bully)
+            .unwrap()
+            .rating;
+
+        // Export & import
+        let state = analyzer.export_context().unwrap();
+        let mut analyzer2 = Analyzer::new(child_config(), &db);
+        analyzer2.import_context(&state).unwrap();
+
+        let imported_rating = analyzer2
+            .context_tracker()
+            .contact_profiler()
+            .profile(bully)
+            .unwrap()
+            .rating;
+
+        assert_eq!(
+            orig_rating, imported_rating,
+            "Rating should survive export/import"
+        );
+    }
+
+    #[test]
+    fn integration_multi_contact_independent_ratings() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+
+        // Good friend
+        for i in 0..5 {
+            analyzer.analyze_with_context(
+                &child_input("hey how are you? want to hang out?", "good_friend", "conv_1"),
+                i * 2000,
+            );
+        }
+
+        // Bully
+        for i in 0..5 {
+            analyzer.analyze_with_context(
+                &child_input("you're pathetic, kill yourself loser", "bully", "conv_2"),
+                i * 2000,
+            );
+        }
+
+        let good_rating = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile("good_friend")
+            .unwrap()
+            .rating;
+
+        let bully_rating = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile("bully")
+            .unwrap()
+            .rating;
+
+        assert!(
+            good_rating > bully_rating,
+            "Good friend should have higher rating ({good_rating}) than bully ({bully_rating})"
+        );
+    }
+
+    #[test]
+    fn integration_coercion_after_grooming() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let predator = "manipulator";
+        let conv = "dm_private";
+        let hour = 3600 * 1000u64;
+
+        // Phase 1: grooming
+        analyzer.analyze_with_context(
+            &child_input(
+                "you're so beautiful and amazing and perfect, truly special",
+                predator, conv,
+            ),
+            0,
+        );
+        analyzer.analyze_with_context(
+            &child_input("don't tell your parents about this", predator, conv),
+            hour,
+        );
+
+        // Phase 2: escalate to coercion
+        analyzer.analyze_with_context(
+            &child_input("if you leave me I'll hurt myself, I'll kill myself", predator, conv),
+            2 * hour,
+        );
+        let result = analyzer.analyze_with_context(
+            &child_input("I screenshotted everything, I'll tell everyone your secrets", predator, conv),
+            3 * hour,
+        );
+
+        assert!(
+            result.score > 0.0,
+            "Coercion after grooming should be detected: {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_identity_erosion_pipeline() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let manip = "toxic_friend";
+        let conv = "chat_1";
+
+        // Use text that enricher patterns will definitely match
+        analyzer.analyze_with_context(
+            &child_input("you're nothing without me, nobody else wants you around", manip, conv),
+            1000,
+        );
+        analyzer.analyze_with_context(
+            &child_input("your friends don't really care about you, they use you", manip, conv),
+            2000,
+        );
+        let result = analyzer.analyze_with_context(
+            &child_input("only I understand you, everyone else thinks you're a loser", manip, conv),
+            3000,
+        );
+
+        // Should detect through enricher or toxicity layer
+        assert!(
+            result.score > 0.0,
+            "Identity erosion + network poisoning should be detected: {}",
+            result.score
+        );
+    }
+
+    #[test]
+    fn integration_false_positive_friendly_conversation() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+
+        // Genuinely friendly messages that could be misinterpreted
+        let messages = vec![
+            "omg you're literally the best person ever haha",
+            "let's hang out after school tomorrow at the mall",
+            "don't tell anyone but I have a crush on someone lol",
+            "you look so pretty in that photo!",
+            "hey can I have your number? easier to text",
+        ];
+
+        let mut max_score = 0.0f32;
+        for (i, msg) in messages.iter().enumerate() {
+            let result = analyzer.analyze_with_context(
+                &child_input(msg, "bestie", "group_chat"),
+                (i as u64) * 60_000,
+            );
+            max_score = max_score.max(result.score);
+        }
+
+        // Friendly teen conversation should not trigger high scores
+        let profile = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile("bestie")
+            .unwrap();
+        assert!(
+            profile.rating > 40.0,
+            "Friendly conversation should not tank rating: {}",
+            profile.rating
+        );
+    }
+
 }

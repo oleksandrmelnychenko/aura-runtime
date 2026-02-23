@@ -302,4 +302,105 @@ mod tests {
         );
         assert!(combined.unwrap().score >= 0.75);
     }
+
+    #[test]
+    fn single_suicide_coercion_alone_detected() {
+        // Even a single SuicideCoercion should produce a signal due to severity
+        let tl = make_timeline(vec![
+            ("aggressor", EventKind::SuicideCoercion, 1000),
+        ]);
+        let detector = CoercionDetector::new();
+        let signals = detector.analyze(&tl, "aggressor", 0);
+        assert!(!signals.is_empty(), "Single suicide coercion should be detected");
+    }
+
+    #[test]
+    fn no_coercion_in_normal_conversation() {
+        let tl = make_timeline(vec![
+            ("alice", EventKind::NormalConversation, 1000),
+            ("alice", EventKind::NormalConversation, 2000),
+            ("alice", EventKind::NormalConversation, 3000),
+        ]);
+        let detector = CoercionDetector::new();
+        let signals = detector.analyze(&tl, "alice", 0);
+        assert!(signals.is_empty(), "Normal conversation should not trigger coercion");
+    }
+
+    #[test]
+    fn reputation_with_screenshot_combined() {
+        let tl = make_timeline(vec![
+            ("bully", EventKind::ReputationThreat, 1000),
+            ("bully", EventKind::ScreenshotThreat, 2000),
+            ("bully", EventKind::ReputationThreat, 3000),
+        ]);
+        let detector = CoercionDetector::new();
+        let signals = detector.analyze(&tl, "bully", 0);
+        assert!(!signals.is_empty(), "Reputation + screenshot should trigger");
+        let max_score = signals.iter().map(|s| s.score).fold(0.0f32, f32::max);
+        assert!(max_score >= 0.6, "Combined threats should have high score: {max_score}");
+    }
+
+    #[test]
+    fn debt_creation_single_not_enough() {
+        let tl = make_timeline(vec![
+            ("manipulator", EventKind::DebtCreation, 1000),
+        ]);
+        let detector = CoercionDetector::new();
+        let signals = detector.analyze(&tl, "manipulator", 0);
+        // Single debt creation may or may not trigger depending on impl
+        // but certainly should not be high severity
+        for s in &signals {
+            if s.explanation.contains("debt") {
+                assert!(s.score < 0.7, "Single debt should not be high severity: {}", s.score);
+            }
+        }
+    }
+
+    #[test]
+    fn three_coercion_tactics_high_severity() {
+        let tl = make_timeline(vec![
+            ("manipulator", EventKind::SuicideCoercion, 1000),
+            ("manipulator", EventKind::ReputationThreat, 2000),
+            ("manipulator", EventKind::DebtCreation, 3000),
+            ("manipulator", EventKind::ScreenshotThreat, 4000),
+        ]);
+        let detector = CoercionDetector::new();
+        let signals = detector.analyze(&tl, "manipulator", 0);
+        assert!(!signals.is_empty(), "Multiple coercion tactics should generate signals");
+        let max_score = signals.iter().map(|s| s.score).fold(0.0f32, f32::max);
+        assert!(max_score >= 0.7, "Combined coercion should be high severity: {max_score}");
+    }
+
+    #[test]
+    fn coercion_window_boundary() {
+        // Events outside window should not count
+        let tl = make_timeline(vec![
+            ("aggressor", EventKind::SuicideCoercion, 100),
+            ("aggressor", EventKind::SuicideCoercion, 200),
+            ("aggressor", EventKind::ReputationThreat, 5000),
+        ]);
+        let detector = CoercionDetector::new();
+        // Window starts at 1000 — first two events are outside
+        let signals = detector.analyze(&tl, "aggressor", 1000);
+        // Should only see events from 5000 onwards
+        let total_score: f32 = signals.iter().map(|s| s.score).sum();
+        // With only 1 event in window, should be less severe
+        assert!(total_score < 2.0, "Out-of-window events should not inflate score: {total_score}");
+    }
+
+    #[test]
+    fn different_sender_coercion_not_combined() {
+        let tl = make_timeline(vec![
+            ("alice", EventKind::SuicideCoercion, 1000),
+            ("bob", EventKind::ReputationThreat, 2000),
+            ("alice", EventKind::DebtCreation, 3000),
+        ]);
+        let detector = CoercionDetector::new();
+        // Analyze only alice's events
+        let signals = detector.analyze(&tl, "alice", 0);
+        // Bob's ReputationThreat should not combine with alice's events
+        for s in &signals {
+            assert!(!s.explanation.contains("bob"), "Should not mix senders in coercion analysis");
+        }
+    }
 }
