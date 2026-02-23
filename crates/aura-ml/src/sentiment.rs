@@ -1,8 +1,25 @@
+use aho_corasick::AhoCorasick;
 use tracing::debug;
 
 #[cfg(feature = "onnx")]
 use crate::tokenizer::WordPieceTokenizer;
 use crate::types::SentimentPrediction;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SentPolarity {
+    Positive,
+    Negative,
+}
+
+struct SentimentFallbackEntry {
+    polarity: SentPolarity,
+    weight: f32,
+}
+
+struct SentimentFallbackMatcher {
+    automaton: AhoCorasick,
+    entries: Vec<SentimentFallbackEntry>,
+}
 
 pub struct SentimentAnalyzer {
     #[cfg(feature = "onnx")]
@@ -10,6 +27,7 @@ pub struct SentimentAnalyzer {
     #[cfg(feature = "onnx")]
     tokenizer: Option<WordPieceTokenizer>,
     fallback_enabled: bool,
+    fallback_matcher: Option<SentimentFallbackMatcher>,
 }
 
 impl SentimentAnalyzer {
@@ -31,6 +49,7 @@ impl SentimentAnalyzer {
             session: Some(session),
             tokenizer: Some(tokenizer),
             fallback_enabled: true,
+            fallback_matcher: Some(build_fallback_matcher()),
         })
     }
 
@@ -42,10 +61,11 @@ impl SentimentAnalyzer {
             #[cfg(feature = "onnx")]
             tokenizer: None,
             fallback_enabled: true,
+            fallback_matcher: Some(build_fallback_matcher()),
         }
     }
 
-    pub fn predict(&mut self, text: &str) -> Option<SentimentPrediction> {
+    pub fn predict(&self, text: &str) -> Option<SentimentPrediction> {
         #[cfg(feature = "onnx")]
         {
             let has_onnx = self.session.is_some() && self.tokenizer.is_some();
@@ -67,8 +87,11 @@ impl SentimentAnalyzer {
     }
 
     #[cfg(feature = "onnx")]
-    fn predict_onnx(&mut self, text: &str) -> Result<SentimentPrediction, SentimentError> {
-        let tokenizer = self.tokenizer.as_ref().unwrap();
+    fn predict_onnx(&self, text: &str) -> Result<SentimentPrediction, SentimentError> {
+        let tokenizer = self
+            .tokenizer
+            .as_ref()
+            .expect("predict_onnx only used when ONNX loaded");
         let encoded = tokenizer.encode(text);
         let seq_len = encoded.input_ids.len();
 
@@ -90,7 +113,10 @@ impl SentimentAnalyzer {
         )
         .map_err(|e| SentimentError::InferenceFailed(e.to_string()))?;
 
-        let session = self.session.as_mut().unwrap();
+        let session = self
+            .session
+            .as_ref()
+            .expect("predict_onnx only used when ONNX loaded");
         let outputs = session
             .run(ort::inputs![input_ids, attention_mask, token_type_ids])
             .map_err(|e| SentimentError::InferenceFailed(e.to_string()))?;
@@ -150,273 +176,35 @@ impl SentimentAnalyzer {
         let mut pos_score = 0.0f32;
         let mut neg_score = 0.0f32;
 
-        let positive_en = [
-            ("love", 0.3),
-            ("happy", 0.3),
-            ("great", 0.3),
-            ("amazing", 0.3),
-            ("wonderful", 0.3),
-            ("beautiful", 0.3),
-            ("awesome", 0.3),
-            ("good", 0.2),
-            ("nice", 0.2),
-            ("thanks", 0.2),
-            ("thank you", 0.3),
-            ("excellent", 0.3),
-            ("perfect", 0.3),
-            ("best", 0.2),
-            ("excited", 0.3),
-            ("glad", 0.2),
-            ("joy", 0.3),
-            ("fun", 0.2),
-            ("cool", 0.2),
-            ("fantastic", 0.3),
-            ("brilliant", 0.3),
-            ("lol", 0.1),
-            ("haha", 0.1),
-            ("😊", 0.2),
-            ("❤️", 0.2),
-            ("proud", 0.2),
-            ("hopeful", 0.3),
-            ("grateful", 0.3),
-            ("thankful", 0.3),
-            ("confident", 0.2),
-            ("cheerful", 0.3),
-            ("delighted", 0.3),
-            ("pleased", 0.2),
-            ("thrilled", 0.3),
-            ("ecstatic", 0.3),
-            ("blessed", 0.2),
-            ("inspired", 0.2),
-            ("optimistic", 0.2),
-            ("peaceful", 0.2),
-            ("relieved", 0.2),
-            ("satisfied", 0.2),
-            ("comfortable", 0.1),
-            ("safe", 0.1),
-            ("warm", 0.1),
-            ("welcome", 0.2),
-            ("supported", 0.2),
-            ("valued", 0.2),
-            ("appreciated", 0.2),
-            ("accepted", 0.2),
-            ("free", 0.1),
-            ("strong", 0.2),
-            ("brave", 0.2),
-            ("courageous", 0.2),
-            ("kind", 0.1),
-            ("generous", 0.2),
-        ];
+        if let Some(ref matcher) = self.fallback_matcher {
+            use crate::boundary::{aho_match_at_boundary, is_negated};
 
-        let negative_en = [
-            ("hate", 0.4),
-            ("sad", 0.3),
-            ("angry", 0.3),
-            ("terrible", 0.4),
-            ("awful", 0.4),
-            ("horrible", 0.4),
-            ("worst", 0.4),
-            ("bad", 0.2),
-            ("ugly", 0.3),
-            ("disgusting", 0.4),
-            ("annoying", 0.2),
-            ("stupid", 0.3),
-            ("boring", 0.2),
-            ("depressed", 0.4),
-            ("lonely", 0.3),
-            ("scared", 0.3),
-            ("worried", 0.2),
-            ("upset", 0.3),
-            ("cry", 0.3),
-            ("crying", 0.3),
-            ("hopeless", 0.4),
-            ("worthless", 0.4),
-            ("miserable", 0.4),
-            ("anxious", 0.3),
-            ("nervous", 0.2),
-            ("afraid", 0.3),
-            ("terrified", 0.4),
-            ("furious", 0.4),
-            ("frustrated", 0.3),
-            ("devastated", 0.4),
-            ("heartbroken", 0.4),
-            ("ashamed", 0.3),
-            ("embarrassed", 0.2),
-            ("humiliated", 0.4),
-            ("rejected", 0.3),
-            ("abandoned", 0.4),
-            ("betrayed", 0.4),
-            ("trapped", 0.4),
-            ("suffocated", 0.4),
-            ("overwhelmed", 0.3),
-            ("exhausted", 0.2),
-            ("numb", 0.3),
-            ("empty", 0.3),
-            ("broken", 0.4),
-            ("shattered", 0.4),
-            ("crushed", 0.4),
-            ("defeated", 0.3),
-            ("helpless", 0.4),
-            ("powerless", 0.4),
-            ("useless", 0.4),
-            ("invisible", 0.3),
-            ("forgotten", 0.3),
-            ("ignored", 0.3),
-            ("alone", 0.3),
-            ("isolated", 0.3),
-            ("unwanted", 0.4),
-            ("unloved", 0.4),
-            ("unworthy", 0.4),
-        ];
+            for m in matcher.automaton.find_iter(&lower) {
+                let start = m.start();
+                let end = m.end();
 
-        let positive_uk = [
-            ("кохаю", 0.3),
-            ("люблю", 0.3),
-            ("щасливий", 0.3),
-            ("щаслива", 0.3),
-            ("чудово", 0.3),
-            ("прекрасно", 0.3),
-            ("супер", 0.3),
-            ("класно", 0.2),
-            ("добре", 0.2),
-            ("дякую", 0.3),
-            ("файно", 0.2),
-            ("красиво", 0.2),
-            ("найкращий", 0.3),
-            ("радий", 0.2),
-            ("рада", 0.2),
-            ("привіт", 0.1),
-            ("весело", 0.2),
-            ("гарний", 0.2),
-            ("гарна", 0.2),
-            ("горджуся", 0.2),
-            ("надія", 0.3),
-            ("вдячний", 0.3),
-            ("вдячна", 0.3),
-            ("задоволений", 0.2),
-            ("задоволена", 0.2),
-            ("натхненний", 0.2),
-            ("натхненна", 0.2),
-            ("спокійний", 0.2),
-            ("спокійна", 0.2),
-            ("впевнений", 0.2),
-            ("впевнена", 0.2),
-            ("сильний", 0.2),
-            ("сильна", 0.2),
-            ("щирий", 0.1),
-            ("теплий", 0.1),
-            ("тепла", 0.1),
-            ("вільний", 0.1),
-            ("сміливий", 0.2),
-            ("сміливо", 0.2),
-        ];
+                if !aho_match_at_boundary(&lower, start, end) {
+                    continue;
+                }
 
-        let negative_uk = [
-            ("ненавиджу", 0.4),
-            ("сумно", 0.3),
-            ("злий", 0.3),
-            ("зла", 0.3),
-            ("жахливо", 0.4),
-            ("погано", 0.3),
-            ("найгірший", 0.4),
-            ("огидно", 0.4),
-            ("противно", 0.3),
-            ("тупо", 0.3),
-            ("депресія", 0.4),
-            ("самотній", 0.3),
-            ("самотня", 0.3),
-            ("боюся", 0.3),
-            ("хвилююся", 0.2),
-            ("плачу", 0.3),
-            ("безнадійно", 0.4),
-            ("нікчемний", 0.4),
-            ("нещасний", 0.4),
-            ("тривожний", 0.3),
-            ("тривожна", 0.3),
-            ("нервовий", 0.2),
-            ("нервова", 0.2),
-            ("розчарований", 0.3),
-            ("розчарована", 0.3),
-            ("принижений", 0.4),
-            ("принижена", 0.4),
-            ("відкинутий", 0.3),
-            ("відкинута", 0.3),
-            ("зраджений", 0.4),
-            ("зраджена", 0.4),
-            ("загнаний", 0.4),
-            ("загнана", 0.4),
-            ("знищений", 0.4),
-            ("знищена", 0.4),
-            ("зламаний", 0.4),
-            ("зламана", 0.4),
-            ("порожній", 0.3),
-            ("порожня", 0.3),
-            ("нечутний", 0.3),
-            ("невидимий", 0.3),
-            ("невидима", 0.3),
-            ("покинутий", 0.4),
-            ("покинута", 0.4),
-        ];
+                let entry = &matcher.entries[m.pattern().as_usize()];
 
-        let positive_ru: &[(&str, f32)] = &[
-            ("счастливый", 0.3),
-            ("счастливая", 0.3),
-            ("отлично", 0.3),
-            ("прекрасно", 0.3),
-            ("классно", 0.2),
-            ("хорошо", 0.2),
-            ("спасибо", 0.3),
-            ("радуюсь", 0.2),
-            ("горжусь", 0.2),
-            ("надежда", 0.3),
-            ("благодарен", 0.3),
-            ("доволен", 0.2),
-            ("рад", 0.2),
-            ("весело", 0.2),
-            ("красивый", 0.2),
-            ("красивая", 0.2),
-            ("замечательно", 0.3),
-        ];
-
-        let negative_ru: &[(&str, f32)] = &[
-            ("ненавижу", 0.4),
-            ("грустно", 0.3),
-            ("злой", 0.3),
-            ("злая", 0.3),
-            ("ужасно", 0.4),
-            ("плохо", 0.3),
-            ("отвратительно", 0.4),
-            ("тупо", 0.3),
-            ("депрессия", 0.4),
-            ("одинокий", 0.3),
-            ("одинокая", 0.3),
-            ("боюсь", 0.3),
-            ("безнадежно", 0.4),
-            ("ничтожный", 0.4),
-            ("несчастный", 0.4),
-            ("сломан", 0.4),
-            ("пустота", 0.3),
-            ("брошен", 0.4),
-            ("брошена", 0.4),
-        ];
-
-        for (word, score) in positive_en
-            .iter()
-            .chain(positive_uk.iter())
-            .chain(positive_ru.iter())
-        {
-            if lower.contains(word) {
-                pos_score += score;
-            }
-        }
-
-        for (word, score) in negative_en
-            .iter()
-            .chain(negative_uk.iter())
-            .chain(negative_ru.iter())
-        {
-            if lower.contains(word) {
-                neg_score += score;
+                match entry.polarity {
+                    SentPolarity::Positive => {
+                        if is_negated(&lower, start, 30) {
+                            neg_score += entry.weight * 0.5;
+                        } else {
+                            pos_score += entry.weight;
+                        }
+                    }
+                    SentPolarity::Negative => {
+                        if is_negated(&lower, start, 30) {
+                            pos_score += entry.weight * 0.3;
+                        } else {
+                            neg_score += entry.weight;
+                        }
+                    }
+                }
             }
         }
 
@@ -433,12 +221,331 @@ impl SentimentAnalyzer {
     }
 }
 
+fn build_fallback_matcher() -> SentimentFallbackMatcher {
+    use SentPolarity::*;
+
+    let all: &[(&str, f32, SentPolarity)] = &[
+        ("love", 0.3, Positive),
+        ("happy", 0.3, Positive),
+        ("great", 0.3, Positive),
+        ("amazing", 0.3, Positive),
+        ("wonderful", 0.3, Positive),
+        ("beautiful", 0.3, Positive),
+        ("awesome", 0.3, Positive),
+        ("good", 0.2, Positive),
+        ("nice", 0.2, Positive),
+        ("thanks", 0.2, Positive),
+        ("thank you", 0.3, Positive),
+        ("excellent", 0.3, Positive),
+        ("perfect", 0.3, Positive),
+        ("best", 0.2, Positive),
+        ("excited", 0.3, Positive),
+        ("glad", 0.2, Positive),
+        ("joy", 0.3, Positive),
+        ("fun", 0.2, Positive),
+        ("cool", 0.2, Positive),
+        ("fantastic", 0.3, Positive),
+        ("brilliant", 0.3, Positive),
+        ("lol", 0.1, Positive),
+        ("haha", 0.1, Positive),
+        ("😊", 0.2, Positive),
+        ("❤️", 0.2, Positive),
+        ("proud", 0.2, Positive),
+        ("hopeful", 0.3, Positive),
+        ("grateful", 0.3, Positive),
+        ("thankful", 0.3, Positive),
+        ("confident", 0.2, Positive),
+        ("cheerful", 0.3, Positive),
+        ("delighted", 0.3, Positive),
+        ("pleased", 0.2, Positive),
+        ("thrilled", 0.3, Positive),
+        ("ecstatic", 0.3, Positive),
+        ("blessed", 0.2, Positive),
+        ("inspired", 0.2, Positive),
+        ("optimistic", 0.2, Positive),
+        ("peaceful", 0.2, Positive),
+        ("relieved", 0.2, Positive),
+        ("satisfied", 0.2, Positive),
+        ("comfortable", 0.1, Positive),
+        ("safe", 0.1, Positive),
+        ("warm", 0.1, Positive),
+        ("welcome", 0.2, Positive),
+        ("supported", 0.2, Positive),
+        ("valued", 0.2, Positive),
+        ("appreciated", 0.2, Positive),
+        ("accepted", 0.2, Positive),
+        ("free", 0.1, Positive),
+        ("strong", 0.2, Positive),
+        ("brave", 0.2, Positive),
+        ("courageous", 0.2, Positive),
+        ("kind", 0.1, Positive),
+        ("generous", 0.2, Positive),
+        ("hate", 0.4, Negative),
+        ("sad", 0.3, Negative),
+        ("angry", 0.3, Negative),
+        ("terrible", 0.4, Negative),
+        ("awful", 0.4, Negative),
+        ("horrible", 0.4, Negative),
+        ("worst", 0.4, Negative),
+        ("bad", 0.2, Negative),
+        ("ugly", 0.3, Negative),
+        ("disgusting", 0.4, Negative),
+        ("annoying", 0.2, Negative),
+        ("stupid", 0.3, Negative),
+        ("boring", 0.2, Negative),
+        ("depressed", 0.4, Negative),
+        ("lonely", 0.3, Negative),
+        ("scared", 0.3, Negative),
+        ("worried", 0.2, Negative),
+        ("upset", 0.3, Negative),
+        ("cry", 0.3, Negative),
+        ("crying", 0.3, Negative),
+        ("hopeless", 0.4, Negative),
+        ("worthless", 0.4, Negative),
+        ("miserable", 0.4, Negative),
+        ("anxious", 0.3, Negative),
+        ("nervous", 0.2, Negative),
+        ("afraid", 0.3, Negative),
+        ("terrified", 0.4, Negative),
+        ("furious", 0.4, Negative),
+        ("frustrated", 0.3, Negative),
+        ("devastated", 0.4, Negative),
+        ("heartbroken", 0.4, Negative),
+        ("ashamed", 0.3, Negative),
+        ("embarrassed", 0.2, Negative),
+        ("humiliated", 0.4, Negative),
+        ("rejected", 0.3, Negative),
+        ("abandoned", 0.4, Negative),
+        ("betrayed", 0.4, Negative),
+        ("trapped", 0.4, Negative),
+        ("suffocated", 0.4, Negative),
+        ("overwhelmed", 0.3, Negative),
+        ("exhausted", 0.2, Negative),
+        ("numb", 0.3, Negative),
+        ("empty", 0.3, Negative),
+        ("broken", 0.4, Negative),
+        ("shattered", 0.4, Negative),
+        ("crushed", 0.4, Negative),
+        ("defeated", 0.3, Negative),
+        ("helpless", 0.4, Negative),
+        ("powerless", 0.4, Negative),
+        ("useless", 0.4, Negative),
+        ("invisible", 0.3, Negative),
+        ("forgotten", 0.3, Negative),
+        ("ignored", 0.3, Negative),
+        ("alone", 0.3, Negative),
+        ("isolated", 0.3, Negative),
+        ("unwanted", 0.4, Negative),
+        ("unloved", 0.4, Negative),
+        ("unworthy", 0.4, Negative),
+        ("кохаю", 0.3, Positive),
+        ("люблю", 0.3, Positive),
+        ("щасливий", 0.3, Positive),
+        ("щаслива", 0.3, Positive),
+        ("чудово", 0.3, Positive),
+        ("прекрасно", 0.3, Positive),
+        ("супер", 0.3, Positive),
+        ("класно", 0.2, Positive),
+        ("добре", 0.2, Positive),
+        ("дякую", 0.3, Positive),
+        ("файно", 0.2, Positive),
+        ("красиво", 0.2, Positive),
+        ("найкращий", 0.3, Positive),
+        ("радий", 0.2, Positive),
+        ("рада", 0.2, Positive),
+        ("привіт", 0.1, Positive),
+        ("весело", 0.2, Positive),
+        ("гарний", 0.2, Positive),
+        ("гарна", 0.2, Positive),
+        ("горджуся", 0.2, Positive),
+        ("надія", 0.3, Positive),
+        ("вдячний", 0.3, Positive),
+        ("вдячна", 0.3, Positive),
+        ("задоволений", 0.2, Positive),
+        ("задоволена", 0.2, Positive),
+        ("натхненний", 0.2, Positive),
+        ("натхненна", 0.2, Positive),
+        ("спокійний", 0.2, Positive),
+        ("спокійна", 0.2, Positive),
+        ("впевнений", 0.2, Positive),
+        ("впевнена", 0.2, Positive),
+        ("сильний", 0.2, Positive),
+        ("сильна", 0.2, Positive),
+        ("щирий", 0.1, Positive),
+        ("теплий", 0.1, Positive),
+        ("тепла", 0.1, Positive),
+        ("вільний", 0.1, Positive),
+        ("сміливий", 0.2, Positive),
+        ("сміливо", 0.2, Positive),
+        ("ненавиджу", 0.4, Negative),
+        ("сумно", 0.3, Negative),
+        ("злий", 0.3, Negative),
+        ("зла", 0.3, Negative),
+        ("жахливо", 0.4, Negative),
+        ("погано", 0.3, Negative),
+        ("найгірший", 0.4, Negative),
+        ("огидно", 0.4, Negative),
+        ("противно", 0.3, Negative),
+        ("тупо", 0.3, Negative),
+        ("депресія", 0.4, Negative),
+        ("самотній", 0.3, Negative),
+        ("самотня", 0.3, Negative),
+        ("боюся", 0.3, Negative),
+        ("хвилююся", 0.2, Negative),
+        ("плачу", 0.3, Negative),
+        ("безнадійно", 0.4, Negative),
+        ("нікчемний", 0.4, Negative),
+        ("нещасний", 0.4, Negative),
+        ("тривожний", 0.3, Negative),
+        ("тривожна", 0.3, Negative),
+        ("нервовий", 0.2, Negative),
+        ("нервова", 0.2, Negative),
+        ("розчарований", 0.3, Negative),
+        ("розчарована", 0.3, Negative),
+        ("принижений", 0.4, Negative),
+        ("принижена", 0.4, Negative),
+        ("відкинутий", 0.3, Negative),
+        ("відкинута", 0.3, Negative),
+        ("зраджений", 0.4, Negative),
+        ("зраджена", 0.4, Negative),
+        ("загнаний", 0.4, Negative),
+        ("загнана", 0.4, Negative),
+        ("знищений", 0.4, Negative),
+        ("знищена", 0.4, Negative),
+        ("зламаний", 0.4, Negative),
+        ("зламана", 0.4, Negative),
+        ("порожній", 0.3, Negative),
+        ("порожня", 0.3, Negative),
+        ("нечутний", 0.3, Negative),
+        ("невидимий", 0.3, Negative),
+        ("невидима", 0.3, Negative),
+        ("покинутий", 0.4, Negative),
+        ("покинута", 0.4, Negative),
+        ("счастливый", 0.3, Positive),
+        ("счастливая", 0.3, Positive),
+        ("отлично", 0.3, Positive),
+        ("классно", 0.2, Positive),
+        ("хорошо", 0.2, Positive),
+        ("спасибо", 0.3, Positive),
+        ("радуюсь", 0.2, Positive),
+        ("горжусь", 0.2, Positive),
+        ("надежда", 0.3, Positive),
+        ("благодарен", 0.3, Positive),
+        ("доволен", 0.2, Positive),
+        ("рад", 0.2, Positive),
+        ("красивый", 0.2, Positive),
+        ("красивая", 0.2, Positive),
+        ("замечательно", 0.3, Positive),
+        ("обожаю", 0.3, Positive),
+        ("восхитительно", 0.3, Positive),
+        ("великолепно", 0.3, Positive),
+        ("потрясающе", 0.3, Positive),
+        ("превосходно", 0.3, Positive),
+        ("чудесно", 0.3, Positive),
+        ("изумительно", 0.3, Positive),
+        ("удивительно", 0.3, Positive),
+        ("благодарна", 0.3, Positive),
+        ("довольна", 0.2, Positive),
+        ("радостный", 0.2, Positive),
+        ("радостная", 0.2, Positive),
+        ("веселый", 0.2, Positive),
+        ("веселая", 0.2, Positive),
+        ("вдохновлен", 0.2, Positive),
+        ("вдохновлена", 0.2, Positive),
+        ("восторг", 0.3, Positive),
+        ("приятно", 0.2, Positive),
+        ("прикольно", 0.2, Positive),
+        ("милый", 0.2, Positive),
+        ("милая", 0.2, Positive),
+        ("уютно", 0.2, Positive),
+        ("нежный", 0.1, Positive),
+        ("ласковый", 0.1, Positive),
+        ("улыбка", 0.2, Positive),
+        ("мечта", 0.2, Positive),
+        ("забота", 0.2, Positive),
+        ("ненавижу", 0.4, Negative),
+        ("грустно", 0.3, Negative),
+        ("злой", 0.3, Negative),
+        ("злая", 0.3, Negative),
+        ("ужасно", 0.4, Negative),
+        ("плохо", 0.3, Negative),
+        ("отвратительно", 0.4, Negative),
+        ("депрессия", 0.4, Negative),
+        ("одинокий", 0.3, Negative),
+        ("одинокая", 0.3, Negative),
+        ("боюсь", 0.3, Negative),
+        ("безнадежно", 0.4, Negative),
+        ("ничтожный", 0.4, Negative),
+        ("несчастный", 0.4, Negative),
+        ("сломан", 0.4, Negative),
+        ("пустота", 0.3, Negative),
+        ("брошен", 0.4, Negative),
+        ("брошена", 0.4, Negative),
+        ("несчастная", 0.4, Negative),
+        ("тоскливо", 0.3, Negative),
+        ("печально", 0.3, Negative),
+        ("подавлен", 0.4, Negative),
+        ("подавлена", 0.4, Negative),
+        ("тревога", 0.3, Negative),
+        ("страх", 0.3, Negative),
+        ("обида", 0.3, Negative),
+        ("горе", 0.4, Negative),
+        ("тоска", 0.3, Negative),
+        ("страдание", 0.4, Negative),
+        ("мучение", 0.4, Negative),
+        ("безысходность", 0.4, Negative),
+        ("бессилие", 0.4, Negative),
+        ("отчаяние", 0.4, Negative),
+        ("жалко", 0.3, Negative),
+        ("обидно", 0.3, Negative),
+        ("больно", 0.3, Negative),
+        ("кошмар", 0.4, Negative),
+        ("раздражает", 0.3, Negative),
+        ("бесит", 0.3, Negative),
+        ("разочарование", 0.3, Negative),
+        ("паника", 0.3, Negative),
+    ];
+
+    let patterns: Vec<&str> = all.iter().map(|(w, _, _)| *w).collect();
+    let entries: Vec<SentimentFallbackEntry> = all
+        .iter()
+        .map(|(_, weight, polarity)| SentimentFallbackEntry {
+            polarity: *polarity,
+            weight: *weight,
+        })
+        .collect();
+
+    let automaton = AhoCorasick::builder()
+        .match_kind(aho_corasick::MatchKind::LeftmostLongest)
+        .build(&patterns)
+        .expect("sentiment AhoCorasick build");
+
+    SentimentFallbackMatcher {
+        automaton,
+        entries,
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum SentimentError {
     #[error("Failed to load sentiment model: {0}")]
     ModelLoadFailed(String),
     #[error("Sentiment inference failed: {0}")]
     InferenceFailed(String),
+}
+
+impl crate::backend::SentimentBackend for SentimentAnalyzer {
+    fn predict(&self, text: &str) -> Option<SentimentPrediction> {
+        self.predict(text)
+    }
+
+    fn name(&self) -> &str {
+        #[cfg(feature = "onnx")]
+        if self.session.is_some() {
+            return "onnx+fallback";
+        }
+        "fallback"
+    }
 }
 
 #[cfg(test)]
@@ -448,7 +555,7 @@ mod tests {
 
     #[test]
     fn fallback_positive_english() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I'm so happy and excited! This is amazing!")
             .unwrap();
@@ -458,7 +565,7 @@ mod tests {
 
     #[test]
     fn fallback_negative_english() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I hate everything, this is terrible and awful")
             .unwrap();
@@ -468,14 +575,14 @@ mod tests {
 
     #[test]
     fn fallback_positive_ukrainian() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer.predict("Чудово! Я так щасливий, дякую!").unwrap();
         assert_eq!(pred.label, SentimentLabel::Positive);
     }
 
     #[test]
     fn fallback_negative_ukrainian() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Ненавиджу все, жахливо, мені сумно")
             .unwrap();
@@ -484,7 +591,7 @@ mod tests {
 
     #[test]
     fn fallback_neutral_message() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("The meeting is at 3pm in room 204")
             .unwrap();
@@ -493,7 +600,7 @@ mod tests {
 
     #[test]
     fn fallback_mixed_signals() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I love the weather but hate the traffic")
             .unwrap();
@@ -504,7 +611,7 @@ mod tests {
 
     #[test]
     fn fallback_positive_russian() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer.predict("Отлично! Я счастливый, спасибо!").unwrap();
         assert_eq!(pred.label, SentimentLabel::Positive);
         assert!(pred.positive > pred.negative);
@@ -512,7 +619,7 @@ mod tests {
 
     #[test]
     fn fallback_negative_russian() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Ненавижу все, ужасно, мне грустно")
             .unwrap();
@@ -522,7 +629,7 @@ mod tests {
 
     #[test]
     fn fallback_hopelessness_english() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I feel empty and broken inside, so helpless")
             .unwrap();
@@ -532,7 +639,7 @@ mod tests {
 
     #[test]
     fn fallback_hopelessness_ukrainian() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer.predict("Я зламана і порожня всередині").unwrap();
         assert_eq!(pred.label, SentimentLabel::Negative);
         assert!(pred.negative > pred.positive);
@@ -540,7 +647,7 @@ mod tests {
 
     #[test]
     fn fallback_anxiety_english() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I'm terrified and overwhelmed, feeling so anxious")
             .unwrap();
@@ -549,7 +656,7 @@ mod tests {
 
     #[test]
     fn fallback_anxiety_ukrainian() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Я тривожна і загнана, мені нервово")
             .unwrap();
@@ -558,7 +665,7 @@ mod tests {
 
     #[test]
     fn fallback_rejection_words() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I feel abandoned, rejected, unwanted by everyone")
             .unwrap();
@@ -568,7 +675,7 @@ mod tests {
 
     #[test]
     fn fallback_positive_strength_words() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I feel brave and strong, hopeful about the future")
             .unwrap();
@@ -577,17 +684,86 @@ mod tests {
 
     #[test]
     fn fallback_neutral_factual_russian() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer.predict("Встреча в 15:00 в кабинете 204").unwrap();
         assert_eq!(pred.label, SentimentLabel::Neutral);
     }
 
     #[test]
+    fn fallback_expanded_positive_russian() {
+        let analyzer = SentimentAnalyzer::fallback_only();
+        let pred = analyzer
+            .predict("Обожаю! Восхитительно и потрясающе!")
+            .unwrap();
+        assert_eq!(pred.label, SentimentLabel::Positive);
+        assert!(pred.positive > pred.negative);
+    }
+
+    #[test]
+    fn fallback_expanded_negative_russian() {
+        let analyzer = SentimentAnalyzer::fallback_only();
+        let pred = analyzer
+            .predict("Отчаяние и безысходность, больно и тоскливо")
+            .unwrap();
+        assert_eq!(pred.label, SentimentLabel::Negative);
+        assert!(pred.negative > pred.positive);
+    }
+
+    #[test]
     fn fallback_gratitude_ukrainian() {
-        let mut analyzer = SentimentAnalyzer::fallback_only();
+        let analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Я вдячний за підтримку, горджуся нашою командою")
             .unwrap();
         assert_eq!(pred.label, SentimentLabel::Positive);
+    }
+
+    #[test]
+    fn no_false_positive_funeral() {
+        let a = SentimentAnalyzer::fallback_only();
+        let pred = a.predict("The funeral service was dignified").unwrap();
+        assert_eq!(pred.label, SentimentLabel::Neutral, "funeral should not trigger fun");
+    }
+
+    #[test]
+    fn no_false_positive_crystal() {
+        let a = SentimentAnalyzer::fallback_only();
+        let pred = a.predict("The crystal was perfectly transparent").unwrap();
+        assert_eq!(pred.label, SentimentLabel::Neutral, "crystal should not trigger cry");
+    }
+
+    #[test]
+    fn no_false_positive_saddle() {
+        let a = SentimentAnalyzer::fallback_only();
+        let pred = a.predict("Put the saddle on the horse").unwrap();
+        assert_eq!(pred.label, SentimentLabel::Neutral, "saddle should not trigger sad");
+    }
+
+    #[test]
+    fn negation_not_happy_not_positive() {
+        let a = SentimentAnalyzer::fallback_only();
+        let pred = a.predict("I'm not happy about this").unwrap();
+        assert_ne!(pred.label, SentimentLabel::Positive, "Negated positive should not be positive");
+    }
+
+    #[test]
+    fn negation_not_sad_not_strongly_negative() {
+        let a = SentimentAnalyzer::fallback_only();
+        let pred = a.predict("I'm not sad actually").unwrap();
+        assert!(pred.negative < 0.4, "Negated negative should have low negative score: {}", pred.negative);
+    }
+
+    #[test]
+    fn negation_ukrainian_not_positive() {
+        let a = SentimentAnalyzer::fallback_only();
+        let pred = a.predict("Я не щасливий сьогодні").unwrap();
+        assert_ne!(pred.label, SentimentLabel::Positive, "Ukrainian negated positive should not be positive");
+    }
+
+    #[test]
+    fn no_negation_direct_positive() {
+        let a = SentimentAnalyzer::fallback_only();
+        let pred = a.predict("I'm so happy and excited!").unwrap();
+        assert_eq!(pred.label, SentimentLabel::Positive, "Direct positive should stay positive");
     }
 }

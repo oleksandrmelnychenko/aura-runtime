@@ -20,6 +20,13 @@ pub struct AuraConfig {
 
     #[serde(default)]
     pub account_holder_age: Option<u16>,
+
+    #[serde(default = "default_ttl_days")]
+    pub ttl_days: u32,
+}
+
+fn default_ttl_days() -> u32 {
+    30
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -65,6 +72,23 @@ impl AuraConfig {
     pub fn bullying_detection_enabled(&self) -> bool {
         self.enabled && self.effective_protection_level() != ProtectionLevel::Off
     }
+
+    pub fn validate(&self) -> Result<(), crate::error::AuraError> {
+        if self.ttl_days == 0 || self.ttl_days > 365 {
+            return Err(crate::error::AuraError::InvalidConfig(format!(
+                "ttl_days must be 1..=365, got {}",
+                self.ttl_days
+            )));
+        }
+        if let Some(age) = self.account_holder_age {
+            if age < 5 || age > 120 {
+                return Err(crate::error::AuraError::InvalidConfig(format!(
+                    "account_holder_age must be 5..=120, got {age}"
+                )));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for AuraConfig {
@@ -78,6 +102,7 @@ impl Default for AuraConfig {
             patterns_path: None,
             models_path: None,
             account_holder_age: None,
+            ttl_days: 30,
         }
     }
 }

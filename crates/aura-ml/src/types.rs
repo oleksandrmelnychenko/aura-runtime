@@ -3,9 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MlResult {
     pub toxicity: Option<ToxicityPrediction>,
-
     pub sentiment: Option<SentimentPrediction>,
-
     pub inference_time_us: u64,
 }
 
@@ -26,17 +24,11 @@ impl MlResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToxicityPrediction {
     pub toxicity: f32,
-
     pub severe_toxicity: f32,
-
     pub identity_attack: f32,
-
     pub insult: f32,
-
     pub sexual_explicit: f32,
-
     pub threat: f32,
-
     pub primary_label: Option<ToxicityLabel>,
 }
 
@@ -54,10 +46,11 @@ impl ToxicityPrediction {
             (self.insult, ToxicityLabel::Insult),
         ];
 
+        use std::cmp::Ordering;
         scores
             .iter()
             .filter(|(score, _)| *score >= threshold)
-            .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+            .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal))
             .map(|(_, label)| *label)
     }
 }
@@ -75,11 +68,8 @@ pub enum ToxicityLabel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SentimentPrediction {
     pub positive: f32,
-
     pub neutral: f32,
-
     pub negative: f32,
-
     pub label: SentimentLabel,
 }
 
@@ -112,17 +102,11 @@ pub enum SentimentLabel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MlConfig {
     pub toxicity_model_path: Option<String>,
-
     pub sentiment_model_path: Option<String>,
-
     pub vocab_path: Option<String>,
-
     pub max_seq_length: usize,
-
     pub toxicity_threshold: f32,
-
     pub use_fallback: bool,
-
     pub language: String,
 }
 

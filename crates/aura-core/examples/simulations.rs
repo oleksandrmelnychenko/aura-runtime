@@ -1,5 +1,5 @@
 use aura_core::context::events::EventKind;
-use aura_core::{Analyzer, AuraConfig, ContentType, MessageInput};
+use aura_core::{Analyzer, AuraConfig, ContentType, ConversationType, MessageInput};
 use aura_patterns::PatternDatabase;
 
 fn main() {
@@ -60,6 +60,8 @@ fn msg(text: &str, sender: &str, conv: &str) -> MessageInput {
         sender_id: sender.to_string(),
         conversation_id: conv.to_string(),
         language: Some("en".to_string()),
+        conversation_type: ConversationType::Direct,
+        member_count: None,
     }
 }
 
@@ -71,6 +73,8 @@ fn msg_uk(text: &str, sender: &str, conv: &str) -> MessageInput {
         sender_id: sender.to_string(),
         conversation_id: conv.to_string(),
         language: Some("uk".to_string()),
+        conversation_type: ConversationType::Direct,
+        member_count: None,
     }
 }
 

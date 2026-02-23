@@ -30,13 +30,9 @@ pub enum Confidence {
 #[serde(rename_all = "snake_case")]
 pub enum Action {
     Allow,
-
     Mark,
-
     Blur,
-
     Warn,
-
     Block,
 }
 
@@ -54,9 +50,7 @@ pub enum ProtectionLevel {
 #[serde(rename_all = "snake_case")]
 pub enum AccountType {
     Adult,
-
     Teen,
-
     Child,
 }
 
@@ -64,9 +58,7 @@ pub enum AccountType {
 #[serde(rename_all = "snake_case")]
 pub enum DetectionLayer {
     PatternMatching,
-
     MlClassification,
-
     ContextAnalysis,
 }
 
@@ -82,21 +74,13 @@ pub struct DetectionSignal {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisResult {
     pub threat_type: ThreatType,
-
     pub confidence: Confidence,
-
     pub action: Action,
-
     pub score: f32,
-
     pub explanation: String,
-
     pub detected_threats: Vec<(ThreatType, f32)>,
-
     pub signals: Vec<DetectionSignal>,
-
     pub recommended_action: Option<ActionRecommendation>,
-
     pub analysis_time_us: u64,
 }
 
@@ -138,21 +122,25 @@ pub enum AlertPriority {
 #[serde(rename_all = "snake_case")]
 pub enum FollowUpAction {
     MonitorConversation,
-
     BlockSuggested,
-
     ReviewContactProfile,
-
     ReportToAuthorities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionRecommendation {
     pub parent_alert: AlertPriority,
-
     pub follow_ups: Vec<FollowUpAction>,
-
     pub crisis_resources: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationType {
+    #[default]
+    Direct,
+    GroupChat,
+    Group,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,4 +160,6 @@ pub struct MessageInput {
     pub sender_id: String,
     pub conversation_id: String,
     pub language: Option<String>,
+    pub conversation_type: ConversationType,
+    pub member_count: Option<u32>,
 }

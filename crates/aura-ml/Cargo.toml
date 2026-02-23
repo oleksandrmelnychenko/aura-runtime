@@ -8,12 +8,15 @@ description = "ML inference engine for AURA (Layer 2: toxicity, sentiment, inten
 default = []
 # Enable real ONNX Runtime inference. Without this, uses rule-based fallback.
 onnx = ["ort", "ndarray"]
+# Future: Apple CoreML backend via coreml-sys or objc2
+coreml = []
 
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde_json.workspace = true
+aho-corasick = "1"
 
 # ONNX Runtime — optional, only when `onnx` feature is enabled.
 ort = { version = "2.0.0-rc.11", features = ["load-dynamic", "ndarray"], optional = true }

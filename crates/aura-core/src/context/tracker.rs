@@ -2,7 +2,14 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::DetectionSignal;
+use crate::error::AuraError;
+use crate::types::{ConversationType, DetectionSignal};
+
+const TRACKER_STATE_VERSION: u32 = 1;
+
+fn default_state_version() -> u32 {
+    1
+}
 
 use super::bullying::BullyingDetector;
 use super::contact::ContactProfiler;
@@ -26,6 +33,9 @@ pub struct TrackerConfig {
 
     #[serde(default)]
     pub account_holder_age: Option<u16>,
+
+    #[serde(default)]
+    pub auto_cleanup_interval: u32,
 }
 
 impl Default for TrackerConfig {
@@ -38,6 +48,7 @@ impl Default for TrackerConfig {
             is_child_account: false,
             is_teen_account: false,
             account_holder_age: None,
+            auto_cleanup_interval: 0,
         }
     }
 }
@@ -45,6 +56,8 @@ impl Default for TrackerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationTimeline {
     pub conversation_id: String,
+    #[serde(default)]
+    pub conversation_type: ConversationType,
     events: Vec<ContextEvent>,
     max_events: usize,
 }
@@ -53,6 +66,20 @@ impl ConversationTimeline {
     pub fn new(conversation_id: String, max_events: usize) -> Self {
         Self {
             conversation_id,
+            conversation_type: ConversationType::Direct,
+            events: Vec::new(),
+            max_events,
+        }
+    }
+
+    pub fn new_with_type(
+        conversation_id: String,
+        max_events: usize,
+        conversation_type: ConversationType,
+    ) -> Self {
+        Self {
+            conversation_id,
+            conversation_type,
             events: Vec::new(),
             max_events,
         }
@@ -133,6 +160,7 @@ pub struct ConversationTracker {
     selfharm_detector: SelfHarmDetector,
     raid_detector: RaidDetector,
     contact_profiler: ContactProfiler,
+    call_count: u32,
 }
 
 impl ConversationTracker {
@@ -154,6 +182,17 @@ impl ConversationTracker {
             selfharm_detector,
             raid_detector,
             contact_profiler,
+            call_count: 0,
+        }
+    }
+
+    pub fn set_conversation_type(
+        &mut self,
+        conversation_id: &str,
+        conversation_type: ConversationType,
+    ) {
+        if let Some(timeline) = self.timelines.get_mut(conversation_id) {
+            timeline.conversation_type = conversation_type;
         }
     }
 
@@ -184,7 +223,10 @@ impl ConversationTracker {
 
         let mut signals = Vec::new();
 
-        let timeline = self.timelines.get(&conversation_id).unwrap();
+        let timeline = match self.timelines.get(&conversation_id) {
+            Some(t) => t,
+            None => return signals,
+        };
         let grooming_signals = self.grooming_detector.analyze(
             timeline,
             &sender_id,
@@ -228,9 +270,20 @@ impl ConversationTracker {
 
     pub fn record_events(&mut self, events: Vec<ContextEvent>) -> Vec<DetectionSignal> {
         let mut all_signals = Vec::new();
+        let mut latest_ts = 0u64;
+        for event in &events {
+            latest_ts = latest_ts.max(event.timestamp_ms);
+        }
         for event in events {
             let signals = self.record_event(event);
             all_signals.extend(signals);
+        }
+        if self.config.auto_cleanup_interval > 0 {
+            self.call_count += 1;
+            if self.call_count >= self.config.auto_cleanup_interval {
+                self.call_count = 0;
+                self.cleanup(latest_ts);
+            }
         }
         all_signals
     }
@@ -257,14 +310,21 @@ impl ConversationTracker {
 
     pub fn export_state(&self) -> Result<String, serde_json::Error> {
         let state = TrackerState {
+            schema_version: TRACKER_STATE_VERSION,
             timelines: self.timelines.values().cloned().collect(),
             contact_profiler: self.contact_profiler.export(),
         };
         serde_json::to_string(&state)
     }
 
-    pub fn import_state(&mut self, json: &str) -> Result<(), serde_json::Error> {
+    pub fn import_state(&mut self, json: &str) -> Result<(), AuraError> {
         let state: TrackerState = serde_json::from_str(json)?;
+        if state.schema_version > TRACKER_STATE_VERSION {
+            return Err(AuraError::IncompatibleStateVersion {
+                found: state.schema_version,
+                supported: TRACKER_STATE_VERSION,
+            });
+        }
         for timeline in state.timelines {
             self.timelines
                 .insert(timeline.conversation_id.clone(), timeline);
@@ -296,6 +356,8 @@ impl ConversationTracker {
 
 #[derive(Serialize, Deserialize)]
 struct TrackerState {
+    #[serde(default = "default_state_version")]
+    schema_version: u32,
     timelines: Vec<ConversationTimeline>,
     contact_profiler: contact::ContactProfilerState,
 }
@@ -400,5 +462,84 @@ mod tests {
         tracker2.import_state(&state).unwrap();
 
         assert_eq!(tracker2.timeline("conv_1").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn state_export_contains_schema_version() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Flattery, 1000));
+
+        let state = tracker.export_state().unwrap();
+        assert!(
+            state.contains("\"schema_version\":1"),
+            "Exported state should contain schema_version: {state}"
+        );
+    }
+
+    #[test]
+    fn state_import_old_json_without_version() {
+        let old_json = r#"{"timelines":[],"contact_profiler":{"profiles":[]}}"#;
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        assert!(tracker.import_state(old_json).is_ok());
+    }
+
+    #[test]
+    fn state_import_future_version_fails() {
+        let future_json =
+            r#"{"schema_version":999,"timelines":[],"contact_profiler":{"profiles":[]}}"#;
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        let result = tracker.import_state(future_json);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("incompatible state version"),
+            "Error should mention incompatible version: {err}"
+        );
+    }
+
+    #[test]
+    fn auto_cleanup_triggers_after_interval() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            analysis_window_ms: 10_000,
+            auto_cleanup_interval: 3,
+            ..Default::default()
+        });
+
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
+        assert_eq!(tracker.timeline("conv_1").unwrap().len(), 1);
+
+        tracker.record_events(vec![make_event(
+            "conv_1",
+            "alice",
+            EventKind::NormalConversation,
+            20_000,
+        )]);
+        assert_eq!(tracker.timeline("conv_1").unwrap().len(), 2);
+
+        tracker.record_events(vec![make_event(
+            "conv_1",
+            "alice",
+            EventKind::NormalConversation,
+            20_001,
+        )]);
+        assert_eq!(tracker.timeline("conv_1").unwrap().len(), 3);
+
+        tracker.record_events(vec![make_event(
+            "conv_1",
+            "alice",
+            EventKind::NormalConversation,
+            20_002,
+        )]);
+        assert_eq!(
+            tracker.timeline("conv_1").unwrap().len(),
+            3,
+            "After auto-cleanup, old event should be removed"
+        );
+    }
+
+    #[test]
+    fn auto_cleanup_disabled_by_default() {
+        let config = TrackerConfig::default();
+        assert_eq!(config.auto_cleanup_interval, 0);
     }
 }

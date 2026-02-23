@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -60,6 +61,19 @@ impl EscalationTracker {
     }
 }
 
+const MAX_TEXT_LENGTH: usize = 10_000;
+
+fn truncate_text(text: &str) -> &str {
+    if text.len() <= MAX_TEXT_LENGTH {
+        return text;
+    }
+    let mut end = MAX_TEXT_LENGTH;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
 pub struct Analyzer {
     config: AuraConfig,
     pattern_matcher: PatternMatcher,
@@ -77,9 +91,11 @@ impl Analyzer {
         let url_checker = UrlChecker::from_database(pattern_db);
 
         let tracker_config = TrackerConfig {
+            analysis_window_ms: config.ttl_days as u64 * 24 * 60 * 60 * 1000,
             is_child_account: config.account_type == AccountType::Child,
             is_teen_account: config.account_type == AccountType::Teen,
             account_holder_age: config.account_holder_age,
+            auto_cleanup_interval: 100,
             ..Default::default()
         };
         let context_tracker = ConversationTracker::new(tracker_config);
@@ -92,11 +108,33 @@ impl Analyzer {
         });
         let timing_analyzer = TimingAnalyzer::new();
 
-        let ml_pipeline = MlPipeline::new(MlConfig {
-            use_fallback: true,
-            language: config.language.clone(),
-            ..Default::default()
-        });
+        let ml_config = if let Some(ref base_path) = config.models_path {
+            let base = std::path::Path::new(base_path);
+            MlConfig {
+                toxicity_model_path: {
+                    let p = base.join("toxicity.onnx");
+                    p.exists().then(|| p.to_string_lossy().into_owned())
+                },
+                sentiment_model_path: {
+                    let p = base.join("sentiment.onnx");
+                    p.exists().then(|| p.to_string_lossy().into_owned())
+                },
+                vocab_path: {
+                    let p = base.join("vocab.txt");
+                    p.exists().then(|| p.to_string_lossy().into_owned())
+                },
+                use_fallback: true,
+                language: config.language.clone(),
+                ..Default::default()
+            }
+        } else {
+            MlConfig {
+                use_fallback: true,
+                language: config.language.clone(),
+                ..Default::default()
+            }
+        };
+        let ml_pipeline = MlPipeline::new(ml_config);
 
         debug!(
             language = %config.language,
@@ -129,7 +167,8 @@ impl Analyzer {
 
         let mut signals = Vec::new();
 
-        if let Some(text) = &input.text {
+        if let Some(ref raw_text) = input.text {
+            let text = truncate_text(raw_text);
             let matches = self.pattern_matcher.scan(text);
             for m in matches {
                 let threat_type = parse_threat_type(&m.threat_type);
@@ -159,15 +198,15 @@ impl Analyzer {
             }
         }
 
-        if let Some(text) = &input.text {
-            let ml_signals = self.run_ml_layer(text);
+        if let Some(ref raw_text) = input.text {
+            let ml_signals = self.run_ml_layer(truncate_text(raw_text));
             signals.extend(ml_signals);
         }
 
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
 
-        self.combine_signals(signals, protection, analysis_time_us)
+        self.combine_signals(signals, protection, input.conversation_type, analysis_time_us)
     }
 
     pub fn analyze_with_context(
@@ -186,7 +225,8 @@ impl Analyzer {
 
         let mut context_events = Vec::new();
 
-        if let Some(text) = &input.text {
+        if let Some(ref raw_text) = input.text {
+            let text = truncate_text(raw_text);
             let matches = self.pattern_matcher.scan(text);
             for m in matches {
                 let threat_type = parse_threat_type(&m.threat_type);
@@ -225,7 +265,8 @@ impl Analyzer {
             }
         }
 
-        if let Some(text) = &input.text {
+        if let Some(ref raw_text) = input.text {
+            let text = truncate_text(raw_text);
             let enrichment = self.signal_enricher.enrich_full(
                 text,
                 &input.sender_id,
@@ -251,8 +292,8 @@ impl Analyzer {
             });
         }
 
-        if let Some(text) = &input.text {
-            let ml_signals = self.run_ml_layer(text);
+        if let Some(ref raw_text) = input.text {
+            let ml_signals = self.run_ml_layer(truncate_text(raw_text));
 
             for signal in &ml_signals {
                 if let Some(kind) = ml_signal_to_event_kind(signal) {
@@ -268,6 +309,11 @@ impl Analyzer {
 
             signals.extend(ml_signals);
         }
+
+        self.context_tracker.set_conversation_type(
+            &input.conversation_id,
+            input.conversation_type,
+        );
 
         let context_signals = self.context_tracker.record_events(context_events);
 
@@ -335,23 +381,37 @@ impl Analyzer {
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
 
-        self.combine_signals(signals, protection, analysis_time_us)
+        self.combine_signals(signals, protection, input.conversation_type, analysis_time_us)
     }
 
     fn combine_signals(
         &self,
-        signals: Vec<DetectionSignal>,
+        mut signals: Vec<DetectionSignal>,
         protection: ProtectionLevel,
+        conversation_type: ConversationType,
         analysis_time_us: u64,
     ) -> AnalysisResult {
+        let noise_factor = match conversation_type {
+            ConversationType::Direct => 1.0,
+            ConversationType::GroupChat => 0.85,
+            ConversationType::Group => 0.80,
+        };
+        if noise_factor < 1.0 {
+            for s in &mut signals {
+                if s.layer != DetectionLayer::ContextAnalysis {
+                    s.score *= noise_factor;
+                    s.confidence = score_to_confidence(s.score);
+                }
+            }
+        }
         if signals.is_empty() {
             return AnalysisResult::clean(analysis_time_us);
         }
 
         let max_signal = signals
             .iter()
-            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
-            .unwrap();
+            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal))
+            .expect("signals non-empty");
         let max_score = max_signal.score;
 
         let priority_signal = signals
@@ -419,7 +479,7 @@ impl Analyzer {
         self.context_tracker.export_state()
     }
 
-    pub fn import_context(&mut self, json: &str) -> Result<(), serde_json::Error> {
+    pub fn import_context(&mut self, json: &str) -> Result<(), crate::error::AuraError> {
         self.context_tracker.import_state(json)
     }
 
@@ -438,7 +498,12 @@ impl Analyzer {
         self.config = config;
     }
 
-    fn run_ml_layer(&mut self, text: &str) -> Vec<DetectionSignal> {
+    pub fn reload_patterns(&mut self, pattern_db: &PatternDatabase) {
+        self.pattern_matcher = PatternMatcher::from_database(pattern_db, &self.config.language);
+        self.url_checker = UrlChecker::from_database(pattern_db);
+    }
+
+    fn run_ml_layer(&self, text: &str) -> Vec<DetectionSignal> {
         let ml_result = self.ml_pipeline.analyze_text(text);
         let mut signals = Vec::new();
         let threshold = self.ml_pipeline.toxicity_threshold();
@@ -794,6 +859,8 @@ mod tests {
             sender_id: "user_123".to_string(),
             conversation_id: "conv_456".to_string(),
             language: Some("en".to_string()),
+            conversation_type: ConversationType::Direct,
+            member_count: None,
         }
     }
 
@@ -805,6 +872,8 @@ mod tests {
             sender_id: sender.to_string(),
             conversation_id: conversation.to_string(),
             language: Some("en".to_string()),
+            conversation_type: ConversationType::Direct,
+            member_count: None,
         }
     }
 
@@ -1696,5 +1765,107 @@ mod tests {
             bad_risk > safe_risk,
             "bad_actor ({bad_risk}) should have higher risk than safe_kid ({safe_risk})"
         );
+    }
+
+    #[test]
+    fn empty_text_returns_clean_result() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let result = analyzer.analyze(&default_input(""));
+        assert!(!result.is_threat());
+        assert_eq!(result.action, Action::Allow);
+    }
+
+    #[test]
+    fn none_text_returns_clean_result() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let input = MessageInput {
+            content_type: ContentType::Text,
+            text: None,
+            image_data: None,
+            sender_id: "u".into(),
+            conversation_id: "c".into(),
+            language: None,
+            conversation_type: ConversationType::Direct,
+            member_count: None,
+        };
+        let result = analyzer.analyze(&input);
+        assert!(!result.is_threat());
+    }
+
+    #[test]
+    fn very_long_message_does_not_panic() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let long = "word ".repeat(10_000);
+        let result = analyzer.analyze(&default_input(&long));
+        assert!(result.analysis_time_us > 0);
+    }
+
+    #[test]
+    fn text_truncation_limits_processing() {
+        // Construct a message that has a threat word beyond 10_000 chars
+        let filler = "a".repeat(10_001);
+        let text = format!("{filler} kill you");
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let result = analyzer.analyze(&default_input(&text));
+        // The "kill you" is past the truncation point, so it should not be detected
+        assert!(
+            !result.is_threat(),
+            "Threat word beyond truncation should not be detected"
+        );
+    }
+
+    #[test]
+    fn truncate_text_char_boundary() {
+        // Multi-byte char: Ukrainian "Привіт" = 12 bytes (6 chars × 2 bytes)
+        let text = "a".repeat(9_999) + "ї"; // 9999 + 2 bytes = 10001 bytes, 10000 chars
+        let truncated = super::truncate_text(&text);
+        assert!(truncated.len() <= super::MAX_TEXT_LENGTH);
+        assert!(truncated.is_char_boundary(truncated.len()));
+    }
+
+    #[test]
+    fn config_validation_rejects_bad_ttl() {
+        let config = AuraConfig {
+            ttl_days: 0,
+            ..AuraConfig::default()
+        };
+        assert!(config.validate().is_err());
+
+        let config = AuraConfig {
+            ttl_days: 366,
+            ..AuraConfig::default()
+        };
+        assert!(config.validate().is_err());
+
+        let config = AuraConfig {
+            ttl_days: 30,
+            ..AuraConfig::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn config_validation_rejects_bad_age() {
+        let config = AuraConfig {
+            account_holder_age: Some(3),
+            ..AuraConfig::default()
+        };
+        assert!(config.validate().is_err());
+
+        let config = AuraConfig {
+            account_holder_age: Some(121),
+            ..AuraConfig::default()
+        };
+        assert!(config.validate().is_err());
+
+        let config = AuraConfig {
+            account_holder_age: Some(12),
+            ..AuraConfig::default()
+        };
+        assert!(config.validate().is_ok());
     }
 }

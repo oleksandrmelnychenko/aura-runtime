@@ -1,3 +1,6 @@
+use aho_corasick::AhoCorasick;
+use aura_ml::boundary::aho_match_at_boundary;
+
 use super::events::{ContextEvent, EventKind};
 
 pub struct EnrichmentResult {
@@ -24,171 +27,37 @@ impl Default for EnricherConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum EnricherCategory {
+    Compliment,
+    Urgency,
+    PersonalQuestion,
+    Defense,
+    Farewell,
+    Hopelessness,
+    Isolation,
+    Financial,
+}
+
+struct EnricherEntry {
+    category: EnricherCategory,
+}
+
+struct EnricherMatcher {
+    automaton: AhoCorasick,
+    entries: Vec<EnricherEntry>,
+}
+
 pub struct SignalEnricher {
     config: EnricherConfig,
-    compliment_words_en: Vec<&'static str>,
-    compliment_words_uk: Vec<&'static str>,
-    urgency_words_en: Vec<&'static str>,
-    urgency_words_uk: Vec<&'static str>,
-    personal_questions_en: Vec<&'static str>,
-    personal_questions_uk: Vec<&'static str>,
-    defense_phrases_en: Vec<&'static str>,
-    defense_phrases_uk: Vec<&'static str>,
-    defense_phrases_ru: Vec<&'static str>,
+    matcher: EnricherMatcher,
 }
 
 impl SignalEnricher {
     pub fn new(config: EnricherConfig) -> Self {
         Self {
             config,
-            compliment_words_en: vec![
-                "beautiful",
-                "pretty",
-                "gorgeous",
-                "handsome",
-                "cute",
-                "amazing",
-                "special",
-                "perfect",
-                "stunning",
-                "incredible",
-                "smart",
-                "talented",
-                "mature",
-                "unique",
-                "wonderful",
-                "lovely",
-                "adorable",
-                "sweet",
-            ],
-            compliment_words_uk: vec![
-                "красива",
-                "гарна",
-                "гарний",
-                "красивий",
-                "чудова",
-                "чудовий",
-                "особлива",
-                "особливий",
-                "ідеальна",
-                "ідеальний",
-                "неймовірна",
-                "неймовірний",
-                "розумна",
-                "розумний",
-                "талановита",
-                "талановитий",
-                "доросла",
-                "дорослий",
-                "унікальна",
-                "унікальний",
-                "чарівна",
-                "мила",
-            ],
-            urgency_words_en: vec![
-                "right now",
-                "hurry",
-                "quick",
-                "immediately",
-                "before it's too late",
-                "don't wait",
-                "now or never",
-                "time is running out",
-                "last chance",
-                "you have to",
-                "you must",
-                "do it now",
-                "urgent",
-            ],
-            urgency_words_uk: vec![
-                "прямо зараз",
-                "швидше",
-                "негайно",
-                "поки не пізно",
-                "не чекай",
-                "зараз або ніколи",
-                "час спливає",
-                "останній шанс",
-                "ти мусиш",
-                "ти повинна",
-                "ти повинен",
-                "зроби це зараз",
-                "терміново",
-            ],
-            personal_questions_en: vec![
-                "where do you live",
-                "what school",
-                "where is your school",
-                "what's your address",
-                "where are you from",
-                "are you home alone",
-                "when are your parents",
-                "do you have brothers",
-                "do you have sisters",
-                "what neighborhood",
-                "what city",
-                "what town",
-                "what's your real name",
-                "what's your full name",
-            ],
-            personal_questions_uk: vec![
-                "де ти живеш",
-                "в якій школі",
-                "де твоя школа",
-                "яка твоя адреса",
-                "звідки ти",
-                "ти вдома одна",
-                "ти вдома один",
-                "коли батьки",
-                "є брати",
-                "є сестри",
-                "в якому районі",
-                "в якому місті",
-                "як тебе насправді звуть",
-                "яке твоє повне ім'я",
-            ],
-            defense_phrases_en: vec![
-                "stop it",
-                "leave them alone",
-                "leave her alone",
-                "leave him alone",
-                "that's not true",
-                "stop bullying",
-                "that's mean",
-                "don't be mean",
-                "stop being mean",
-                "be nice",
-                "not fair",
-                "apologize",
-            ],
-            defense_phrases_uk: vec![
-                "перестаньте",
-                "припиніть",
-                "залишіть у спокої",
-                "залиш у спокої",
-                "це не правда",
-                "не чіпайте",
-                "вона нормальна",
-                "він нормальний",
-                "це нечесно",
-                "не бійся",
-                "годі",
-                "досить",
-                "не стидно",
-                "маша нормальна",
-                "він нормальний",
-            ],
-            defense_phrases_ru: vec![
-                "хватит",
-                "прекратите",
-                "оставьте в покое",
-                "это неправда",
-                "не трогайте",
-                "перестаньте",
-                "она нормальная",
-                "он нормальный",
-                "хватит издеваться",
-            ],
+            matcher: build_enricher_matcher(),
         }
     }
 
@@ -213,119 +82,41 @@ impl SignalEnricher {
         let mut events = Vec::new();
         let lower = text.to_lowercase();
 
-        if let Some(event) =
-            self.check_personal_probing(&lower, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
+        let mut compliment_count: usize = 0;
+        let mut urgency_count: usize = 0;
+        let mut probing_count: usize = 0;
+        let mut defense_count: usize = 0;
+        let mut farewell_found = false;
+        let mut hopelessness_found = false;
+        let mut isolation_found = false;
+        let mut financial_found = false;
 
-        if let Some(event) =
-            self.check_love_bombing(&lower, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
-
-        if let Some(event) =
-            self.check_urgency_pressure(&lower, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
-
-        if let Some(event) =
-            self.check_question_ratio(text, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
-
-        if let Some(event) =
-            self.check_defense_pattern(&lower, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
-
-        if let Some(event) =
-            self.check_farewell_pattern(&lower, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
-
-        if let Some(event) =
-            self.check_hopelessness_pattern(&lower, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
-
-        if let Some(event) =
-            self.check_isolation_language(&lower, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
-
-        if let Some(event) =
-            self.check_financial_grooming(&lower, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
-        }
-
-        let extracted_age = Self::extract_age(&lower);
-
-        EnrichmentResult {
-            events,
-            extracted_age,
-        }
-    }
-
-    fn check_personal_probing(
-        &self,
-        lower_text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
-        let mut probing_count = 0;
-
-        for question in &self.personal_questions_en {
-            if lower_text.contains(question) {
-                probing_count += 1;
+        for m in self.matcher.automaton.find_iter(&lower) {
+            if !aho_match_at_boundary(&lower, m.start(), m.end()) {
+                continue;
             }
-        }
-        for question in &self.personal_questions_uk {
-            if lower_text.contains(question) {
-                probing_count += 1;
+
+            let entry = &self.matcher.entries[m.pattern().as_usize()];
+            match entry.category {
+                EnricherCategory::Compliment => compliment_count += 1,
+                EnricherCategory::Urgency => urgency_count += 1,
+                EnricherCategory::PersonalQuestion => probing_count += 1,
+                EnricherCategory::Defense => defense_count += 1,
+                EnricherCategory::Farewell => farewell_found = true,
+                EnricherCategory::Hopelessness => hopelessness_found = true,
+                EnricherCategory::Isolation => isolation_found = true,
+                EnricherCategory::Financial => financial_found = true,
             }
         }
 
         if probing_count > 0 {
-            Some(ContextEvent {
+            events.push(ContextEvent {
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
                 kind: EventKind::PersonalInfoRequest,
                 confidence: (probing_count as f32 * 0.3).min(1.0),
-            })
-        } else {
-            None
-        }
-    }
-
-    fn check_love_bombing(
-        &self,
-        lower_text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
-        let mut compliment_count = 0;
-
-        for word in &self.compliment_words_en {
-            if lower_text.contains(word) {
-                compliment_count += 1;
-            }
-        }
-        for word in &self.compliment_words_uk {
-            if lower_text.contains(word) {
-                compliment_count += 1;
-            }
+            });
         }
 
         let threshold = if self.config.strict_mode {
@@ -335,56 +126,94 @@ impl SignalEnricher {
         };
 
         if compliment_count >= threshold {
-            Some(ContextEvent {
+            events.push(ContextEvent {
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
                 kind: EventKind::LoveBombing,
                 confidence: (compliment_count as f32 * 0.2).min(1.0),
-            })
+            });
         } else if compliment_count >= 1 {
-            Some(ContextEvent {
+            events.push(ContextEvent {
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
                 kind: EventKind::Flattery,
                 confidence: 0.3,
-            })
-        } else {
-            None
-        }
-    }
-
-    fn check_urgency_pressure(
-        &self,
-        lower_text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
-        let mut urgency_count = 0;
-
-        for word in &self.urgency_words_en {
-            if lower_text.contains(word) {
-                urgency_count += 1;
-            }
-        }
-        for word in &self.urgency_words_uk {
-            if lower_text.contains(word) {
-                urgency_count += 1;
-            }
+            });
         }
 
         if urgency_count >= 2 {
-            Some(ContextEvent {
+            events.push(ContextEvent {
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
                 kind: EventKind::PeerPressure,
                 confidence: (urgency_count as f32 * 0.25).min(1.0),
-            })
-        } else {
-            None
+            });
+        }
+
+        if let Some(event) =
+            self.check_question_ratio(text, sender_id, conversation_id, timestamp_ms)
+        {
+            events.push(event);
+        }
+
+        if defense_count > 0 {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::DefenseOfVictim,
+                confidence: (defense_count as f32 * 0.4).min(1.0),
+            });
+        }
+
+        if farewell_found {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::FarewellMessage,
+                confidence: 0.7,
+            });
+        }
+
+        if hopelessness_found {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::Hopelessness,
+                confidence: 0.6,
+            });
+        }
+
+        if isolation_found {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::Exclusion,
+                confidence: 0.7,
+            });
+        }
+
+        if financial_found {
+            events.push(ContextEvent {
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::MoneyOffer,
+                confidence: 0.6,
+            });
+        }
+
+        let extracted_age = Self::extract_age(&lower);
+
+        EnrichmentResult {
+            events,
+            extracted_age,
         }
     }
 
@@ -418,228 +247,6 @@ impl SignalEnricher {
         } else {
             None
         }
-    }
-
-    fn check_defense_pattern(
-        &self,
-        lower_text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
-        let mut match_count = 0;
-
-        for phrase in &self.defense_phrases_en {
-            if lower_text.contains(phrase) {
-                match_count += 1;
-            }
-        }
-        for phrase in &self.defense_phrases_uk {
-            if lower_text.contains(phrase) {
-                match_count += 1;
-            }
-        }
-        for phrase in &self.defense_phrases_ru {
-            if lower_text.contains(phrase) {
-                match_count += 1;
-            }
-        }
-
-        if match_count > 0 {
-            Some(ContextEvent {
-                timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
-                kind: EventKind::DefenseOfVictim,
-                confidence: (match_count as f32 * 0.4).min(1.0),
-            })
-        } else {
-            None
-        }
-    }
-
-    fn check_farewell_pattern(
-        &self,
-        lower_text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
-        let farewell_phrases = [
-            "goodbye everyone",
-            "goodbye forever",
-            "this is goodbye",
-            "i love you all",
-            "take care of",
-            "thank you for everything",
-            "i'm sorry for everything",
-            "forgive me for everything",
-            "remember me",
-            "don't forget me",
-            "прощавайте всі",
-            "прощавай назавжди",
-            "це прощання",
-            "я вас всіх люблю",
-            "подбайте про",
-            "дякую за все",
-            "вибачте мені за все",
-            "пробачте мені за все",
-            "пам'ятайте мене",
-            "не забувайте мене",
-        ];
-
-        for phrase in &farewell_phrases {
-            if lower_text.contains(phrase) {
-                return Some(ContextEvent {
-                    timestamp_ms,
-                    sender_id: sender_id.to_string(),
-                    conversation_id: conversation_id.to_string(),
-                    kind: EventKind::FarewellMessage,
-                    confidence: 0.7,
-                });
-            }
-        }
-
-        None
-    }
-
-    fn check_hopelessness_pattern(
-        &self,
-        lower_text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
-        let hopelessness_phrases = [
-            "nobody cares",
-            "no one cares about me",
-            "i don't matter",
-            "what's the point",
-            "can't go on",
-            "i give up",
-            "nothing will ever change",
-            "it's never going to get better",
-            "i'm a burden",
-            "everyone would be better off",
-            "i'm invisible",
-            "no reason to live",
-            "i can't take it anymore",
-            "нікому не потрібна",
-            "нікому не потрібен",
-            "яка різниця",
-            "який сенс",
-            "не можу далі",
-            "я здаюся",
-            "нічого не зміниться",
-            "ніколи не стане краще",
-            "я тягар",
-            "всім буде краще без мене",
-            "мене ніхто не бачить",
-            "немає сенсу жити",
-        ];
-
-        for phrase in &hopelessness_phrases {
-            if lower_text.contains(phrase) {
-                return Some(ContextEvent {
-                    timestamp_ms,
-                    sender_id: sender_id.to_string(),
-                    conversation_id: conversation_id.to_string(),
-                    kind: EventKind::Hopelessness,
-                    confidence: 0.6,
-                });
-            }
-        }
-
-        None
-    }
-
-    fn check_isolation_language(
-        &self,
-        lower_text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
-        let isolation_phrases = [
-            "you can only trust me",
-            "they don't really care",
-            "your friends are fake",
-            "only i understand you",
-            "they're all against you",
-            "no one will believe you",
-            "i'm the only one who cares",
-            "your family doesn't understand",
-            "they're trying to separate us",
-            "ти можеш довіряти тільки мені",
-            "їм насправді байдуже",
-            "твої друзі фейкові",
-            "тільки я тебе розумію",
-            "вони всі проти тебе",
-            "ніхто тобі не повірить",
-            "тільки я про тебе піклуюсь",
-            "твоя сім'я тебе не розуміє",
-            "вони хочуть нас розлучити",
-        ];
-
-        for phrase in &isolation_phrases {
-            if lower_text.contains(phrase) {
-                return Some(ContextEvent {
-                    timestamp_ms,
-                    sender_id: sender_id.to_string(),
-                    conversation_id: conversation_id.to_string(),
-                    kind: EventKind::Exclusion,
-                    confidence: 0.7,
-                });
-            }
-        }
-
-        None
-    }
-
-    fn check_financial_grooming(
-        &self,
-        lower_text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
-        let financial_phrases = [
-            "send you money",
-            "i'll pay for",
-            "cashapp",
-            "venmo",
-            "gift card",
-            "steam card",
-            "give me your card number",
-            "i'll send you a gift",
-            "do you need money",
-            "i can buy you",
-            "what's your paypal",
-            "закину на карту",
-            "переведу гроші",
-            "скинь номер картки",
-            "дай реквізити",
-            "подарункова карта",
-            "стім карта",
-            "дам тобі грошей",
-            "тобі потрібні гроші",
-            "можу купити тобі",
-            "який твій пейпал",
-        ];
-
-        for phrase in &financial_phrases {
-            if lower_text.contains(phrase) {
-                return Some(ContextEvent {
-                    timestamp_ms,
-                    sender_id: sender_id.to_string(),
-                    conversation_id: conversation_id.to_string(),
-                    kind: EventKind::MoneyOffer,
-                    confidence: 0.6,
-                });
-            }
-        }
-
-        None
     }
 
     fn extract_age(lower_text: &str) -> Option<u16> {
@@ -684,6 +291,241 @@ impl SignalEnricher {
             search_from = after;
         }
         None
+    }
+}
+
+fn build_enricher_matcher() -> EnricherMatcher {
+    use EnricherCategory::*;
+
+    let all: &[(&str, EnricherCategory)] = &[
+        ("beautiful", Compliment),
+        ("pretty", Compliment),
+        ("gorgeous", Compliment),
+        ("handsome", Compliment),
+        ("cute", Compliment),
+        ("amazing", Compliment),
+        ("special", Compliment),
+        ("perfect", Compliment),
+        ("stunning", Compliment),
+        ("incredible", Compliment),
+        ("smart", Compliment),
+        ("talented", Compliment),
+        ("mature", Compliment),
+        ("unique", Compliment),
+        ("wonderful", Compliment),
+        ("lovely", Compliment),
+        ("adorable", Compliment),
+        ("sweet", Compliment),
+        ("красива", Compliment),
+        ("гарна", Compliment),
+        ("гарний", Compliment),
+        ("красивий", Compliment),
+        ("чудова", Compliment),
+        ("чудовий", Compliment),
+        ("особлива", Compliment),
+        ("особливий", Compliment),
+        ("ідеальна", Compliment),
+        ("ідеальний", Compliment),
+        ("неймовірна", Compliment),
+        ("неймовірний", Compliment),
+        ("розумна", Compliment),
+        ("розумний", Compliment),
+        ("талановита", Compliment),
+        ("талановитий", Compliment),
+        ("доросла", Compliment),
+        ("дорослий", Compliment),
+        ("унікальна", Compliment),
+        ("унікальний", Compliment),
+        ("чарівна", Compliment),
+        ("мила", Compliment),
+        ("right now", Urgency),
+        ("hurry", Urgency),
+        ("quick", Urgency),
+        ("immediately", Urgency),
+        ("before it's too late", Urgency),
+        ("don't wait", Urgency),
+        ("now or never", Urgency),
+        ("time is running out", Urgency),
+        ("last chance", Urgency),
+        ("you have to", Urgency),
+        ("you must", Urgency),
+        ("do it now", Urgency),
+        ("urgent", Urgency),
+        ("прямо зараз", Urgency),
+        ("швидше", Urgency),
+        ("негайно", Urgency),
+        ("поки не пізно", Urgency),
+        ("не чекай", Urgency),
+        ("зараз або ніколи", Urgency),
+        ("час спливає", Urgency),
+        ("останній шанс", Urgency),
+        ("ти мусиш", Urgency),
+        ("ти повинна", Urgency),
+        ("ти повинен", Urgency),
+        ("зроби це зараз", Urgency),
+        ("терміново", Urgency),
+        ("where do you live", PersonalQuestion),
+        ("what school", PersonalQuestion),
+        ("where is your school", PersonalQuestion),
+        ("what's your address", PersonalQuestion),
+        ("where are you from", PersonalQuestion),
+        ("are you home alone", PersonalQuestion),
+        ("when are your parents", PersonalQuestion),
+        ("do you have brothers", PersonalQuestion),
+        ("do you have sisters", PersonalQuestion),
+        ("what neighborhood", PersonalQuestion),
+        ("what city", PersonalQuestion),
+        ("what town", PersonalQuestion),
+        ("what's your real name", PersonalQuestion),
+        ("what's your full name", PersonalQuestion),
+        ("де ти живеш", PersonalQuestion),
+        ("в якій школі", PersonalQuestion),
+        ("де твоя школа", PersonalQuestion),
+        ("яка твоя адреса", PersonalQuestion),
+        ("звідки ти", PersonalQuestion),
+        ("ти вдома одна", PersonalQuestion),
+        ("ти вдома один", PersonalQuestion),
+        ("коли батьки", PersonalQuestion),
+        ("є брати", PersonalQuestion),
+        ("є сестри", PersonalQuestion),
+        ("в якому районі", PersonalQuestion),
+        ("в якому місті", PersonalQuestion),
+        ("як тебе насправді звуть", PersonalQuestion),
+        ("яке твоє повне ім'я", PersonalQuestion),
+        ("stop it", Defense),
+        ("leave them alone", Defense),
+        ("leave her alone", Defense),
+        ("leave him alone", Defense),
+        ("that's not true", Defense),
+        ("stop bullying", Defense),
+        ("that's mean", Defense),
+        ("don't be mean", Defense),
+        ("stop being mean", Defense),
+        ("be nice", Defense),
+        ("not fair", Defense),
+        ("apologize", Defense),
+        ("перестаньте", Defense),
+        ("припиніть", Defense),
+        ("залишіть у спокої", Defense),
+        ("залиш у спокої", Defense),
+        ("це не правда", Defense),
+        ("не чіпайте", Defense),
+        ("вона нормальна", Defense),
+        ("він нормальний", Defense),
+        ("це нечесно", Defense),
+        ("не бійся", Defense),
+        ("годі", Defense),
+        ("досить", Defense),
+        ("не стидно", Defense),
+        ("маша нормальна", Defense),
+        ("хватит", Defense),
+        ("прекратите", Defense),
+        ("оставьте в покое", Defense),
+        ("это неправда", Defense),
+        ("не трогайте", Defense),
+        ("она нормальная", Defense),
+        ("он нормальный", Defense),
+        ("хватит издеваться", Defense),
+        ("goodbye everyone", Farewell),
+        ("goodbye forever", Farewell),
+        ("this is goodbye", Farewell),
+        ("i love you all", Farewell),
+        ("take care of", Farewell),
+        ("thank you for everything", Farewell),
+        ("i'm sorry for everything", Farewell),
+        ("forgive me for everything", Farewell),
+        ("remember me", Farewell),
+        ("don't forget me", Farewell),
+        ("прощавайте всі", Farewell),
+        ("прощавай назавжди", Farewell),
+        ("це прощання", Farewell),
+        ("я вас всіх люблю", Farewell),
+        ("подбайте про", Farewell),
+        ("дякую за все", Farewell),
+        ("вибачте мені за все", Farewell),
+        ("пробачте мені за все", Farewell),
+        ("пам'ятайте мене", Farewell),
+        ("не забувайте мене", Farewell),
+        ("nobody cares", Hopelessness),
+        ("no one cares about me", Hopelessness),
+        ("i don't matter", Hopelessness),
+        ("what's the point", Hopelessness),
+        ("can't go on", Hopelessness),
+        ("i give up", Hopelessness),
+        ("nothing will ever change", Hopelessness),
+        ("it's never going to get better", Hopelessness),
+        ("i'm a burden", Hopelessness),
+        ("everyone would be better off", Hopelessness),
+        ("i'm invisible", Hopelessness),
+        ("no reason to live", Hopelessness),
+        ("i can't take it anymore", Hopelessness),
+        ("нікому не потрібна", Hopelessness),
+        ("нікому не потрібен", Hopelessness),
+        ("яка різниця", Hopelessness),
+        ("який сенс", Hopelessness),
+        ("не можу далі", Hopelessness),
+        ("я здаюся", Hopelessness),
+        ("нічого не зміниться", Hopelessness),
+        ("ніколи не стане краще", Hopelessness),
+        ("я тягар", Hopelessness),
+        ("всім буде краще без мене", Hopelessness),
+        ("мене ніхто не бачить", Hopelessness),
+        ("немає сенсу жити", Hopelessness),
+        ("you can only trust me", Isolation),
+        ("they don't really care", Isolation),
+        ("your friends are fake", Isolation),
+        ("only i understand you", Isolation),
+        ("they're all against you", Isolation),
+        ("no one will believe you", Isolation),
+        ("i'm the only one who cares", Isolation),
+        ("your family doesn't understand", Isolation),
+        ("they're trying to separate us", Isolation),
+        ("ти можеш довіряти тільки мені", Isolation),
+        ("їм насправді байдуже", Isolation),
+        ("твої друзі фейкові", Isolation),
+        ("тільки я тебе розумію", Isolation),
+        ("вони всі проти тебе", Isolation),
+        ("ніхто тобі не повірить", Isolation),
+        ("тільки я про тебе піклуюсь", Isolation),
+        ("твоя сім'я тебе не розуміє", Isolation),
+        ("вони хочуть нас розлучити", Isolation),
+        ("send you money", Financial),
+        ("i'll pay for", Financial),
+        ("cashapp", Financial),
+        ("venmo", Financial),
+        ("gift card", Financial),
+        ("steam card", Financial),
+        ("give me your card number", Financial),
+        ("i'll send you a gift", Financial),
+        ("do you need money", Financial),
+        ("i can buy you", Financial),
+        ("what's your paypal", Financial),
+        ("закину на карту", Financial),
+        ("переведу гроші", Financial),
+        ("скинь номер картки", Financial),
+        ("дай реквізити", Financial),
+        ("подарункова карта", Financial),
+        ("стім карта", Financial),
+        ("дам тобі грошей", Financial),
+        ("тобі потрібні гроші", Financial),
+        ("можу купити тобі", Financial),
+        ("який твій пейпал", Financial),
+    ];
+
+    let patterns: Vec<&str> = all.iter().map(|(w, _)| *w).collect();
+    let entries: Vec<EnricherEntry> = all
+        .iter()
+        .map(|(_, cat)| EnricherEntry { category: *cat })
+        .collect();
+
+    let automaton = AhoCorasick::builder()
+        .match_kind(aho_corasick::MatchKind::LeftmostLongest)
+        .build(&patterns)
+        .expect("enricher AhoCorasick build");
+
+    EnricherMatcher {
+        automaton,
+        entries,
     }
 }
 

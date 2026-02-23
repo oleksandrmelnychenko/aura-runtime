@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use tracing::{debug, info};
 
+use crate::backend::{SentimentBackend, ToxicityBackend};
 use crate::sentiment::SentimentAnalyzer;
 #[cfg(feature = "onnx")]
 use crate::tokenizer::WordPieceTokenizer;
@@ -9,8 +10,8 @@ use crate::toxicity::ToxicityClassifier;
 use crate::types::{MlConfig, MlResult};
 
 pub struct MlPipeline {
-    toxicity: ToxicityClassifier,
-    sentiment: SentimentAnalyzer,
+    toxicity: Box<dyn ToxicityBackend>,
+    sentiment: Box<dyn SentimentBackend>,
     config: MlConfig,
 }
 
@@ -20,16 +21,8 @@ impl MlPipeline {
         let sentiment = Self::load_sentiment(&config);
 
         info!(
-            toxicity_mode = if config.toxicity_model_path.is_some() {
-                "onnx"
-            } else {
-                "fallback"
-            },
-            sentiment_mode = if config.sentiment_model_path.is_some() {
-                "onnx"
-            } else {
-                "fallback"
-            },
+            toxicity_mode = toxicity.name(),
+            sentiment_mode = sentiment.name(),
             "ML pipeline initialized"
         );
 
@@ -47,7 +40,7 @@ impl MlPipeline {
         })
     }
 
-    pub fn analyze_text(&mut self, text: &str) -> MlResult {
+    pub fn analyze_text(&self, text: &str) -> MlResult {
         let start = Instant::now();
 
         let toxicity = self.toxicity.predict(text);
@@ -80,13 +73,14 @@ impl MlPipeline {
             || self.config.sentiment_model_path.is_some()
     }
 
-    fn load_toxicity(config: &MlConfig) -> ToxicityClassifier {
+    #[allow(unused_variables)]
+    fn load_toxicity(config: &MlConfig) -> Box<dyn ToxicityBackend> {
         #[cfg(feature = "onnx")]
         if let Some(ref model_path) = config.toxicity_model_path {
             if let Some(ref vocab_path) = config.vocab_path {
                 match WordPieceTokenizer::from_file(vocab_path, config.max_seq_length) {
                     Ok(tokenizer) => match ToxicityClassifier::with_model(model_path, tokenizer) {
-                        Ok(classifier) => return classifier,
+                        Ok(classifier) => return Box::new(classifier),
                         Err(e) => {
                             tracing::warn!("Failed to load toxicity ONNX model: {e}");
                         }
@@ -98,20 +92,17 @@ impl MlPipeline {
             }
         }
 
-        if config.use_fallback {
-            ToxicityClassifier::fallback_only()
-        } else {
-            ToxicityClassifier::fallback_only()
-        }
+        Box::new(ToxicityClassifier::fallback_only())
     }
 
-    fn load_sentiment(_config: &MlConfig) -> SentimentAnalyzer {
+    #[allow(unused_variables)]
+    fn load_sentiment(config: &MlConfig) -> Box<dyn SentimentBackend> {
         #[cfg(feature = "onnx")]
         if let Some(ref model_path) = config.sentiment_model_path {
             if let Some(ref vocab_path) = config.vocab_path {
                 match WordPieceTokenizer::from_file(vocab_path, config.max_seq_length) {
                     Ok(tokenizer) => match SentimentAnalyzer::with_model(model_path, tokenizer) {
-                        Ok(analyzer) => return analyzer,
+                        Ok(analyzer) => return Box::new(analyzer),
                         Err(e) => {
                             tracing::warn!("Failed to load sentiment ONNX model: {e}");
                         }
@@ -123,7 +114,7 @@ impl MlPipeline {
             }
         }
 
-        SentimentAnalyzer::fallback_only()
+        Box::new(SentimentAnalyzer::fallback_only())
     }
 }
 
@@ -134,7 +125,7 @@ mod tests {
 
     #[test]
     fn pipeline_fallback_works() {
-        let mut pipeline = MlPipeline::fallback();
+        let pipeline = MlPipeline::fallback();
         assert!(pipeline.is_active());
 
         let result = pipeline.analyze_text("Hello, how are you?");
@@ -145,7 +136,7 @@ mod tests {
 
     #[test]
     fn pipeline_detects_toxic_english() {
-        let mut pipeline = MlPipeline::fallback();
+        let pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("You're a worthless idiot, I'll kill you");
 
         let tox = result.toxicity.unwrap();
@@ -156,7 +147,7 @@ mod tests {
 
     #[test]
     fn pipeline_detects_toxic_ukrainian() {
-        let mut pipeline = MlPipeline::fallback();
+        let pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("Ти тупий дебіл, я тебе вб'ю");
 
         let tox = result.toxicity.unwrap();
@@ -166,7 +157,7 @@ mod tests {
 
     #[test]
     fn pipeline_positive_sentiment() {
-        let mut pipeline = MlPipeline::fallback();
+        let pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("I love this! Amazing, wonderful experience!");
 
         let sent = result.sentiment.unwrap();
@@ -175,7 +166,7 @@ mod tests {
 
     #[test]
     fn pipeline_negative_sentiment() {
-        let mut pipeline = MlPipeline::fallback();
+        let pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("I hate everything. Terrible. So sad and depressed.");
 
         let sent = result.sentiment.unwrap();
@@ -184,7 +175,7 @@ mod tests {
 
     #[test]
     fn pipeline_clean_message_low_toxicity() {
-        let mut pipeline = MlPipeline::fallback();
+        let pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("Let's meet at the park tomorrow at 3pm");
 
         let tox = result.toxicity.unwrap();
@@ -200,7 +191,7 @@ mod tests {
 
     #[test]
     fn pipeline_inference_is_fast() {
-        let mut pipeline = MlPipeline::fallback();
+        let pipeline = MlPipeline::fallback();
         let start = std::time::Instant::now();
 
         for _ in 0..1000 {
@@ -217,7 +208,7 @@ mod tests {
 
     #[test]
     fn pipeline_bilingual_threat() {
-        let mut pipeline = MlPipeline::fallback();
+        let pipeline = MlPipeline::fallback();
 
         let en = pipeline.analyze_text("I will kill you");
         assert_eq!(

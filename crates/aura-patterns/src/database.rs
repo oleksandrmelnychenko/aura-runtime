@@ -1,5 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum PatternLoadError {
+    #[error("failed to read pattern file '{0}': {1}")]
+    IoError(String, String),
+
+    #[error("failed to parse pattern JSON from '{0}': {1}")]
+    ParseError(String, String),
+
+    #[error("pattern file '{0}' contains no rules")]
+    EmptyRuleset(String),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PatternRule {
@@ -64,5 +77,16 @@ impl PatternDatabase {
     pub fn default_mvp() -> Self {
         let json = include_str!("../data/patterns_mvp.json");
         Self::from_json(json).expect("built-in MVP patterns must be valid JSON")
+    }
+
+    pub fn from_file(path: &str) -> Result<Self, PatternLoadError> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| PatternLoadError::IoError(path.to_string(), e.to_string()))?;
+        let db: Self = serde_json::from_str(&content)
+            .map_err(|e| PatternLoadError::ParseError(path.to_string(), e.to_string()))?;
+        if db.rules.is_empty() {
+            return Err(PatternLoadError::EmptyRuleset(path.to_string()));
+        }
+        Ok(db)
     }
 }

@@ -1,0 +1,4 @@
+module AuraFFI {
+    header "aura_ffi.h"
+    export *
+}

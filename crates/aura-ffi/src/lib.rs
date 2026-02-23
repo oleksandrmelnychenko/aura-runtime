@@ -1,9 +1,30 @@
+#![allow(clippy::missing_safety_doc)]
+
+use std::cell::RefCell;
 use std::ffi::{c_void, CStr, CString};
 use std::os::raw::c_char;
 use std::sync::Mutex;
 
-use aura_core::{Analyzer, AuraConfig, ContentType, MessageInput};
+use aura_core::{Analyzer, AuraConfig, ContentType, ConversationType, MessageInput};
 use aura_patterns::PatternDatabase;
+
+const MAX_BATCH_SIZE: usize = 1000;
+
+thread_local! {
+    static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+fn set_last_error(msg: impl Into<String>) {
+    LAST_ERROR.with(|e| {
+        *e.borrow_mut() = Some(msg.into());
+    });
+}
+
+fn clear_last_error() {
+    LAST_ERROR.with(|e| {
+        *e.borrow_mut() = None;
+    });
+}
 
 struct AuraInstance {
     analyzer: Analyzer,
@@ -12,16 +33,33 @@ struct AuraInstance {
 
 #[no_mangle]
 pub unsafe extern "C" fn aura_init(config_json: *const c_char) -> *mut c_void {
+    clear_last_error();
+
     if config_json.is_null() {
+        set_last_error("null config_json pointer");
         return std::ptr::null_mut();
     }
 
     let config_str = match CStr::from_ptr(config_json).to_str() {
         Ok(s) => s,
-        Err(_) => return std::ptr::null_mut(),
+        Err(_) => {
+            set_last_error("invalid UTF-8 in config_json");
+            return std::ptr::null_mut();
+        }
     };
 
-    let config: AuraConfig = serde_json::from_str(config_str).unwrap_or_default();
+    let config: AuraConfig = match serde_json::from_str(config_str) {
+        Ok(c) => c,
+        Err(e) => {
+            set_last_error(format!("invalid config JSON: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+
+    if let Err(e) = config.validate() {
+        set_last_error(format!("config validation failed: {e}"));
+        return std::ptr::null_mut();
+    }
 
     let pattern_db = load_pattern_db(&config);
     let analyzer = Analyzer::new(config, &pattern_db);
@@ -60,6 +98,8 @@ pub unsafe extern "C" fn aura_analyze(
         sender_id: sender,
         conversation_id: conversation,
         language: None,
+        conversation_type: ConversationType::Direct,
+        member_count: None,
     };
 
     let instance = &*(handle as *mut Mutex<AuraInstance>);
@@ -100,6 +140,8 @@ pub unsafe extern "C" fn aura_analyze_json(
             .conversation_id
             .unwrap_or_else(|| "unknown".into()),
         language: ffi_input.language,
+        conversation_type: parse_conversation_type(ffi_input.conversation_type.as_deref()),
+        member_count: ffi_input.member_count,
     };
 
     let instance = &*(handle as *mut Mutex<AuraInstance>);
@@ -141,6 +183,8 @@ pub unsafe extern "C" fn aura_analyze_context(
             .conversation_id
             .unwrap_or_else(|| "unknown".into()),
         language: ffi_input.language,
+        conversation_type: parse_conversation_type(ffi_input.conversation_type.as_deref()),
+        member_count: ffi_input.member_count,
     };
 
     let instance = &*(handle as *mut Mutex<AuraInstance>);
@@ -172,6 +216,13 @@ pub unsafe extern "C" fn aura_analyze_batch(
         Err(e) => return error_json(&format!("invalid JSON in batch: {e}")),
     };
 
+    if batch_items.len() > MAX_BATCH_SIZE {
+        return error_json(&format!(
+            "batch size {} exceeds limit of {MAX_BATCH_SIZE}",
+            batch_items.len()
+        ));
+    }
+
     let instance = &*(handle as *mut Mutex<AuraInstance>);
     let mut guard = match instance.lock() {
         Ok(g) => g,
@@ -190,6 +241,8 @@ pub unsafe extern "C" fn aura_analyze_batch(
                 .clone()
                 .unwrap_or_else(|| "unknown".into()),
             language: item.language.clone(),
+            conversation_type: parse_conversation_type(item.conversation_type.as_deref()),
+            member_count: item.member_count,
         };
         let result = if let Some(ts) = item.timestamp_ms {
             guard.analyzer.analyze_with_context(&input, ts)
@@ -210,24 +263,41 @@ pub unsafe extern "C" fn aura_update_config(
     handle: *mut c_void,
     config_json: *const c_char,
 ) -> bool {
+    clear_last_error();
+
     if handle.is_null() || config_json.is_null() {
+        set_last_error("null handle or config_json pointer");
         return false;
     }
 
     let config_str = match CStr::from_ptr(config_json).to_str() {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => {
+            set_last_error("invalid UTF-8 in config_json");
+            return false;
+        }
     };
 
     let config: AuraConfig = match serde_json::from_str(config_str) {
         Ok(c) => c,
-        Err(_) => return false,
+        Err(e) => {
+            set_last_error(format!("invalid config JSON: {e}"));
+            return false;
+        }
     };
+
+    if let Err(e) = config.validate() {
+        set_last_error(format!("config validation failed: {e}"));
+        return false;
+    }
 
     let instance = &*(handle as *mut Mutex<AuraInstance>);
     let mut guard = match instance.lock() {
         Ok(g) => g,
-        Err(_) => return false,
+        Err(_) => {
+            set_last_error("mutex poisoned");
+            return false;
+        }
     };
 
     if let Some(ref path) = config.patterns_path {
@@ -242,6 +312,37 @@ pub unsafe extern "C" fn aura_update_config(
 
     guard.analyzer.update_config(config, &*db_ptr);
     true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn aura_reload_patterns(
+    handle: *mut c_void,
+    patterns_path: *const c_char,
+) -> *mut c_char {
+    if handle.is_null() || patterns_path.is_null() {
+        return error_json("null handle or patterns_path");
+    }
+
+    let path_str = match CStr::from_ptr(patterns_path).to_str() {
+        Ok(s) => s,
+        Err(_) => return error_json("invalid UTF-8 in patterns_path"),
+    };
+
+    let db = match PatternDatabase::from_file(path_str) {
+        Ok(db) => db,
+        Err(e) => return error_json(&format!("pattern load failed: {e}")),
+    };
+
+    let instance = &*(handle as *mut Mutex<AuraInstance>);
+    let mut guard = match instance.lock() {
+        Ok(g) => g,
+        Err(_) => return error_json("mutex poisoned"),
+    };
+
+    guard.analyzer.reload_patterns(&db);
+    guard.pattern_db = db;
+
+    string_to_c(r#"{"ok":true}"#.to_string())
 }
 
 #[no_mangle]
@@ -267,34 +368,55 @@ pub unsafe extern "C" fn aura_import_context(
     handle: *mut c_void,
     state_json: *const c_char,
 ) -> bool {
+    clear_last_error();
+
     if handle.is_null() || state_json.is_null() {
+        set_last_error("null handle or state_json pointer");
         return false;
     }
 
     let state_str = match CStr::from_ptr(state_json).to_str() {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => {
+            set_last_error("invalid UTF-8 in state_json");
+            return false;
+        }
     };
 
     let instance = &*(handle as *mut Mutex<AuraInstance>);
     let mut guard = match instance.lock() {
         Ok(g) => g,
-        Err(_) => return false,
+        Err(_) => {
+            set_last_error("mutex poisoned");
+            return false;
+        }
     };
 
-    guard.analyzer.import_context(state_str).is_ok()
+    match guard.analyzer.import_context(state_str) {
+        Ok(_) => true,
+        Err(e) => {
+            set_last_error(format!("import failed: {e}"));
+            false
+        }
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn aura_cleanup_context(handle: *mut c_void, now_ms: u64) -> bool {
+    clear_last_error();
+
     if handle.is_null() {
+        set_last_error("null handle");
         return false;
     }
 
     let instance = &*(handle as *mut Mutex<AuraInstance>);
     let mut guard = match instance.lock() {
         Ok(g) => g,
-        Err(_) => return false,
+        Err(_) => {
+            set_last_error("mutex poisoned");
+            return false;
+        }
     };
 
     guard.analyzer.cleanup_context(now_ms);
@@ -392,19 +514,28 @@ pub unsafe extern "C" fn aura_mark_contact_trusted(
     handle: *mut c_void,
     sender_id: *const c_char,
 ) -> bool {
+    clear_last_error();
+
     if handle.is_null() || sender_id.is_null() {
+        set_last_error("null handle or sender_id pointer");
         return false;
     }
 
     let sender_str = match CStr::from_ptr(sender_id).to_str() {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => {
+            set_last_error("invalid UTF-8 in sender_id");
+            return false;
+        }
     };
 
     let instance = &*(handle as *mut Mutex<AuraInstance>);
     let mut guard = match instance.lock() {
         Ok(g) => g,
-        Err(_) => return false,
+        Err(_) => {
+            set_last_error("mutex poisoned");
+            return false;
+        }
     };
 
     guard.analyzer.mark_contact_trusted(sender_str);
@@ -485,12 +616,25 @@ pub extern "C" fn aura_version() -> *const c_char {
     VERSION.as_ptr() as *const c_char
 }
 
+#[no_mangle]
+pub extern "C" fn aura_last_error() -> *mut c_char {
+    LAST_ERROR.with(|e| {
+        let borrow = e.borrow();
+        match borrow.as_ref() {
+            Some(msg) => string_to_c(msg.clone()),
+            None => std::ptr::null_mut(),
+        }
+    })
+}
+
 #[derive(serde::Deserialize)]
 struct FfiMessageInput {
     text: Option<String>,
     sender_id: Option<String>,
     conversation_id: Option<String>,
     language: Option<String>,
+    conversation_type: Option<String>,
+    member_count: Option<u32>,
 }
 
 #[derive(serde::Deserialize)]
@@ -500,6 +644,16 @@ struct FfiBatchItem {
     conversation_id: Option<String>,
     language: Option<String>,
     timestamp_ms: Option<u64>,
+    conversation_type: Option<String>,
+    member_count: Option<u32>,
+}
+
+fn parse_conversation_type(s: Option<&str>) -> ConversationType {
+    match s {
+        Some("group_chat") => ConversationType::GroupChat,
+        Some("group") => ConversationType::Group,
+        _ => ConversationType::Direct,
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -573,6 +727,9 @@ const ERR_INVALID_UTF8: u32 = 1001;
 const ERR_INVALID_JSON: u32 = 1002;
 const ERR_MUTEX_POISONED: u32 = 1003;
 const ERR_SERIALIZATION: u32 = 1004;
+const ERR_INVALID_CONFIG: u32 = 1005;
+const ERR_MODEL_NOT_FOUND: u32 = 1006;
+const ERR_INCOMPATIBLE_STATE: u32 = 1007;
 
 fn error_json_code(code: u32, msg: &str) -> *mut c_char {
     let json = format!(
@@ -993,6 +1150,82 @@ mod tests {
             assert_eq!(v["conversations"].as_array().unwrap().len(), 0);
 
             aura_free_string(summary_ptr);
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn last_error_null_by_default() {
+        let err = aura_last_error();
+        assert!(err.is_null(), "No error initially");
+    }
+
+    #[test]
+    fn last_error_set_on_bad_init() {
+        unsafe {
+            let bad = CString::new("{invalid!!!}").unwrap();
+            let handle = aura_init(bad.as_ptr());
+            assert!(handle.is_null(), "Bad JSON should return null handle");
+
+            let err = aura_last_error();
+            assert!(!err.is_null(), "last_error should be set");
+            let err_str = CStr::from_ptr(err).to_str().unwrap();
+            assert!(err_str.contains("invalid config JSON"), "Got: {err_str}");
+            aura_free_string(err);
+        }
+    }
+
+    #[test]
+    fn last_error_set_on_validation_failure() {
+        unsafe {
+            let config = CString::new(r#"{"protection_level":"medium","account_type":"adult","language":"en","cultural_context":"english","enabled":true,"ttl_days":0}"#).unwrap();
+            let handle = aura_init(config.as_ptr());
+            assert!(handle.is_null(), "Invalid ttl_days should return null");
+
+            let err = aura_last_error();
+            assert!(!err.is_null());
+            let err_str = CStr::from_ptr(err).to_str().unwrap();
+            assert!(err_str.contains("ttl_days"), "Got: {err_str}");
+            aura_free_string(err);
+        }
+    }
+
+    #[test]
+    fn batch_size_limit_enforced() {
+        unsafe {
+            let config = CString::new(EN_CONFIG).unwrap();
+            let handle = aura_init(config.as_ptr());
+
+            let mut items = String::from("[");
+            for i in 0..1001 {
+                if i > 0 { items.push(','); }
+                items.push_str(&format!(r#"{{"text":"msg {}","sender_id":"u","conversation_id":"c"}}"#, i));
+            }
+            items.push(']');
+            let batch = CString::new(items).unwrap();
+            let result_ptr = aura_analyze_batch(handle, batch.as_ptr());
+            let result_str = CStr::from_ptr(result_ptr).to_str().unwrap();
+            assert!(result_str.contains("error"), "Should reject oversized batch");
+            assert!(result_str.contains("1000"), "Should mention the limit");
+
+            aura_free_string(result_ptr);
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn last_error_cleared_on_success() {
+        unsafe {
+            let bad = CString::new("{invalid!!!}").unwrap();
+            let _ = aura_init(bad.as_ptr());
+
+            let config = CString::new(EN_CONFIG).unwrap();
+            let handle = aura_init(config.as_ptr());
+            assert!(!handle.is_null());
+
+            let err = aura_last_error();
+            assert!(err.is_null(), "Error should be cleared after success");
+
             aura_free(handle);
         }
     }

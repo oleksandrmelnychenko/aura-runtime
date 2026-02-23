@@ -12,5 +12,12 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
+aho-corasick = "1"
 
 [dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "analyze"
+path = "benches/analyze_bench.rs"
+harness = false
