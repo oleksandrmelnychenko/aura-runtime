@@ -727,8 +727,11 @@ const ERR_INVALID_UTF8: u32 = 1001;
 const ERR_INVALID_JSON: u32 = 1002;
 const ERR_MUTEX_POISONED: u32 = 1003;
 const ERR_SERIALIZATION: u32 = 1004;
+#[allow(dead_code)]
 const ERR_INVALID_CONFIG: u32 = 1005;
+#[allow(dead_code)]
 const ERR_MODEL_NOT_FOUND: u32 = 1006;
+#[allow(dead_code)]
 const ERR_INCOMPATIBLE_STATE: u32 = 1007;
 
 fn error_json_code(code: u32, msg: &str) -> *mut c_char {
@@ -1198,14 +1201,22 @@ mod tests {
 
             let mut items = String::from("[");
             for i in 0..1001 {
-                if i > 0 { items.push(','); }
-                items.push_str(&format!(r#"{{"text":"msg {}","sender_id":"u","conversation_id":"c"}}"#, i));
+                if i > 0 {
+                    items.push(',');
+                }
+                items.push_str(&format!(
+                    r#"{{"text":"msg {}","sender_id":"u","conversation_id":"c"}}"#,
+                    i
+                ));
             }
             items.push(']');
             let batch = CString::new(items).unwrap();
             let result_ptr = aura_analyze_batch(handle, batch.as_ptr());
             let result_str = CStr::from_ptr(result_ptr).to_str().unwrap();
-            assert!(result_str.contains("error"), "Should reject oversized batch");
+            assert!(
+                result_str.contains("error"),
+                "Should reject oversized batch"
+            );
             assert!(result_str.contains("1000"), "Should mention the limit");
 
             aura_free_string(result_ptr);

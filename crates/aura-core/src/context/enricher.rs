@@ -523,10 +523,7 @@ fn build_enricher_matcher() -> EnricherMatcher {
         .build(&patterns)
         .expect("enricher AhoCorasick build");
 
-    EnricherMatcher {
-        automaton,
-        entries,
-    }
+    EnricherMatcher { automaton, entries }
 }
 
 #[cfg(test)]

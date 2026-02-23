@@ -1,5 +1,5 @@
-use aura_core::{Analyzer, AuraConfig, ContentType, ConversationType, MessageInput};
 use aura_core::types::AccountType;
+use aura_core::{Analyzer, AuraConfig, ContentType, ConversationType, MessageInput};
 use aura_patterns::PatternDatabase;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
@@ -81,8 +81,7 @@ fn bench_context(c: &mut Criterion) {
         for i in 0..100u64 {
             analyzer.analyze_with_context(&normal, i * 60_000);
         }
-        let threat =
-            make_child_input("Don't tell your parents about me", "stranger", "conv_heavy");
+        let threat = make_child_input("Don't tell your parents about me", "stranger", "conv_heavy");
         let mut ts = 100 * 60_000u64;
         b.iter(|| {
             ts += 60_000;

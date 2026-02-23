@@ -9,17 +9,20 @@ pub fn find_at_boundary(text: &str, pattern: &str) -> Option<usize> {
     let mut start = 0;
     while start < text.len() {
         let haystack = &text[start..];
-        let pos = match haystack.find(pattern) {
-            Some(p) => p,
-            None => return None,
-        };
+        let pos = haystack.find(pattern)?;
         let abs = start + pos;
         let end = abs + pattern.len();
 
-        let before_ok =
-            abs == 0 || text[..abs].chars().next_back().map_or(true, |c| !c.is_alphanumeric());
-        let after_ok =
-            end >= text.len() || text[end..].chars().next().map_or(true, |c| !c.is_alphanumeric());
+        let before_ok = abs == 0
+            || text[..abs]
+                .chars()
+                .next_back()
+                .is_none_or(|c| !c.is_alphanumeric());
+        let after_ok = end >= text.len()
+            || text[end..]
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_alphanumeric());
 
         if before_ok && after_ok {
             return Some(abs);
@@ -38,26 +41,40 @@ pub fn aho_match_at_boundary(text: &str, match_start: usize, match_end: usize) -
         || text[..match_start]
             .chars()
             .next_back()
-            .map_or(true, |c| !c.is_alphanumeric());
+            .is_none_or(|c| !c.is_alphanumeric());
     let after_ok = match_end >= text.len()
         || text[match_end..]
             .chars()
             .next()
-            .map_or(true, |c| !c.is_alphanumeric());
+            .is_none_or(|c| !c.is_alphanumeric());
     before_ok && after_ok
 }
 
 const NEGATION_EN: &[&str] = &[
-    "not", "don't", "doesn't", "didn't", "won't", "wouldn't", "can't", "couldn't",
-    "isn't", "aren't", "wasn't", "weren't", "never", "no", "nobody", "nothing", "hardly",
+    "not", "don't", "doesn't", "didn't", "won't", "wouldn't", "can't", "couldn't", "isn't",
+    "aren't", "wasn't", "weren't", "never", "no", "nobody", "nothing", "hardly",
 ];
 
 const NEGATION_UK: &[&str] = &[
-    "не", "ні", "ніколи", "ніхто", "ніщо", "жодний", "жодна", "навряд",
+    "не",
+    "ні",
+    "ніколи",
+    "ніхто",
+    "ніщо",
+    "жодний",
+    "жодна",
+    "навряд",
 ];
 
 const NEGATION_RU: &[&str] = &[
-    "не", "ни", "никогда", "никто", "ничего", "нигде", "ничто", "едва",
+    "не",
+    "ни",
+    "никогда",
+    "никто",
+    "ничего",
+    "нигде",
+    "ничто",
+    "едва",
 ];
 
 pub fn is_negated(text: &str, match_start: usize, window_chars: usize) -> bool {
@@ -76,7 +93,11 @@ pub fn is_negated(text: &str, match_start: usize, window_chars: usize) -> bool {
     };
     let window = &text[start_byte..match_start];
 
-    for neg in NEGATION_EN.iter().chain(NEGATION_UK.iter()).chain(NEGATION_RU.iter()) {
+    for neg in NEGATION_EN
+        .iter()
+        .chain(NEGATION_UK.iter())
+        .chain(NEGATION_RU.iter())
+    {
         if find_at_boundary(&window.to_lowercase(), neg).is_some() {
             return true;
         }

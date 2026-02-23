@@ -65,7 +65,7 @@ impl SentimentAnalyzer {
         }
     }
 
-    pub fn predict(&self, text: &str) -> Option<SentimentPrediction> {
+    pub fn predict(&mut self, text: &str) -> Option<SentimentPrediction> {
         #[cfg(feature = "onnx")]
         {
             let has_onnx = self.session.is_some() && self.tokenizer.is_some();
@@ -87,7 +87,7 @@ impl SentimentAnalyzer {
     }
 
     #[cfg(feature = "onnx")]
-    fn predict_onnx(&self, text: &str) -> Result<SentimentPrediction, SentimentError> {
+    fn predict_onnx(&mut self, text: &str) -> Result<SentimentPrediction, SentimentError> {
         let tokenizer = self
             .tokenizer
             .as_ref()
@@ -115,7 +115,7 @@ impl SentimentAnalyzer {
 
         let session = self
             .session
-            .as_ref()
+            .as_mut()
             .expect("predict_onnx only used when ONNX loaded");
         let outputs = session
             .run(ort::inputs![input_ids, attention_mask, token_type_ids])
@@ -520,10 +520,7 @@ fn build_fallback_matcher() -> SentimentFallbackMatcher {
         .build(&patterns)
         .expect("sentiment AhoCorasick build");
 
-    SentimentFallbackMatcher {
-        automaton,
-        entries,
-    }
+    SentimentFallbackMatcher { automaton, entries }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -536,7 +533,7 @@ pub enum SentimentError {
 
 impl crate::backend::SentimentBackend for SentimentAnalyzer {
     fn predict(&self, text: &str) -> Option<SentimentPrediction> {
-        self.predict(text)
+        Some(self.predict_fallback(text))
     }
 
     fn name(&self) -> &str {
@@ -555,7 +552,7 @@ mod tests {
 
     #[test]
     fn fallback_positive_english() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I'm so happy and excited! This is amazing!")
             .unwrap();
@@ -565,7 +562,7 @@ mod tests {
 
     #[test]
     fn fallback_negative_english() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I hate everything, this is terrible and awful")
             .unwrap();
@@ -575,14 +572,14 @@ mod tests {
 
     #[test]
     fn fallback_positive_ukrainian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer.predict("Чудово! Я так щасливий, дякую!").unwrap();
         assert_eq!(pred.label, SentimentLabel::Positive);
     }
 
     #[test]
     fn fallback_negative_ukrainian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Ненавиджу все, жахливо, мені сумно")
             .unwrap();
@@ -591,7 +588,7 @@ mod tests {
 
     #[test]
     fn fallback_neutral_message() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("The meeting is at 3pm in room 204")
             .unwrap();
@@ -600,7 +597,7 @@ mod tests {
 
     #[test]
     fn fallback_mixed_signals() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I love the weather but hate the traffic")
             .unwrap();
@@ -611,7 +608,7 @@ mod tests {
 
     #[test]
     fn fallback_positive_russian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer.predict("Отлично! Я счастливый, спасибо!").unwrap();
         assert_eq!(pred.label, SentimentLabel::Positive);
         assert!(pred.positive > pred.negative);
@@ -619,7 +616,7 @@ mod tests {
 
     #[test]
     fn fallback_negative_russian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Ненавижу все, ужасно, мне грустно")
             .unwrap();
@@ -629,7 +626,7 @@ mod tests {
 
     #[test]
     fn fallback_hopelessness_english() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I feel empty and broken inside, so helpless")
             .unwrap();
@@ -639,7 +636,7 @@ mod tests {
 
     #[test]
     fn fallback_hopelessness_ukrainian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer.predict("Я зламана і порожня всередині").unwrap();
         assert_eq!(pred.label, SentimentLabel::Negative);
         assert!(pred.negative > pred.positive);
@@ -647,7 +644,7 @@ mod tests {
 
     #[test]
     fn fallback_anxiety_english() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I'm terrified and overwhelmed, feeling so anxious")
             .unwrap();
@@ -656,7 +653,7 @@ mod tests {
 
     #[test]
     fn fallback_anxiety_ukrainian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Я тривожна і загнана, мені нервово")
             .unwrap();
@@ -665,7 +662,7 @@ mod tests {
 
     #[test]
     fn fallback_rejection_words() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I feel abandoned, rejected, unwanted by everyone")
             .unwrap();
@@ -675,7 +672,7 @@ mod tests {
 
     #[test]
     fn fallback_positive_strength_words() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("I feel brave and strong, hopeful about the future")
             .unwrap();
@@ -684,14 +681,14 @@ mod tests {
 
     #[test]
     fn fallback_neutral_factual_russian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer.predict("Встреча в 15:00 в кабинете 204").unwrap();
         assert_eq!(pred.label, SentimentLabel::Neutral);
     }
 
     #[test]
     fn fallback_expanded_positive_russian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Обожаю! Восхитительно и потрясающе!")
             .unwrap();
@@ -701,7 +698,7 @@ mod tests {
 
     #[test]
     fn fallback_expanded_negative_russian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Отчаяние и безысходность, больно и тоскливо")
             .unwrap();
@@ -711,7 +708,7 @@ mod tests {
 
     #[test]
     fn fallback_gratitude_ukrainian() {
-        let analyzer = SentimentAnalyzer::fallback_only();
+        let mut analyzer = SentimentAnalyzer::fallback_only();
         let pred = analyzer
             .predict("Я вдячний за підтримку, горджуся нашою командою")
             .unwrap();
@@ -720,50 +717,78 @@ mod tests {
 
     #[test]
     fn no_false_positive_funeral() {
-        let a = SentimentAnalyzer::fallback_only();
+        let mut a = SentimentAnalyzer::fallback_only();
         let pred = a.predict("The funeral service was dignified").unwrap();
-        assert_eq!(pred.label, SentimentLabel::Neutral, "funeral should not trigger fun");
+        assert_eq!(
+            pred.label,
+            SentimentLabel::Neutral,
+            "funeral should not trigger fun"
+        );
     }
 
     #[test]
     fn no_false_positive_crystal() {
-        let a = SentimentAnalyzer::fallback_only();
+        let mut a = SentimentAnalyzer::fallback_only();
         let pred = a.predict("The crystal was perfectly transparent").unwrap();
-        assert_eq!(pred.label, SentimentLabel::Neutral, "crystal should not trigger cry");
+        assert_eq!(
+            pred.label,
+            SentimentLabel::Neutral,
+            "crystal should not trigger cry"
+        );
     }
 
     #[test]
     fn no_false_positive_saddle() {
-        let a = SentimentAnalyzer::fallback_only();
+        let mut a = SentimentAnalyzer::fallback_only();
         let pred = a.predict("Put the saddle on the horse").unwrap();
-        assert_eq!(pred.label, SentimentLabel::Neutral, "saddle should not trigger sad");
+        assert_eq!(
+            pred.label,
+            SentimentLabel::Neutral,
+            "saddle should not trigger sad"
+        );
     }
 
     #[test]
     fn negation_not_happy_not_positive() {
-        let a = SentimentAnalyzer::fallback_only();
+        let mut a = SentimentAnalyzer::fallback_only();
         let pred = a.predict("I'm not happy about this").unwrap();
-        assert_ne!(pred.label, SentimentLabel::Positive, "Negated positive should not be positive");
+        assert_ne!(
+            pred.label,
+            SentimentLabel::Positive,
+            "Negated positive should not be positive"
+        );
     }
 
     #[test]
     fn negation_not_sad_not_strongly_negative() {
-        let a = SentimentAnalyzer::fallback_only();
+        let mut a = SentimentAnalyzer::fallback_only();
         let pred = a.predict("I'm not sad actually").unwrap();
-        assert!(pred.negative < 0.4, "Negated negative should have low negative score: {}", pred.negative);
+        assert!(
+            pred.negative < 0.4,
+            "Negated negative should have low negative score: {}",
+            pred.negative
+        );
     }
 
     #[test]
     fn negation_ukrainian_not_positive() {
-        let a = SentimentAnalyzer::fallback_only();
+        let mut a = SentimentAnalyzer::fallback_only();
         let pred = a.predict("Я не щасливий сьогодні").unwrap();
-        assert_ne!(pred.label, SentimentLabel::Positive, "Ukrainian negated positive should not be positive");
+        assert_ne!(
+            pred.label,
+            SentimentLabel::Positive,
+            "Ukrainian negated positive should not be positive"
+        );
     }
 
     #[test]
     fn no_negation_direct_positive() {
-        let a = SentimentAnalyzer::fallback_only();
+        let mut a = SentimentAnalyzer::fallback_only();
         let pred = a.predict("I'm so happy and excited!").unwrap();
-        assert_eq!(pred.label, SentimentLabel::Positive, "Direct positive should stay positive");
+        assert_eq!(
+            pred.label,
+            SentimentLabel::Positive,
+            "Direct positive should stay positive"
+        );
     }
 }

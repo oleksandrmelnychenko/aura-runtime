@@ -1,4 +1,5 @@
 #![cfg(feature = "onnx")]
+#![allow(unused_mut)]
 
 use std::path::Path;
 

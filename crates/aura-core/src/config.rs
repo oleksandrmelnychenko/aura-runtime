@@ -81,7 +81,7 @@ impl AuraConfig {
             )));
         }
         if let Some(age) = self.account_holder_age {
-            if age < 5 || age > 120 {
+            if !(5..=120).contains(&age) {
                 return Err(crate::error::AuraError::InvalidConfig(format!(
                     "account_holder_age must be 5..=120, got {age}"
                 )));

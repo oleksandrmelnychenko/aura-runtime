@@ -206,7 +206,12 @@ impl Analyzer {
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
 
-        self.combine_signals(signals, protection, input.conversation_type, analysis_time_us)
+        self.combine_signals(
+            signals,
+            protection,
+            input.conversation_type,
+            analysis_time_us,
+        )
     }
 
     pub fn analyze_with_context(
@@ -310,10 +315,8 @@ impl Analyzer {
             signals.extend(ml_signals);
         }
 
-        self.context_tracker.set_conversation_type(
-            &input.conversation_id,
-            input.conversation_type,
-        );
+        self.context_tracker
+            .set_conversation_type(&input.conversation_id, input.conversation_type);
 
         let context_signals = self.context_tracker.record_events(context_events);
 
@@ -381,7 +384,12 @@ impl Analyzer {
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
 
-        self.combine_signals(signals, protection, input.conversation_type, analysis_time_us)
+        self.combine_signals(
+            signals,
+            protection,
+            input.conversation_type,
+            analysis_time_us,
+        )
     }
 
     fn combine_signals(
