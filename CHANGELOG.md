@@ -1,5 +1,87 @@
 # AURA Core — Changelog
 
+## v0.4.0 — Accuracy, Safety & Performance
+
+**405 тестів (з ONNX) | 389 (без ONNX) | 151 правило | 0 warnings**
+
+Фокус: усунення false positives, negation handling, input validation, single-pass AhoCorasick.
+
+---
+
+### Step 1: Word Boundary Matching
+
+**`aura-ml/src/boundary.rs`** — NEW
+- `contains_at_boundary()` — Unicode-aware (Latin + Cyrillic) boundary check
+- `find_at_boundary()` — повертає byte position для negation lookback
+- `aho_match_at_boundary()` — post-filter для AhoCorasick матчів
+- Замінює `str::contains()` у toxicity, sentiment, enricher
+- Усуває false positives: "method"≠"meth", "cockpit"≠"cock", "funeral"≠"fun", "crystal"≠"cry", "establish"≠"stab", "scunthorpe"≠"cunt", "dickens"≠"dick", "shitake"≠"shit"
+- 45 тестів (boundary, Cyrillic, edge cases)
+
+### Step 2: `&self` на ML Backends
+
+- `predict(&mut self)` → `predict(&self)` на ToxicityBackend, SentimentBackend traits
+- `ort::Session::run()` в v2.x приймає `&self`, fallback stateless
+- `MlPipeline::analyze_text(&self)` замість `&mut self`
+- `Analyzer::run_ml_layer(&self)` замість `&mut self`
+
+### Step 3: Input Validation + Limits + `aura_last_error()`
+
+**`aura-core/src/analyzer.rs`**
+- `MAX_TEXT_LENGTH = 10_000` — truncation на char boundary
+- Defensive: не помилка, просто обрізання
+
+**`aura-ffi/src/lib.rs`**
+- `MAX_BATCH_SIZE = 1000` — error JSON якщо batch перевищує
+- Thread-local `aura_last_error()` — повертає останню помилку або null
+- `aura_init` — proper error handling замість `unwrap_or_default()`
+- Всі bool-returning FFI функції (`aura_update_config`, `aura_import_context`, `aura_cleanup_context`, `aura_mark_contact_trusted`) викликають `set_last_error()` перед `return false`
+
+**`aura-core/src/config.rs`**
+- `AuraConfig::validate()` — `ttl_days` 1..=365, `account_holder_age` 5..=120
+
+### Step 4: Negation Handling
+
+**`aura-ml/src/boundary.rs`**
+- `is_negated(text, match_start, window_chars)` — 30-char lookback
+- Negation words: EN (17), UK (8), RU (8)
+
+**`aura-ml/src/toxicity.rs`** — per-category dampening:
+- Threats: `score * 0.1` ("I won't kill you" → low)
+- Profanity: NO dampening ("don't say fuck" — слово присутнє)
+- Insults: `score * 0.3` ("you're not stupid" → low)
+- Sexual / Drugs: `score * 0.3`
+
+**`aura-ml/src/sentiment.rs`** — polarity flip:
+- Negated positive → add to negative ("I'm not happy" ≠ Positive)
+- Negated negative → add to positive ("I'm not sad" → mildly positive)
+
+### Step 5: AhoCorasick Single-Pass Automata
+
+**`aura-ml/src/toxicity.rs`**
+- `ToxCategory` enum (Insult, Threat, Sexual, Profanity, Drug)
+- `FallbackMatcher` з `AhoCorasick` automaton (~296 patterns)
+- `LeftmostLongest` match kind — довші паттерни мають пріоритет
+- Single-pass `find_iter()` + boundary post-filter + negation dampening
+
+**`aura-ml/src/sentiment.rs`**
+- `SentPolarity` enum, `SentimentFallbackMatcher` (~277 patterns)
+- Single-pass з boundary + negation post-filters
+
+**`aura-core/src/context/enricher.rs`**
+- `EnricherCategory` enum (8 categories)
+- `EnricherMatcher` з per-category automaton
+- `SignalEnricher::new()` будує automata; `enrich_full()` — single scan
+
+### ONNX Integration
+
+- `ort` 2.0.0-rc.11 з `load-dynamic` feature
+- `.cargo/config.toml` — `ORT_DYLIB_PATH` для macOS (Homebrew)
+- Models: `toxicity.onnx` (unitary/toxic-bert), `sentiment.onnx` (textattack/bert-base-uncased-SST-2)
+- 16 ONNX integration тестів
+
+---
+
 ## v0.3.0 — Horizontal Expansion to Production Readiness
 
 **303 тести | 26 симуляцій | 151 правило | 0 warnings**
@@ -191,15 +273,23 @@
 
 | Функція | Опис |
 |---------|------|
-| `aura_create_analyzer()` | Створити handle аналізатора |
+| `aura_init(config_json)` | Створити handle аналізатора |
 | `aura_analyze()` | Аналіз одного повідомлення |
-| `aura_analyze_batch()` | Batch аналіз (JSON array) |
-| `aura_get_conversation_summary()` | Огляд розмов для parent dashboard |
+| `aura_analyze_json()` | Аналіз з JSON input |
+| `aura_analyze_context()` | Аналіз з context tracking (timestamp) |
+| `aura_analyze_batch()` | Batch аналіз (JSON array, max 1000) |
+| `aura_update_config()` | Оновити конфіг на льоту |
+| `aura_reload_patterns()` | Hot-reload pattern database |
 | `aura_export_context()` | Експорт стану контексту |
 | `aura_import_context()` | Імпорт стану контексту |
+| `aura_cleanup_context()` | Очищення старих даних |
+| `aura_mark_contact_trusted()` | Позначити контакт довіреним |
+| `aura_get_conversation_summary()` | Огляд розмов для parent dashboard |
+| `aura_parent_dashboard_contacts()` | Контакти для parent dashboard |
+| `aura_last_error()` | Остання помилка (thread-local) |
 | `aura_version()` | Версія бібліотеки |
 | `aura_free_string()` | Звільнення рядка |
-| `aura_destroy_analyzer()` | Знищення handle |
+| `aura_free(handle)` | Знищення handle |
 
 ### Error Codes
 
@@ -210,6 +300,9 @@
 | 1002 | Invalid JSON |
 | 1003 | Mutex poisoned |
 | 1004 | Serialization failure |
+| 1005 | Invalid config |
+| 1006 | Model not found |
+| 1007 | Incompatible state |
 
 ---
 
@@ -217,9 +310,11 @@
 
 | Метрика | Значення |
 |---------|----------|
-| Тести | 303 (183 core + 16 ffi + 44 ml + 60 patterns) |
+| Тести | 405 (195 core + 21 ffi + 113 ml + 16 ONNX + 60 patterns) |
 | Симуляції | 26 |
 | Pattern rules | 151 |
+| ML fallback patterns | ~573 (296 toxicity + 277 sentiment) |
+| Enricher patterns | ~214 (8 categories) |
 | Мови | EN, UK, RU |
 | EventKind variants | 20+ |
 | Grooming stages | 6 |

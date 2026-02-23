@@ -13,17 +13,17 @@ Intelligent protection system for Ecliptix Messenger: content moderation, threat
 
 ```bash
 cargo build
-cargo test
+cargo test --workspace
 ```
 
 With ONNX (optional):
 
 ```bash
-cargo build --features onnx -p aura-ml
-cargo test --features onnx -p aura-ml
+brew install onnxruntime   # macOS
+cargo test --all-features --workspace
 ```
 
-Requires ONNX Runtime library (`libonnxruntime.dylib` / `.so` / `.dll`) for ONNX tests.
+ONNX Runtime path is configured in `.cargo/config.toml` for macOS (Homebrew).
 
 ## Usage (Rust)
 
@@ -49,12 +49,16 @@ let result = analyzer.analyze(&input);
 
 ## FFI (C / Kotlin / Swift)
 
-- **Create:** `aura_init(config_json)` → handle (or null).
-- **Analyse:** `aura_analyze(handle, text, sender_id, conversation_id)` or `aura_analyze_json(handle, message_json)` → JSON string; caller must call **`aura_free_string`** on the returned pointer.
+- **Create:** `aura_init(config_json)` → handle (or null; check `aura_last_error()`).
+- **Analyse:** `aura_analyze(handle, text, sender_id, conversation_id)` or `aura_analyze_json(handle, message_json)` → JSON string.
 - **Context:** `aura_analyze_context(handle, message_json, timestamp_ms)` for stateful analysis.
+- **Batch:** `aura_analyze_batch(handle, messages_json)` — up to 1000 messages.
+- **Config:** `aura_update_config(handle, config_json)` — update at runtime.
+- **Patterns:** `aura_reload_patterns(handle, json)` — hot-reload pattern database.
+- **Errors:** `aura_last_error()` — thread-local last error string (or null).
 - **Cleanup:** **`aura_free(handle)`** when done; **`aura_free_string(ptr)`** for every string returned by the API.
 
-All returned strings are UTF-8. Invalid UTF-8 or null pointers return error JSON. Do not pass arbitrary unbounded input length; enforce limits on the caller side if needed.
+Text is truncated at 10,000 chars internally. All returned strings are UTF-8. Invalid UTF-8 or null pointers return error JSON with structured error codes.
 
 ## Data and privacy
 
