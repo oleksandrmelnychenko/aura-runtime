@@ -1,0 +1,14 @@
+[package]
+name = "aura-ffi"
+version.workspace = true
+edition.workspace = true
+description = "C FFI bindings for AURA Core (Android NDK, iOS, Desktop)"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+aura-core = { path = "../aura-core" }
+aura-patterns = { path = "../aura-patterns" }
+serde.workspace = true
+serde_json.workspace = true

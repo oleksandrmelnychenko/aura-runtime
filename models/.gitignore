@@ -1,0 +1,4 @@
+# ONNX model files (too large for git, download with scripts/download_models.py)
+*.onnx
+vocab.txt
+*_tmp/

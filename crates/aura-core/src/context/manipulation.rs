@@ -1,0 +1,476 @@
+use crate::types::{Confidence, DetectionLayer, DetectionSignal, ThreatType};
+
+use super::events::EventKind;
+use super::tracker::ConversationTimeline;
+
+pub struct ManipulationDetector;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum ManipulationTactic {
+    Gaslighting,
+    GuiltTripping,
+    EmotionalBlackmail,
+    PeerPressure,
+    Isolation,
+    Darvo,
+    Devaluation,
+}
+
+impl Default for ManipulationDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ManipulationDetector {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn analyze(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Vec<DetectionSignal> {
+        let mut signals = Vec::new();
+
+        if let Some(signal) = self.check_repeated_gaslighting(timeline, sender_id, window_start) {
+            signals.push(signal);
+        }
+
+        if let Some(signal) = self.check_control_pattern(timeline, sender_id, window_start) {
+            signals.push(signal);
+        }
+
+        if let Some(signal) =
+            self.check_emotional_blackmail_pattern(timeline, sender_id, window_start)
+        {
+            signals.push(signal);
+        }
+
+        if let Some(signal) = self.check_darvo_pattern(timeline, sender_id, window_start) {
+            signals.push(signal);
+        }
+
+        if let Some(signal) = self.check_love_bomb_devalue_cycle(timeline, sender_id, window_start)
+        {
+            signals.push(signal);
+        }
+
+        signals
+    }
+
+    fn check_repeated_gaslighting(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Option<DetectionSignal> {
+        let gaslighting_count =
+            timeline.count_events(sender_id, &EventKind::Gaslighting, window_start);
+
+        if gaslighting_count >= 3 {
+            let score = (0.5 + (gaslighting_count as f32 - 3.0) * 0.1).min(0.9);
+            Some(DetectionSignal {
+                threat_type: ThreatType::Manipulation,
+                score,
+                confidence: if gaslighting_count >= 5 {
+                    Confidence::High
+                } else {
+                    Confidence::Medium
+                },
+                layer: DetectionLayer::ContextAnalysis,
+                explanation: format!(
+                    "Repeated gaslighting detected: {gaslighting_count} instances of reality-denial from the same sender"
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_control_pattern(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Option<DetectionSignal> {
+        let events = timeline.events_from_sender(sender_id, window_start);
+
+        let mut tactics_used = std::collections::HashSet::new();
+        let mut total_manipulation = 0usize;
+
+        for event in &events {
+            if let Some(tactic) = Self::classify_tactic(&event.kind) {
+                tactics_used.insert(tactic);
+                total_manipulation += 1;
+            }
+        }
+
+        let num_tactics = tactics_used.len();
+
+        if num_tactics >= 3 {
+            let score = (0.7 + (total_manipulation as f32 * 0.02)).min(0.95);
+            Some(DetectionSignal {
+                threat_type: ThreatType::Manipulation,
+                score,
+                confidence: Confidence::High,
+                layer: DetectionLayer::ContextAnalysis,
+                explanation: format!(
+                    "Multi-tactic manipulation detected: {} different tactics used ({} total events). \
+                     This is a textbook psychological control pattern.",
+                    num_tactics, total_manipulation
+                ),
+            })
+        } else if num_tactics == 2 && total_manipulation >= 4 {
+            let score = (0.5 + (total_manipulation as f32 * 0.03)).min(0.8);
+            Some(DetectionSignal {
+                threat_type: ThreatType::Manipulation,
+                score,
+                confidence: Confidence::Medium,
+                layer: DetectionLayer::ContextAnalysis,
+                explanation: format!(
+                    "Manipulation pattern detected: {} different tactics used across {} events",
+                    num_tactics, total_manipulation
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_emotional_blackmail_pattern(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Option<DetectionSignal> {
+        let blackmail_count =
+            timeline.count_events(sender_id, &EventKind::EmotionalBlackmail, window_start);
+
+        if blackmail_count >= 2 {
+            let score = (0.6 + (blackmail_count as f32 - 2.0) * 0.1).min(0.9);
+            Some(DetectionSignal {
+                threat_type: ThreatType::Manipulation,
+                score,
+                confidence: Confidence::High,
+                layer: DetectionLayer::ContextAnalysis,
+                explanation: format!(
+                    "Emotional blackmail pattern detected: sender has used {blackmail_count} \
+                     threats of self-harm or abandonment to control the conversation"
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_darvo_pattern(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Option<DetectionSignal> {
+        let darvo_count = timeline.count_events(sender_id, &EventKind::Darvo, window_start);
+
+        if darvo_count >= 2 {
+            let score = (0.6 + (darvo_count as f32 - 2.0) * 0.1).min(0.85);
+            Some(DetectionSignal {
+                threat_type: ThreatType::Manipulation,
+                score,
+                confidence: if darvo_count >= 4 {
+                    Confidence::High
+                } else {
+                    Confidence::Medium
+                },
+                layer: DetectionLayer::ContextAnalysis,
+                explanation: format!(
+                    "DARVO pattern detected: sender reversed victim/offender roles {} times",
+                    darvo_count
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_love_bomb_devalue_cycle(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Option<DetectionSignal> {
+        let events = timeline.events_from_sender(sender_id, window_start);
+
+        let love_count = events
+            .iter()
+            .filter(|e| e.kind == EventKind::LoveBombing)
+            .count();
+
+        let devalue_count = events
+            .iter()
+            .filter(|e| e.kind == EventKind::Devaluation || e.kind == EventKind::Denigration)
+            .count();
+
+        if love_count >= 2 && devalue_count >= 2 {
+            let total = love_count + devalue_count;
+            let score = (0.7 + (total as f32 - 4.0) * 0.02).min(0.85);
+            Some(DetectionSignal {
+                threat_type: ThreatType::Manipulation,
+                score,
+                confidence: Confidence::High,
+                layer: DetectionLayer::ContextAnalysis,
+                explanation: format!(
+                    "Love-bomb/devalue cycle detected: {} affection + {} devaluation events from same sender. \
+                     This creates psychological dependency through intermittent reinforcement.",
+                    love_count, devalue_count
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn classify_tactic(kind: &EventKind) -> Option<ManipulationTactic> {
+        match kind {
+            EventKind::Gaslighting => Some(ManipulationTactic::Gaslighting),
+            EventKind::GuildTripping => Some(ManipulationTactic::GuiltTripping),
+            EventKind::EmotionalBlackmail => Some(ManipulationTactic::EmotionalBlackmail),
+            EventKind::PeerPressure => Some(ManipulationTactic::PeerPressure),
+            EventKind::Exclusion => Some(ManipulationTactic::Isolation),
+            EventKind::Darvo => Some(ManipulationTactic::Darvo),
+            EventKind::Devaluation => Some(ManipulationTactic::Devaluation),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::events::{ContextEvent, EventKind};
+    use super::super::tracker::ConversationTimeline;
+    use super::*;
+
+    fn make_timeline(events: Vec<(&str, EventKind, u64)>) -> ConversationTimeline {
+        let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
+        for (sender, kind, ts) in events {
+            timeline.push(ContextEvent {
+                timestamp_ms: ts,
+                sender_id: sender.to_string(),
+                conversation_id: "conv_1".to_string(),
+                kind,
+                confidence: 0.8,
+            });
+        }
+        timeline
+    }
+
+    #[test]
+    fn no_manipulation_in_normal_conversation() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("alice", EventKind::NormalConversation, 1000),
+            ("alice", EventKind::NormalConversation, 2000),
+        ]);
+        let signals = detector.analyze(&timeline, "alice", 0);
+        assert!(signals.is_empty());
+    }
+
+    #[test]
+    fn single_gaslighting_not_flagged() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![("manipulator", EventKind::Gaslighting, 1000)]);
+        let signals = detector.analyze(&timeline, "manipulator", 0);
+        assert!(signals.is_empty());
+    }
+
+    #[test]
+    fn repeated_gaslighting_detected() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("manipulator", EventKind::Gaslighting, 1000),
+            ("manipulator", EventKind::Gaslighting, 2000),
+            ("manipulator", EventKind::Gaslighting, 3000),
+        ]);
+        let signals = detector.analyze(&timeline, "manipulator", 0);
+        assert!(
+            signals
+                .iter()
+                .any(|s| s.explanation.contains("gaslighting")),
+            "Expected gaslighting detection, got: {signals:?}"
+        );
+    }
+
+    #[test]
+    fn multi_tactic_control_pattern() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::Gaslighting, 1000),
+            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::EmotionalBlackmail, 3000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        assert!(
+            signals
+                .iter()
+                .any(|s| s.explanation.contains("Multi-tactic")),
+            "Expected multi-tactic detection, got: {signals:?}"
+        );
+        let control = signals
+            .iter()
+            .find(|s| s.explanation.contains("Multi-tactic"))
+            .unwrap();
+        assert!(
+            control.score >= 0.7,
+            "Multi-tactic should score high, got {}",
+            control.score
+        );
+    }
+
+    #[test]
+    fn two_tactics_with_frequency() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("manipulator", EventKind::Gaslighting, 1000),
+            ("manipulator", EventKind::Gaslighting, 2000),
+            ("manipulator", EventKind::GuildTripping, 3000),
+            ("manipulator", EventKind::GuildTripping, 4000),
+        ]);
+        let signals = detector.analyze(&timeline, "manipulator", 0);
+        assert!(
+            signals
+                .iter()
+                .any(|s| s.explanation.contains("Manipulation pattern")),
+            "Expected 2-tactic pattern, got: {signals:?}"
+        );
+    }
+
+    #[test]
+    fn emotional_blackmail_repeated() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("controller", EventKind::EmotionalBlackmail, 1000),
+            ("controller", EventKind::EmotionalBlackmail, 2000),
+        ]);
+        let signals = detector.analyze(&timeline, "controller", 0);
+        assert!(
+            signals.iter().any(|s| s.explanation.contains("blackmail")),
+            "Expected blackmail detection, got: {signals:?}"
+        );
+    }
+
+    #[test]
+    fn different_senders_not_combined() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("person_a", EventKind::Gaslighting, 1000),
+            ("person_b", EventKind::Gaslighting, 2000),
+            ("person_c", EventKind::Gaslighting, 3000),
+        ]);
+
+        let signals = detector.analyze(&timeline, "person_a", 0);
+        assert!(signals.is_empty());
+    }
+
+    #[test]
+    fn darvo_pattern_detected() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::Darvo, 1000),
+            ("abuser", EventKind::Darvo, 2000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        let darvo = signals.iter().find(|s| s.explanation.contains("DARVO"));
+        assert!(darvo.is_some(), "Expected DARVO pattern, got: {signals:?}");
+        assert!((darvo.unwrap().score - 0.6).abs() < 0.01);
+    }
+
+    #[test]
+    fn single_darvo_not_enough() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![("abuser", EventKind::Darvo, 1000)]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        let darvo = signals.iter().find(|s| s.explanation.contains("DARVO"));
+        assert!(darvo.is_none(), "Single DARVO should not trigger pattern");
+    }
+
+    #[test]
+    fn love_bomb_devalue_cycle_detected() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::LoveBombing, 1000),
+            ("abuser", EventKind::LoveBombing, 2000),
+            ("abuser", EventKind::Devaluation, 3000),
+            ("abuser", EventKind::Denigration, 4000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        let cycle = signals.iter().find(|s| s.explanation.contains("Love-bomb"));
+        assert!(
+            cycle.is_some(),
+            "Expected love-bomb/devalue cycle, got: {signals:?}"
+        );
+        assert!(cycle.unwrap().score >= 0.7);
+    }
+
+    #[test]
+    fn love_bomb_only_no_cycle() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("person", EventKind::LoveBombing, 1000),
+            ("person", EventKind::LoveBombing, 2000),
+            ("person", EventKind::LoveBombing, 3000),
+        ]);
+        let signals = detector.analyze(&timeline, "person", 0);
+        let cycle = signals.iter().find(|s| s.explanation.contains("Love-bomb"));
+        assert!(
+            cycle.is_none(),
+            "Love bombing alone should not trigger cycle"
+        );
+    }
+
+    #[test]
+    fn five_plus_tactics_high_score() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::Gaslighting, 1000),
+            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::EmotionalBlackmail, 3000),
+            ("abuser", EventKind::Darvo, 4000),
+            ("abuser", EventKind::Devaluation, 5000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        let control = signals
+            .iter()
+            .find(|s| s.explanation.contains("Multi-tactic"));
+        assert!(control.is_some(), "Expected multi-tactic, got: {signals:?}");
+        assert!(
+            control.unwrap().score >= 0.7,
+            "5 tactics should have high score, got {}",
+            control.unwrap().score
+        );
+    }
+
+    #[test]
+    fn darvo_classified_as_manipulation() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("abuser", EventKind::Darvo, 1000),
+            ("abuser", EventKind::Darvo, 2000),
+            ("abuser", EventKind::Darvo, 3000),
+        ]);
+        let signals = detector.analyze(&timeline, "abuser", 0);
+        assert!(
+            signals
+                .iter()
+                .all(|s| s.threat_type == ThreatType::Manipulation),
+            "All DARVO signals should be ThreatType::Manipulation"
+        );
+
+        let darvo = signals
+            .iter()
+            .find(|s| s.explanation.contains("DARVO"))
+            .unwrap();
+        assert!((darvo.score - 0.7).abs() < 0.01);
+    }
+}

@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/aura-core",
+    "crates/aura-patterns",
+    "crates/aura-ml",
+    "crates/aura-ffi",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Ecliptix"]
+license = "Proprietary"
+description = "AURA - Intelligent Protection System for Ecliptix Messenger"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+unicode-segmentation = "1"
+unicode-normalization = "0.1"
+ndarray = "0.17"

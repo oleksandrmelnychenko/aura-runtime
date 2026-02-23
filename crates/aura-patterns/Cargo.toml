@@ -1,0 +1,17 @@
+[package]
+name = "aura-patterns"
+version.workspace = true
+edition.workspace = true
+description = "Fast pattern matching engine for AURA (Layer 1)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+regex = "1"
+aho-corasick = "1"
+unicode-segmentation.workspace = true
+unicode-normalization.workspace = true
+
+[dev-dependencies]
