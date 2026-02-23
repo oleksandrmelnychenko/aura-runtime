@@ -1695,4 +1695,224 @@ mod tests {
         );
     }
 
+    // ---- Mixed-language tests ----
+
+    #[test]
+    fn mixed_lang_uk_en_compliments() {
+        // Ukrainian + English teen mix: "ти такa cute, ваще gorgeous"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "ти така cute і gorgeous, ваще amazing",
+            "stranger", "conv_1", 1000,
+        );
+        // Should detect at least Flattery from "cute" + "gorgeous" + "amazing"
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::Flattery || e.kind == EventKind::LoveBombing),
+            "Mixed UK/EN compliments should detect flattery: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_uk_en_personal_questions() {
+        // "Хей, where do you live? В якій школі навчаєшся?"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Хей, where do you live? В якій школі навчаєшся?",
+            "stranger", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::PersonalInfoRequest),
+            "Mixed UK/EN personal questions should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_ru_en_blackmail() {
+        // "I have screenshots, я покажу всей школе"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "i have screenshots и я покажу всей школе lol",
+            "bully", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::ScreenshotThreat || e.kind == EventKind::ReputationThreat),
+            "Mixed RU/EN blackmail + reputation should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_uk_en_suicide_coercion() {
+        // "If u leave i cant live, без тебе мені кінець"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "если ты уйдешь мне нет смысла жить, i cant live without u",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::SuicideCoercion),
+            "Mixed language suicide coercion should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_uk_en_platform_switch() {
+        // "Го в тг, this app is trash lets go"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "го в тг, this app is trash lets go",
+            "stranger", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::PlatformSwitch),
+            "Mixed UK/EN platform switch should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_three_languages_grooming() {
+        // All 3 languages in one message: flattery + isolation + urgency
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "ти така beautiful, тільки я тебе розумію, hurry прямо зараз, быстрее",
+            "predator", "conv_1", 1000,
+        );
+        // Should detect multiple signals from three-language input
+        let has_flattery = events.iter().any(|e| e.kind == EventKind::Flattery || e.kind == EventKind::LoveBombing);
+        assert!(
+            has_flattery,
+            "Three-language mix should detect flattery: {events:?}"
+        );
+        // Verify that the multilingual input produces events at all
+        assert!(
+            !events.is_empty(),
+            "Three-language input should produce at least one event"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_dare_en_uk() {
+        // "I dare you, тобі слабо зробити це"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "i dare you бро, тобі слабо, bet you wont",
+            "peer", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::DareChallenge),
+            "Mixed dare/challenge should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_pii_disclosure_en_uk() {
+        // Child mixing languages when sharing info
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "my number is 0501234567, я ходжу в школу номер 42",
+            "child", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::PiiSelfDisclosure),
+            "Mixed PII self-disclosure should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_debt_creation_ru_en() {
+        // "After everything i did for u, неблагодарная"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "after everything i did for u, неблагодарная, u owe me",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::DebtCreation),
+            "Mixed debt creation should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_identity_erosion_uk_en() {
+        // "Ur not like other kids, ти занадто розумна для своїх ровесників"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "ur not like other kids, ти занадто розумна для своїх ровесників",
+            "groomer", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::IdentityErosion),
+            "Mixed identity erosion should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_network_poisoning_ru_en() {
+        // "They dont really like u, они с тебя смеются за спиной"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "they dont really like u, они с тебя смеются за спиной",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::NetworkPoisoning),
+            "Mixed network poisoning should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_fake_vulnerability_uk_en() {
+        // "Im going through so much rn, в мене нікого крім тебе немає"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "im going through so much rn, в мене нікого крім тебе немає",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::FakeVulnerability),
+            "Mixed fake vulnerability should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_false_consensus_ru_en() {
+        // "Everyone does it, все так делают, its normal"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "everyone does it, все так делают, its totally normal",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::FalseConsensus),
+            "Mixed false consensus should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_hopelessness_uk_en() {
+        // "Nobody cares, я тягар, what's the point"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "nobody cares, я тягар, what's the point",
+            "child", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::Hopelessness || e.kind == EventKind::SuicidalIdeation),
+            "Mixed hopelessness should be detected: {events:?}"
+        );
+    }
+
+    #[test]
+    fn mixed_lang_emotional_withdrawal_en_uk() {
+        // "Fine whatever, ну ясно тобі пофіг"
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "fine whatever ну ясно тобі пофіг ill find someone who actually cares",
+            "manipulator", "conv_1", 1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::EmotionalBlackmail || e.kind == EventKind::Devaluation),
+            "Mixed emotional withdrawal should be detected: {events:?}"
+        );
+    }
+
 }

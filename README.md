@@ -11,7 +11,7 @@ Intelligent protection system for Ecliptix Messenger: content moderation, threat
 - **Behavioral Trend Detection**: Stable, Improving, GradualWorsening, RapidWorsening, RoleReversal
 - **18 Signal Enricher Categories**: PII self-disclosure, dare/challenge, screenshot blackmail, advanced psychological manipulation
 - **3 Languages**: English, Ukrainian, Russian (including teen slang)
-- **469 Tests**, 0 warnings
+- **577 Tests**, 0 warnings
 
 ## Architecture
 
