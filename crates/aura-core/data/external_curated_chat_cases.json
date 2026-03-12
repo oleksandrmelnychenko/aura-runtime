@@ -44,7 +44,7 @@
       ]
     },
     {
-      "id": "external_uk_trusted_adult_private_channel",
+      "id": "external_en_trusted_adult_private_channel",
       "source_family": "research_seed",
       "review_status": "seed_reviewed",
       "default_language": "en",
@@ -59,25 +59,25 @@
       "messages": [
         {
           "text": "You're so mature for your age. I really understand you better than others do.",
-          "sender_id": "external_coach_uk",
+          "sender_id": "external_coach_en",
           "language": "en",
           "observed_threats": ["grooming"]
         },
         {
           "text": "I bought you a special gift. Keep it between us, okay?",
-          "sender_id": "external_coach_uk",
+          "sender_id": "external_coach_en",
           "language": "en",
           "observed_threats": ["grooming"]
         },
         {
           "text": "Don't tell your parents about our chats. They wouldn't understand our bond.",
-          "sender_id": "external_coach_uk",
+          "sender_id": "external_coach_en",
           "language": "en",
           "observed_threats": ["grooming", "manipulation"]
         },
         {
           "text": "Let's switch to Telegram and keep talking there privately.",
-          "sender_id": "external_coach_uk",
+          "sender_id": "external_coach_en",
           "language": "en",
           "observed_threats": ["grooming"]
         }
@@ -126,7 +126,7 @@
       "policy_expectation_case": "screenshot_blackmail",
       "messages": [
         {
-          "text": "Я заскрінив і покажу це всім в школі.",
+          "text": "Я заскринил и покажу это всем в школе.",
           "sender_id": "external_blackmailer_ru"
         },
         {

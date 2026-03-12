@@ -593,8 +593,37 @@ fn merge_stricter_quality_gates(
             base.min_pre_onset_detection_rate,
             stricter.min_pre_onset_detection_rate,
         ),
-        per_threat: base.per_threat.clone(),
+        per_threat: merge_stricter_per_threat_gates(&base.per_threat, &stricter.per_threat),
     }
+}
+
+fn merge_stricter_per_threat_gates(
+    base: &[crate::ThreatCalibrationGate],
+    stricter: &[crate::ThreatCalibrationGate],
+) -> Vec<crate::ThreatCalibrationGate> {
+    let mut merged = base.to_vec();
+
+    for strict_gate in stricter {
+        if let Some(existing) = merged
+            .iter_mut()
+            .find(|gate| gate.threat_type == strict_gate.threat_type)
+        {
+            existing.min_example_count = stricter_min_count_threshold(
+                existing.min_example_count,
+                strict_gate.min_example_count,
+            );
+            existing.max_brier_score =
+                stricter_max_threshold(existing.max_brier_score, strict_gate.max_brier_score);
+            existing.max_expected_calibration_error = stricter_max_threshold(
+                existing.max_expected_calibration_error,
+                strict_gate.max_expected_calibration_error,
+            );
+        } else {
+            merged.push(strict_gate.clone());
+        }
+    }
+
+    merged
 }
 
 fn stricter_max_threshold(base: Option<f32>, stricter: Option<f32>) -> Option<f32> {
@@ -607,6 +636,15 @@ fn stricter_max_threshold(base: Option<f32>, stricter: Option<f32>) -> Option<f3
 }
 
 fn stricter_min_threshold(base: Option<f32>, stricter: Option<f32>) -> Option<f32> {
+    match (base, stricter) {
+        (Some(base), Some(stricter)) => Some(base.max(stricter)),
+        (Some(base), None) => Some(base),
+        (None, Some(stricter)) => Some(stricter),
+        (None, None) => None,
+    }
+}
+
+fn stricter_min_count_threshold(base: Option<usize>, stricter: Option<usize>) -> Option<usize> {
     match (base, stricter) {
         (Some(base), Some(stricter)) => Some(base.max(stricter)),
         (Some(base), None) => Some(base),
@@ -1059,6 +1097,47 @@ mod tests {
         assert!(
             gold.min_pre_onset_detection_rate.unwrap() > base.min_pre_onset_detection_rate.unwrap()
         );
+    }
+
+    #[test]
+    fn stricter_quality_gate_merge_preserves_per_threat_rules() {
+        let base = ScenarioQualityGates {
+            max_brier_score: Some(0.30),
+            max_expected_calibration_error: Some(0.30),
+            min_positive_detection_rate: Some(0.80),
+            max_negative_false_positive_rate: Some(0.05),
+            min_pre_onset_detection_rate: Some(0.20),
+            per_threat: vec![crate::ThreatCalibrationGate {
+                threat_type: ThreatType::Manipulation,
+                min_example_count: Some(10),
+                max_brier_score: Some(0.25),
+                max_expected_calibration_error: Some(0.20),
+            }],
+        };
+        let stricter = ScenarioQualityGates {
+            max_brier_score: Some(0.20),
+            max_expected_calibration_error: Some(0.15),
+            min_positive_detection_rate: Some(0.90),
+            max_negative_false_positive_rate: Some(0.03),
+            min_pre_onset_detection_rate: Some(0.30),
+            per_threat: vec![crate::ThreatCalibrationGate {
+                threat_type: ThreatType::Manipulation,
+                min_example_count: Some(12),
+                max_brier_score: Some(0.18),
+                max_expected_calibration_error: Some(0.14),
+            }],
+        };
+
+        let merged = merge_stricter_quality_gates(&base, &stricter);
+        let manipulation = merged
+            .per_threat
+            .iter()
+            .find(|gate| gate.threat_type == ThreatType::Manipulation)
+            .expect("merged manipulation gate");
+
+        assert_eq!(manipulation.min_example_count, Some(12));
+        assert_eq!(manipulation.max_brier_score, Some(0.18));
+        assert_eq!(manipulation.max_expected_calibration_error, Some(0.14));
     }
 
     #[test]

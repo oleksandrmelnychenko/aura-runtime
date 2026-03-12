@@ -6,7 +6,9 @@ use aura_ml::{MlConfig, MlPipeline, ToxicityLabel};
 use aura_patterns::{PatternDatabase, PatternMatcher, UrlChecker};
 use tracing::debug;
 
-use crate::action::{augment_recommendation_for_reason_codes, decide_action_v2};
+use crate::action::{
+    augment_recommendation_for_inference, augment_recommendation_for_reason_codes, decide_action_v2,
+};
 use crate::config::AuraConfig;
 use crate::context::enricher::{EnricherConfig, SignalEnricher};
 use crate::context::events::{ContextEvent, EventKind};
@@ -420,6 +422,13 @@ impl Analyzer {
             input.conversation_type,
             result.contact_snapshot.as_ref(),
         );
+        if let Some(recommendation) = result.recommended_action.as_mut() {
+            augment_recommendation_for_inference(
+                recommendation,
+                result.threat_type,
+                &result.inference,
+            );
+        }
         result
     }
 
@@ -495,6 +504,7 @@ impl Analyzer {
             conversation_type,
             None,
         );
+        augment_recommendation_for_inference(&mut recommendation, primary.threat_type, &inference);
 
         AnalysisResult {
             threat_type: primary.threat_type,
@@ -2448,6 +2458,58 @@ mod tests {
             "recommendation should expose messenger ui actions"
         );
         assert_eq!(rec.reason_codes, r.reason_codes);
+    }
+
+    #[test]
+    fn coercive_control_inference_escalates_policy_actions() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let conv = "int_coercive_control";
+        let hour = 3_600_000u64;
+
+        analyzer.analyze_with_context(
+            &child_input(
+                "Everyone does it. It's totally normal between friends.",
+                "dating_abuser",
+                conv,
+            ),
+            0,
+        );
+        analyzer.analyze_with_context(
+            &child_input(
+                "After everything I did for u, u owe me honesty.",
+                "dating_abuser",
+                conv,
+            ),
+            hour,
+        );
+        let result = analyzer.analyze_with_context(
+            &child_input("You must do it now. Don't wait.", "dating_abuser", conv),
+            2 * hour,
+        );
+
+        let recommendation = result
+            .recommended_action
+            .expect("recommendation should be present");
+
+        assert!(
+            recommendation.ui_actions.contains(&UiAction::SuggestReport),
+            "coercive-control escalation should trigger report guidance"
+        );
+        assert!(
+            recommendation
+                .ui_actions
+                .contains(&UiAction::SlowDownConversation),
+            "coercive-control escalation should slow the conversation"
+        );
+        assert!(
+            result
+                .inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::CoerciveControl),
+            "coercive-control latent state should be present"
+        );
     }
 
     #[test]

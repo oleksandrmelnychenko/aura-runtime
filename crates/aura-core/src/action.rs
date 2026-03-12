@@ -1,6 +1,6 @@
 use crate::types::{
-    Action, ActionRecommendation, AlertPriority, FollowUpAction, ProtectionLevel, ThreatType,
-    UiAction,
+    Action, ActionRecommendation, AlertPriority, FollowUpAction, InferenceSummary, LatentStateKind,
+    ProtectionLevel, RiskHorizon, ThreatType, UiAction,
 };
 
 pub fn decide_action(score: f32, protection_level: ProtectionLevel) -> Action {
@@ -310,6 +310,56 @@ pub fn augment_recommendation_for_reason_codes(
     recommendation.ui_actions.dedup();
 }
 
+pub fn augment_recommendation_for_inference(
+    recommendation: &mut ActionRecommendation,
+    threat_type: ThreatType,
+    inference: &InferenceSummary,
+) {
+    let coercive_control = latent_state_score(inference, LatentStateKind::CoerciveControl);
+    let group_escalation = latent_state_score(inference, LatentStateKind::GroupEscalation);
+    let crisis_vulnerability = latent_state_score(inference, LatentStateKind::CrisisVulnerability);
+
+    if threat_type == ThreatType::SelfHarm
+        && (inference.risk_horizon == RiskHorizon::Immediate
+            || crisis_vulnerability >= 0.65
+            || inference.escalation_likelihood_24h >= 0.70)
+    {
+        recommendation.parent_alert = recommendation.parent_alert.max(AlertPriority::Urgent);
+        recommendation.crisis_resources = true;
+        recommendation.ui_actions.push(UiAction::ShowCrisisSupport);
+        recommendation.ui_actions.push(UiAction::EscalateToGuardian);
+    }
+
+    if matches!(threat_type, ThreatType::Grooming | ThreatType::Manipulation)
+        && (coercive_control >= 0.55
+            || inference.risk_horizon == RiskHorizon::ShortTerm
+                && inference.escalation_likelihood_24h >= 0.65)
+    {
+        recommendation
+            .ui_actions
+            .push(UiAction::SuggestBlockContact);
+        recommendation
+            .ui_actions
+            .push(UiAction::SlowDownConversation);
+
+        if coercive_control >= 0.65 || inference.escalation_likelihood_24h >= 0.75 {
+            recommendation.ui_actions.push(UiAction::SuggestReport);
+        }
+    }
+
+    if threat_type == ThreatType::Bullying
+        && (group_escalation >= 0.55 || inference.escalation_likelihood_24h >= 0.70)
+    {
+        recommendation.ui_actions.push(UiAction::SuggestReport);
+        recommendation
+            .ui_actions
+            .push(UiAction::SlowDownConversation);
+    }
+
+    recommendation.ui_actions.sort();
+    recommendation.ui_actions.dedup();
+}
+
 fn recommendation(
     parent_alert: AlertPriority,
     follow_ups: Vec<FollowUpAction>,
@@ -407,6 +457,15 @@ fn is_group_abuse_reason_code(reason_code: &str) -> bool {
         || reason_code.starts_with("abuse.raid.")
 }
 
+fn latent_state_score(inference: &InferenceSummary, kind: LatentStateKind) -> f32 {
+    inference
+        .latent_states
+        .iter()
+        .find(|state| state.kind == kind)
+        .map(|state| state.score)
+        .unwrap_or(0.0)
+}
+
 struct ActionThresholds {
     mark: f32,
     blur: f32,
@@ -451,6 +510,7 @@ impl ActionThresholds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{InferenceSummary, LatentStateEvidence, UncertaintyLevel};
 
     #[test]
     fn clean_message_is_allowed() {
@@ -735,6 +795,84 @@ mod tests {
     #[test]
     fn bullying_warn_actions_include_report_and_slowdown() {
         let (_, rec) = decide_action_v2(ThreatType::Bullying, 0.62, ProtectionLevel::High);
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
+        assert!(rec.ui_actions.contains(&UiAction::SlowDownConversation));
+    }
+
+    #[test]
+    fn selfharm_immediate_inference_adds_guardian_even_when_base_score_is_low() {
+        let (_, mut rec) = decide_action_v2(ThreatType::SelfHarm, 0.3, ProtectionLevel::High);
+        assert!(!rec.ui_actions.contains(&UiAction::EscalateToGuardian));
+
+        augment_recommendation_for_inference(
+            &mut rec,
+            ThreatType::SelfHarm,
+            &InferenceSummary {
+                uncertainty: UncertaintyLevel::Medium,
+                risk_horizon: RiskHorizon::Immediate,
+                escalation_likelihood_24h: 0.85,
+                protective_factor_strength: 0.0,
+                latent_states: vec![LatentStateEvidence {
+                    kind: LatentStateKind::CrisisVulnerability,
+                    score: 0.8,
+                    reason_codes: vec!["conversation.selfharm.acute_crisis".to_string()],
+                }],
+            },
+        );
+
+        assert!(rec.ui_actions.contains(&UiAction::EscalateToGuardian));
+        assert!(rec.ui_actions.contains(&UiAction::ShowCrisisSupport));
+        assert_eq!(rec.parent_alert, AlertPriority::Urgent);
+    }
+
+    #[test]
+    fn coercive_control_inference_adds_report_and_slowdown() {
+        let (_, mut rec) =
+            decide_action_v2(ThreatType::Manipulation, 0.55, ProtectionLevel::Medium);
+        assert!(!rec.ui_actions.contains(&UiAction::SuggestReport));
+        assert!(!rec.ui_actions.contains(&UiAction::SlowDownConversation));
+
+        augment_recommendation_for_inference(
+            &mut rec,
+            ThreatType::Manipulation,
+            &InferenceSummary {
+                uncertainty: UncertaintyLevel::Low,
+                risk_horizon: RiskHorizon::ShortTerm,
+                escalation_likelihood_24h: 0.82,
+                protective_factor_strength: 0.0,
+                latent_states: vec![LatentStateEvidence {
+                    kind: LatentStateKind::CoerciveControl,
+                    score: 0.78,
+                    reason_codes: vec!["conversation.manipulation.multi_tactic_control".to_string()],
+                }],
+            },
+        );
+
+        assert!(rec.ui_actions.contains(&UiAction::SuggestBlockContact));
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
+        assert!(rec.ui_actions.contains(&UiAction::SlowDownConversation));
+    }
+
+    #[test]
+    fn group_escalation_inference_adds_report_and_slowdown_for_bullying() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Bullying, 0.4, ProtectionLevel::Medium);
+
+        augment_recommendation_for_inference(
+            &mut rec,
+            ThreatType::Bullying,
+            &InferenceSummary {
+                uncertainty: UncertaintyLevel::Low,
+                risk_horizon: RiskHorizon::Sustained,
+                escalation_likelihood_24h: 0.74,
+                protective_factor_strength: 0.0,
+                latent_states: vec![LatentStateEvidence {
+                    kind: LatentStateKind::GroupEscalation,
+                    score: 0.72,
+                    reason_codes: vec!["abuse.bullying.pile_on".to_string()],
+                }],
+            },
+        );
+
         assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
         assert!(rec.ui_actions.contains(&UiAction::SlowDownConversation));
     }

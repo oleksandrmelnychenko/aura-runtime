@@ -150,11 +150,10 @@ fn print_slice_group(
         let policy_report = policy_reports
             .iter()
             .find(|(slice_id, _)| slice_id == &slice.slice_id)
-            .map(|(_, report)| report)
-            .expect("matching policy report");
+            .map(|(_, report)| report);
 
         println!(
-            "  {} -> cases={} calib={} positives={} negatives={} onset={} brier={:.4} ece={:.4} pos_detect={:.2} neg_fp={:.2} eval_gates={} policy_gates={} policy_pass_rate={:.2}",
+            "  {} -> cases={} calib={} positives={} negatives={} onset={} brier={:.4} ece={:.4} pos_detect={:.2} neg_fp={:.2} eval_gates={} policy_gates={} policy_pass_rate={}",
             slice.slice_id,
             slice.case_count,
             slice.evaluation.calibration.count,
@@ -166,8 +165,12 @@ fn print_slice_group(
             slice.evaluation.classification.positive_detection_rate,
             slice.evaluation.classification.negative_false_positive_rate,
             if eval_report.passed { "PASS" } else { "FAIL" },
-            if policy_report.passed { "PASS" } else { "FAIL" },
-            slice.policy.scenario_pass_rate
+            policy_report
+                .map(|report| if report.passed { "PASS" } else { "FAIL" })
+                .unwrap_or("N/A"),
+            policy_report
+                .map(|_| format!("{:.2}", slice.policy.scenario_pass_rate))
+                .unwrap_or_else(|| "N/A".to_string())
         );
     }
 }
