@@ -1,17 +1,17 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use aura_ml::{MlConfig, MlPipeline, ToxicityLabel};
 use aura_patterns::{PatternDatabase, PatternMatcher, UrlChecker};
 use tracing::debug;
 
-use crate::action::decide_action_v2;
+use crate::action::{augment_recommendation_for_reason_codes, decide_action_v2};
 use crate::config::AuraConfig;
 use crate::context::enricher::{EnricherConfig, SignalEnricher};
 use crate::context::events::{ContextEvent, EventKind};
 use crate::context::timing::TimingAnalyzer;
-use crate::context::tracker::{ConversationTracker, TrackerConfig};
+use crate::context::tracker::{ConversationTracker, TrackerConfig, TrackerWireState};
 use crate::types::*;
 
 struct EscalationTracker {
@@ -76,7 +76,8 @@ fn truncate_text(text: &str) -> &str {
 
 pub struct Analyzer {
     config: AuraConfig,
-    pattern_matcher: PatternMatcher,
+    pattern_db: PatternDatabase,
+    pattern_matchers: HashMap<String, PatternMatcher>,
     url_checker: UrlChecker,
     context_tracker: ConversationTracker,
     signal_enricher: SignalEnricher,
@@ -87,7 +88,8 @@ pub struct Analyzer {
 
 impl Analyzer {
     pub fn new(config: AuraConfig, pattern_db: &PatternDatabase) -> Self {
-        let pattern_matcher = PatternMatcher::from_database(pattern_db, &config.language);
+        let default_pattern_language = config.language.clone();
+        let pattern_matcher = PatternMatcher::from_database(pattern_db, &default_pattern_language);
         let url_checker = UrlChecker::from_database(pattern_db);
 
         let tracker_config = TrackerConfig {
@@ -96,6 +98,7 @@ impl Analyzer {
             is_teen_account: config.account_type == AccountType::Teen,
             account_holder_age: config.account_holder_age,
             auto_cleanup_interval: 100,
+            timezone_offset_minutes: config.timezone_offset_minutes,
             ..Default::default()
         };
         let context_tracker = ConversationTracker::new(tracker_config);
@@ -147,7 +150,8 @@ impl Analyzer {
 
         Self {
             config,
-            pattern_matcher,
+            pattern_db: pattern_db.clone(),
+            pattern_matchers: HashMap::from([(default_pattern_language, pattern_matcher)]),
             url_checker,
             context_tracker,
             signal_enricher,
@@ -169,7 +173,10 @@ impl Analyzer {
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
-            let matches = self.pattern_matcher.scan(text);
+            let matches = {
+                let matcher = self.pattern_matcher_for(input.language.as_deref());
+                matcher.scan(text)
+            };
             for m in matches {
                 let threat_type = parse_threat_type(&m.threat_type);
 
@@ -177,24 +184,24 @@ impl Analyzer {
                     continue;
                 }
 
-                signals.push(DetectionSignal {
+                signals.push(DetectionSignal::pattern(
                     threat_type,
-                    score: m.score,
-                    confidence: score_to_confidence(m.score),
-                    layer: DetectionLayer::PatternMatching,
-                    explanation: m.explanation,
-                });
+                    m.score,
+                    score_to_confidence(m.score),
+                    format!("pattern.{}", m.rule_id),
+                    m.explanation,
+                ));
             }
 
             let blocked_urls = self.url_checker.find_blocked_urls(text);
             for url in blocked_urls {
-                signals.push(DetectionSignal {
-                    threat_type: ThreatType::Phishing,
-                    score: 0.95,
-                    confidence: Confidence::High,
-                    layer: DetectionLayer::PatternMatching,
-                    explanation: format!("Blocked URL detected: {url}"),
-                });
+                signals.push(DetectionSignal::pattern(
+                    ThreatType::Phishing,
+                    0.95,
+                    Confidence::High,
+                    "link.blocked_domain",
+                    format!("Blocked URL detected: {url}"),
+                ));
             }
         }
 
@@ -232,23 +239,27 @@ impl Analyzer {
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
-            let matches = self.pattern_matcher.scan(text);
+            let matches = {
+                let matcher = self.pattern_matcher_for(input.language.as_deref());
+                matcher.scan(text)
+            };
             for m in matches {
                 let threat_type = parse_threat_type(&m.threat_type);
                 if !self.is_detection_enabled(threat_type) {
                     continue;
                 }
 
-                signals.push(DetectionSignal {
+                signals.push(DetectionSignal::pattern(
                     threat_type,
-                    score: m.score,
-                    confidence: score_to_confidence(m.score),
-                    layer: DetectionLayer::PatternMatching,
-                    explanation: m.explanation,
-                });
+                    m.score,
+                    score_to_confidence(m.score),
+                    format!("pattern.{}", m.rule_id),
+                    m.explanation,
+                ));
 
                 if let Some(event_kind) = match_to_event_kind(&m.rule_id, threat_type) {
                     context_events.push(ContextEvent {
+                        event_id: 0,
                         timestamp_ms,
                         sender_id: input.sender_id.clone(),
                         conversation_id: input.conversation_id.clone(),
@@ -260,13 +271,13 @@ impl Analyzer {
 
             let blocked_urls = self.url_checker.find_blocked_urls(text);
             for url in blocked_urls {
-                signals.push(DetectionSignal {
-                    threat_type: ThreatType::Phishing,
-                    score: 0.95,
-                    confidence: Confidence::High,
-                    layer: DetectionLayer::PatternMatching,
-                    explanation: format!("Blocked URL detected: {url}"),
-                });
+                signals.push(DetectionSignal::pattern(
+                    ThreatType::Phishing,
+                    0.95,
+                    Confidence::High,
+                    "link.blocked_domain",
+                    format!("Blocked URL detected: {url}"),
+                ));
             }
         }
 
@@ -289,6 +300,7 @@ impl Analyzer {
 
         if context_events.is_empty() {
             context_events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: input.sender_id.clone(),
                 conversation_id: input.conversation_id.clone(),
@@ -303,6 +315,7 @@ impl Analyzer {
             for signal in &ml_signals {
                 if let Some(kind) = ml_signal_to_event_kind(signal) {
                     context_events.push(ContextEvent {
+                        event_id: 0,
                         timestamp_ms,
                         sender_id: input.sender_id.clone(),
                         conversation_id: input.conversation_id.clone(),
@@ -347,9 +360,14 @@ impl Analyzer {
 
         let is_child = self.config.account_type == AccountType::Child;
         if let Some(timeline) = self.context_tracker.timeline(&input.conversation_id) {
-            let timing_signals =
-                self.timing_analyzer
-                    .analyze(timeline, &input.sender_id, timestamp_ms, is_child);
+            let tz_offset = self.context_tracker.config().timezone_offset_minutes;
+            let timing_signals = self.timing_analyzer.analyze_with_tz(
+                timeline,
+                &input.sender_id,
+                timestamp_ms,
+                is_child,
+                tz_offset,
+            );
             signals.extend(timing_signals);
         }
 
@@ -384,12 +402,25 @@ impl Analyzer {
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
 
-        self.combine_signals(
+        let mut result = self.combine_signals(
             signals,
             protection,
             input.conversation_type,
             analysis_time_us,
-        )
+        );
+        result.contact_snapshot = self
+            .context_tracker
+            .contact_profiler()
+            .snapshot(&input.sender_id);
+        result.inference = build_inference_summary(
+            &result.signals,
+            &result.risk_breakdown,
+            result.threat_type,
+            result.score,
+            input.conversation_type,
+            result.contact_snapshot.as_ref(),
+        );
+        result
     }
 
     fn combine_signals(
@@ -431,7 +462,8 @@ impl Analyzer {
         let score = max_score.max(priority_signal.score);
         let primary = priority_signal;
 
-        let (action_v2, recommendation) = decide_action_v2(primary.threat_type, score, protection);
+        let (action_v2, mut recommendation) =
+            decide_action_v2(primary.threat_type, score, protection);
         let action = action_v2;
 
         let mut threat_map: std::collections::HashMap<ThreatType, f32> =
@@ -447,6 +479,23 @@ impl Analyzer {
         let mut detected_threats: Vec<(ThreatType, f32)> = threat_map.into_iter().collect();
         detected_threats.sort_by_key(|(tt, _)| threat_priority(*tt));
 
+        let risk_breakdown = compute_risk_breakdown(&signals);
+        let reason_codes = collect_reason_codes(&signals);
+        recommendation.reason_codes = reason_codes.clone();
+        augment_recommendation_for_reason_codes(
+            &mut recommendation,
+            primary.threat_type,
+            &reason_codes,
+        );
+        let inference = build_inference_summary(
+            &signals,
+            &risk_breakdown,
+            primary.threat_type,
+            score,
+            conversation_type,
+            None,
+        );
+
         AnalysisResult {
             threat_type: primary.threat_type,
             confidence: primary.confidence,
@@ -456,6 +505,10 @@ impl Analyzer {
             detected_threats,
             signals,
             recommended_action: Some(recommendation),
+            risk_breakdown,
+            contact_snapshot: None,
+            reason_codes,
+            inference,
             analysis_time_us,
         }
     }
@@ -485,12 +538,15 @@ impl Analyzer {
         &self.context_tracker
     }
 
-    pub fn export_context(&self) -> Result<String, serde_json::Error> {
-        self.context_tracker.export_state()
+    pub fn export_context_state(&self) -> TrackerWireState {
+        self.context_tracker.export_wire_state()
     }
 
-    pub fn import_context(&mut self, json: &str) -> Result<(), crate::error::AuraError> {
-        self.context_tracker.import_state(json)
+    pub fn import_context_state(
+        &mut self,
+        state: TrackerWireState,
+    ) -> Result<(), crate::error::AuraError> {
+        self.context_tracker.import_wire_state(state)
     }
 
     pub fn cleanup_context(&mut self, now_ms: u64) {
@@ -503,14 +559,46 @@ impl Analyzer {
     }
 
     pub fn update_config(&mut self, config: AuraConfig, pattern_db: &PatternDatabase) {
-        self.pattern_matcher = PatternMatcher::from_database(pattern_db, &config.language);
+        self.pattern_db = pattern_db.clone();
+        self.pattern_matchers = HashMap::from([(
+            config.language.clone(),
+            PatternMatcher::from_database(pattern_db, &config.language),
+        )]);
         self.url_checker = UrlChecker::from_database(pattern_db);
         self.config = config;
     }
 
     pub fn reload_patterns(&mut self, pattern_db: &PatternDatabase) {
-        self.pattern_matcher = PatternMatcher::from_database(pattern_db, &self.config.language);
+        self.pattern_db = pattern_db.clone();
+        self.pattern_matchers = HashMap::from([(
+            self.config.language.clone(),
+            PatternMatcher::from_database(pattern_db, &self.config.language),
+        )]);
         self.url_checker = UrlChecker::from_database(pattern_db);
+    }
+
+    fn pattern_matcher_for(&mut self, message_language: Option<&str>) -> &PatternMatcher {
+        let language = self.pattern_language(message_language);
+        self.pattern_matchers
+            .entry(language.clone())
+            .or_insert_with(|| PatternMatcher::from_database(&self.pattern_db, &language))
+    }
+
+    fn pattern_language(&self, message_language: Option<&str>) -> String {
+        let Some(language) = message_language else {
+            return self.config.language.clone();
+        };
+
+        if self
+            .pattern_db
+            .rules
+            .iter()
+            .any(|rule| rule.languages.iter().any(|candidate| candidate == language))
+        {
+            language.to_string()
+        } else {
+            self.config.language.clone()
+        }
     }
 
     fn run_ml_layer(&self, text: &str) -> Vec<DetectionSignal> {
@@ -557,19 +645,443 @@ impl Analyzer {
                 };
 
                 if self.is_detection_enabled(threat_type) {
-                    signals.push(DetectionSignal {
+                    let reason_code = match threat_type {
+                        ThreatType::Threat => "ml.threat",
+                        ThreatType::Explicit => "ml.sexual_explicit",
+                        ThreatType::Bullying => "ml.toxicity",
+                        _ => "ml.generic",
+                    };
+                    signals.push(DetectionSignal::ml(
                         threat_type,
-                        score: tox.toxicity,
-                        confidence: score_to_confidence(tox.toxicity),
-                        layer: DetectionLayer::MlClassification,
+                        tox.toxicity,
+                        score_to_confidence(tox.toxicity),
+                        reason_code,
                         explanation,
-                    });
+                    ));
                 }
             }
         }
 
         signals
     }
+}
+
+fn compute_risk_breakdown(signals: &[DetectionSignal]) -> RiskBreakdown {
+    let mut breakdown = RiskBreakdown::default();
+    for signal in signals {
+        match signal.family {
+            SignalFamily::Content => breakdown.content = breakdown.content.max(signal.score),
+            SignalFamily::Conversation => {
+                breakdown.conversation = breakdown.conversation.max(signal.score)
+            }
+            SignalFamily::Link => breakdown.link = breakdown.link.max(signal.score),
+            SignalFamily::Abuse => breakdown.abuse = breakdown.abuse.max(signal.score),
+        }
+    }
+    breakdown
+}
+
+fn collect_reason_codes(signals: &[DetectionSignal]) -> Vec<String> {
+    let mut sorted = signals.to_vec();
+    sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+
+    let mut seen = HashSet::new();
+    let mut codes = Vec::new();
+    for signal in sorted {
+        if signal.reason_code.is_empty() || !seen.insert(signal.reason_code.clone()) {
+            continue;
+        }
+        codes.push(signal.reason_code);
+        if codes.len() >= 8 {
+            break;
+        }
+    }
+    codes
+}
+
+fn build_inference_summary(
+    signals: &[DetectionSignal],
+    risk_breakdown: &RiskBreakdown,
+    primary_threat: ThreatType,
+    primary_score: f32,
+    conversation_type: ConversationType,
+    contact_snapshot: Option<&ContactSnapshot>,
+) -> InferenceSummary {
+    let latent_states = collect_latent_states(signals, conversation_type, contact_snapshot);
+    let protective_factor_strength = latent_states
+        .iter()
+        .find(|state| state.kind == LatentStateKind::ProtectiveSupport)
+        .map(|state| state.score)
+        .unwrap_or(0.0);
+
+    InferenceSummary {
+        uncertainty: estimate_uncertainty(signals, primary_threat, primary_score),
+        risk_horizon: infer_risk_horizon(signals, primary_threat, primary_score, contact_snapshot),
+        escalation_likelihood_24h: estimate_escalation_likelihood(
+            signals,
+            risk_breakdown,
+            primary_threat,
+            contact_snapshot,
+            protective_factor_strength,
+            &latent_states,
+        ),
+        protective_factor_strength,
+        latent_states,
+    }
+}
+
+fn collect_latent_states(
+    signals: &[DetectionSignal],
+    conversation_type: ConversationType,
+    contact_snapshot: Option<&ContactSnapshot>,
+) -> Vec<LatentStateEvidence> {
+    let mut states = Vec::new();
+
+    push_latent_state(
+        &mut states,
+        LatentStateKind::DependencyBuilding,
+        match_signal_family(
+            signals,
+            &[
+                "grooming",
+                "love_bomb",
+                "flattery",
+                "gift",
+                "financial",
+                "fake_vulnerability",
+                "false_consensus",
+                "identity_erosion",
+            ],
+            &[ThreatType::Grooming],
+        ),
+        0.30,
+    );
+    push_latent_state(
+        &mut states,
+        LatentStateKind::IsolationPressure,
+        match_signal_family(
+            signals,
+            &[
+                "secrecy",
+                "platform_switch",
+                "network_poisoning",
+                "exclusion",
+                "isolation",
+            ],
+            &[
+                ThreatType::Grooming,
+                ThreatType::Manipulation,
+                ThreatType::Bullying,
+            ],
+        ),
+        0.30,
+    );
+    push_latent_state(
+        &mut states,
+        LatentStateKind::CoerciveControl,
+        match_signal_family(
+            signals,
+            &[
+                "coercion",
+                "blackmail",
+                "debt",
+                "reputation",
+                "screenshot",
+                "emotional_blackmail",
+                "darvo",
+                "control",
+            ],
+            &[ThreatType::Manipulation, ThreatType::Threat],
+        ),
+        0.35,
+    );
+    push_latent_state(
+        &mut states,
+        LatentStateKind::Humiliation,
+        match_signal_family(
+            signals,
+            &[
+                "bullying",
+                "mockery",
+                "denigration",
+                "rumor",
+                "hate",
+                "doxx",
+                "exclusion",
+            ],
+            &[
+                ThreatType::Bullying,
+                ThreatType::HateSpeech,
+                ThreatType::Doxxing,
+            ],
+        ),
+        0.35,
+    );
+    push_latent_state(
+        &mut states,
+        LatentStateKind::CrisisVulnerability,
+        match_signal_family(
+            signals,
+            &[
+                "selfharm",
+                "hopeless",
+                "farewell",
+                "ideation",
+                "acute_crisis",
+                "chronic_pattern",
+            ],
+            &[ThreatType::SelfHarm],
+        ),
+        0.40,
+    );
+
+    let mut protective = match_signal_family(
+        signals,
+        &["protective_factor", "defense", "support"],
+        &[ThreatType::SelfHarm, ThreatType::Bullying],
+    );
+    protective.score = protective.score.abs();
+    if let Some(snapshot) = contact_snapshot {
+        if snapshot.trend == BehavioralTrend::Improving {
+            protective.score = protective.score.max(0.25);
+            protective
+                .reason_codes
+                .push("contact.trend.improving".to_string());
+        }
+        if snapshot.is_trusted && snapshot.trust_level >= 0.8 {
+            protective.score = protective.score.max(0.20);
+            protective
+                .reason_codes
+                .push("contact.trusted.high_trust".to_string());
+        }
+    }
+    push_latent_state(
+        &mut states,
+        LatentStateKind::ProtectiveSupport,
+        protective,
+        0.15,
+    );
+
+    let mut group_escalation = match_signal_family(
+        signals,
+        &["raid", "pile_on", "message_bombing", "bystander", "group"],
+        &[ThreatType::Bullying, ThreatType::Spam, ThreatType::Scam],
+    );
+    if conversation_type != ConversationType::Direct {
+        group_escalation.score = group_escalation.score.max(
+            signals
+                .iter()
+                .filter(|signal| signal.family == SignalFamily::Abuse)
+                .map(|signal| signal.score)
+                .fold(0.0, f32::max),
+        );
+    }
+    push_latent_state(
+        &mut states,
+        LatentStateKind::GroupEscalation,
+        group_escalation,
+        0.35,
+    );
+
+    states.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+    states.truncate(5);
+    states
+}
+
+#[derive(Default)]
+struct MatchedSignals {
+    score: f32,
+    reason_codes: Vec<String>,
+}
+
+fn match_signal_family(
+    signals: &[DetectionSignal],
+    reason_needles: &[&str],
+    threat_types: &[ThreatType],
+) -> MatchedSignals {
+    let mut matched = MatchedSignals::default();
+    let mut seen = HashSet::new();
+
+    for signal in signals {
+        let reason_match = reason_needles
+            .iter()
+            .any(|needle| signal.reason_code.contains(needle));
+        let threat_match = threat_types.contains(&signal.threat_type);
+        if !reason_match && !threat_match {
+            continue;
+        }
+
+        matched.score = matched.score.max(signal.score);
+        if !signal.reason_code.is_empty() && seen.insert(signal.reason_code.clone()) {
+            matched.reason_codes.push(signal.reason_code.clone());
+        }
+    }
+
+    matched
+}
+
+fn push_latent_state(
+    states: &mut Vec<LatentStateEvidence>,
+    kind: LatentStateKind,
+    matched: MatchedSignals,
+    min_score: f32,
+) {
+    if matched.score < min_score {
+        return;
+    }
+
+    states.push(LatentStateEvidence {
+        kind,
+        score: matched.score.clamp(0.0, 1.0),
+        reason_codes: matched.reason_codes,
+    });
+}
+
+fn estimate_uncertainty(
+    signals: &[DetectionSignal],
+    primary_threat: ThreatType,
+    primary_score: f32,
+) -> UncertaintyLevel {
+    let mut threat_scores: HashMap<ThreatType, f32> = HashMap::new();
+    for signal in signals {
+        threat_scores
+            .entry(signal.threat_type)
+            .and_modify(|score| *score = score.max(signal.score))
+            .or_insert(signal.score);
+    }
+
+    let mut ordered_scores: Vec<f32> = threat_scores
+        .into_iter()
+        .filter(|(threat, _)| *threat != ThreatType::None)
+        .map(|(_, score)| score)
+        .collect();
+    ordered_scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
+
+    let top_gap = match ordered_scores.as_slice() {
+        [top, second, ..] => top - second,
+        [_top] => 1.0,
+        [] => 0.0,
+    };
+    let primary_support = signals
+        .iter()
+        .filter(|signal| {
+            signal.threat_type == primary_threat && signal.score >= (primary_score - 0.15)
+        })
+        .count();
+
+    if primary_support >= 2 && primary_score >= 0.75 && top_gap >= 0.25 {
+        UncertaintyLevel::Low
+    } else if primary_support <= 1 || top_gap < 0.15 {
+        UncertaintyLevel::High
+    } else {
+        UncertaintyLevel::Medium
+    }
+}
+
+fn infer_risk_horizon(
+    signals: &[DetectionSignal],
+    primary_threat: ThreatType,
+    primary_score: f32,
+    contact_snapshot: Option<&ContactSnapshot>,
+) -> RiskHorizon {
+    let has_immediate_reason = signals.iter().any(|signal| {
+        signal.reason_code.contains("farewell_after_ideation")
+            || signal.reason_code.contains("acute_crisis")
+            || signal.reason_code.contains("blocked_domain")
+    });
+    if has_immediate_reason
+        || matches!(
+            primary_threat,
+            ThreatType::Threat | ThreatType::Explicit | ThreatType::Phishing
+        ) && primary_score >= 0.8
+    {
+        return RiskHorizon::Immediate;
+    }
+
+    if matches!(
+        primary_threat,
+        ThreatType::Grooming | ThreatType::Manipulation | ThreatType::SelfHarm
+    ) && primary_score >= 0.55
+    {
+        return RiskHorizon::ShortTerm;
+    }
+
+    if matches!(primary_threat, ThreatType::Bullying)
+        || contact_snapshot.is_some_and(|snapshot| {
+            matches!(
+                snapshot.trend,
+                BehavioralTrend::GradualWorsening
+                    | BehavioralTrend::RapidWorsening
+                    | BehavioralTrend::RoleReversal
+            )
+        })
+    {
+        return RiskHorizon::Sustained;
+    }
+
+    RiskHorizon::Unknown
+}
+
+fn estimate_escalation_likelihood(
+    signals: &[DetectionSignal],
+    risk_breakdown: &RiskBreakdown,
+    primary_threat: ThreatType,
+    contact_snapshot: Option<&ContactSnapshot>,
+    protective_factor_strength: f32,
+    latent_states: &[LatentStateEvidence],
+) -> f32 {
+    let mut estimate = risk_breakdown
+        .conversation
+        .max(risk_breakdown.abuse)
+        .max(risk_breakdown.link)
+        .max(risk_breakdown.content * 0.85);
+
+    if matches!(primary_threat, ThreatType::SelfHarm) {
+        estimate = estimate.max(
+            signals
+                .iter()
+                .filter(|signal| signal.threat_type == ThreatType::SelfHarm)
+                .map(|signal| signal.score)
+                .fold(0.0, f32::max),
+        );
+    }
+
+    let coercive_control = latent_score(latent_states, LatentStateKind::CoerciveControl);
+    let dependency = latent_score(latent_states, LatentStateKind::DependencyBuilding);
+    let isolation = latent_score(latent_states, LatentStateKind::IsolationPressure);
+    let crisis = latent_score(latent_states, LatentStateKind::CrisisVulnerability);
+
+    if coercive_control >= 0.6 {
+        estimate += 0.10;
+    }
+    if dependency >= 0.45 && isolation >= 0.45 {
+        estimate += 0.10;
+    }
+    if crisis >= 0.7 {
+        estimate += 0.15;
+    }
+
+    if let Some(snapshot) = contact_snapshot {
+        if snapshot.is_new_contact && matches!(primary_threat, ThreatType::Grooming) {
+            estimate += 0.10;
+        }
+        estimate += match snapshot.trend {
+            BehavioralTrend::RapidWorsening | BehavioralTrend::RoleReversal => 0.15,
+            BehavioralTrend::GradualWorsening => 0.08,
+            BehavioralTrend::Improving => -0.05,
+            BehavioralTrend::Stable => 0.0,
+        };
+    }
+
+    (estimate - protective_factor_strength * 0.35).clamp(0.0, 1.0)
+}
+
+fn latent_score(latent_states: &[LatentStateEvidence], kind: LatentStateKind) -> f32 {
+    latent_states
+        .iter()
+        .find(|state| state.kind == kind)
+        .map(|state| state.score)
+        .unwrap_or(0.0)
 }
 
 fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKind> {
@@ -633,7 +1145,7 @@ fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKi
         return Some(EventKind::Gaslighting);
     }
     if rule_id.starts_with("manipulation_guilt") {
-        return Some(EventKind::GuildTripping);
+        return Some(EventKind::GuiltTripping);
     }
     if rule_id.starts_with("manipulation_pressure") {
         return Some(EventKind::PeerPressure);
@@ -733,7 +1245,7 @@ fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKi
         ThreatType::Bullying => Some(EventKind::Insult),
         ThreatType::Threat => Some(EventKind::PhysicalThreat),
         ThreatType::SelfHarm => Some(EventKind::SuicidalIdeation),
-        ThreatType::Manipulation => Some(EventKind::GuildTripping),
+        ThreatType::Manipulation => Some(EventKind::GuiltTripping),
         ThreatType::Doxxing => Some(EventKind::DoxxingAttempt),
         ThreatType::HateSpeech => Some(EventKind::HateSpeech),
         ThreatType::PiiLeakage => Some(EventKind::PiiSelfDisclosure),
@@ -1099,10 +1611,10 @@ mod tests {
         );
         analyzer.analyze_with_context(&child_input("Hello there", "friend", "conv_2"), 2000);
 
-        let state = analyzer.export_context().unwrap();
+        let state = analyzer.export_context_state();
 
         let mut analyzer2 = Analyzer::new(child_config(), &db);
-        analyzer2.import_context(&state).unwrap();
+        analyzer2.import_context_state(state).unwrap();
 
         assert!(analyzer2.context_tracker().timeline("conv_1").is_some());
         assert!(analyzer2.context_tracker().timeline("conv_2").is_some());
@@ -1544,12 +2056,18 @@ mod tests {
             1000,
         );
 
-        let state = analyzer.export_context().expect("export should work");
-        assert!(state.contains(conv), "State should contain conversation");
+        let state = analyzer.export_context_state();
+        assert!(
+            state
+                .timelines
+                .iter()
+                .any(|timeline| timeline.conversation_id == conv),
+            "State should contain conversation"
+        );
 
         let mut analyzer2 = Analyzer::new(child_config(), &db);
         analyzer2
-            .import_context(&state)
+            .import_context_state(state)
             .expect("import should work");
 
         let r = analyzer2.analyze_with_context(
@@ -1772,14 +2290,164 @@ mod tests {
         );
 
         let json = serde_json::to_string(&r).expect("should serialize");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid json");
+        assert!(value.get("recommended_action").is_some());
+        assert!(value["recommended_action"].get("parent_alert").is_some());
+        assert!(value.get("risk_breakdown").is_some());
+        assert!(value.get("reason_codes").is_some());
+        assert!(value.get("contact_snapshot").is_some());
+        assert!(value.get("inference").is_some());
+    }
+
+    #[test]
+    fn integration_context_result_includes_contact_snapshot_and_breakdown() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let conv = "int_snapshot";
+
+        let r = analyzer.analyze_with_context(
+            &child_input("Don't tell your parents about me ok?", "stranger", conv),
+            1000,
+        );
+
+        let snapshot = r
+            .contact_snapshot
+            .expect("context analysis should attach snapshot");
+        assert_eq!(snapshot.sender_id, "stranger");
+        assert!(snapshot.is_new_contact);
+        assert!(r.risk_breakdown.content > 0.0 || r.risk_breakdown.conversation > 0.0);
         assert!(
-            json.contains("recommended_action"),
-            "JSON should include recommended_action"
+            !r.reason_codes.is_empty(),
+            "reason codes should be populated"
+        );
+    }
+
+    #[test]
+    fn clean_result_has_default_inference_summary() {
+        let result = AnalysisResult::clean(42);
+        assert_eq!(result.inference.uncertainty, UncertaintyLevel::Medium);
+        assert_eq!(result.inference.risk_horizon, RiskHorizon::Unknown);
+        assert_eq!(result.inference.escalation_likelihood_24h, 0.0);
+        assert!(result.inference.latent_states.is_empty());
+    }
+
+    #[test]
+    fn selfharm_inference_sets_immediate_horizon_and_crisis_state() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let conv = "int_sh_inference";
+
+        analyzer.analyze_with_context(
+            &child_input(
+                "I don't want to live anymore. I want to end it all.",
+                "child",
+                conv,
+            ),
+            1000,
+        );
+        let r = analyzer.analyze_with_context(
+            &child_input("Goodbye everyone. This is the end.", "child", conv),
+            2000,
+        );
+
+        assert_eq!(r.inference.risk_horizon, RiskHorizon::Immediate);
+        assert!(
+            r.inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::CrisisVulnerability),
+            "self-harm flow should surface crisis latent state"
         );
         assert!(
-            json.contains("parent_alert"),
-            "JSON should include parent_alert field"
+            r.inference.escalation_likelihood_24h >= 0.7,
+            "acute self-harm should imply high short-horizon escalation likelihood"
         );
+    }
+
+    #[test]
+    fn grooming_inference_surfaces_dependency_and_isolation_states() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let conv = "int_groom_inference";
+        let hour = 3600 * 1000u64;
+
+        analyzer.analyze_with_context(
+            &child_input(
+                "You're so special and beautiful. I can buy you anything.",
+                "stranger",
+                conv,
+            ),
+            0,
+        );
+        let r = analyzer.analyze_with_context(
+            &child_input(
+                "Don't tell your parents about us. Let's move to Telegram.",
+                "stranger",
+                conv,
+            ),
+            hour,
+        );
+
+        assert!(
+            r.inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::DependencyBuilding),
+            "grooming flow should surface dependency-building"
+        );
+        assert!(
+            r.inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::IsolationPressure),
+            "grooming flow should surface isolation pressure"
+        );
+        assert_eq!(r.inference.risk_horizon, RiskHorizon::ShortTerm);
+    }
+
+    #[test]
+    fn blocked_url_sets_link_risk_and_reason_codes() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let r = analyzer.analyze(&default_input("check this out https://evil-site.com/login"));
+
+        assert!(
+            r.risk_breakdown.link > 0.0,
+            "blocked url should raise link risk"
+        );
+        assert!(
+            r.reason_codes
+                .iter()
+                .any(|code| code == "link.blocked_domain"),
+            "blocked url should include link reason code"
+        );
+        assert!(
+            r.signals
+                .iter()
+                .any(|signal| signal.family == SignalFamily::Link),
+            "blocked url signal should be classified as link family"
+        );
+    }
+
+    #[test]
+    fn recommendation_carries_ui_actions_and_reason_codes() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let conv = "int_ui_actions";
+
+        let r = analyzer.analyze_with_context(
+            &child_input("Don't tell your parents about me ok?", "stranger", conv),
+            1000,
+        );
+
+        let rec = r
+            .recommended_action
+            .expect("recommendation should be present");
+        assert!(
+            !rec.ui_actions.is_empty(),
+            "recommendation should expose messenger ui actions"
+        );
+        assert_eq!(rec.reason_codes, r.reason_codes);
     }
 
     #[test]
@@ -1946,11 +2614,7 @@ mod tests {
 
         let result = analyzer.analyze_with_context(&input, 1000);
         // PII should never block
-        assert_ne!(
-            result.action,
-            Action::Block,
-            "PII leakage must NEVER block"
-        );
+        assert_ne!(result.action, Action::Block, "PII leakage must NEVER block");
     }
 
     #[test]
@@ -2096,7 +2760,10 @@ mod tests {
         let msgs = vec![
             ("you're imagining things, that never happened", 1000u64),
             ("after everything i've done for you, you owe me", 2000),
-            ("I dare you to do it, bet you can't! you're too scared", 3000),
+            (
+                "I dare you to do it, bet you can't! you're too scared",
+                3000,
+            ),
         ];
         let mut last_result = None;
         for (text, ts) in msgs {
@@ -2132,9 +2799,7 @@ mod tests {
         let result = analyzer.analyze_with_context(
             &MessageInput {
                 content_type: ContentType::Text,
-                text: Some(
-                    "if u block me ill end it, i cant live without u".to_string(),
-                ),
+                text: Some("if u block me ill end it, i cant live without u".to_string()),
                 image_data: None,
                 sender_id: "manipulator".to_string(),
                 conversation_id: "conv_sc".to_string(),
@@ -2177,6 +2842,69 @@ mod tests {
             result.score > 0.0,
             "Teen slang platform switch should be detected, got score {}",
             result.score
+        );
+    }
+
+    #[test]
+    fn integration_noisy_platform_switch_and_probing_shorthand() {
+        let db = test_db();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(13),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "conv_noisy_slang";
+        let sender = "stranger";
+
+        analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("wh4t schoooool u go to? where u live??".to_string()),
+                image_data: None,
+                sender_id: sender.to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("en".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1000,
+        );
+
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("msg me on in$ta rn, delete this ch4t".to_string()),
+                image_data: None,
+                sender_id: sender.to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("en".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            2000,
+        );
+
+        assert!(
+            result.score > 0.0,
+            "Noisy shorthand probing/platform-switch should still produce risk, got {}",
+            result.score
+        );
+
+        let timeline = analyzer.context_tracker().timeline(conv).unwrap();
+        assert!(
+            timeline
+                .all_events()
+                .iter()
+                .any(|e| e.kind == EventKind::PersonalInfoRequest),
+            "Noisy shorthand should still surface PersonalInfoRequest"
+        );
+        assert!(
+            timeline
+                .all_events()
+                .iter()
+                .any(|e| e.kind == EventKind::PlatformSwitch),
+            "Noisy shorthand should still surface PlatformSwitch"
         );
     }
 
@@ -2224,9 +2952,7 @@ mod tests {
         let result = analyzer.analyze_with_context(
             &MessageInput {
                 content_type: ContentType::Text,
-                text: Some(
-                    "ill get u vbucks if u do what i say, want free skins?".to_string(),
-                ),
+                text: Some("ill get u vbucks if u do what i say, want free skins?".to_string()),
                 image_data: None,
                 sender_id: "stranger".to_string(),
                 conversation_id: "conv_gb".to_string(),
@@ -2289,10 +3015,7 @@ mod tests {
         let bully = "mean_kid";
         let conv = "school_chat";
 
-        analyzer.analyze_with_context(
-            &child_input("hey what's up", bully, conv),
-            1000,
-        );
+        analyzer.analyze_with_context(&child_input("hey what's up", bully, conv), 1000);
         let rating_before = analyzer
             .context_tracker()
             .contact_profiler()
@@ -2329,10 +3052,7 @@ mod tests {
         let conv = "private_chat";
 
         // Establish and mark trusted
-        analyzer.analyze_with_context(
-            &child_input("hey bestie!", friend, conv),
-            1000,
-        );
+        analyzer.analyze_with_context(&child_input("hey bestie!", friend, conv), 1000);
         analyzer.mark_contact_trusted(friend);
         let trust_before = analyzer
             .context_tracker()
@@ -2354,10 +3074,7 @@ mod tests {
             "i'll make your life hell",
         ];
         for (i, msg) in hostile_msgs.iter().enumerate() {
-            analyzer.analyze_with_context(
-                &child_input(msg, friend, conv),
-                (i as u64 + 2) * 2000,
-            );
+            analyzer.analyze_with_context(&child_input(msg, friend, conv), (i as u64 + 2) * 2000);
         }
 
         let profile = analyzer
@@ -2370,7 +3087,8 @@ mod tests {
         assert!(
             profile.trust_level < trust_before,
             "Trust should decay after sustained hostility: {} (was {})",
-            profile.trust_level, trust_before
+            profile.trust_level,
+            trust_before
         );
     }
 
@@ -2386,7 +3104,11 @@ mod tests {
         for w in 0..3 {
             for msg in 0..10 {
                 analyzer.analyze_with_context(
-                    &child_input("hey how was your day? good luck on the test!", contact, conv),
+                    &child_input(
+                        "hey how was your day? good luck on the test!",
+                        contact,
+                        conv,
+                    ),
                     w * week + msg * 60_000,
                 );
             }
@@ -2429,10 +3151,7 @@ mod tests {
         );
 
         // Full pipeline should detect threats
-        assert!(
-            result.score > 0.0,
-            "Hostile message should be detected"
-        );
+        assert!(result.score > 0.0, "Hostile message should be detected");
     }
 
     #[test]
@@ -2476,20 +3195,33 @@ mod tests {
         analyzer.analyze_with_context(
             &child_input(
                 "you're so beautiful and amazing and perfect, you're the most incredible person",
-                predator, conv,
+                predator,
+                conv,
             ),
             0,
         );
         analyzer.analyze_with_context(
-            &child_input("where do you go to school? how old are you?", predator, conv),
+            &child_input(
+                "where do you go to school? how old are you?",
+                predator,
+                conv,
+            ),
             hour,
         );
         analyzer.analyze_with_context(
-            &child_input("don't tell your parents about me ok? this is our secret", predator, conv),
+            &child_input(
+                "don't tell your parents about me ok? this is our secret",
+                predator,
+                conv,
+            ),
             2 * hour,
         );
         analyzer.analyze_with_context(
-            &child_input("send me a photo, let's meet up just the two of us", predator, conv),
+            &child_input(
+                "send me a photo, let's meet up just the two of us",
+                predator,
+                conv,
+            ),
             3 * hour,
         );
 
@@ -2530,9 +3262,9 @@ mod tests {
             .rating;
 
         // Export & import
-        let state = analyzer.export_context().unwrap();
+        let state = analyzer.export_context_state();
         let mut analyzer2 = Analyzer::new(child_config(), &db);
-        analyzer2.import_context(&state).unwrap();
+        analyzer2.import_context_state(state).unwrap();
 
         let imported_rating = analyzer2
             .context_tracker()
@@ -2549,13 +3281,17 @@ mod tests {
 
     #[test]
     fn integration_multi_contact_independent_ratings() {
-        let db = test_db();
+        let db = PatternDatabase::default_mvp();
         let mut analyzer = Analyzer::new(child_config(), &db);
 
         // Good friend
         for i in 0..5 {
             analyzer.analyze_with_context(
-                &child_input("hey how are you? want to hang out?", "good_friend", "conv_1"),
+                &child_input(
+                    "hey how are you? want to hang out?",
+                    "good_friend",
+                    "conv_1",
+                ),
                 i * 2000,
             );
         }
@@ -2600,7 +3336,8 @@ mod tests {
         analyzer.analyze_with_context(
             &child_input(
                 "you're so beautiful and amazing and perfect, truly special",
-                predator, conv,
+                predator,
+                conv,
             ),
             0,
         );
@@ -2611,11 +3348,19 @@ mod tests {
 
         // Phase 2: escalate to coercion
         analyzer.analyze_with_context(
-            &child_input("if you leave me I'll hurt myself, I'll kill myself", predator, conv),
+            &child_input(
+                "if you leave me I'll hurt myself, I'll kill myself",
+                predator,
+                conv,
+            ),
             2 * hour,
         );
         let result = analyzer.analyze_with_context(
-            &child_input("I screenshotted everything, I'll tell everyone your secrets", predator, conv),
+            &child_input(
+                "I screenshotted everything, I'll tell everyone your secrets",
+                predator,
+                conv,
+            ),
             3 * hour,
         );
 
@@ -2635,15 +3380,27 @@ mod tests {
 
         // Use text that enricher patterns will definitely match
         analyzer.analyze_with_context(
-            &child_input("you're nothing without me, nobody else wants you around", manip, conv),
+            &child_input(
+                "you're nothing without me, nobody else wants you around",
+                manip,
+                conv,
+            ),
             1000,
         );
         analyzer.analyze_with_context(
-            &child_input("your friends don't really care about you, they use you", manip, conv),
+            &child_input(
+                "your friends don't really care about you, they use you",
+                manip,
+                conv,
+            ),
             2000,
         );
         let result = analyzer.analyze_with_context(
-            &child_input("only I understand you, everyone else thinks you're a loser", manip, conv),
+            &child_input(
+                "only I understand you, everyone else thinks you're a loser",
+                manip,
+                conv,
+            ),
             3000,
         );
 
@@ -2691,4 +3448,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn integration_message_language_overrides_default_pattern_language() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+
+        let result = analyzer.analyze_with_context(
+            &child_input("you're pathetic, kill yourself loser", "bully", "conv_en"),
+            0,
+        );
+
+        assert!(
+            result.detected_threats.iter().any(|(threat, score)| {
+                matches!(threat, ThreatType::Bullying | ThreatType::Threat) && *score >= 0.7
+            }),
+            "English hostile message should be detected even when config language differs: {:?}",
+            result.detected_threats
+        );
+
+        let bully_rating = analyzer
+            .context_tracker()
+            .contact_profiler()
+            .profile("bully")
+            .expect("bully profile")
+            .rating;
+        assert!(
+            bully_rating < 50.0,
+            "Hostile contact should lose trust, got rating {bully_rating}"
+        );
+    }
 }

@@ -1,0 +1,154 @@
+{
+  "cases": [
+    {
+      "id": "curated_en_grooming_probe",
+      "language": "en",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming"],
+      "detection_threshold": 0.45,
+      "onset_step": 0,
+      "messages": [
+        {
+          "text": "hey where u live fr",
+          "sender_id": "stranger_probe",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "what school u go to lol",
+          "sender_id": "stranger_probe",
+          "observed_threats": ["grooming"]
+        }
+      ]
+    },
+    {
+      "id": "curated_en_high_noise_selfharm",
+      "language": "en",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "messages": [
+        {
+          "text": "idk i feel so alone rn",
+          "sender_id": "child_noisy",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "i cant do this anymore i want to end it all",
+          "sender_id": "child_noisy",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "curated_en_screenshot_blackmail",
+      "language": "en",
+      "primary_threat": "manipulation",
+      "tracked_threats": ["manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 1,
+      "messages": [
+        {
+          "text": "i got screenshots of our chat",
+          "sender_id": "blackmailer",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "ill tell everyone at school and ill send this to your parents",
+          "sender_id": "blackmailer",
+          "observed_threats": ["manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "curated_uk_group_bullying",
+      "language": "uk",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": ["bullying"],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "messages": [
+        {
+          "text": "чого ти взагалі тут",
+          "sender_id": "bully_one",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "нікому ти тут не потрібен",
+          "sender_id": "bully_two",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "просто вийди з чату",
+          "sender_id": "bully_three",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "curated_ru_suicide_coercion",
+      "language": "ru",
+      "primary_threat": "manipulation",
+      "tracked_threats": ["manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 0,
+      "messages": [
+        {
+          "text": "если заблочишь я покончу с этим",
+          "sender_id": "coercer_ru",
+          "observed_threats": ["manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "curated_negative_en_peer_support",
+      "language": "en",
+      "tracked_threats": ["self_harm", "grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "messages": [
+        {
+          "text": "im here for u and we can talk tonight",
+          "sender_id": "friend_support"
+        },
+        {
+          "text": "pls tell your parents too so they can help",
+          "sender_id": "friend_support"
+        }
+      ]
+    },
+    {
+      "id": "curated_negative_uk_school_logistics",
+      "language": "uk",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "messages": [
+        {
+          "text": "принеси форму на тренування о 5",
+          "sender_id": "coach_safe"
+        },
+        {
+          "text": "скинь фото підписаної заяви в батьківський чат",
+          "sender_id": "coach_safe"
+        }
+      ]
+    },
+    {
+      "id": "curated_negative_en_peer_banter",
+      "language": "en",
+      "conversation_type": "group_chat",
+      "tracked_threats": ["bullying", "manipulation"],
+      "detection_threshold": 0.6,
+      "messages": [
+        {
+          "text": "bro ur late again lol",
+          "sender_id": "friend_one"
+        },
+        {
+          "text": "save me a seat nerd",
+          "sender_id": "friend_two"
+        }
+      ]
+    }
+  ]
+}

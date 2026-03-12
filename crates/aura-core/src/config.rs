@@ -23,6 +23,10 @@ pub struct AuraConfig {
 
     #[serde(default = "default_ttl_days")]
     pub ttl_days: u32,
+
+    /// Timezone offset in minutes from UTC (e.g. +180 for UTC+3 Ukraine).
+    #[serde(default)]
+    pub timezone_offset_minutes: i32,
 }
 
 fn default_ttl_days() -> u32 {
@@ -103,6 +107,7 @@ impl Default for AuraConfig {
             models_path: None,
             account_holder_age: None,
             ttl_days: 30,
+            timezone_offset_minutes: 0,
         }
     }
 }

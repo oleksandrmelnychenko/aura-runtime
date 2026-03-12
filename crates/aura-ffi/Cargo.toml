@@ -9,6 +9,6 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 aura-core = { path = "../aura-core" }
+aura-proto = { path = "../aura-proto" }
 aura-patterns = { path = "../aura-patterns" }
-serde.workspace = true
-serde_json.workspace = true
+prost.workspace = true

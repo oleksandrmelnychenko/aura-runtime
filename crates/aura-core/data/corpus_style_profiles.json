@@ -1,0 +1,72 @@
+{
+  "profiles": [
+    {
+      "id": "english_casual_teen",
+      "general_replacements": [
+        { "from": " you ", "to": " u " },
+        { "from": " your ", "to": " ur " },
+        { "from": " please ", "to": " pls " },
+        { "from": "you're", "to": "ur" },
+        { "from": "you are", "to": "u r" }
+      ],
+      "targeted_replacements": [
+        { "from": "where u live", "to": "where u liiive fr" },
+        { "from": "what school u go to", "to": "what schoooool u go to lol" },
+        { "from": "msg me on insta", "to": "msg me on insta rn" },
+        { "from": "text me on tg", "to": "text me on tg rn" },
+        { "from": "i got screenshots", "to": "i got screenshotss fr" },
+        { "from": "goodbye", "to": "goooodbye" }
+      ],
+      "filler": "fr"
+    },
+    {
+      "id": "english_high_noise_teen",
+      "general_replacements": [
+        { "from": " you ", "to": " u " },
+        { "from": " your ", "to": " ur " },
+        { "from": " please ", "to": " pls " },
+        { "from": "you're", "to": "ur" },
+        { "from": "you are", "to": "u r" },
+        { "from": "nobody", "to": "noboody" },
+        { "from": "alone", "to": "alonne" },
+        { "from": "secret", "to": "secrett" },
+        { "from": "parents", "to": "parentss" }
+      ],
+      "targeted_replacements": [
+        { "from": "where u live", "to": "w.h.e.r.e u liiive" },
+        { "from": "what school u go to", "to": "wh4t s.c.h.o.o.l u go to" },
+        { "from": "msg me on insta", "to": "msg me on i.n.s.t.a" },
+        { "from": "text me on tg", "to": "text me on t.g" },
+        { "from": "i got screenshots", "to": "i got s.c.r.e.e.n.s.h.o.t.s" },
+        { "from": "goodbye", "to": "gooooodbye" },
+        { "from": "end it all", "to": "end it all fr" }
+      ],
+      "filler": "idk"
+    },
+    {
+      "id": "ukrainian_casual_teen",
+      "general_replacements": [],
+      "targeted_replacements": [
+        { "from": "де живеш", "to": "деее живеш" },
+        { "from": "в якій школі вчишся", "to": "в якій шкооолі вчишся" },
+        { "from": "пиши в інст", "to": "пиши в інст пж" },
+        { "from": "го в інст", "to": "го в інст пж" },
+        { "from": "скріни", "to": "скріііни" },
+        { "from": "прощавай", "to": "прощааавай" }
+      ],
+      "filler": "пж"
+    },
+    {
+      "id": "russian_casual_teen",
+      "general_replacements": [],
+      "targeted_replacements": [
+        { "from": "пиши в инст", "to": "пиши в инст пж" },
+        { "from": "го в инст", "to": "го в инст пж" },
+        { "from": "скрины", "to": "скрииины" },
+        { "from": "заблочишь", "to": "заблочиишь" },
+        { "from": "прощай", "to": "прощааай" }
+      ],
+      "filler": "пж"
+    }
+  ]
+}

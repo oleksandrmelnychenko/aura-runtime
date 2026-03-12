@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "dataset_id": "aura_external_curated_seed",
+  "dataset_label": "AURA External Curated Seed Corpus",
+  "curation_status": "seed_reviewed",
+  "maintainer": "aura_core_team",
+  "created_at_ms": 1773273600000,
+  "updated_at_ms": 1773273600000,
+  "cases": [
+    {
+      "id": "external_en_child_stranger_secrecy_probe",
+      "source_family": "research_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "classic_grooming",
+      "messages": [
+        {
+          "text": "Hey! You seem really cool and special for your age.",
+          "sender_id": "external_stranger_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "Where do you live? What school do you go to?",
+          "sender_id": "external_stranger_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "Don't tell your parents about me. Let's move this to Telegram.",
+          "sender_id": "external_stranger_1",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "Send me a photo, I want to see what you look like.",
+          "sender_id": "external_stranger_1",
+          "observed_threats": ["grooming"]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_trusted_adult_private_channel",
+      "source_family": "research_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "You're so mature for your age. I really understand you better than others do.",
+          "sender_id": "external_coach_uk",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "I bought you a special gift. Keep it between us, okay?",
+          "sender_id": "external_coach_uk",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "Don't tell your parents about our chats. They wouldn't understand our bond.",
+          "sender_id": "external_coach_uk",
+          "language": "en",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "Let's switch to Telegram and keep talking there privately.",
+          "sender_id": "external_coach_uk",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        }
+      ]
+    },
+    {
+      "id": "external_en_selfharm_goodbye_window",
+      "source_family": "support_boundary_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "account_type": "teen",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 1,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "acute_selfharm",
+      "messages": [
+        {
+          "text": "Nobody would notice if I wasn't here.",
+          "sender_id": "external_self_en",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "I don't want to live anymore. I want to end it all.",
+          "sender_id": "external_self_en",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_screenshot_reputation_blackmail",
+      "source_family": "moderation_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": ["manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 1,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "screenshot_blackmail",
+      "messages": [
+        {
+          "text": "Я заскрінив і покажу це всім в школі.",
+          "sender_id": "external_blackmailer_ru"
+        },
+        {
+          "text": "У меня есть скриншоты, я расскажу всей школе и все узнают.",
+          "sender_id": "external_blackmailer_ru",
+          "observed_threats": ["manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "external_en_phishing_school_portal",
+      "source_family": "moderation_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "stranger",
+      "account_type": "teen",
+      "primary_threat": "phishing",
+      "tracked_threats": ["phishing"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 300000,
+      "policy_expectation_case": "phishing_link",
+      "messages": [
+        {
+          "text": "Check this out: https://example.com",
+          "sender_id": "external_phish_en"
+        },
+        {
+          "text": "Use this link instead: https://secure-login.example.com/verify",
+          "sender_id": "external_phish_en",
+          "observed_threats": ["phishing"]
+        }
+      ]
+    },
+    {
+      "id": "external_en_group_class_pile_on",
+      "source_family": "school_context_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "account_type": "teen",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": ["bullying"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "external_group_bully_1",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "external_group_bully_2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "external_group_bully_3",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_friend_help_path",
+      "source_family": "support_boundary_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "tracked_threats": ["self_harm", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "I'm here with you. Thank you for telling me.",
+          "sender_id": "external_support_uk"
+        },
+        {
+          "text": "Давай скажемо батькам або психологу разом, не треба це ховати.",
+          "sender_id": "external_support_uk"
+        }
+      ]
+    },
+    {
+      "id": "external_en_peer_weekend_plans",
+      "source_family": "support_boundary_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "account_type": "teen",
+      "tracked_threats": ["grooming", "manipulation", "bullying"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "Did you finish the homework?",
+          "sender_id": "external_peer_safe_en"
+        },
+        {
+          "text": "Yeah, want to play Minecraft later?",
+          "sender_id": "external_peer_safe_en"
+        },
+        {
+          "text": "Sure, let's build a castle together!",
+          "sender_id": "external_peer_safe_en"
+        }
+      ]
+    }
+  ]
+}

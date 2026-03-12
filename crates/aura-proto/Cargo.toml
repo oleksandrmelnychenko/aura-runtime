@@ -1,0 +1,12 @@
+[package]
+name = "aura-proto"
+version.workspace = true
+edition.workspace = true
+description = "Protobuf contracts for AURA messenger runtime"
+
+[dependencies]
+prost.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+protoc-bin-vendored.workspace = true

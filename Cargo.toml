@@ -4,6 +4,7 @@ members = [
     "crates/aura-core",
     "crates/aura-patterns",
     "crates/aura-ml",
+    "crates/aura-proto",
     "crates/aura-ffi",
 ]
 
@@ -22,3 +23,6 @@ tracing = "0.1"
 unicode-segmentation = "1"
 unicode-normalization = "0.1"
 ndarray = "0.17"
+prost = "0.13"
+prost-build = "0.13"
+protoc-bin-vendored = "3"

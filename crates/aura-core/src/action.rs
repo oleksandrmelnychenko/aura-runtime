@@ -1,5 +1,6 @@
 use crate::types::{
     Action, ActionRecommendation, AlertPriority, FollowUpAction, ProtectionLevel, ThreatType,
+    UiAction,
 };
 
 pub fn decide_action(score: f32, protection_level: ProtectionLevel) -> Action {
@@ -34,11 +35,12 @@ pub fn decide_action_v2(
             };
             (
                 Action::Warn,
-                ActionRecommendation {
+                recommendation(
                     parent_alert,
-                    follow_ups: vec![FollowUpAction::MonitorConversation],
-                    crisis_resources: true,
-                },
+                    vec![FollowUpAction::MonitorConversation],
+                    true,
+                    ui_actions_for(threat_type, Action::Warn, score, parent_alert),
+                ),
             )
         }
         ThreatType::Grooming => {
@@ -60,11 +62,12 @@ pub fn decide_action_v2(
             }
             (
                 action,
-                ActionRecommendation {
+                recommendation(
                     parent_alert,
                     follow_ups,
-                    crisis_resources: false,
-                },
+                    false,
+                    ui_actions_for(threat_type, action, score, parent_alert),
+                ),
             )
         }
         ThreatType::Bullying => {
@@ -84,11 +87,12 @@ pub fn decide_action_v2(
             };
             (
                 action,
-                ActionRecommendation {
+                recommendation(
                     parent_alert,
-                    follow_ups: vec![FollowUpAction::MonitorConversation],
-                    crisis_resources: false,
-                },
+                    vec![FollowUpAction::MonitorConversation],
+                    false,
+                    ui_actions_for(threat_type, action, score, parent_alert),
+                ),
             )
         }
         ThreatType::Manipulation => {
@@ -106,11 +110,12 @@ pub fn decide_action_v2(
             };
             (
                 action,
-                ActionRecommendation {
+                recommendation(
                     parent_alert,
-                    follow_ups: vec![FollowUpAction::ReviewContactProfile],
-                    crisis_resources: false,
-                },
+                    vec![FollowUpAction::ReviewContactProfile],
+                    false,
+                    ui_actions_for(threat_type, action, score, parent_alert),
+                ),
             )
         }
         ThreatType::Explicit => {
@@ -124,11 +129,12 @@ pub fn decide_action_v2(
 
             (
                 action,
-                ActionRecommendation {
-                    parent_alert: AlertPriority::High,
-                    follow_ups: vec![FollowUpAction::ReportToAuthorities],
-                    crisis_resources: false,
-                },
+                recommendation(
+                    AlertPriority::High,
+                    vec![FollowUpAction::ReportToAuthorities],
+                    false,
+                    ui_actions_for(threat_type, action, score, AlertPriority::High),
+                ),
             )
         }
         ThreatType::Doxxing => {
@@ -142,11 +148,12 @@ pub fn decide_action_v2(
 
             (
                 action,
-                ActionRecommendation {
-                    parent_alert: AlertPriority::High,
-                    follow_ups: vec![FollowUpAction::ReportToAuthorities],
-                    crisis_resources: false,
-                },
+                recommendation(
+                    AlertPriority::High,
+                    vec![FollowUpAction::ReportToAuthorities],
+                    false,
+                    ui_actions_for(threat_type, action, score, AlertPriority::High),
+                ),
             )
         }
         ThreatType::Threat => {
@@ -168,11 +175,12 @@ pub fn decide_action_v2(
             }
             (
                 action,
-                ActionRecommendation {
+                recommendation(
                     parent_alert,
                     follow_ups,
-                    crisis_resources: false,
-                },
+                    false,
+                    ui_actions_for(threat_type, action, score, parent_alert),
+                ),
             )
         }
 
@@ -191,14 +199,53 @@ pub fn decide_action_v2(
             };
             (
                 action,
-                ActionRecommendation {
+                recommendation(
                     parent_alert,
-                    follow_ups: vec![
+                    vec![
                         FollowUpAction::MonitorConversation,
                         FollowUpAction::ReviewContactProfile,
                     ],
-                    crisis_resources: false,
-                },
+                    false,
+                    ui_actions_for(threat_type, action, score, parent_alert),
+                ),
+            )
+        }
+
+        ThreatType::Phishing => {
+            let action = if score >= 0.85 {
+                Action::Block
+            } else if score >= 0.6 {
+                Action::Warn
+            } else {
+                decide_action(score, protection_level)
+            };
+
+            (
+                action,
+                recommendation(
+                    AlertPriority::Medium,
+                    vec![FollowUpAction::ReviewContactProfile],
+                    false,
+                    ui_actions_for(threat_type, action, score, AlertPriority::Medium),
+                ),
+            )
+        }
+
+        ThreatType::Spam | ThreatType::Scam => {
+            let action = if score >= 0.8 {
+                Action::Warn
+            } else {
+                decide_action(score, protection_level)
+            };
+
+            (
+                action,
+                recommendation(
+                    AlertPriority::Low,
+                    vec![FollowUpAction::MonitorConversation],
+                    false,
+                    ui_actions_for(threat_type, action, score, AlertPriority::Low),
+                ),
             )
         }
 
@@ -211,14 +258,153 @@ pub fn decide_action_v2(
             };
             (
                 action,
-                ActionRecommendation {
+                recommendation(
                     parent_alert,
-                    follow_ups: vec![],
-                    crisis_resources: false,
-                },
+                    vec![],
+                    false,
+                    ui_actions_for(threat_type, action, score, parent_alert),
+                ),
             )
         }
     }
+}
+
+pub fn augment_recommendation_for_reason_codes(
+    recommendation: &mut ActionRecommendation,
+    threat_type: ThreatType,
+    reason_codes: &[String],
+) {
+    if threat_type == ThreatType::Manipulation
+        && reason_codes
+            .iter()
+            .any(|code| is_coercive_control_reason_code(code))
+    {
+        recommendation
+            .ui_actions
+            .retain(|action| *action != UiAction::RestrictUnknownContact);
+    }
+
+    if threat_type != ThreatType::SelfHarm
+        && reason_codes
+            .iter()
+            .any(|code| is_reportable_reason_code(code))
+    {
+        recommendation
+            .ui_actions
+            .push(UiAction::SuggestBlockContact);
+        recommendation.ui_actions.push(UiAction::SuggestReport);
+    }
+
+    if threat_type == ThreatType::Bullying
+        && reason_codes
+            .iter()
+            .any(|code| is_group_abuse_reason_code(code))
+    {
+        recommendation.ui_actions.push(UiAction::SuggestReport);
+        recommendation
+            .ui_actions
+            .push(UiAction::SlowDownConversation);
+    }
+
+    recommendation.ui_actions.sort();
+    recommendation.ui_actions.dedup();
+}
+
+fn recommendation(
+    parent_alert: AlertPriority,
+    follow_ups: Vec<FollowUpAction>,
+    crisis_resources: bool,
+    ui_actions: Vec<UiAction>,
+) -> ActionRecommendation {
+    ActionRecommendation {
+        parent_alert,
+        follow_ups,
+        crisis_resources,
+        ui_actions,
+        reason_codes: Vec::new(),
+    }
+}
+
+fn ui_actions_for(
+    threat_type: ThreatType,
+    action: Action,
+    score: f32,
+    parent_alert: AlertPriority,
+) -> Vec<UiAction> {
+    let mut actions = match action {
+        Action::Blur => vec![UiAction::BlurUntilTap],
+        Action::Warn | Action::Block => vec![UiAction::WarnBeforeDisplay],
+        _ => Vec::new(),
+    };
+
+    match threat_type {
+        ThreatType::SelfHarm => {
+            actions.push(UiAction::ShowCrisisSupport);
+        }
+        ThreatType::Grooming => {
+            actions.push(UiAction::SuggestBlockContact);
+            actions.push(UiAction::RestrictUnknownContact);
+        }
+        ThreatType::Bullying => {
+            if matches!(action, Action::Warn | Action::Block) || score >= 0.6 {
+                actions.push(UiAction::SuggestReport);
+                actions.push(UiAction::SlowDownConversation);
+            }
+        }
+        ThreatType::Manipulation => {
+            actions.push(UiAction::SuggestBlockContact);
+        }
+        ThreatType::Explicit => {
+            actions.push(UiAction::BlurUntilTap);
+            actions.push(UiAction::SuggestReport);
+        }
+        ThreatType::Doxxing => {
+            actions.push(UiAction::SuggestReport);
+            actions.push(UiAction::SuggestBlockContact);
+        }
+        ThreatType::Threat => {
+            actions.push(UiAction::SuggestBlockContact);
+            actions.push(UiAction::SuggestReport);
+        }
+        ThreatType::PiiLeakage => {
+            actions.push(UiAction::WarnBeforeSend);
+        }
+        ThreatType::Phishing => {
+            actions.push(UiAction::ConfirmBeforeOpenLink);
+            actions.push(UiAction::SuggestReport);
+        }
+        ThreatType::Spam | ThreatType::Scam => {
+            actions.push(UiAction::RestrictUnknownContact);
+            actions.push(UiAction::SuggestReport);
+            actions.push(UiAction::SlowDownConversation);
+        }
+        _ => {}
+    }
+
+    if parent_alert >= AlertPriority::High {
+        actions.push(UiAction::EscalateToGuardian);
+    }
+
+    actions.sort();
+    actions.dedup();
+    actions
+}
+
+fn is_reportable_reason_code(reason_code: &str) -> bool {
+    reason_code.contains("blackmail")
+        || reason_code.contains("screenshot")
+        || reason_code.contains("reputation_blackmail")
+}
+
+fn is_coercive_control_reason_code(reason_code: &str) -> bool {
+    reason_code.starts_with("conversation.manipulation.")
+        || reason_code.starts_with("conversation.coercion.")
+}
+
+fn is_group_abuse_reason_code(reason_code: &str) -> bool {
+    reason_code.starts_with("conversation.bullying.")
+        || reason_code.starts_with("abuse.bullying.")
+        || reason_code.starts_with("abuse.raid.")
 }
 
 struct ActionThresholds {
@@ -440,5 +626,116 @@ mod tests {
                 .contains(&FollowUpAction::ReviewContactProfile),
             "PII should recommend reviewing contact"
         );
+    }
+
+    #[test]
+    fn selfharm_ui_actions_include_crisis_and_guardian() {
+        let (_, rec) = decide_action_v2(ThreatType::SelfHarm, 0.7, ProtectionLevel::High);
+        assert!(rec.ui_actions.contains(&UiAction::ShowCrisisSupport));
+        assert!(rec.ui_actions.contains(&UiAction::EscalateToGuardian));
+    }
+
+    #[test]
+    fn phishing_ui_actions_include_link_controls() {
+        let (_, rec) = decide_action_v2(ThreatType::Phishing, 0.8, ProtectionLevel::Medium);
+        assert!(rec.ui_actions.contains(&UiAction::ConfirmBeforeOpenLink));
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
+    }
+
+    #[test]
+    fn grooming_ui_actions_include_restrict_and_block() {
+        let (_, rec) = decide_action_v2(ThreatType::Grooming, 0.7, ProtectionLevel::High);
+        assert!(rec.ui_actions.contains(&UiAction::SuggestBlockContact));
+        assert!(rec.ui_actions.contains(&UiAction::RestrictUnknownContact));
+    }
+
+    #[test]
+    fn spam_ui_actions_include_restrict_and_slowdown() {
+        let (_, rec) = decide_action_v2(ThreatType::Spam, 0.8, ProtectionLevel::Medium);
+        assert!(rec.ui_actions.contains(&UiAction::RestrictUnknownContact));
+        assert!(rec.ui_actions.contains(&UiAction::SlowDownConversation));
+    }
+
+    #[test]
+    fn reportable_reason_codes_add_report_action() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Manipulation, 0.8, ProtectionLevel::Medium);
+        assert!(!rec.ui_actions.contains(&UiAction::SuggestReport));
+
+        augment_recommendation_for_reason_codes(
+            &mut rec,
+            ThreatType::Manipulation,
+            &["conversation.manipulation.screenshot_reputation_blackmail".to_string()],
+        );
+
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
+        assert!(rec.ui_actions.contains(&UiAction::SuggestBlockContact));
+    }
+
+    #[test]
+    fn reportable_reason_codes_add_report_action_even_for_grooming_primary() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Grooming, 0.8, ProtectionLevel::Medium);
+        assert!(!rec.ui_actions.contains(&UiAction::SuggestReport));
+
+        augment_recommendation_for_reason_codes(
+            &mut rec,
+            ThreatType::Grooming,
+            &["conversation.manipulation.screenshot_reputation_blackmail".to_string()],
+        );
+
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
+        assert!(rec.ui_actions.contains(&UiAction::SuggestBlockContact));
+    }
+
+    #[test]
+    fn non_reportable_reason_codes_do_not_change_actions() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Manipulation, 0.8, ProtectionLevel::Medium);
+        let before = rec.ui_actions.clone();
+
+        augment_recommendation_for_reason_codes(
+            &mut rec,
+            ThreatType::Manipulation,
+            &["conversation.manipulation.multi_tactic_control".to_string()],
+        );
+
+        assert_eq!(rec.ui_actions, before);
+    }
+
+    #[test]
+    fn coercive_control_reason_codes_remove_unknown_contact_restriction() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Grooming, 0.8, ProtectionLevel::Medium);
+        assert!(rec.ui_actions.contains(&UiAction::RestrictUnknownContact));
+
+        augment_recommendation_for_reason_codes(
+            &mut rec,
+            ThreatType::Manipulation,
+            &["conversation.manipulation.multi_tactic_control".to_string()],
+        );
+
+        assert!(!rec.ui_actions.contains(&UiAction::RestrictUnknownContact));
+        assert!(rec.ui_actions.contains(&UiAction::SuggestBlockContact));
+    }
+
+    #[test]
+    fn group_abuse_reason_codes_add_report_and_slowdown() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Bullying, 0.62, ProtectionLevel::Medium);
+        rec.ui_actions.retain(|action| {
+            *action != UiAction::SuggestReport && *action != UiAction::SlowDownConversation
+        });
+
+        augment_recommendation_for_reason_codes(
+            &mut rec,
+            ThreatType::Bullying,
+            &["abuse.bullying.pile_on".to_string()],
+        );
+
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
+        assert!(rec.ui_actions.contains(&UiAction::SlowDownConversation));
+    }
+
+    #[test]
+    fn bullying_warn_actions_include_report_and_slowdown() {
+        let (_, rec) = decide_action_v2(ThreatType::Bullying, 0.62, ProtectionLevel::High);
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
+        assert!(rec.ui_actions.contains(&UiAction::SlowDownConversation));
     }
 }

@@ -96,9 +96,9 @@ fn bench_context(c: &mut Criterion) {
             analyzer.analyze_with_context(&input, i * 60_000);
         }
         b.iter(|| {
-            let state = analyzer.export_context().unwrap();
+            let state = analyzer.export_context_state();
             let mut a2 = Analyzer::new(child_config(), &db);
-            a2.import_context(black_box(&state)).unwrap();
+            a2.import_context_state(black_box(state)).unwrap();
             black_box(a2)
         })
     });

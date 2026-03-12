@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -7,13 +7,9 @@ use crate::types::{ConversationType, DetectionSignal};
 
 const TRACKER_STATE_VERSION: u32 = 2;
 
-fn default_state_version() -> u32 {
-    1
-}
-
 use super::bullying::BullyingDetector;
 use super::coercion::CoercionDetector;
-use super::contact::ContactProfiler;
+use super::contact::{ContactProfiler, ContactProfilerWireState};
 use super::events::{ContextEvent, EventKind};
 use super::grooming::GroomingDetector;
 use super::manipulation::ManipulationDetector;
@@ -37,6 +33,11 @@ pub struct TrackerConfig {
 
     #[serde(default)]
     pub auto_cleanup_interval: u32,
+
+    /// Timezone offset in minutes from UTC (e.g. +180 for UTC+3 Ukraine).
+    /// Used for late-night detection in TimingAnalyzer.
+    #[serde(default)]
+    pub timezone_offset_minutes: i32,
 }
 
 impl Default for TrackerConfig {
@@ -50,6 +51,7 @@ impl Default for TrackerConfig {
             is_teen_account: false,
             account_holder_age: None,
             auto_cleanup_interval: 0,
+            timezone_offset_minutes: 0,
         }
     }
 }
@@ -61,6 +63,13 @@ pub struct ConversationTimeline {
     pub conversation_type: ConversationType,
     events: Vec<ContextEvent>,
     max_events: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConversationTimelineState {
+    pub conversation_id: String,
+    pub conversation_type: ConversationType,
+    pub events: Vec<ContextEvent>,
 }
 
 impl ConversationTimeline {
@@ -150,6 +159,57 @@ impl ConversationTimeline {
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
     }
+
+    pub fn export_state(&self) -> ConversationTimelineState {
+        ConversationTimelineState {
+            conversation_id: self.conversation_id.clone(),
+            conversation_type: self.conversation_type,
+            events: self.events.clone(),
+        }
+    }
+
+    /// Merge events from another timeline, deduplicating by content signature.
+    /// Uses (timestamp_ms, sender_id, kind) as the dedup key — this handles both:
+    /// - Same-tracker re-import (same event_ids)
+    /// - Cross-tracker merge (different trackers may assign overlapping event_ids)
+    pub fn merge_from(&mut self, other: ConversationTimeline) {
+        let existing: HashSet<(u64, String, EventKind)> = self
+            .events
+            .iter()
+            .map(|e| (e.timestamp_ms, e.sender_id.clone(), e.kind.clone()))
+            .collect();
+
+        for event in other.events {
+            let key = (
+                event.timestamp_ms,
+                event.sender_id.clone(),
+                event.kind.clone(),
+            );
+            if !existing.contains(&key) {
+                self.events.push(event);
+            }
+        }
+
+        self.events.sort_by_key(|e| e.timestamp_ms);
+
+        while self.events.len() > self.max_events {
+            self.events.remove(0);
+        }
+    }
+}
+
+impl ConversationTimelineState {
+    fn into_timeline(self, max_events: usize) -> ConversationTimeline {
+        let mut timeline = ConversationTimeline::new_with_type(
+            self.conversation_id,
+            max_events,
+            self.conversation_type,
+        );
+        for event in self.events {
+            timeline.push(event);
+        }
+        timeline
+    }
 }
 
 pub struct ConversationTracker {
@@ -163,6 +223,14 @@ pub struct ConversationTracker {
     raid_detector: RaidDetector,
     contact_profiler: ContactProfiler,
     call_count: u32,
+    next_event_id: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TrackerWireState {
+    pub schema_version: u32,
+    pub timelines: Vec<ConversationTimelineState>,
+    pub contact_profiler: ContactProfilerWireState,
 }
 
 impl ConversationTracker {
@@ -187,7 +255,12 @@ impl ConversationTracker {
             raid_detector,
             contact_profiler,
             call_count: 0,
+            next_event_id: 1,
         }
+    }
+
+    pub fn config(&self) -> &TrackerConfig {
+        &self.config
     }
 
     pub fn set_conversation_type(
@@ -204,6 +277,10 @@ impl ConversationTracker {
         let conversation_id = event.conversation_id.clone();
         let sender_id = event.sender_id.clone();
         let now_ms = event.timestamp_ms;
+
+        let mut event = event;
+        event.event_id = self.next_event_id;
+        self.next_event_id += 1;
 
         self.contact_profiler.record_event(&event);
 
@@ -277,26 +354,24 @@ impl ConversationTracker {
         let shift_signals = self.contact_profiler.check_behavioral_shift(&sender_id);
         signals.extend(shift_signals);
 
+        if self.config.auto_cleanup_interval > 0 {
+            self.call_count += 1;
+            if self.call_count >= self.config.auto_cleanup_interval {
+                self.call_count = 0;
+                self.cleanup(now_ms);
+            }
+        }
+
         signals
     }
 
     pub fn record_events(&mut self, events: Vec<ContextEvent>) -> Vec<DetectionSignal> {
         let mut all_signals = Vec::new();
-        let mut latest_ts = 0u64;
-        for event in &events {
-            latest_ts = latest_ts.max(event.timestamp_ms);
-        }
         for event in events {
             let signals = self.record_event(event);
             all_signals.extend(signals);
         }
-        if self.config.auto_cleanup_interval > 0 {
-            self.call_count += 1;
-            if self.call_count >= self.config.auto_cleanup_interval {
-                self.call_count = 0;
-                self.cleanup(latest_ts);
-            }
-        }
+        // auto_cleanup is handled inside each record_event() call
         all_signals
     }
 
@@ -320,28 +395,48 @@ impl ConversationTracker {
         self.contact_profiler.mark_trusted(sender_id);
     }
 
-    pub fn export_state(&self) -> Result<String, serde_json::Error> {
-        let state = TrackerState {
+    pub fn export_wire_state(&self) -> TrackerWireState {
+        TrackerWireState {
             schema_version: TRACKER_STATE_VERSION,
-            timelines: self.timelines.values().cloned().collect(),
-            contact_profiler: self.contact_profiler.export(),
-        };
-        serde_json::to_string(&state)
+            timelines: self
+                .timelines
+                .values()
+                .map(ConversationTimeline::export_state)
+                .collect(),
+            contact_profiler: self.contact_profiler.export_wire_state(),
+        }
     }
 
-    pub fn import_state(&mut self, json: &str) -> Result<(), AuraError> {
-        let state: TrackerState = serde_json::from_str(json)?;
+    pub fn import_wire_state(&mut self, state: TrackerWireState) -> Result<(), AuraError> {
         if state.schema_version > TRACKER_STATE_VERSION {
             return Err(AuraError::IncompatibleStateVersion {
                 found: state.schema_version,
                 supported: TRACKER_STATE_VERSION,
             });
         }
-        for timeline in state.timelines {
-            self.timelines
-                .insert(timeline.conversation_id.clone(), timeline);
+
+        let mut max_imported_id = 0_u64;
+        for incoming in state.timelines {
+            for event in &incoming.events {
+                max_imported_id = max_imported_id.max(event.event_id);
+            }
+
+            let incoming = incoming.into_timeline(self.config.max_events_per_conversation);
+            match self.timelines.get_mut(&incoming.conversation_id) {
+                Some(local) => local.merge_from(incoming),
+                None => {
+                    self.timelines
+                        .insert(incoming.conversation_id.clone(), incoming);
+                }
+            }
         }
-        self.contact_profiler.import(state.contact_profiler);
+
+        if max_imported_id >= self.next_event_id {
+            self.next_event_id = max_imported_id + 1;
+        }
+
+        self.contact_profiler
+            .merge_import_wire_state(state.contact_profiler);
         Ok(())
     }
 
@@ -366,16 +461,6 @@ impl ConversationTracker {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct TrackerState {
-    #[serde(default = "default_state_version")]
-    schema_version: u32,
-    timelines: Vec<ConversationTimeline>,
-    contact_profiler: contact::ContactProfilerState,
-}
-
-use super::contact;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -387,6 +472,7 @@ mod tests {
         timestamp_ms: u64,
     ) -> ContextEvent {
         ContextEvent {
+            event_id: 0,
             timestamp_ms,
             sender_id: sender_id.to_string(),
             conversation_id: conversation_id.to_string(),
@@ -468,12 +554,27 @@ mod tests {
         tracker.record_event(make_event("conv_1", "alice", EventKind::Flattery, 1000));
         tracker.record_event(make_event("conv_1", "alice", EventKind::GiftOffer, 2000));
 
-        let state = tracker.export_state().unwrap();
+        let state = tracker.export_wire_state();
 
         let mut tracker2 = ConversationTracker::new(TrackerConfig::default());
-        tracker2.import_state(&state).unwrap();
+        tracker2.import_wire_state(state).unwrap();
 
         assert_eq!(tracker2.timeline("conv_1").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn wire_state_export_import_roundtrip() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Flattery, 1000));
+        tracker.record_event(make_event("conv_1", "alice", EventKind::GiftOffer, 2000));
+
+        let state = tracker.export_wire_state();
+
+        let mut tracker2 = ConversationTracker::new(TrackerConfig::default());
+        tracker2.import_wire_state(state).unwrap();
+
+        assert_eq!(tracker2.timeline("conv_1").unwrap().len(), 2);
+        assert!(tracker2.contact_profiler().profile("alice").is_some());
     }
 
     #[test]
@@ -481,26 +582,21 @@ mod tests {
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
         tracker.record_event(make_event("conv_1", "alice", EventKind::Flattery, 1000));
 
-        let state = tracker.export_state().unwrap();
-        assert!(
-            state.contains("\"schema_version\":2"),
-            "Exported state should contain schema_version: {state}"
-        );
-    }
-
-    #[test]
-    fn state_import_old_json_without_version() {
-        let old_json = r#"{"timelines":[],"contact_profiler":{"profiles":[]}}"#;
-        let mut tracker = ConversationTracker::new(TrackerConfig::default());
-        assert!(tracker.import_state(old_json).is_ok());
+        let state = tracker.export_wire_state();
+        assert_eq!(state.schema_version, 2);
     }
 
     #[test]
     fn state_import_future_version_fails() {
-        let future_json =
-            r#"{"schema_version":999,"timelines":[],"contact_profiler":{"profiles":[]}}"#;
+        let state = TrackerWireState {
+            schema_version: 999,
+            timelines: Vec::new(),
+            contact_profiler: ContactProfilerWireState {
+                profiles: Vec::new(),
+            },
+        };
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
-        let result = tracker.import_state(future_json);
+        let result = tracker.import_wire_state(state);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(
@@ -511,42 +607,48 @@ mod tests {
 
     #[test]
     fn auto_cleanup_triggers_after_interval() {
+        // auto_cleanup_interval=3 means cleanup triggers every 3rd record_event() call
         let mut tracker = ConversationTracker::new(TrackerConfig {
             analysis_window_ms: 10_000,
             auto_cleanup_interval: 3,
             ..Default::default()
         });
 
+        // Call 1: old event (will be cleaned up later)
         tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
         assert_eq!(tracker.timeline("conv_1").unwrap().len(), 1);
 
-        tracker.record_events(vec![make_event(
+        // Call 2: recent event
+        tracker.record_event(make_event(
             "conv_1",
             "alice",
             EventKind::NormalConversation,
             20_000,
-        )]);
+        ));
         assert_eq!(tracker.timeline("conv_1").unwrap().len(), 2);
 
-        tracker.record_events(vec![make_event(
+        // Call 3: triggers cleanup (call_count reaches 3).
+        // Cleanup removes event at ts=1000 (cutoff = 20001 - 10000 = 10001)
+        tracker.record_event(make_event(
             "conv_1",
             "alice",
             EventKind::NormalConversation,
             20_001,
-        )]);
-        assert_eq!(tracker.timeline("conv_1").unwrap().len(), 3);
+        ));
+        assert_eq!(
+            tracker.timeline("conv_1").unwrap().len(),
+            2,
+            "After auto-cleanup, old event at ts=1000 should be removed"
+        );
 
-        tracker.record_events(vec![make_event(
+        // Call 4: new event after cleanup
+        tracker.record_event(make_event(
             "conv_1",
             "alice",
             EventKind::NormalConversation,
             20_002,
-        )]);
-        assert_eq!(
-            tracker.timeline("conv_1").unwrap().len(),
-            3,
-            "After auto-cleanup, old event should be removed"
-        );
+        ));
+        assert_eq!(tracker.timeline("conv_1").unwrap().len(), 3);
     }
 
     #[test]
@@ -633,8 +735,8 @@ mod tests {
 
         let profile = tracker.contact_profiler().profile("masha").unwrap();
         assert!(
-            profile.trend == super::contact::BehavioralTrend::RoleReversal
-                || profile.trend == super::contact::BehavioralTrend::RapidWorsening,
+            profile.trend == crate::types::BehavioralTrend::RoleReversal
+                || profile.trend == crate::types::BehavioralTrend::RapidWorsening,
             "Expected worsening/reversal trend, got {:?}",
             profile.trend
         );
@@ -647,24 +749,58 @@ mod tests {
             ..Default::default()
         });
 
-        tracker.record_event(make_event("conv_1", "alice", EventKind::NormalConversation, 1000));
-        tracker.record_event(make_event("conv_2", "bob", EventKind::NormalConversation, 2000));
-        tracker.record_event(make_event("conv_3", "charlie", EventKind::NormalConversation, 3000));
+        tracker.record_event(make_event(
+            "conv_1",
+            "alice",
+            EventKind::NormalConversation,
+            1000,
+        ));
+        tracker.record_event(make_event(
+            "conv_2",
+            "bob",
+            EventKind::NormalConversation,
+            2000,
+        ));
+        tracker.record_event(make_event(
+            "conv_3",
+            "charlie",
+            EventKind::NormalConversation,
+            3000,
+        ));
         // This should evict conv_1 (oldest)
-        tracker.record_event(make_event("conv_4", "dave", EventKind::NormalConversation, 4000));
+        tracker.record_event(make_event(
+            "conv_4",
+            "dave",
+            EventKind::NormalConversation,
+            4000,
+        ));
 
-        assert!(tracker.timeline("conv_1").is_none(), "Oldest conversation should be evicted");
-        assert!(tracker.timeline("conv_4").is_some(), "New conversation should exist");
+        assert!(
+            tracker.timeline("conv_1").is_none(),
+            "Oldest conversation should be evicted"
+        );
+        assert!(
+            tracker.timeline("conv_4").is_some(),
+            "New conversation should exist"
+        );
     }
 
     #[test]
     fn conversation_type_preserved() {
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
-        tracker.record_event(make_event("conv_1", "alice", EventKind::NormalConversation, 1000));
+        tracker.record_event(make_event(
+            "conv_1",
+            "alice",
+            EventKind::NormalConversation,
+            1000,
+        ));
         tracker.set_conversation_type("conv_1", crate::types::ConversationType::Group);
 
         let timeline = tracker.timeline("conv_1").unwrap();
-        assert_eq!(timeline.conversation_type, crate::types::ConversationType::Group);
+        assert_eq!(
+            timeline.conversation_type,
+            crate::types::ConversationType::Group
+        );
     }
 
     #[test]
@@ -677,21 +813,51 @@ mod tests {
         // Grooming sequence
         tracker.record_event(make_event("conv_1", "predator", EventKind::Flattery, 1000));
         tracker.record_event(make_event("conv_1", "predator", EventKind::GiftOffer, 2000));
-        tracker.record_event(make_event("conv_1", "predator", EventKind::SecrecyRequest, 3000));
-        tracker.record_event(make_event("conv_1", "predator", EventKind::PersonalInfoRequest, 4000));
+        tracker.record_event(make_event(
+            "conv_1",
+            "predator",
+            EventKind::SecrecyRequest,
+            3000,
+        ));
+        tracker.record_event(make_event(
+            "conv_1",
+            "predator",
+            EventKind::PersonalInfoRequest,
+            4000,
+        ));
 
         // Then coercion
-        tracker.record_event(make_event("conv_1", "predator", EventKind::SuicideCoercion, 5000));
-        tracker.record_event(make_event("conv_1", "predator", EventKind::ReputationThreat, 6000));
+        tracker.record_event(make_event(
+            "conv_1",
+            "predator",
+            EventKind::SuicideCoercion,
+            5000,
+        ));
+        tracker.record_event(make_event(
+            "conv_1",
+            "predator",
+            EventKind::ReputationThreat,
+            6000,
+        ));
 
         let signals = tracker.record_event(make_event(
-            "conv_1", "predator", EventKind::ScreenshotThreat, 7000,
+            "conv_1",
+            "predator",
+            EventKind::ScreenshotThreat,
+            7000,
         ));
 
         // Should detect both grooming and manipulation/coercion signals
-        let has_grooming = signals.iter().any(|s| s.threat_type == crate::types::ThreatType::Grooming);
-        let has_manipulation = signals.iter().any(|s| s.threat_type == crate::types::ThreatType::Manipulation);
-        assert!(has_grooming || has_manipulation, "Should detect grooming or manipulation in combined attack");
+        let has_grooming = signals
+            .iter()
+            .any(|s| s.threat_type == crate::types::ThreatType::Grooming);
+        let has_manipulation = signals
+            .iter()
+            .any(|s| s.threat_type == crate::types::ThreatType::Manipulation);
+        assert!(
+            has_grooming || has_manipulation,
+            "Should detect grooming or manipulation in combined attack"
+        );
     }
 
     #[test]
@@ -703,22 +869,32 @@ mod tests {
         for w in 0..4 {
             for msg in 0..5 {
                 tracker.record_event(make_event(
-                    "conv_1", "alice", EventKind::NormalConversation,
+                    "conv_1",
+                    "alice",
+                    EventKind::NormalConversation,
                     w * week_ms + msg * 1000,
                 ));
             }
         }
-        tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 4 * week_ms));
+        tracker.record_event(make_event(
+            "conv_1",
+            "alice",
+            EventKind::Insult,
+            4 * week_ms,
+        ));
 
-        let state = tracker.export_state().unwrap();
+        let state = tracker.export_wire_state();
         let orig = tracker.contact_profiler().profile("alice").unwrap();
         let orig_rating = orig.rating;
 
         let mut tracker2 = ConversationTracker::new(TrackerConfig::default());
-        tracker2.import_state(&state).unwrap();
+        tracker2.import_wire_state(state).unwrap();
 
         let imported = tracker2.contact_profiler().profile("alice").unwrap();
-        assert_eq!(imported.rating, orig_rating, "Rating should survive roundtrip");
+        assert_eq!(
+            imported.rating, orig_rating,
+            "Rating should survive roundtrip"
+        );
     }
 
     #[test]
@@ -732,15 +908,31 @@ mod tests {
         for i in 0..5 {
             tracker.record_event(make_event("conv_1", "bully", EventKind::Insult, i * 1000));
         }
-        tracker.record_event(make_event("conv_1", "victim", EventKind::Hopelessness, 6000));
-        tracker.record_event(make_event("conv_1", "victim", EventKind::Hopelessness, 7000));
+        tracker.record_event(make_event(
+            "conv_1",
+            "victim",
+            EventKind::Hopelessness,
+            6000,
+        ));
+        tracker.record_event(make_event(
+            "conv_1",
+            "victim",
+            EventKind::Hopelessness,
+            7000,
+        ));
         let signals = tracker.record_event(make_event(
-            "conv_1", "victim", EventKind::FarewellMessage, 8000,
+            "conv_1",
+            "victim",
+            EventKind::FarewellMessage,
+            8000,
         ));
 
         // Should have signals from bullying detector AND self-harm detector
         let threat_types: Vec<_> = signals.iter().map(|s| s.threat_type).collect();
-        assert!(!threat_types.is_empty(), "Should detect threats in bullying->selfharm pathway");
+        assert!(
+            !threat_types.is_empty(),
+            "Should detect threats in bullying->selfharm pathway"
+        );
     }
 
     #[test]
@@ -761,19 +953,181 @@ mod tests {
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
         tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
         tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 2000));
-        tracker.record_event(make_event("conv_1", "alice", EventKind::NormalConversation, 3000));
+        tracker.record_event(make_event(
+            "conv_1",
+            "alice",
+            EventKind::NormalConversation,
+            3000,
+        ));
 
         let timeline = tracker.timeline("conv_1").unwrap();
         assert_eq!(timeline.count_events("alice", &EventKind::Insult, 0), 2);
-        assert_eq!(timeline.count_events("alice", &EventKind::NormalConversation, 0), 1);
+        assert_eq!(
+            timeline.count_events("alice", &EventKind::NormalConversation, 0),
+            1
+        );
     }
 
     #[test]
     fn contact_profiler_accessible_from_tracker() {
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
-        tracker.record_event(make_event("conv_1", "alice", EventKind::NormalConversation, 1000));
+        tracker.record_event(make_event(
+            "conv_1",
+            "alice",
+            EventKind::NormalConversation,
+            1000,
+        ));
 
         assert!(tracker.contact_profiler().profile("alice").is_some());
         assert!(tracker.contact_profiler().profile("bob").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 1: merge-based import tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn import_merge_preserves_local_events() {
+        let mut tracker_a = ConversationTracker::new(TrackerConfig::default());
+        tracker_a.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
+        tracker_a.record_event(make_event("conv_1", "alice", EventKind::Mockery, 2000));
+
+        let mut tracker_b = ConversationTracker::new(TrackerConfig::default());
+        tracker_b.record_event(make_event("conv_1", "bob", EventKind::Flattery, 1500));
+
+        // Import B into A — should merge, not overwrite
+        let state_b = tracker_b.export_wire_state();
+        tracker_a.import_wire_state(state_b).unwrap();
+
+        let timeline = tracker_a.timeline("conv_1").unwrap();
+        assert_eq!(
+            timeline.len(),
+            3,
+            "Should have all 3 events after merge (2 from A + 1 from B)"
+        );
+        // Events should be sorted by timestamp
+        let events = timeline.all_events();
+        assert_eq!(events[0].timestamp_ms, 1000);
+        assert_eq!(events[1].timestamp_ms, 1500);
+        assert_eq!(events[2].timestamp_ms, 2000);
+    }
+
+    #[test]
+    fn import_merge_deduplicates_by_event_id() {
+        let mut tracker_a = ConversationTracker::new(TrackerConfig::default());
+        tracker_a.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
+        tracker_a.record_event(make_event("conv_1", "alice", EventKind::Mockery, 2000));
+
+        // Export A, then import it back — should NOT duplicate events
+        let state = tracker_a.export_wire_state();
+        tracker_a.import_wire_state(state).unwrap();
+
+        let timeline = tracker_a.timeline("conv_1").unwrap();
+        assert_eq!(
+            timeline.len(),
+            2,
+            "Importing same events should deduplicate by event_id"
+        );
+    }
+
+    #[test]
+    fn import_merge_handles_separate_conversations() {
+        let mut tracker_a = ConversationTracker::new(TrackerConfig::default());
+        tracker_a.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
+
+        let mut tracker_b = ConversationTracker::new(TrackerConfig::default());
+        tracker_b.record_event(make_event("conv_2", "bob", EventKind::Flattery, 2000));
+
+        let state_b = tracker_b.export_wire_state();
+        tracker_a.import_wire_state(state_b).unwrap();
+
+        assert!(tracker_a.timeline("conv_1").is_some());
+        assert!(tracker_a.timeline("conv_2").is_some());
+        assert_eq!(tracker_a.timeline("conv_1").unwrap().len(), 1);
+        assert_eq!(tracker_a.timeline("conv_2").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn import_updates_next_event_id() {
+        let mut tracker_a = ConversationTracker::new(TrackerConfig::default());
+        tracker_a.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
+
+        let mut tracker_b = ConversationTracker::new(TrackerConfig::default());
+        // Generate many events on B to push its event_id counter high
+        for i in 0..10 {
+            tracker_b.record_event(make_event(
+                "conv_2",
+                "bob",
+                EventKind::NormalConversation,
+                i * 1000,
+            ));
+        }
+
+        let state_b = tracker_b.export_wire_state();
+        tracker_a.import_wire_state(state_b).unwrap();
+
+        // Now record a new event on A — its event_id should be higher than all imported ones
+        tracker_a.record_event(make_event("conv_1", "alice", EventKind::Mockery, 20000));
+        let events = tracker_a.timeline("conv_1").unwrap().all_events();
+        let last_event = events.last().unwrap();
+        assert!(
+            last_event.event_id > 10,
+            "New event_id {} should be higher than imported max",
+            last_event.event_id
+        );
+    }
+
+    #[test]
+    fn event_ids_are_monotonically_assigned() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
+        tracker.record_event(make_event("conv_1", "bob", EventKind::Mockery, 2000));
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Flattery, 3000));
+
+        let events = tracker.timeline("conv_1").unwrap().all_events();
+        assert_eq!(events[0].event_id, 1);
+        assert_eq!(events[1].event_id, 2);
+        assert_eq!(events[2].event_id, 3);
+    }
+
+    #[test]
+    fn auto_cleanup_triggers_from_single_record_event() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            analysis_window_ms: 10_000,
+            auto_cleanup_interval: 2,
+            ..Default::default()
+        });
+
+        tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
+        assert_eq!(tracker.timeline("conv_1").unwrap().len(), 1);
+
+        // Call 2: triggers cleanup (20000 - 10000 = 10000 cutoff, event at 1000 removed)
+        tracker.record_event(make_event(
+            "conv_1",
+            "alice",
+            EventKind::NormalConversation,
+            20_000,
+        ));
+        assert_eq!(
+            tracker.timeline("conv_1").unwrap().len(),
+            1,
+            "Auto-cleanup from record_event() should remove old events"
+        );
+    }
+
+    #[test]
+    fn guilt_tripping_backward_compat_deserialization() {
+        // Ensure old state with "guild_tripping" deserializes as GuiltTripping
+        let json = r#"{"event_id":0,"timestamp_ms":1000,"sender_id":"x","conversation_id":"c","kind":"guild_tripping","confidence":0.8}"#;
+        let event: ContextEvent = serde_json::from_str(json).unwrap();
+        assert_eq!(event.kind, EventKind::GuiltTripping);
+    }
+
+    #[test]
+    fn event_id_defaults_to_zero_on_deserialization() {
+        // Old state without event_id field should deserialize with event_id=0
+        let json = r#"{"timestamp_ms":1000,"sender_id":"x","conversation_id":"c","kind":"insult","confidence":0.8}"#;
+        let event: ContextEvent = serde_json::from_str(json).unwrap();
+        assert_eq!(event.event_id, 0);
     }
 }

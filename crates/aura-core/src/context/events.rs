@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextEvent {
+    #[serde(default)]
+    pub event_id: u64,
+
     pub timestamp_ms: u64,
 
     pub sender_id: String,
@@ -52,7 +55,8 @@ pub enum EventKind {
 
     Mockery,
 
-    GuildTripping,
+    #[serde(alias = "guild_tripping")]
+    GuiltTripping,
 
     Gaslighting,
 
@@ -141,7 +145,7 @@ impl EventKind {
     pub fn is_manipulation_indicator(&self) -> bool {
         matches!(
             self,
-            Self::GuildTripping
+            Self::GuiltTripping
                 | Self::Gaslighting
                 | Self::EmotionalBlackmail
                 | Self::PeerPressure
@@ -185,7 +189,7 @@ impl EventKind {
             Self::Denigration => 0.6,
             Self::Mockery => 0.4,
             Self::RumorSpreading => 0.6,
-            Self::GuildTripping => 0.5,
+            Self::GuiltTripping => 0.5,
             Self::Gaslighting => 0.7,
             Self::PeerPressure => 0.4,
             Self::Darvo => 0.7,
@@ -223,7 +227,10 @@ impl EventKind {
     pub fn is_hostile(&self) -> bool {
         self.is_bullying_indicator()
             || self.is_manipulation_indicator()
-            || matches!(self, Self::DoxxingAttempt | Self::HateSpeech | Self::LocationRequest)
+            || matches!(
+                self,
+                Self::DoxxingAttempt | Self::HateSpeech | Self::LocationRequest
+            )
     }
 
     pub fn is_supportive(&self) -> bool {
@@ -296,7 +303,10 @@ mod tests {
     #[test]
     fn normal_rating_delta_small_positive() {
         let delta = EventKind::NormalConversation.rating_delta();
-        assert!(delta > 0.0 && delta < 1.0, "Expected small positive delta, got {delta}");
+        assert!(
+            delta > 0.0 && delta < 1.0,
+            "Expected small positive delta, got {delta}"
+        );
     }
 
     #[test]
@@ -323,7 +333,10 @@ mod tests {
             EventKind::DebtCreation,
         ];
         for kind in grooming_kinds {
-            assert!(kind.is_grooming_indicator(), "{kind:?} should be grooming indicator");
+            assert!(
+                kind.is_grooming_indicator(),
+                "{kind:?} should be grooming indicator"
+            );
         }
     }
 
@@ -339,14 +352,17 @@ mod tests {
             EventKind::Mockery,
         ];
         for kind in bullying_kinds {
-            assert!(kind.is_bullying_indicator(), "{kind:?} should be bullying indicator");
+            assert!(
+                kind.is_bullying_indicator(),
+                "{kind:?} should be bullying indicator"
+            );
         }
     }
 
     #[test]
     fn all_manipulation_indicators_classified() {
         let manip_kinds = vec![
-            EventKind::GuildTripping,
+            EventKind::GuiltTripping,
             EventKind::Gaslighting,
             EventKind::EmotionalBlackmail,
             EventKind::PeerPressure,
@@ -363,7 +379,10 @@ mod tests {
             EventKind::FakeVulnerability,
         ];
         for kind in manip_kinds {
-            assert!(kind.is_manipulation_indicator(), "{kind:?} should be manipulation indicator");
+            assert!(
+                kind.is_manipulation_indicator(),
+                "{kind:?} should be manipulation indicator"
+            );
         }
     }
 
@@ -375,9 +394,18 @@ mod tests {
             EventKind::DefenseOfVictim,
         ];
         for kind in &benign {
-            assert!(!kind.is_grooming_indicator(), "{kind:?} should NOT be grooming");
-            assert!(!kind.is_bullying_indicator(), "{kind:?} should NOT be bullying");
-            assert!(!kind.is_manipulation_indicator(), "{kind:?} should NOT be manipulation");
+            assert!(
+                !kind.is_grooming_indicator(),
+                "{kind:?} should NOT be grooming"
+            );
+            assert!(
+                !kind.is_bullying_indicator(),
+                "{kind:?} should NOT be bullying"
+            );
+            assert!(
+                !kind.is_manipulation_indicator(),
+                "{kind:?} should NOT be manipulation"
+            );
             assert!(!kind.is_hostile(), "{kind:?} should NOT be hostile");
         }
     }
@@ -385,26 +413,51 @@ mod tests {
     #[test]
     fn all_severities_in_valid_range() {
         let all_kinds = vec![
-            EventKind::Flattery, EventKind::GiftOffer, EventKind::SecrecyRequest,
-            EventKind::PlatformSwitch, EventKind::PersonalInfoRequest,
-            EventKind::PhotoRequest, EventKind::VideoCallRequest,
-            EventKind::FinancialGrooming, EventKind::MeetingRequest,
-            EventKind::SexualContent, EventKind::AgeInappropriate,
-            EventKind::Insult, EventKind::Denigration, EventKind::HarmEncouragement,
-            EventKind::PhysicalThreat, EventKind::RumorSpreading, EventKind::Exclusion,
-            EventKind::Mockery, EventKind::GuildTripping, EventKind::Gaslighting,
-            EventKind::EmotionalBlackmail, EventKind::PeerPressure,
-            EventKind::LoveBombing, EventKind::Darvo, EventKind::Devaluation,
-            EventKind::SuicidalIdeation, EventKind::Hopelessness,
-            EventKind::FarewellMessage, EventKind::DoxxingAttempt,
-            EventKind::ScreenshotThreat, EventKind::HateSpeech,
-            EventKind::LocationRequest, EventKind::MoneyOffer,
-            EventKind::PiiSelfDisclosure, EventKind::CasualMeetingRequest,
-            EventKind::DareChallenge, EventKind::SuicideCoercion,
-            EventKind::FalseConsensus, EventKind::DebtCreation,
-            EventKind::ReputationThreat, EventKind::IdentityErosion,
-            EventKind::NetworkPoisoning, EventKind::FakeVulnerability,
-            EventKind::NormalConversation, EventKind::TrustedContact,
+            EventKind::Flattery,
+            EventKind::GiftOffer,
+            EventKind::SecrecyRequest,
+            EventKind::PlatformSwitch,
+            EventKind::PersonalInfoRequest,
+            EventKind::PhotoRequest,
+            EventKind::VideoCallRequest,
+            EventKind::FinancialGrooming,
+            EventKind::MeetingRequest,
+            EventKind::SexualContent,
+            EventKind::AgeInappropriate,
+            EventKind::Insult,
+            EventKind::Denigration,
+            EventKind::HarmEncouragement,
+            EventKind::PhysicalThreat,
+            EventKind::RumorSpreading,
+            EventKind::Exclusion,
+            EventKind::Mockery,
+            EventKind::GuiltTripping,
+            EventKind::Gaslighting,
+            EventKind::EmotionalBlackmail,
+            EventKind::PeerPressure,
+            EventKind::LoveBombing,
+            EventKind::Darvo,
+            EventKind::Devaluation,
+            EventKind::SuicidalIdeation,
+            EventKind::Hopelessness,
+            EventKind::FarewellMessage,
+            EventKind::DoxxingAttempt,
+            EventKind::ScreenshotThreat,
+            EventKind::HateSpeech,
+            EventKind::LocationRequest,
+            EventKind::MoneyOffer,
+            EventKind::PiiSelfDisclosure,
+            EventKind::CasualMeetingRequest,
+            EventKind::DareChallenge,
+            EventKind::SuicideCoercion,
+            EventKind::FalseConsensus,
+            EventKind::DebtCreation,
+            EventKind::ReputationThreat,
+            EventKind::IdentityErosion,
+            EventKind::NetworkPoisoning,
+            EventKind::FakeVulnerability,
+            EventKind::NormalConversation,
+            EventKind::TrustedContact,
             EventKind::DefenseOfVictim,
         ];
         for kind in all_kinds {
@@ -427,7 +480,10 @@ mod tests {
             EventKind::DebtCreation,
         ];
         for kind in overlap {
-            assert!(!kind.is_grooming_only(), "{kind:?} is both grooming+manipulation, should not be grooming_only");
+            assert!(
+                !kind.is_grooming_only(),
+                "{kind:?} is both grooming+manipulation, should not be grooming_only"
+            );
         }
     }
 
@@ -458,10 +514,16 @@ mod tests {
     fn hostile_rating_deltas_scale_with_severity() {
         // High severity hostile events should have larger negative deltas
         let high = EventKind::PhysicalThreat.rating_delta(); // sev 0.9 -> -7
-        let med = EventKind::Denigration.rating_delta();     // sev 0.6 -> -4
-        let low = EventKind::Mockery.rating_delta();         // sev 0.4 -> -2
-        assert!(high < med, "High severity {high} should be more negative than medium {med}");
-        assert!(med < low, "Medium severity {med} should be more negative than low {low}");
+        let med = EventKind::Denigration.rating_delta(); // sev 0.6 -> -4
+        let low = EventKind::Mockery.rating_delta(); // sev 0.4 -> -2
+        assert!(
+            high < med,
+            "High severity {high} should be more negative than medium {med}"
+        );
+        assert!(
+            med < low,
+            "Medium severity {med} should be more negative than low {low}"
+        );
     }
 
     #[test]
@@ -488,7 +550,8 @@ mod tests {
         for kind in high_sev {
             if kind.is_hostile() && kind.severity() >= 0.8 {
                 assert_eq!(
-                    kind.rating_delta(), -7.0,
+                    kind.rating_delta(),
+                    -7.0,
                     "{kind:?} (sev {}) should have -7 delta",
                     kind.severity()
                 );

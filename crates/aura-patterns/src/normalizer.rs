@@ -124,6 +124,25 @@ impl TextNormalizer {
         s
     }
 
+    pub fn normalize_semantic(&self, text: &str) -> String {
+        let mut s = text.to_string();
+
+        s = self.strip_zero_width(&s);
+        s = self.strip_diacritics(&s);
+        s = s.to_lowercase();
+
+        s.split_whitespace()
+            .map(|token| {
+                let token = self.strip_interstitial(token);
+                let token = self.decode_semantic_leet(&token);
+                let token = self.unify_homoglyphs(&token);
+                self.collapse_repeats_to_len(&token, 2)
+            })
+            .filter(|token| !token.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     pub fn is_purely_cyrillic(text: &str) -> bool {
         text.chars().filter(|c| c.is_alphabetic()).all(is_cyrillic)
     }
@@ -173,6 +192,10 @@ impl TextNormalizer {
     }
 
     fn collapse_repeats(&self, text: &str) -> String {
+        self.collapse_repeats_to_len(text, 1)
+    }
+
+    fn collapse_repeats_to_len(&self, text: &str, collapsed_len: usize) -> String {
         let chars: Vec<char> = text.chars().collect();
         if chars.is_empty() {
             return String::new();
@@ -196,7 +219,9 @@ impl TextNormalizer {
         let mut result = String::with_capacity(chars.len());
         for (ch, len) in runs {
             if len >= 3 {
-                result.push(ch);
+                for _ in 0..collapsed_len {
+                    result.push(ch);
+                }
             } else {
                 for _ in 0..len {
                     result.push(ch);
@@ -291,6 +316,18 @@ impl TextNormalizer {
     fn decode_leet(&self, text: &str) -> String {
         text.chars()
             .map(|c| *self.leet_map.get(&c).unwrap_or(&c))
+            .collect()
+    }
+
+    fn decode_semantic_leet(&self, text: &str) -> String {
+        text.chars()
+            .map(|c| {
+                if c == '!' {
+                    c
+                } else {
+                    *self.leet_map.get(&c).unwrap_or(&c)
+                }
+            })
             .collect()
     }
 
@@ -522,6 +559,30 @@ mod tests {
         let n = norm();
         let result = n.normalize("Hello, how are you?");
         assert_eq!(result, "hello, how are you?");
+    }
+
+    #[test]
+    fn semantic_normalization_preserves_word_shape_for_elongation() {
+        let n = norm();
+
+        assert_eq!(n.normalize_semantic("schoooool"), "school");
+        assert_eq!(n.normalize_semantic("screeeenshots"), "screenshots");
+    }
+
+    #[test]
+    fn semantic_normalization_handles_chat_noise() {
+        let n = norm();
+        let result = n.normalize_semantic("DM me on in$ta, delete this ch4t");
+
+        assert_eq!(result, "dm me on insta, delete this chat");
+    }
+
+    #[test]
+    fn semantic_normalization_preserves_sentence_punctuation() {
+        let n = norm();
+        let result = n.normalize_semantic("Stop it! Leave her alone!");
+
+        assert_eq!(result, "stop it! leave her alone!");
     }
 
     #[test]

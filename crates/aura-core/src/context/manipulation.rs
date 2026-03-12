@@ -1,4 +1,4 @@
-use crate::types::{Confidence, DetectionLayer, DetectionSignal, ThreatType};
+use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 
 use super::events::EventKind;
 use super::tracker::ConversationTimeline;
@@ -66,9 +66,7 @@ impl ManipulationDetector {
             signals.push(signal);
         }
 
-        if let Some(signal) =
-            self.check_screenshot_blackmail(timeline, sender_id, window_start)
-        {
+        if let Some(signal) = self.check_screenshot_blackmail(timeline, sender_id, window_start) {
             signals.push(signal);
         }
 
@@ -86,19 +84,20 @@ impl ManipulationDetector {
 
         if gaslighting_count >= 3 {
             let score = (0.5 + (gaslighting_count as f32 - 3.0) * 0.1).min(0.9);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Manipulation,
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
                 score,
-                confidence: if gaslighting_count >= 5 {
+                if gaslighting_count >= 5 {
                     Confidence::High
                 } else {
                     Confidence::Medium
                 },
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                SignalFamily::Conversation,
+                "conversation.manipulation.repeated_gaslighting",
+                format!(
                     "Repeated gaslighting detected: {gaslighting_count} instances of reality-denial from the same sender"
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -126,29 +125,31 @@ impl ManipulationDetector {
 
         if num_tactics >= 3 {
             let score = (0.7 + (total_manipulation as f32 * 0.02)).min(0.95);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Manipulation,
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
                 score,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.manipulation.multi_tactic_control",
+                format!(
                     "Multi-tactic manipulation detected: {} different tactics used ({} total events). \
                      This is a textbook psychological control pattern.",
                     num_tactics, total_manipulation
                 ),
-            })
+            ))
         } else if num_tactics == 2 && total_manipulation >= 4 {
             let score = (0.5 + (total_manipulation as f32 * 0.03)).min(0.8);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Manipulation,
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
                 score,
-                confidence: Confidence::Medium,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                Confidence::Medium,
+                SignalFamily::Conversation,
+                "conversation.manipulation.multi_tactic_pattern",
+                format!(
                     "Manipulation pattern detected: {} different tactics used across {} events",
                     num_tactics, total_manipulation
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -165,16 +166,17 @@ impl ManipulationDetector {
 
         if blackmail_count >= 2 {
             let score = (0.6 + (blackmail_count as f32 - 2.0) * 0.1).min(0.9);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Manipulation,
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
                 score,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.manipulation.emotional_blackmail",
+                format!(
                     "Emotional blackmail pattern detected: sender has used {blackmail_count} \
                      threats of self-harm or abandonment to control the conversation"
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -190,20 +192,21 @@ impl ManipulationDetector {
 
         if darvo_count >= 2 {
             let score = (0.6 + (darvo_count as f32 - 2.0) * 0.1).min(0.85);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Manipulation,
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
                 score,
-                confidence: if darvo_count >= 4 {
+                if darvo_count >= 4 {
                     Confidence::High
                 } else {
                     Confidence::Medium
                 },
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                SignalFamily::Conversation,
+                "conversation.manipulation.darvo",
+                format!(
                     "DARVO pattern detected: sender reversed victim/offender roles {} times",
                     darvo_count
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -230,17 +233,18 @@ impl ManipulationDetector {
         if love_count >= 2 && devalue_count >= 2 {
             let total = love_count + devalue_count;
             let score = (0.7 + (total as f32 - 4.0) * 0.02).min(0.85);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Manipulation,
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
                 score,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.manipulation.love_bomb_devalue_cycle",
+                format!(
                     "Love-bomb/devalue cycle detected: {} affection + {} devaluation events from same sender. \
                      This creates psychological dependency through intermittent reinforcement.",
                     love_count, devalue_count
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -254,23 +258,40 @@ impl ManipulationDetector {
     ) -> Option<DetectionSignal> {
         let screenshot_count =
             timeline.count_events(sender_id, &EventKind::ScreenshotThreat, window_start);
+        let reputation_count =
+            timeline.count_events(sender_id, &EventKind::ReputationThreat, window_start);
 
-        if screenshot_count >= 2 {
-            let score = (0.7 + (screenshot_count as f32 - 2.0) * 0.1).min(0.9);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Manipulation,
+        if screenshot_count >= 1 && reputation_count >= 1 {
+            let score =
+                (0.75 + ((screenshot_count + reputation_count) as f32 - 2.0) * 0.05).min(0.92);
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
                 score,
-                confidence: if screenshot_count >= 4 {
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.manipulation.screenshot_reputation_blackmail",
+                format!(
+                    "Screenshot blackmail with reputation threat detected: {} screenshot signals + {} reputation threats",
+                    screenshot_count, reputation_count
+                ),
+            ))
+        } else if screenshot_count >= 2 {
+            let score = (0.7 + (screenshot_count as f32 - 2.0) * 0.1).min(0.9);
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
+                score,
+                if screenshot_count >= 4 {
                     Confidence::High
                 } else {
                     Confidence::Medium
                 },
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                SignalFamily::Conversation,
+                "conversation.manipulation.screenshot_blackmail",
+                format!(
                     "Screenshot blackmail pattern detected: {} threats to share screenshots/recordings",
                     screenshot_count
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -279,7 +300,7 @@ impl ManipulationDetector {
     fn classify_tactic(kind: &EventKind) -> Option<ManipulationTactic> {
         match kind {
             EventKind::Gaslighting => Some(ManipulationTactic::Gaslighting),
-            EventKind::GuildTripping => Some(ManipulationTactic::GuiltTripping),
+            EventKind::GuiltTripping => Some(ManipulationTactic::GuiltTripping),
             EventKind::EmotionalBlackmail => Some(ManipulationTactic::EmotionalBlackmail),
             EventKind::PeerPressure => Some(ManipulationTactic::PeerPressure),
             EventKind::Exclusion => Some(ManipulationTactic::Isolation),
@@ -308,6 +329,7 @@ mod tests {
         let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
         for (sender, kind, ts) in events {
             timeline.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms: ts,
                 sender_id: sender.to_string(),
                 conversation_id: "conv_1".to_string(),
@@ -359,7 +381,7 @@ mod tests {
         let detector = ManipulationDetector::new();
         let timeline = make_timeline(vec![
             ("abuser", EventKind::Gaslighting, 1000),
-            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::GuiltTripping, 2000),
             ("abuser", EventKind::EmotionalBlackmail, 3000),
         ]);
         let signals = detector.analyze(&timeline, "abuser", 0);
@@ -386,8 +408,8 @@ mod tests {
         let timeline = make_timeline(vec![
             ("manipulator", EventKind::Gaslighting, 1000),
             ("manipulator", EventKind::Gaslighting, 2000),
-            ("manipulator", EventKind::GuildTripping, 3000),
-            ("manipulator", EventKind::GuildTripping, 4000),
+            ("manipulator", EventKind::GuiltTripping, 3000),
+            ("manipulator", EventKind::GuiltTripping, 4000),
         ]);
         let signals = detector.analyze(&timeline, "manipulator", 0);
         assert!(
@@ -486,7 +508,7 @@ mod tests {
         let detector = ManipulationDetector::new();
         let timeline = make_timeline(vec![
             ("abuser", EventKind::Gaslighting, 1000),
-            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::GuiltTripping, 2000),
             ("abuser", EventKind::EmotionalBlackmail, 3000),
             ("abuser", EventKind::Darvo, 4000),
             ("abuser", EventKind::Devaluation, 5000),
@@ -522,6 +544,24 @@ mod tests {
     }
 
     #[test]
+    fn screenshot_plus_reputation_threat_detected_early() {
+        let detector = ManipulationDetector::new();
+        let timeline = make_timeline(vec![
+            ("bully", EventKind::ScreenshotThreat, 1000),
+            ("bully", EventKind::ReputationThreat, 2000),
+        ]);
+        let signals = detector.analyze(&timeline, "bully", 0);
+        let blackmail = signals
+            .iter()
+            .find(|s| s.reason_code == "conversation.manipulation.screenshot_reputation_blackmail");
+        assert!(
+            blackmail.is_some(),
+            "Expected screenshot + reputation blackmail, got: {signals:?}"
+        );
+        assert!(blackmail.unwrap().score >= 0.75);
+    }
+
+    #[test]
     fn single_screenshot_not_blackmail() {
         let detector = ManipulationDetector::new();
         let timeline = make_timeline(vec![("bully", EventKind::ScreenshotThreat, 1000)]);
@@ -540,7 +580,7 @@ mod tests {
         let detector = ManipulationDetector::new();
         let timeline = make_timeline(vec![
             ("abuser", EventKind::Gaslighting, 1000),
-            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::GuiltTripping, 2000),
             ("abuser", EventKind::DareChallenge, 3000),
         ]);
         let signals = detector.analyze(&timeline, "abuser", 0);
@@ -580,12 +620,14 @@ mod tests {
         let detector = ManipulationDetector::new();
         let timeline = make_timeline(vec![
             ("abuser", EventKind::Gaslighting, 1000),
-            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::GuiltTripping, 2000),
             ("abuser", EventKind::FalseConsensus, 3000),
         ]);
         let signals = detector.analyze(&timeline, "abuser", 0);
         assert!(
-            signals.iter().any(|s| s.explanation.contains("Multi-tactic")),
+            signals
+                .iter()
+                .any(|s| s.explanation.contains("Multi-tactic")),
             "FalseConsensus should count as manipulation tactic, got: {signals:?}"
         );
     }
@@ -595,12 +637,14 @@ mod tests {
         let detector = ManipulationDetector::new();
         let timeline = make_timeline(vec![
             ("abuser", EventKind::Gaslighting, 1000),
-            ("abuser", EventKind::GuildTripping, 2000),
+            ("abuser", EventKind::GuiltTripping, 2000),
             ("abuser", EventKind::NetworkPoisoning, 3000),
         ]);
         let signals = detector.analyze(&timeline, "abuser", 0);
         assert!(
-            signals.iter().any(|s| s.explanation.contains("Multi-tactic")),
+            signals
+                .iter()
+                .any(|s| s.explanation.contains("Multi-tactic")),
             "NetworkPoisoning should count as manipulation tactic, got: {signals:?}"
         );
     }
@@ -615,7 +659,9 @@ mod tests {
         ]);
         let signals = detector.analyze(&timeline, "abuser", 0);
         assert!(
-            signals.iter().any(|s| s.explanation.contains("Multi-tactic")),
+            signals
+                .iter()
+                .any(|s| s.explanation.contains("Multi-tactic")),
             "ReputationThreat should count as manipulation tactic, got: {signals:?}"
         );
     }
@@ -643,5 +689,4 @@ mod tests {
             control.unwrap().score
         );
     }
-
 }

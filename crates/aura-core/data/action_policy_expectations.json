@@ -1,0 +1,114 @@
+{
+  "scenarios": [
+    {
+      "scenario_name": "classic_grooming",
+      "required_any": ["suggest_block_contact", "restrict_unknown_contact"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "trusted_adult_grooming",
+      "required_any": ["suggest_block_contact", "escalate_to_guardian"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "acute_selfharm",
+      "required_any": ["show_crisis_support", "escalate_to_guardian"],
+      "required_by_onset": ["show_crisis_support"],
+      "forbidden_any": [
+        "suggest_report",
+        "suggest_block_contact",
+        "restrict_unknown_contact",
+        "confirm_before_open_link"
+      ]
+    },
+    {
+      "scenario_name": "group_bullying",
+      "required_any": ["slow_down_conversation", "suggest_report"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "coercive_control_password_pressure",
+      "required_any": ["suggest_block_contact"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "suicide_coercion",
+      "required_any": ["suggest_block_contact"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "screenshot_blackmail",
+      "required_any": ["suggest_block_contact", "suggest_report"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "image_based_abuse_escalation",
+      "required_any": ["suggest_block_contact", "suggest_report"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "mixed_language_grooming",
+      "required_any": ["suggest_block_contact", "restrict_unknown_contact"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "mixed_language_group_bullying",
+      "required_any": ["slow_down_conversation", "suggest_report"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "mixed_language_selfharm_crisis",
+      "required_any": ["show_crisis_support", "escalate_to_guardian"],
+      "required_by_onset": ["show_crisis_support"],
+      "forbidden_any": [
+        "suggest_report",
+        "suggest_block_contact",
+        "restrict_unknown_contact",
+        "confirm_before_open_link"
+      ]
+    },
+    {
+      "scenario_name": "mixed_language_image_blackmail",
+      "required_any": ["suggest_block_contact", "suggest_report"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "negative_control_multilingual_support",
+      "forbid_any_action": true
+    },
+    {
+      "scenario_name": "negative_control_multilingual_peer_chat",
+      "forbid_any_action": true
+    },
+    {
+      "scenario_name": "phishing_link",
+      "required_any": ["confirm_before_open_link", "suggest_report"],
+      "required_by_onset": ["confirm_before_open_link"],
+      "forbidden_any": ["show_crisis_support", "suggest_block_contact"]
+    },
+    {
+      "scenario_name": "bystander_rescue",
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link", "suggest_block_contact"]
+    },
+    {
+      "scenario_name": "negative_control_trusted_adult",
+      "forbid_any_action": true
+    },
+    {
+      "scenario_name": "negative_control_teen_flirting",
+      "forbid_any_action": true
+    },
+    {
+      "scenario_name": "false_positive_friends",
+      "forbid_any_action": true
+    }
+  ]
+}

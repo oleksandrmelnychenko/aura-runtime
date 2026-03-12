@@ -1,4 +1,4 @@
-use crate::types::{Confidence, DetectionLayer, DetectionSignal, ThreatType};
+use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 
 use super::events::EventKind;
 use super::tracker::ConversationTimeline;
@@ -68,28 +68,30 @@ impl SelfHarmDetector {
 
         if combined >= 3 {
             let score = (0.7 + (combined as f32 - 3.0) * 0.05).min(0.95);
-            Some(DetectionSignal {
-                threat_type: ThreatType::SelfHarm,
+            Some(DetectionSignal::context(
+                ThreatType::SelfHarm,
                 score,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.selfharm.escalation",
+                format!(
                     "Self-harm escalation detected: {} expressions of hopelessness/suicidal ideation \
                      across multiple messages. Crisis resources should be prominently displayed.",
                     combined
                 ),
-            })
+            ))
         } else if combined == 2 {
-            Some(DetectionSignal {
-                threat_type: ThreatType::SelfHarm,
-                score: 0.6,
-                confidence: Confidence::Medium,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            Some(DetectionSignal::context(
+                ThreatType::SelfHarm,
+                0.6,
+                Confidence::Medium,
+                SignalFamily::Conversation,
+                "conversation.selfharm.recurring_signals",
+                format!(
                     "Recurring self-harm signals: {} expressions of despair detected. Monitoring for escalation.",
                     combined
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -124,26 +126,25 @@ impl SelfHarmDetector {
         }
 
         if farewell_after_darkness {
-            Some(DetectionSignal {
-                threat_type: ThreatType::SelfHarm,
-                score: 0.95,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation:
-                    "CRITICAL: Farewell message following expressions of hopelessness/suicidal ideation. \
-                     This pattern indicates acute risk. Immediate crisis resources and parent alert needed."
-                        .to_string(),
-            })
+            Some(DetectionSignal::context(
+                ThreatType::SelfHarm,
+                0.95,
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.selfharm.farewell_after_ideation",
+                "CRITICAL: Farewell message following expressions of hopelessness/suicidal ideation. \
+                     This pattern indicates acute risk. Immediate crisis resources and parent alert needed.",
+            ))
         } else if has_farewell && !has_hopelessness && !has_ideation {
-            Some(DetectionSignal {
-                threat_type: ThreatType::SelfHarm,
-                score: 0.6,
-                confidence: Confidence::Medium,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: "Farewell message detected without prior self-harm signals. \
-                     May be benign, but crisis resources should be available."
-                    .to_string(),
-            })
+            Some(DetectionSignal::context(
+                ThreatType::SelfHarm,
+                0.6,
+                Confidence::Medium,
+                SignalFamily::Conversation,
+                "conversation.selfharm.farewell_only",
+                "Farewell message detected without prior self-harm signals. \
+                     May be benign, but crisis resources should be available.",
+            ))
         } else {
             None
         }
@@ -180,16 +181,17 @@ impl SelfHarmDetector {
             .count();
 
         if recent_count >= 3 {
-            return Some(DetectionSignal {
-                threat_type: ThreatType::SelfHarm,
-                score: 0.85,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            return Some(DetectionSignal::context(
+                ThreatType::SelfHarm,
+                0.85,
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.selfharm.acute_crisis",
+                format!(
                     "ACUTE self-harm crisis: {} self-harm signals within 24 hours. Immediate crisis resources needed.",
                     recent_count
                 ),
-            });
+            ));
         }
 
         let mut days: Vec<u64> = events.iter().map(|e| e.timestamp_ms / day_ms).collect();
@@ -197,16 +199,17 @@ impl SelfHarmDetector {
         days.dedup();
 
         if days.len() >= 3 {
-            Some(DetectionSignal {
-                threat_type: ThreatType::SelfHarm,
-                score: 0.75,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            Some(DetectionSignal::context(
+                ThreatType::SelfHarm,
+                0.75,
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.selfharm.chronic_pattern",
+                format!(
                     "Chronic self-harm pattern: self-harm signals across {} distinct days. Sustained risk — parent alert recommended.",
                     days.len()
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -238,18 +241,18 @@ impl SelfHarmDetector {
         }
 
         if last_hopelessness_ts.is_some() && positive_after_hopelessness >= 3 {
-            Some(DetectionSignal {
-                threat_type: ThreatType::SelfHarm,
-                score: -0.1,
-
-                confidence: Confidence::Low,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            Some(DetectionSignal::context(
+                ThreatType::SelfHarm,
+                -0.1,
+                Confidence::Low,
+                SignalFamily::Conversation,
+                "conversation.selfharm.protective_factor",
+                format!(
                     "Protective factor: {} positive interactions after hopelessness expression. \
                      Risk slightly reduced but continued monitoring recommended.",
                     positive_after_hopelessness
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -292,17 +295,18 @@ impl SelfHarmDetector {
             }
 
             if senders_in_window.len() >= 2 {
-                return Some(DetectionSignal {
-                    threat_type: ThreatType::SelfHarm,
-                    score: 0.7,
-                    confidence: Confidence::Medium,
-                    layer: DetectionLayer::ContextAnalysis,
-                    explanation: format!(
+                return Some(DetectionSignal::context(
+                    ThreatType::SelfHarm,
+                    0.7,
+                    Confidence::Medium,
+                    SignalFamily::Abuse,
+                    "abuse.selfharm.contagion",
+                    format!(
                         "Self-harm contagion risk: {} different people expressed hopelessness within 48 hours. \
                          Group-level crisis intervention may be needed.",
                         senders_in_window.len()
                     ),
-                });
+                ));
             }
 
             senders_in_window.clear();
@@ -339,17 +343,18 @@ impl SelfHarmDetector {
 
         if bullying_received >= 2 && self_harm_expressed >= 1 {
             let score = (0.7 + (bullying_received as f32 * 0.05)).min(0.9);
-            Some(DetectionSignal {
-                threat_type: ThreatType::SelfHarm,
+            Some(DetectionSignal::context(
+                ThreatType::SelfHarm,
                 score,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.selfharm.bullying_pathway",
+                format!(
                     "Bullying-to-self-harm pathway detected: child received {} bullying events \
                      and expressed {} self-harm signals. This combination requires urgent attention.",
                     bullying_received, self_harm_expressed
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -366,6 +371,7 @@ mod tests {
         let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
         for (sender, kind, ts) in events {
             timeline.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms: ts,
                 sender_id: sender.to_string(),
                 conversation_id: "conv_1".to_string(),

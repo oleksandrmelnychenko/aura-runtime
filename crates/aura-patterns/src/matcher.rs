@@ -116,7 +116,11 @@ impl PatternMatcher {
             if matched_rules.contains(&km.rule_id) {
                 continue;
             }
-            if let Some(mat) = km.automaton.find(text) {
+            if let Some(mat) = km
+                .automaton
+                .find_iter(text)
+                .find(|mat| aho_match_at_boundary(text, mat.start(), mat.end()))
+            {
                 let matched = &km.words[mat.pattern().as_usize()];
                 matched_rules.insert(km.rule_id.clone());
                 results.push(MatchResult {
@@ -163,7 +167,11 @@ impl PatternMatcher {
 
     fn has_threat_in(&self, text: &str) -> bool {
         for km in &self.keyword_matchers {
-            if km.automaton.find(text).is_some() {
+            if km
+                .automaton
+                .find_iter(text)
+                .any(|mat| aho_match_at_boundary(text, mat.start(), mat.end()))
+            {
                 return true;
             }
         }
@@ -178,6 +186,20 @@ impl PatternMatcher {
     pub fn rule_count(&self) -> usize {
         self.keyword_matchers.len() + self.regex_matchers.len()
     }
+}
+
+fn aho_match_at_boundary(text: &str, match_start: usize, match_end: usize) -> bool {
+    let before_ok = match_start == 0
+        || text[..match_start]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !c.is_alphanumeric());
+    let after_ok = match_end >= text.len()
+        || text[match_end..]
+            .chars()
+            .next()
+            .is_none_or(|c| !c.is_alphanumeric());
+    before_ok && after_ok
 }
 
 #[cfg(test)]
@@ -237,6 +259,14 @@ mod tests {
                     "score": 0.75,
                     "languages": ["en"],
                     "explanation": "Self-harm language detected. Resources available."
+                },
+                {
+                    "id": "explicit_ass_001",
+                    "threat_type": "explicit",
+                    "kind": { "type": "keyword", "words": ["ass"] },
+                    "score": 0.55,
+                    "languages": ["en"],
+                    "explanation": "Profanity detected"
                 }
             ]
         }"#;
@@ -323,5 +353,47 @@ mod tests {
 
         assert!(en_matcher.has_threat("https://free-gift.example.com"));
         assert!(uk_matcher.has_threat("https://free-gift.example.com"));
+    }
+
+    #[test]
+    fn keyword_boundary_blocks_embedded_profanity_false_positive() {
+        let db = test_db();
+        let matcher = PatternMatcher::from_database(&db, "en");
+
+        let results = matcher.scan("let's meet by the gym after class tomorrow");
+        assert!(
+            results
+                .iter()
+                .all(|result| result.rule_id != "explicit_ass_001"),
+            "Embedded profanity substring should not match: {results:?}"
+        );
+    }
+
+    #[test]
+    fn keyword_boundary_still_matches_standalone_profanity() {
+        let db = test_db();
+        let matcher = PatternMatcher::from_database(&db, "en");
+
+        let results = matcher.scan("you are such an ass");
+        assert!(
+            results
+                .iter()
+                .any(|result| result.rule_id == "explicit_ass_001"),
+            "Standalone profanity should still match: {results:?}"
+        );
+    }
+
+    #[test]
+    fn default_mvp_obfuscation_regex_does_not_match_class() {
+        let db = PatternDatabase::default_mvp();
+        let matcher = PatternMatcher::from_database(&db, "en");
+
+        let results = matcher.scan("let's meet by the gym after class tomorrow");
+        assert!(
+            results
+                .iter()
+                .all(|result| result.rule_id != "profanity_en_obfuscation"),
+            "Obfuscation regex should not fire on 'class': {results:?}"
+        );
     }
 }

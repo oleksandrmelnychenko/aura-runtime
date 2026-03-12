@@ -5,5 +5,3 @@ Cargo.lock
 .vscode/
 *.swp
 .DS_Store
-AuraKit/.build/
-AuraKit/AuraFFI.xcframework/

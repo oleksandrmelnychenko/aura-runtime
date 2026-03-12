@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{Confidence, DetectionLayer, DetectionSignal, ThreatType};
+use crate::types::{
+    BehavioralTrend, CircleTier, Confidence, ContactSnapshot, DetectionSignal, SignalFamily,
+    ThreatType,
+};
 
 use super::events::ContextEvent;
 
@@ -23,45 +26,6 @@ fn default_trust() -> f32 {
 }
 
 // ---------------------------------------------------------------------------
-// CircleTier
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CircleTier {
-    Inner,
-    Regular,
-    Occasional,
-    New,
-}
-
-impl Default for CircleTier {
-    fn default() -> Self {
-        Self::New
-    }
-}
-
-// ---------------------------------------------------------------------------
-// BehavioralTrend
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BehavioralTrend {
-    Stable,
-    Improving,
-    GradualWorsening,
-    RapidWorsening,
-    RoleReversal,
-}
-
-impl Default for BehavioralTrend {
-    fn default() -> Self {
-        Self::Stable
-    }
-}
-
-// ---------------------------------------------------------------------------
 // BehavioralSnapshot
 // ---------------------------------------------------------------------------
 
@@ -76,6 +40,51 @@ pub struct BehavioralSnapshot {
     pub grooming_count: u32,
     pub manipulation_count: u32,
     pub avg_severity: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct BehavioralSnapshotState {
+    pub period_start_ms: u64,
+    pub period_end_ms: u64,
+    pub total_messages: u32,
+    pub hostile_count: u32,
+    pub supportive_count: u32,
+    pub neutral_count: u32,
+    pub grooming_count: u32,
+    pub manipulation_count: u32,
+    pub avg_severity: f32,
+}
+
+impl From<&BehavioralSnapshot> for BehavioralSnapshotState {
+    fn from(snapshot: &BehavioralSnapshot) -> Self {
+        Self {
+            period_start_ms: snapshot.period_start_ms,
+            period_end_ms: snapshot.period_end_ms,
+            total_messages: snapshot.total_messages,
+            hostile_count: snapshot.hostile_count,
+            supportive_count: snapshot.supportive_count,
+            neutral_count: snapshot.neutral_count,
+            grooming_count: snapshot.grooming_count,
+            manipulation_count: snapshot.manipulation_count,
+            avg_severity: snapshot.avg_severity,
+        }
+    }
+}
+
+impl From<BehavioralSnapshotState> for BehavioralSnapshot {
+    fn from(snapshot: BehavioralSnapshotState) -> Self {
+        Self {
+            period_start_ms: snapshot.period_start_ms,
+            period_end_ms: snapshot.period_end_ms,
+            total_messages: snapshot.total_messages,
+            hostile_count: snapshot.hostile_count,
+            supportive_count: snapshot.supportive_count,
+            neutral_count: snapshot.neutral_count,
+            grooming_count: snapshot.grooming_count,
+            manipulation_count: snapshot.manipulation_count,
+            avg_severity: snapshot.avg_severity,
+        }
+    }
 }
 
 impl BehavioralSnapshot {
@@ -126,7 +135,7 @@ pub struct ContactProfile {
 
     pub conversation_count: usize,
 
-    conversations: Vec<String>,
+    pub(crate) conversations: Vec<String>,
 
     pub grooming_event_count: u64,
 
@@ -143,7 +152,6 @@ pub struct ContactProfile {
     pub inferred_age: Option<u16>,
 
     // --- Phase 7: Rating & Behavioral Profiling ---
-
     #[serde(default = "default_rating")]
     pub rating: f32,
 
@@ -164,6 +172,98 @@ pub struct ContactProfile {
 
     #[serde(default)]
     active_days: HashSet<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContactProfileState {
+    pub sender_id: String,
+    pub first_seen_ms: u64,
+    pub last_seen_ms: u64,
+    pub total_messages: u64,
+    pub conversation_count: usize,
+    pub conversations: Vec<String>,
+    pub grooming_event_count: u64,
+    pub bullying_event_count: u64,
+    pub manipulation_event_count: u64,
+    pub is_trusted: bool,
+    pub severity_sum: f32,
+    pub severity_count: u64,
+    pub inferred_age: Option<u16>,
+    pub rating: f32,
+    pub trust_level: f32,
+    pub circle_tier: CircleTier,
+    pub trend: BehavioralTrend,
+    pub weekly_snapshots: Vec<BehavioralSnapshotState>,
+    pub current_snapshot: Option<BehavioralSnapshotState>,
+    pub active_days: Vec<u32>,
+}
+
+impl From<&ContactProfile> for ContactProfileState {
+    fn from(profile: &ContactProfile) -> Self {
+        let mut active_days: Vec<u32> = profile.active_days.iter().copied().collect();
+        active_days.sort_unstable();
+
+        Self {
+            sender_id: profile.sender_id.clone(),
+            first_seen_ms: profile.first_seen_ms,
+            last_seen_ms: profile.last_seen_ms,
+            total_messages: profile.total_messages,
+            conversation_count: profile.conversation_count,
+            conversations: profile.conversations.clone(),
+            grooming_event_count: profile.grooming_event_count,
+            bullying_event_count: profile.bullying_event_count,
+            manipulation_event_count: profile.manipulation_event_count,
+            is_trusted: profile.is_trusted,
+            severity_sum: profile.severity_sum,
+            severity_count: profile.severity_count,
+            inferred_age: profile.inferred_age,
+            rating: profile.rating,
+            trust_level: profile.trust_level,
+            circle_tier: profile.circle_tier,
+            trend: profile.trend,
+            weekly_snapshots: profile
+                .weekly_snapshots
+                .iter()
+                .map(BehavioralSnapshotState::from)
+                .collect(),
+            current_snapshot: profile
+                .current_snapshot
+                .as_ref()
+                .map(BehavioralSnapshotState::from),
+            active_days,
+        }
+    }
+}
+
+impl From<ContactProfileState> for ContactProfile {
+    fn from(profile: ContactProfileState) -> Self {
+        Self {
+            sender_id: profile.sender_id,
+            first_seen_ms: profile.first_seen_ms,
+            last_seen_ms: profile.last_seen_ms,
+            total_messages: profile.total_messages,
+            conversation_count: profile.conversation_count,
+            conversations: profile.conversations,
+            grooming_event_count: profile.grooming_event_count,
+            bullying_event_count: profile.bullying_event_count,
+            manipulation_event_count: profile.manipulation_event_count,
+            is_trusted: profile.is_trusted,
+            severity_sum: profile.severity_sum,
+            severity_count: profile.severity_count,
+            inferred_age: profile.inferred_age,
+            rating: profile.rating,
+            trust_level: profile.trust_level,
+            circle_tier: profile.circle_tier,
+            trend: profile.trend,
+            weekly_snapshots: profile
+                .weekly_snapshots
+                .into_iter()
+                .map(BehavioralSnapshot::from)
+                .collect(),
+            current_snapshot: profile.current_snapshot.map(BehavioralSnapshot::from),
+            active_days: profile.active_days.into_iter().collect(),
+        }
+    }
 }
 
 impl ContactProfile {
@@ -200,6 +300,21 @@ impl ContactProfile {
         }
     }
 
+    pub fn snapshot(&self, is_new_contact: bool) -> ContactSnapshot {
+        ContactSnapshot {
+            sender_id: self.sender_id.clone(),
+            rating: self.rating,
+            trust_level: self.trust_level,
+            circle_tier: self.circle_tier,
+            trend: self.trend,
+            is_trusted: self.is_trusted,
+            is_new_contact,
+            first_seen_ms: self.first_seen_ms,
+            last_seen_ms: self.last_seen_ms,
+            conversation_count: self.conversation_count,
+        }
+    }
+
     pub fn relationship_age_ms(&self) -> u64 {
         self.last_seen_ms - self.first_seen_ms
     }
@@ -222,9 +337,7 @@ impl ContactProfile {
         score += self.average_severity() * 0.2;
 
         let hours_known = self.relationship_age_ms() as f32 / (1000.0 * 3600.0);
-        if hours_known < 24.0
-            && (self.grooming_event_count > 0 || self.bullying_event_count > 0)
-        {
+        if hours_known < 24.0 && (self.grooming_event_count > 0 || self.bullying_event_count > 0) {
             score += 0.1;
         }
 
@@ -265,10 +378,9 @@ impl ContactProfile {
         }
 
         // Check if week boundary crossed — finalize before mutating
-        let needs_finalize = self
-            .current_snapshot
-            .as_ref()
-            .map_or(false, |s| event.timestamp_ms >= s.period_start_ms.saturating_add(WEEK_MS));
+        let needs_finalize = self.current_snapshot.as_ref().map_or(false, |s| {
+            event.timestamp_ms >= s.period_start_ms.saturating_add(WEEK_MS)
+        });
 
         if needs_finalize {
             if let Some(mut old) = self.current_snapshot.take() {
@@ -303,8 +415,7 @@ impl ContactProfile {
 
         // Running average severity
         let n = snapshot.total_messages as f32;
-        snapshot.avg_severity =
-            snapshot.avg_severity * ((n - 1.0) / n) + event.kind.severity() / n;
+        snapshot.avg_severity = snapshot.avg_severity * ((n - 1.0) / n) + event.kind.severity() / n;
     }
 
     fn recalculate_trend(&mut self) {
@@ -318,8 +429,7 @@ impl ContactProfile {
         // Baseline: first half (2-4 snapshots)
         let baseline_count = (snapshots.len() / 2).max(2).min(4);
         let baseline_hostile = avg_hostile_ratio(snapshots.iter().take(baseline_count));
-        let baseline_supportive =
-            avg_supportive_ratio(snapshots.iter().take(baseline_count));
+        let baseline_supportive = avg_supportive_ratio(snapshots.iter().take(baseline_count));
 
         // Recent: last 2 snapshots
         let recent_hostile = avg_hostile_ratio(snapshots.iter().rev().take(2));
@@ -375,7 +485,10 @@ impl ContactProfile {
     fn count_recent_active_days(&self, days: u32) -> usize {
         let now_day = (self.last_seen_ms / DAY_MS) as u32;
         let cutoff_day = now_day.saturating_sub(days);
-        self.active_days.iter().filter(|&&d| d >= cutoff_day).count()
+        self.active_days
+            .iter()
+            .filter(|&&d| d >= cutoff_day)
+            .count()
     }
 
     pub fn weekly_snapshots(&self) -> &VecDeque<BehavioralSnapshot> {
@@ -407,9 +520,7 @@ fn avg_hostile_ratio<'a>(snapshots: impl Iterator<Item = &'a BehavioralSnapshot>
     }
 }
 
-fn avg_supportive_ratio<'a>(
-    snapshots: impl Iterator<Item = &'a BehavioralSnapshot>,
-) -> f32 {
+fn avg_supportive_ratio<'a>(snapshots: impl Iterator<Item = &'a BehavioralSnapshot>) -> f32 {
     let mut sum = 0.0;
     let mut count = 0u32;
     for s in snapshots {
@@ -425,12 +536,27 @@ fn avg_supportive_ratio<'a>(
     }
 }
 
+fn trend_severity(trend: &BehavioralTrend) -> u8 {
+    match trend {
+        BehavioralTrend::Stable => 0,
+        BehavioralTrend::Improving => 0,
+        BehavioralTrend::GradualWorsening => 1,
+        BehavioralTrend::RapidWorsening => 2,
+        BehavioralTrend::RoleReversal => 3,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ContactProfiler
 // ---------------------------------------------------------------------------
 
 pub struct ContactProfiler {
     profiles: HashMap<String, ContactProfile>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContactProfilerWireState {
+    pub profiles: Vec<ContactProfileState>,
 }
 
 impl Default for ContactProfiler {
@@ -498,6 +624,11 @@ impl ContactProfiler {
         self.profiles.get(sender_id)
     }
 
+    pub fn snapshot(&self, sender_id: &str) -> Option<ContactSnapshot> {
+        self.profile(sender_id)
+            .map(|profile| profile.snapshot(self.is_new_contact(sender_id)))
+    }
+
     pub fn contacts_by_risk(&self) -> Vec<&ContactProfile> {
         let mut profiles: Vec<_> = self.profiles.values().collect();
         profiles.sort_by(|a, b| {
@@ -558,12 +689,17 @@ impl ContactProfiler {
                     (0.3 + gap as f32 * 0.01).min(0.6)
                 };
 
-                signals.push(DetectionSignal {
-                    threat_type: ThreatType::Grooming,
+                signals.push(DetectionSignal::context(
+                    ThreatType::Grooming,
                     score,
-                    confidence: Confidence::Medium,
-                    layer: DetectionLayer::ContextAnalysis,
-                    explanation: format!(
+                    Confidence::Medium,
+                    SignalFamily::Conversation,
+                    if profile.grooming_event_count > 0 {
+                        "conversation.contact.age_gap_with_grooming"
+                    } else {
+                        "conversation.contact.age_gap"
+                    },
+                    format!(
                         "Age gap detected: sender claims age {sender_age}, account holder is {holder_age} (gap: {gap} years){}",
                         if profile.grooming_event_count > 0 {
                             format!(" with {} grooming indicators", profile.grooming_event_count)
@@ -571,18 +707,14 @@ impl ContactProfiler {
                             String::new()
                         }
                     ),
-                });
+                ));
             }
         }
 
         signals
     }
 
-    pub fn check_anomalies(
-        &self,
-        sender_id: &str,
-        is_child_account: bool,
-    ) -> Vec<DetectionSignal> {
+    pub fn check_anomalies(&self, sender_id: &str, is_child_account: bool) -> Vec<DetectionSignal> {
         let mut signals = Vec::new();
 
         let profile = match self.profiles.get(sender_id) {
@@ -597,31 +729,33 @@ impl ContactProfiler {
         let risk = profile.risk_score();
 
         if is_child_account && self.is_new_contact(sender_id) && risk >= 0.3 {
-            signals.push(DetectionSignal {
-                threat_type: ThreatType::Grooming,
-                score: risk,
-                confidence: Confidence::Medium,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            signals.push(DetectionSignal::context(
+                ThreatType::Grooming,
+                risk,
+                Confidence::Medium,
+                SignalFamily::Conversation,
+                "conversation.contact.new_risky_contact",
+                format!(
                     "New contact with suspicious behavior pattern (risk: {risk:.2}). {} grooming indicators, {} bullying indicators.",
                     profile.grooming_event_count,
                     profile.bullying_event_count,
                 ),
-            });
+            ));
         }
 
         if profile.conversation_count >= 5 && profile.grooming_event_count >= 3 {
-            signals.push(DetectionSignal {
-                threat_type: ThreatType::Grooming,
-                score: 0.8,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            signals.push(DetectionSignal::context(
+                ThreatType::Grooming,
+                0.8,
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.contact.multi_conversation_predator_pattern",
+                format!(
                     "Contact appears in {} conversations with {} grooming indicators — possible predator pattern",
                     profile.conversation_count,
                     profile.grooming_event_count,
                 ),
-            });
+            ));
         }
 
         signals
@@ -644,16 +778,17 @@ impl ContactProfiler {
                 if profile.circle_tier == CircleTier::Inner {
                     score += 0.1;
                 }
-                signals.push(DetectionSignal {
-                    threat_type: ThreatType::Manipulation,
+                signals.push(DetectionSignal::context(
+                    ThreatType::Manipulation,
                     score,
-                    confidence: Confidence::Medium,
-                    layer: DetectionLayer::ContextAnalysis,
-                    explanation: format!(
+                    Confidence::Medium,
+                    SignalFamily::Conversation,
+                    "conversation.contact.behavior_rapid_worsening",
+                    format!(
                         "Contact {} showing rapid behavioral worsening (rating: {:.0})",
                         sender_id, profile.rating
                     ),
-                });
+                ));
             }
             BehavioralTrend::RoleReversal => {
                 let mut score = 0.6;
@@ -668,48 +803,51 @@ impl ContactProfiler {
                         }
                     }
                 }
-                signals.push(DetectionSignal {
-                    threat_type: ThreatType::Bullying,
+                signals.push(DetectionSignal::context(
+                    ThreatType::Bullying,
                     score,
-                    confidence: Confidence::High,
-                    layer: DetectionLayer::ContextAnalysis,
-                    explanation: format!(
+                    Confidence::High,
+                    SignalFamily::Conversation,
+                    "conversation.contact.behavior_role_reversal",
+                    format!(
                         "Contact {} role reversal: was supportive, now hostile (rating: {:.0})",
                         sender_id, profile.rating
                     ),
-                });
+                ));
             }
             BehavioralTrend::GradualWorsening => {
                 let mut score = 0.35;
                 if profile.circle_tier == CircleTier::Inner {
                     score += 0.1;
                 }
-                signals.push(DetectionSignal {
-                    threat_type: ThreatType::Manipulation,
+                signals.push(DetectionSignal::context(
+                    ThreatType::Manipulation,
                     score,
-                    confidence: Confidence::Medium,
-                    layer: DetectionLayer::ContextAnalysis,
-                    explanation: format!(
+                    Confidence::Medium,
+                    SignalFamily::Conversation,
+                    "conversation.contact.behavior_gradual_worsening",
+                    format!(
                         "Contact {} showing gradual behavioral worsening over weeks (rating: {:.0})",
                         sender_id, profile.rating
                     ),
-                });
+                ));
             }
             _ => {}
         }
 
         // Low rating alert for inner circle
         if profile.rating < 20.0 && profile.circle_tier == CircleTier::Inner {
-            signals.push(DetectionSignal {
-                threat_type: ThreatType::Bullying,
-                score: 0.55,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            signals.push(DetectionSignal::context(
+                ThreatType::Bullying,
+                0.55,
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.contact.inner_circle_low_rating",
+                format!(
                     "Inner circle contact {} has critically low rating ({:.0}/100)",
                     sender_id, profile.rating
                 ),
-            });
+            ));
         }
 
         signals
@@ -721,11 +859,95 @@ impl ContactProfiler {
         }
     }
 
+    pub fn export_wire_state(&self) -> ContactProfilerWireState {
+        ContactProfilerWireState {
+            profiles: self
+                .profiles
+                .values()
+                .map(ContactProfileState::from)
+                .collect(),
+        }
+    }
+
     pub fn import(&mut self, state: ContactProfilerState) {
         for mut profile in state.profiles {
             profile.post_deserialize_fixup();
             self.profiles.insert(profile.sender_id.clone(), profile);
         }
+    }
+
+    /// Merge-based import: preserves local profiles, takes the most cautious values.
+    pub fn merge_import(&mut self, state: ContactProfilerState) {
+        for mut incoming in state.profiles {
+            incoming.post_deserialize_fixup();
+            match self.profiles.get_mut(&incoming.sender_id) {
+                Some(local) => {
+                    // Take the most cautious / comprehensive values
+                    local.first_seen_ms = local.first_seen_ms.min(incoming.first_seen_ms);
+                    local.last_seen_ms = local.last_seen_ms.max(incoming.last_seen_ms);
+                    local.total_messages = local.total_messages.max(incoming.total_messages);
+                    local.grooming_event_count = local
+                        .grooming_event_count
+                        .max(incoming.grooming_event_count);
+                    local.bullying_event_count = local
+                        .bullying_event_count
+                        .max(incoming.bullying_event_count);
+                    local.manipulation_event_count = local
+                        .manipulation_event_count
+                        .max(incoming.manipulation_event_count);
+
+                    // Union conversations
+                    for conv in incoming.conversations {
+                        if !local.conversations.contains(&conv) {
+                            local.conversations.push(conv);
+                        }
+                    }
+                    local.conversation_count = local.conversations.len();
+
+                    // Most cautious trust/rating
+                    local.trust_level = local.trust_level.min(incoming.trust_level);
+                    local.rating = local.rating.min(incoming.rating);
+                    local.is_trusted = local.is_trusted && incoming.is_trusted;
+
+                    // Take more severe trend
+                    if trend_severity(&incoming.trend) > trend_severity(&local.trend) {
+                        local.trend = incoming.trend;
+                    }
+
+                    // Prefer existing inferred_age, fall back to incoming
+                    if local.inferred_age.is_none() {
+                        local.inferred_age = incoming.inferred_age;
+                    }
+
+                    // Merge severity stats
+                    local.severity_sum = local.severity_sum.max(incoming.severity_sum);
+                    local.severity_count = local.severity_count.max(incoming.severity_count);
+                }
+                None => {
+                    self.profiles.insert(incoming.sender_id.clone(), incoming);
+                }
+            }
+        }
+    }
+
+    pub fn import_wire_state(&mut self, state: ContactProfilerWireState) {
+        self.import(ContactProfilerState {
+            profiles: state
+                .profiles
+                .into_iter()
+                .map(ContactProfile::from)
+                .collect(),
+        });
+    }
+
+    pub fn merge_import_wire_state(&mut self, state: ContactProfilerWireState) {
+        self.merge_import(ContactProfilerState {
+            profiles: state
+                .profiles
+                .into_iter()
+                .map(ContactProfile::from)
+                .collect(),
+        });
     }
 
     pub fn cleanup(&mut self, cutoff_ms: u64) {
@@ -754,6 +976,7 @@ mod tests {
 
     fn make_event(sender: &str, conv: &str, kind: EventKind, ts: u64) -> ContextEvent {
         ContextEvent {
+            event_id: 0,
             timestamp_ms: ts,
             sender_id: sender.to_string(),
             conversation_id: conv.to_string(),
@@ -782,7 +1005,7 @@ mod tests {
             EventKind::RumorSpreading,
             EventKind::Exclusion,
             EventKind::Mockery,
-            EventKind::GuildTripping,
+            EventKind::GuiltTripping,
             EventKind::Gaslighting,
             EventKind::EmotionalBlackmail,
             EventKind::PeerPressure,
@@ -1158,12 +1381,7 @@ mod tests {
     fn hostile_events_decrease_rating() {
         let mut profiler = ContactProfiler::new();
         for i in 0..5 {
-            profiler.record_event(&make_event(
-                "bully",
-                "conv_1",
-                EventKind::Insult,
-                i * 1000,
-            ));
+            profiler.record_event(&make_event("bully", "conv_1", EventKind::Insult, i * 1000));
         }
         let profile = profiler.profile("bully").unwrap();
         assert!(
@@ -1507,8 +1725,7 @@ mod tests {
         ));
         let trend = profiler.profile("masha").unwrap().trend;
         assert!(
-            trend == BehavioralTrend::GradualWorsening
-                || trend == BehavioralTrend::RapidWorsening,
+            trend == BehavioralTrend::GradualWorsening || trend == BehavioralTrend::RapidWorsening,
             "Expected worsening trend, got {:?}",
             trend
         );
@@ -1770,64 +1987,90 @@ mod tests {
         for w in 0..4 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
-                    "masha", "conv_1", EventKind::NormalConversation,
+                    "masha",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * week + msg * 1000,
                 ));
             }
         }
         let sept_rating = profiler.profile("masha").unwrap().rating;
-        assert!(sept_rating > 50.0, "September: rating should be above 50, got {sept_rating}");
+        assert!(
+            sept_rating > 50.0,
+            "September: rating should be above 50, got {sept_rating}"
+        );
 
         // October (weeks 4-7): occasional insults (2/10 messages)
         for w in 4..8 {
             for msg in 0..8 {
                 profiler.record_event(&make_event(
-                    "masha", "conv_1", EventKind::NormalConversation,
+                    "masha",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * week + msg * 1000,
                 ));
             }
             for msg in 8..10 {
                 profiler.record_event(&make_event(
-                    "masha", "conv_1", EventKind::Insult,
+                    "masha",
+                    "conv_1",
+                    EventKind::Insult,
                     w * week + msg * 1000,
                 ));
             }
         }
         let oct_rating = profiler.profile("masha").unwrap().rating;
-        assert!(oct_rating < sept_rating, "October: rating should decrease: sept={sept_rating} oct={oct_rating}");
+        assert!(
+            oct_rating < sept_rating,
+            "October: rating should decrease: sept={sept_rating} oct={oct_rating}"
+        );
 
         // November-December (weeks 8-15): heavy hostility (6/10 messages)
         for w in 8..16 {
             for msg in 0..4 {
                 profiler.record_event(&make_event(
-                    "masha", "conv_1", EventKind::NormalConversation,
+                    "masha",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * week + msg * 1000,
                 ));
             }
             for msg in 4..10 {
                 profiler.record_event(&make_event(
-                    "masha", "conv_1", EventKind::Insult,
+                    "masha",
+                    "conv_1",
+                    EventKind::Insult,
                     w * week + msg * 1000,
                 ));
             }
         }
         // Trigger recalculation
         profiler.record_event(&make_event(
-            "masha", "conv_1", EventKind::Insult,
+            "masha",
+            "conv_1",
+            EventKind::Insult,
             16 * week + 1000,
         ));
 
         let profile = profiler.profile("masha").unwrap();
-        assert!(profile.rating < 30.0, "December: rating should be very low, got {}", profile.rating);
+        assert!(
+            profile.rating < 30.0,
+            "December: rating should be very low, got {}",
+            profile.rating
+        );
         assert!(
             profile.trend == BehavioralTrend::RapidWorsening
                 || profile.trend == BehavioralTrend::GradualWorsening,
-            "Should detect worsening trend, got {:?}", profile.trend
+            "Should detect worsening trend, got {:?}",
+            profile.trend
         );
 
         // Should generate behavioral shift signal
         let signals = profiler.check_behavioral_shift("masha");
-        assert!(!signals.is_empty(), "Should generate shift signal for friend-to-bully");
+        assert!(
+            !signals.is_empty(),
+            "Should generate shift signal for friend-to-bully"
+        );
     }
 
     #[test]
@@ -1840,7 +2083,9 @@ mod tests {
         for w in 0..4 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
-                    "coach", "conv_1", EventKind::NormalConversation,
+                    "coach",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
@@ -1854,20 +2099,28 @@ mod tests {
         for w in 4..8 {
             for msg in 0..5 {
                 profiler.record_event(&make_event(
-                    "coach", "conv_1", EventKind::NormalConversation,
+                    "coach",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
             profiler.record_event(&make_event(
-                "coach", "conv_1", EventKind::Flattery,
+                "coach",
+                "conv_1",
+                EventKind::Flattery,
                 w * WEEK_MS + 5000,
             ));
             profiler.record_event(&make_event(
-                "coach", "conv_1", EventKind::PersonalInfoRequest,
+                "coach",
+                "conv_1",
+                EventKind::PersonalInfoRequest,
                 w * WEEK_MS + 6000,
             ));
             profiler.record_event(&make_event(
-                "coach", "conv_1", EventKind::GiftOffer,
+                "coach",
+                "conv_1",
+                EventKind::GiftOffer,
                 w * WEEK_MS + 7000,
             ));
         }
@@ -1895,7 +2148,9 @@ mod tests {
         for w in 0..3 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
-                    "teacher", "conv_1", EventKind::NormalConversation,
+                    "teacher",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
@@ -1906,19 +2161,25 @@ mod tests {
         for w in 3..6 {
             for msg in 0..5 {
                 profiler.record_event(&make_event(
-                    "teacher", "conv_1", EventKind::Gaslighting,
+                    "teacher",
+                    "conv_1",
+                    EventKind::Gaslighting,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
             for msg in 5..10 {
                 profiler.record_event(&make_event(
-                    "teacher", "conv_1", EventKind::EmotionalBlackmail,
+                    "teacher",
+                    "conv_1",
+                    EventKind::EmotionalBlackmail,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
         }
         profiler.record_event(&make_event(
-            "teacher", "conv_1", EventKind::Gaslighting,
+            "teacher",
+            "conv_1",
+            EventKind::Gaslighting,
             6 * WEEK_MS + 1000,
         ));
 
@@ -1929,7 +2190,11 @@ mod tests {
             profile.trust_level
         );
         assert!(!profile.is_trusted, "Should no longer be trusted");
-        assert!(profile.rating < 20.0, "Rating should be very low: {}", profile.rating);
+        assert!(
+            profile.rating < 20.0,
+            "Rating should be very low: {}",
+            profile.rating
+        );
     }
 
     #[test]
@@ -1941,7 +2206,9 @@ mod tests {
         for w in 0..3 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
-                    "recovering", "conv_1", EventKind::Insult,
+                    "recovering",
+                    "conv_1",
+                    EventKind::Insult,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
@@ -1952,14 +2219,18 @@ mod tests {
         for w in 3..8 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
-                    "recovering", "conv_1", EventKind::NormalConversation,
+                    "recovering",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
         }
         // Trigger
         profiler.record_event(&make_event(
-            "recovering", "conv_1", EventKind::NormalConversation,
+            "recovering",
+            "conv_1",
+            EventKind::NormalConversation,
             8 * WEEK_MS + 1000,
         ));
 
@@ -1985,7 +2256,9 @@ mod tests {
             if w % 2 == 0 {
                 for msg in 0..10 {
                     profiler.record_event(&make_event(
-                        "mixed", "conv_1", EventKind::NormalConversation,
+                        "mixed",
+                        "conv_1",
+                        EventKind::NormalConversation,
                         w * WEEK_MS + msg * 1000,
                     ));
                 }
@@ -1993,20 +2266,26 @@ mod tests {
                 // Hostile weeks: mix of insults and normal to avoid floor
                 for msg in 0..4 {
                     profiler.record_event(&make_event(
-                        "mixed", "conv_1", EventKind::NormalConversation,
+                        "mixed",
+                        "conv_1",
+                        EventKind::NormalConversation,
                         w * WEEK_MS + msg * 1000,
                     ));
                 }
                 for msg in 4..10 {
                     profiler.record_event(&make_event(
-                        "mixed", "conv_1", EventKind::Insult,
+                        "mixed",
+                        "conv_1",
+                        EventKind::Insult,
                         w * WEEK_MS + msg * 1000,
                     ));
                 }
             }
         }
         profiler.record_event(&make_event(
-            "mixed", "conv_1", EventKind::NormalConversation,
+            "mixed",
+            "conv_1",
+            EventKind::NormalConversation,
             8 * WEEK_MS + 1000,
         ));
 
@@ -2029,20 +2308,58 @@ mod tests {
         profiler.record_event(&make_event("stranger", "conv_1", EventKind::Flattery, 1000));
 
         // Day 2: gifts + personal questions
-        profiler.record_event(&make_event("stranger", "conv_1", EventKind::GiftOffer, DAY_MS));
-        profiler.record_event(&make_event("stranger", "conv_1", EventKind::PersonalInfoRequest, DAY_MS + 1000));
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::GiftOffer,
+            DAY_MS,
+        ));
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::PersonalInfoRequest,
+            DAY_MS + 1000,
+        ));
 
         // Day 3: secrecy + platform switch
-        profiler.record_event(&make_event("stranger", "conv_1", EventKind::SecrecyRequest, 2 * DAY_MS));
-        profiler.record_event(&make_event("stranger", "conv_1", EventKind::PlatformSwitch, 2 * DAY_MS + 1000));
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::SecrecyRequest,
+            2 * DAY_MS,
+        ));
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::PlatformSwitch,
+            2 * DAY_MS + 1000,
+        ));
 
         // Day 5: photo request + meeting
-        profiler.record_event(&make_event("stranger", "conv_1", EventKind::PhotoRequest, 4 * DAY_MS));
-        profiler.record_event(&make_event("stranger", "conv_1", EventKind::MeetingRequest, 4 * DAY_MS + 1000));
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::PhotoRequest,
+            4 * DAY_MS,
+        ));
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::MeetingRequest,
+            4 * DAY_MS + 1000,
+        ));
 
         let profile = profiler.profile("stranger").unwrap();
-        assert_eq!(profile.circle_tier, CircleTier::New, "Should still be New (<14 days)");
-        assert!(profile.rating < 45.0, "Rating should drop from grooming: {}", profile.rating);
+        assert_eq!(
+            profile.circle_tier,
+            CircleTier::New,
+            "Should still be New (<14 days)"
+        );
+        assert!(
+            profile.rating < 45.0,
+            "Rating should drop from grooming: {}",
+            profile.rating
+        );
         assert!(profile.grooming_event_count >= 8);
     }
 
@@ -2054,12 +2371,16 @@ mod tests {
         // Week 1: mostly normal, 1 insult (heated argument)
         for msg in 0..9 {
             profiler.record_event(&make_event(
-                "classmate", "conv_1", EventKind::NormalConversation,
+                "classmate",
+                "conv_1",
+                EventKind::NormalConversation,
                 msg * 1000,
             ));
         }
         profiler.record_event(&make_event(
-            "classmate", "conv_1", EventKind::Insult,
+            "classmate",
+            "conv_1",
+            EventKind::Insult,
             9 * 1000,
         ));
 
@@ -2067,18 +2388,26 @@ mod tests {
         for w in 1..5 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
-                    "classmate", "conv_1", EventKind::NormalConversation,
+                    "classmate",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
         }
         profiler.record_event(&make_event(
-            "classmate", "conv_1", EventKind::NormalConversation,
+            "classmate",
+            "conv_1",
+            EventKind::NormalConversation,
             5 * WEEK_MS + 1000,
         ));
 
         let profile = profiler.profile("classmate").unwrap();
-        assert!(profile.rating > 40.0, "Normal teen drama should not tank rating: {}", profile.rating);
+        assert!(
+            profile.rating > 40.0,
+            "Normal teen drama should not tank rating: {}",
+            profile.rating
+        );
         assert!(
             profile.trend == BehavioralTrend::Stable || profile.trend == BehavioralTrend::Improving,
             "Trend should be stable/improving after reconciliation: {:?}",
@@ -2086,7 +2415,10 @@ mod tests {
         );
 
         let signals = profiler.check_behavioral_shift("classmate");
-        assert!(signals.is_empty(), "No behavioral shift signal for normal teen drama");
+        assert!(
+            signals.is_empty(),
+            "No behavioral shift signal for normal teen drama"
+        );
     }
 
     // ---- Edge case tests ----
@@ -2097,7 +2429,9 @@ mod tests {
         // 50 physical threats should floor at 0
         for i in 0..50 {
             profiler.record_event(&make_event(
-                "attacker", "conv_1", EventKind::PhysicalThreat,
+                "attacker",
+                "conv_1",
+                EventKind::PhysicalThreat,
                 i * 1000,
             ));
         }
@@ -2111,7 +2445,9 @@ mod tests {
         // Many supportive events should cap at 100
         for i in 0..100 {
             profiler.record_event(&make_event(
-                "hero", "conv_1", EventKind::DefenseOfVictim,
+                "hero",
+                "conv_1",
+                EventKind::DefenseOfVictim,
                 i * 1000,
             ));
         }
@@ -2122,13 +2458,20 @@ mod tests {
     #[test]
     fn trust_zero_floor() {
         let mut profiler = ContactProfiler::new();
-        profiler.record_event(&make_event("person", "conv_1", EventKind::NormalConversation, 0));
+        profiler.record_event(&make_event(
+            "person",
+            "conv_1",
+            EventKind::NormalConversation,
+            0,
+        ));
         profiler.mark_trusted("person");
 
         // Massive hostility
         for i in 0..50 {
             profiler.record_event(&make_event(
-                "person", "conv_1", EventKind::HarmEncouragement,
+                "person",
+                "conv_1",
+                EventKind::HarmEncouragement,
                 (i + 1) * 1000,
             ));
         }
@@ -2139,10 +2482,18 @@ mod tests {
     #[test]
     fn snapshot_at_exact_week_boundary() {
         let mut profiler = ContactProfiler::new();
-        profiler.record_event(&make_event("alice", "conv_1", EventKind::NormalConversation, 0));
+        profiler.record_event(&make_event(
+            "alice",
+            "conv_1",
+            EventKind::NormalConversation,
+            0,
+        ));
         // Event exactly at week boundary
         profiler.record_event(&make_event(
-            "alice", "conv_1", EventKind::NormalConversation, WEEK_MS,
+            "alice",
+            "conv_1",
+            EventKind::NormalConversation,
+            WEEK_MS,
         ));
         // Should have finalized week 1
         assert_eq!(profiler.profile("alice").unwrap().weekly_snapshots.len(), 1);
@@ -2151,9 +2502,16 @@ mod tests {
     #[test]
     fn circle_tier_exactly_14_days() {
         let mut profiler = ContactProfiler::new();
-        profiler.record_event(&make_event("exact", "conv_1", EventKind::NormalConversation, 0));
         profiler.record_event(&make_event(
-            "exact", "conv_1", EventKind::NormalConversation,
+            "exact",
+            "conv_1",
+            EventKind::NormalConversation,
+            0,
+        ));
+        profiler.record_event(&make_event(
+            "exact",
+            "conv_1",
+            EventKind::NormalConversation,
             14 * DAY_MS,
         ));
         // At exactly 14 days, should no longer be New
@@ -2167,7 +2525,12 @@ mod tests {
     #[test]
     fn multiple_conversations_same_contact() {
         let mut profiler = ContactProfiler::new();
-        profiler.record_event(&make_event("multi", "conv_1", EventKind::NormalConversation, 0));
+        profiler.record_event(&make_event(
+            "multi",
+            "conv_1",
+            EventKind::NormalConversation,
+            0,
+        ));
         profiler.record_event(&make_event("multi", "conv_2", EventKind::Insult, 1000));
         profiler.record_event(&make_event("multi", "conv_3", EventKind::Flattery, 2000));
 
@@ -2183,7 +2546,9 @@ mod tests {
         // Messages over 200 days
         for day in 0..200u64 {
             profiler.record_event(&make_event(
-                "longterm", "conv_1", EventKind::NormalConversation,
+                "longterm",
+                "conv_1",
+                EventKind::NormalConversation,
                 day * DAY_MS,
             ));
         }
@@ -2215,13 +2580,18 @@ mod tests {
         for w in 0..4 {
             for msg in 0..5 {
                 profiler.record_event(&make_event(
-                    "alice", "conv_1", EventKind::NormalConversation,
+                    "alice",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
         }
         profiler.record_event(&make_event(
-            "alice", "conv_1", EventKind::Insult, 4 * WEEK_MS,
+            "alice",
+            "conv_1",
+            EventKind::Insult,
+            4 * WEEK_MS,
         ));
 
         let state = profiler.export();
@@ -2234,9 +2604,13 @@ mod tests {
         profiler2.import(state);
 
         let imported = profiler2.profile("alice").unwrap();
-        assert_eq!(imported.rating, orig_rating, "Rating should survive export/import");
         assert_eq!(
-            imported.weekly_snapshots.len(), orig_snapshots,
+            imported.rating, orig_rating,
+            "Rating should survive export/import"
+        );
+        assert_eq!(
+            imported.weekly_snapshots.len(),
+            orig_snapshots,
             "Snapshots should survive export/import"
         );
     }
@@ -2258,7 +2632,10 @@ mod tests {
     fn no_behavioral_shift_for_unknown_contact() {
         let profiler = ContactProfiler::new();
         let signals = profiler.check_behavioral_shift("nonexistent");
-        assert!(signals.is_empty(), "Unknown contact should return empty signals");
+        assert!(
+            signals.is_empty(),
+            "Unknown contact should return empty signals"
+        );
     }
 
     #[test]
@@ -2274,7 +2651,9 @@ mod tests {
                     EventKind::PhysicalThreat // tanks rating
                 };
                 profiler.record_event(&make_event(
-                    "inner_bully", "conv_1", kind,
+                    "inner_bully",
+                    "conv_1",
+                    kind,
                     day * DAY_MS + msg * 1000,
                 ));
             }
@@ -2282,7 +2661,9 @@ mod tests {
 
         // Trigger to finalize last weekly snapshot
         profiler.record_event(&make_event(
-            "inner_bully", "conv_1", EventKind::PhysicalThreat,
+            "inner_bully",
+            "conv_1",
+            EventKind::PhysicalThreat,
             30 * DAY_MS + 1000,
         ));
         let profile = profiler.profile("inner_bully").unwrap();
@@ -2290,12 +2671,15 @@ mod tests {
 
         // The shift signals should include low rating alert
         let signals = profiler.check_behavioral_shift("inner_bully");
-        let has_low_rating = signals.iter().any(|s| {
-            s.explanation.contains("critically low rating")
-        });
+        let has_low_rating = signals
+            .iter()
+            .any(|s| s.explanation.contains("critically low rating"));
         // Only if rating is actually < 20
         if profile.rating < 20.0 {
-            assert!(has_low_rating, "Inner circle with low rating should trigger alert");
+            assert!(
+                has_low_rating,
+                "Inner circle with low rating should trigger alert"
+            );
         }
     }
 
@@ -2305,8 +2689,18 @@ mod tests {
 
         // Two contacts with same grooming events, different trust levels
         for i in 0..5 {
-            profiler.record_event(&make_event("untrusted", "conv_1", EventKind::Flattery, i * 1000));
-            profiler.record_event(&make_event("trusted", "conv_2", EventKind::Flattery, i * 1000));
+            profiler.record_event(&make_event(
+                "untrusted",
+                "conv_1",
+                EventKind::Flattery,
+                i * 1000,
+            ));
+            profiler.record_event(&make_event(
+                "trusted",
+                "conv_2",
+                EventKind::Flattery,
+                i * 1000,
+            ));
         }
         profiler.mark_trusted("trusted");
 
@@ -2404,12 +2798,7 @@ mod tests {
             EventKind::HateSpeech,
         ];
         for (i, kind) in hostile_kinds.iter().enumerate() {
-            profiler.record_event(&make_event(
-                "m",
-                "c",
-                kind.clone(),
-                (i + 1) as u64 * 1000,
-            ));
+            profiler.record_event(&make_event("m", "c", kind.clone(), (i + 1) as u64 * 1000));
             let r = profiler.profile("m").unwrap().rating;
             assert!(
                 r <= prev_rating,
@@ -2519,7 +2908,12 @@ mod tests {
     #[test]
     fn fuzz_unicode_sender_id() {
         let mut profiler = ContactProfiler::new();
-        profiler.record_event(&make_event("\u{1f9d2}\u{1f466}", "c", EventKind::Insult, 1000));
+        profiler.record_event(&make_event(
+            "\u{1f9d2}\u{1f466}",
+            "c",
+            EventKind::Insult,
+            1000,
+        ));
         assert!(profiler.profile("\u{1f9d2}\u{1f466}").is_some());
     }
 
@@ -2661,7 +3055,10 @@ mod tests {
         for i in 0..1000u64 {
             let sender = format!("contact_{i}");
             let p = profiler.profile(&sender).unwrap();
-            assert_eq!(p.total_messages, 260, "contact_{i} should have 260 messages");
+            assert_eq!(
+                p.total_messages, 260,
+                "contact_{i} should have 260 messages"
+            );
             assert!((0.0..=100.0).contains(&p.rating));
             assert!((0.0..=1.0).contains(&p.trust_level));
         }
@@ -2672,7 +3069,8 @@ mod tests {
         assert!(
             hostile_contact.rating < normal_contact.rating,
             "Hostile contact rating {} should be lower than normal {}",
-            hostile_contact.rating, normal_contact.rating
+            hostile_contact.rating,
+            normal_contact.rating
         );
 
         // Snapshots should be capped at MAX_SNAPSHOTS
@@ -2987,12 +3385,18 @@ mod tests {
             if i % 2 == 0 {
                 // Device A: normal conversation
                 profiler.record_event(&make_event(
-                    "friend", "conv_1", EventKind::NormalConversation, i * 500,
+                    "friend",
+                    "conv_1",
+                    EventKind::NormalConversation,
+                    i * 500,
                 ));
             } else {
                 // Device B: same contact, different conversation
                 profiler.record_event(&make_event(
-                    "friend", "conv_2", EventKind::NormalConversation, i * 500,
+                    "friend",
+                    "conv_2",
+                    EventKind::NormalConversation,
+                    i * 500,
                 ));
             }
         }
@@ -3011,7 +3415,10 @@ mod tests {
         // Phase 1: build some history
         for i in 0..5 {
             profiler.record_event(&make_event(
-                "alice", "conv_1", EventKind::NormalConversation, i * 1000,
+                "alice",
+                "conv_1",
+                EventKind::NormalConversation,
+                i * 1000,
             ));
         }
         let mid_rating = profiler.profile("alice").unwrap().rating;
@@ -3021,9 +3428,7 @@ mod tests {
 
         // Phase 2: more events on original device
         for i in 5..10 {
-            profiler.record_event(&make_event(
-                "alice", "conv_1", EventKind::Insult, i * 1000,
-            ));
+            profiler.record_event(&make_event("alice", "conv_1", EventKind::Insult, i * 1000));
         }
         let post_hostile_rating = profiler.profile("alice").unwrap().rating;
         assert!(post_hostile_rating < mid_rating);
@@ -3032,16 +3437,25 @@ mod tests {
         let mut device2 = ContactProfiler::new();
         device2.import(checkpoint);
         let device2_rating = device2.profile("alice").unwrap().rating;
-        assert_eq!(device2_rating, mid_rating, "Device 2 should have checkpoint rating");
+        assert_eq!(
+            device2_rating, mid_rating,
+            "Device 2 should have checkpoint rating"
+        );
 
         // Device 2 gets new events
         for i in 10..15 {
             device2.record_event(&make_event(
-                "alice", "conv_1", EventKind::NormalConversation, i * 1000,
+                "alice",
+                "conv_1",
+                EventKind::NormalConversation,
+                i * 1000,
             ));
         }
         let device2_final = device2.profile("alice").unwrap().rating;
-        assert!(device2_final > device2_rating, "Device 2 should improve with normal msgs");
+        assert!(
+            device2_final > device2_rating,
+            "Device 2 should improve with normal msgs"
+        );
     }
 
     #[test]
@@ -3049,14 +3463,20 @@ mod tests {
         // Device A has stale data, imports fresh state from server
         let mut device_a = ContactProfiler::new();
         device_a.record_event(&make_event(
-            "bob", "conv_1", EventKind::NormalConversation, 0,
+            "bob",
+            "conv_1",
+            EventKind::NormalConversation,
+            0,
         ));
 
         // Server has more complete profile
         let mut server = ContactProfiler::new();
         for i in 0..20 {
             server.record_event(&make_event(
-                "bob", "conv_1", EventKind::NormalConversation, i * 1000,
+                "bob",
+                "conv_1",
+                EventKind::NormalConversation,
+                i * 1000,
             ));
         }
         let server_state = server.export();
@@ -3064,7 +3484,10 @@ mod tests {
         // Import overwrites device A's profile for "bob"
         device_a.import(server_state);
         let profile = device_a.profile("bob").unwrap();
-        assert_eq!(profile.total_messages, 20, "Import should overwrite stale data");
+        assert_eq!(
+            profile.total_messages, 20,
+            "Import should overwrite stale data"
+        );
     }
 
     #[test]
@@ -3074,22 +3497,26 @@ mod tests {
 
         // Alice gets hostile events
         for i in 0..10 {
-            profiler.record_event(&make_event(
-                "alice", "conv_1", EventKind::Insult, i * 1000,
-            ));
+            profiler.record_event(&make_event("alice", "conv_1", EventKind::Insult, i * 1000));
         }
 
         // Bob gets supportive events (interleaved in "real time")
         for i in 0..10 {
             profiler.record_event(&make_event(
-                "bob", "conv_2", EventKind::DefenseOfVictim, i * 1000,
+                "bob",
+                "conv_2",
+                EventKind::DefenseOfVictim,
+                i * 1000,
             ));
         }
 
         // Charlie gets grooming events
         for i in 0..10 {
             profiler.record_event(&make_event(
-                "charlie", "conv_3", EventKind::Flattery, i * 1000,
+                "charlie",
+                "conv_3",
+                EventKind::Flattery,
+                i * 1000,
             ));
         }
 
@@ -3098,10 +3525,22 @@ mod tests {
         let charlie = profiler.profile("charlie").unwrap();
 
         // Each contact should be independent
-        assert!(alice.rating < 50.0, "Alice should have low rating: {}", alice.rating);
-        assert!(bob.rating > 50.0, "Bob should have high rating: {}", bob.rating);
+        assert!(
+            alice.rating < 50.0,
+            "Alice should have low rating: {}",
+            alice.rating
+        );
+        assert!(
+            bob.rating > 50.0,
+            "Bob should have high rating: {}",
+            bob.rating
+        );
         // Charlie gets small negative from grooming-only
-        assert!(charlie.rating < 50.0, "Charlie (grooming) should have slightly low rating: {}", charlie.rating);
+        assert!(
+            charlie.rating < 50.0,
+            "Charlie (grooming) should have slightly low rating: {}",
+            charlie.rating
+        );
 
         assert_eq!(alice.bullying_event_count, 10);
         assert_eq!(bob.bullying_event_count, 0);
@@ -3117,7 +3556,10 @@ mod tests {
             let sender = format!("user_{i}");
             for j in 0..5 {
                 profiler.record_event(&make_event(
-                    &sender, "conv_1", EventKind::NormalConversation, j * 1000,
+                    &sender,
+                    "conv_1",
+                    EventKind::NormalConversation,
+                    j * 1000,
                 ));
             }
         }
@@ -3143,35 +3585,53 @@ mod tests {
 
         // Old contact (will be cleaned up)
         profiler.record_event(&make_event(
-            "old_user", "conv_1", EventKind::NormalConversation, 1000,
+            "old_user",
+            "conv_1",
+            EventKind::NormalConversation,
+            1000,
         ));
 
         // Active contact
         let active_ts = 100 * DAY_MS;
         for i in 0..10 {
             profiler.record_event(&make_event(
-                "active_user", "conv_1", EventKind::NormalConversation,
+                "active_user",
+                "conv_1",
+                EventKind::NormalConversation,
                 active_ts + i * 1000,
             ));
         }
 
         // Cleanup removes old contacts
         profiler.cleanup(50 * DAY_MS);
-        assert!(profiler.profile("old_user").is_none(), "Old user should be removed");
-        assert!(profiler.profile("active_user").is_some(), "Active user should survive");
+        assert!(
+            profiler.profile("old_user").is_none(),
+            "Old user should be removed"
+        );
+        assert!(
+            profiler.profile("active_user").is_some(),
+            "Active user should survive"
+        );
 
         // Continue adding events after cleanup
         profiler.record_event(&make_event(
-            "active_user", "conv_1", EventKind::NormalConversation,
+            "active_user",
+            "conv_1",
+            EventKind::NormalConversation,
             active_ts + 20000,
         ));
         profiler.record_event(&make_event(
-            "new_user", "conv_1", EventKind::Flattery,
+            "new_user",
+            "conv_1",
+            EventKind::Flattery,
             active_ts + 30000,
         ));
 
         assert_eq!(profiler.profile("active_user").unwrap().total_messages, 11);
-        assert!(profiler.profile("new_user").is_some(), "New user after cleanup should work");
+        assert!(
+            profiler.profile("new_user").is_some(),
+            "New user after cleanup should work"
+        );
     }
 
     #[test]
@@ -3180,7 +3640,10 @@ mod tests {
         let mut profiler1 = ContactProfiler::new();
         for i in 0..5 {
             profiler1.record_event(&make_event(
-                "uncle", "conv_1", EventKind::NormalConversation, i * 1000,
+                "uncle",
+                "conv_1",
+                EventKind::NormalConversation,
+                i * 1000,
             ));
         }
         let state = profiler1.export();
@@ -3196,11 +3659,17 @@ mod tests {
         // Subsequent hostile events should decay trust normally
         for i in 0..5 {
             profiler2.record_event(&make_event(
-                "uncle", "conv_1", EventKind::Insult, 10000 + i * 1000,
+                "uncle",
+                "conv_1",
+                EventKind::Insult,
+                10000 + i * 1000,
             ));
         }
         let profile = profiler2.profile("uncle").unwrap();
-        assert!(profile.trust_level < 1.0, "Trust should decay after import+mark+hostile");
+        assert!(
+            profile.trust_level < 1.0,
+            "Trust should decay after import+mark+hostile"
+        );
     }
 
     #[test]
@@ -3212,7 +3681,10 @@ mod tests {
         let mut p1 = ContactProfiler::new();
         for i in 0..5 {
             p1.record_event(&make_event(
-                "alice", "conv_1", EventKind::NormalConversation, i * 1000,
+                "alice",
+                "conv_1",
+                EventKind::NormalConversation,
+                i * 1000,
             ));
         }
         let state1 = p1.export();
@@ -3220,22 +3692,24 @@ mod tests {
         // State 2: alice with rating after hostile msgs
         let mut p2 = ContactProfiler::new();
         for i in 0..5 {
-            p2.record_event(&make_event(
-                "alice", "conv_1", EventKind::Insult, i * 1000,
-            ));
+            p2.record_event(&make_event("alice", "conv_1", EventKind::Insult, i * 1000));
         }
         let state2 = p2.export();
 
         let rating1 = p1.profile("alice").unwrap().rating;
         let rating2 = p2.profile("alice").unwrap().rating;
-        assert!(rating1 > rating2, "State1 should have higher rating than state2");
+        assert!(
+            rating1 > rating2,
+            "State1 should have higher rating than state2"
+        );
 
         // Import state1 first, then state2 — state2 should win
         profiler.import(state1);
         assert_eq!(profiler.profile("alice").unwrap().rating, rating1);
         profiler.import(state2);
         assert_eq!(
-            profiler.profile("alice").unwrap().rating, rating2,
+            profiler.profile("alice").unwrap().rating,
+            rating2,
             "Second import should overwrite first"
         );
     }
@@ -3249,7 +3723,9 @@ mod tests {
         for w in 0..3 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
-                    "contact", "conv_1", EventKind::NormalConversation,
+                    "contact",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
@@ -3257,20 +3733,27 @@ mod tests {
         for w in 3..6 {
             for msg in 0..6 {
                 profiler.record_event(&make_event(
-                    "contact", "conv_1", EventKind::NormalConversation,
+                    "contact",
+                    "conv_1",
+                    EventKind::NormalConversation,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
             for msg in 6..10 {
                 profiler.record_event(&make_event(
-                    "contact", "conv_1", EventKind::Insult,
+                    "contact",
+                    "conv_1",
+                    EventKind::Insult,
                     w * WEEK_MS + msg * 1000,
                 ));
             }
         }
         // Trigger snapshot
         profiler.record_event(&make_event(
-            "contact", "conv_1", EventKind::Insult, 6 * WEEK_MS + 1000,
+            "contact",
+            "conv_1",
+            EventKind::Insult,
+            6 * WEEK_MS + 1000,
         ));
 
         let orig = profiler.profile("contact").unwrap();
@@ -3292,8 +3775,122 @@ mod tests {
         let signals = profiler2.check_behavioral_shift("contact");
         let orig_signals = profiler.check_behavioral_shift("contact");
         assert_eq!(
-            signals.len(), orig_signals.len(),
+            signals.len(),
+            orig_signals.len(),
             "Behavioral shift signals should match after import"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 1: merge_import tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn merge_import_preserves_local_profile() {
+        let mut profiler_a = ContactProfiler::new();
+        profiler_a.record_event(&make_event("alice", "conv_1", EventKind::Insult, 1000));
+        profiler_a.record_event(&make_event("alice", "conv_1", EventKind::Insult, 2000));
+
+        let mut profiler_b = ContactProfiler::new();
+        profiler_b.record_event(&make_event(
+            "alice",
+            "conv_2",
+            EventKind::NormalConversation,
+            3000,
+        ));
+
+        let state_b = profiler_b.export();
+        profiler_a.merge_import(state_b);
+
+        let profile = profiler_a.profile("alice").unwrap();
+        // Should have max of counters, not sum
+        assert!(
+            profile.bullying_event_count >= 2,
+            "Should preserve higher bullying count from A"
+        );
+        // Should have union of conversations
+        assert!(
+            profile.conversation_count >= 2,
+            "Should have conversations from both A and B"
+        );
+    }
+
+    #[test]
+    fn merge_import_takes_most_cautious_trust() {
+        let mut profiler_a = ContactProfiler::new();
+        profiler_a.record_event(&make_event(
+            "alice",
+            "conv_1",
+            EventKind::NormalConversation,
+            1000,
+        ));
+        profiler_a.mark_trusted("alice");
+
+        let mut profiler_b = ContactProfiler::new();
+        profiler_b.record_event(&make_event("alice", "conv_1", EventKind::Insult, 2000));
+        // B has untrusted alice (default)
+
+        let state_b = profiler_b.export();
+        profiler_a.merge_import(state_b);
+
+        let profile = profiler_a.profile("alice").unwrap();
+        // Most cautious: if either side has is_trusted=false, result should be false
+        assert!(
+            !profile.is_trusted,
+            "Should take most cautious trust: false"
+        );
+    }
+
+    #[test]
+    fn merge_import_inserts_new_profiles() {
+        let mut profiler_a = ContactProfiler::new();
+        profiler_a.record_event(&make_event(
+            "alice",
+            "conv_1",
+            EventKind::NormalConversation,
+            1000,
+        ));
+
+        let mut profiler_b = ContactProfiler::new();
+        profiler_b.record_event(&make_event(
+            "bob",
+            "conv_2",
+            EventKind::NormalConversation,
+            2000,
+        ));
+
+        let state_b = profiler_b.export();
+        profiler_a.merge_import(state_b);
+
+        assert!(profiler_a.profile("alice").is_some());
+        assert!(profiler_a.profile("bob").is_some());
+    }
+
+    #[test]
+    fn merge_import_takes_earliest_first_seen() {
+        let mut profiler_a = ContactProfiler::new();
+        profiler_a.record_event(&make_event(
+            "alice",
+            "conv_1",
+            EventKind::NormalConversation,
+            5000,
+        ));
+
+        let mut profiler_b = ContactProfiler::new();
+        profiler_b.record_event(&make_event(
+            "alice",
+            "conv_1",
+            EventKind::NormalConversation,
+            1000,
+        ));
+
+        let state_b = profiler_b.export();
+        profiler_a.merge_import(state_b);
+
+        let profile = profiler_a.profile("alice").unwrap();
+        assert_eq!(
+            profile.first_seen_ms, 1000,
+            "Should take earliest first_seen"
         );
     }
 }

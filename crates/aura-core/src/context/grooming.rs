@@ -1,4 +1,6 @@
-use crate::types::{Confidence, DetectionLayer, DetectionSignal, ThreatType};
+use std::collections::HashSet;
+
+use crate::types::{Confidence, ConversationType, DetectionSignal, SignalFamily, ThreatType};
 
 use super::contact::ContactProfiler;
 use super::events::EventKind;
@@ -102,19 +104,36 @@ impl GroomingDetector {
             score += 0.05;
         }
 
+        let peer_courtship_dampening = self.peer_courtship_dampening(
+            timeline,
+            sender_id,
+            window_start,
+            &stage_counts,
+            contact_profiler,
+        );
+        if peer_courtship_dampening > 0.0 {
+            score = (score - peer_courtship_dampening).max(0.0);
+        }
+
         score = score.min(1.0);
 
         let threshold = if self.strict_mode { 0.25 } else { 0.35 };
 
         if score >= threshold {
-            let explanation = self.build_explanation(stages_present, &stage_counts, score);
-            signals.push(DetectionSignal {
-                threat_type: ThreatType::Grooming,
+            let explanation = self.build_explanation(
+                stages_present,
+                &stage_counts,
                 score,
-                confidence: self.score_to_confidence(score),
-                layer: DetectionLayer::ContextAnalysis,
+                peer_courtship_dampening > 0.0,
+            );
+            signals.push(DetectionSignal::context(
+                ThreatType::Grooming,
+                score,
+                self.score_to_confidence(score),
+                SignalFamily::Conversation,
+                "conversation.grooming.stage_sequence",
                 explanation,
-            });
+            ));
         }
 
         if stages_present == 1
@@ -122,15 +141,14 @@ impl GroomingDetector {
             && self.strict_mode
             && contact_profiler.is_new_contact(sender_id)
         {
-            signals.push(DetectionSignal {
-                threat_type: ThreatType::Grooming,
-                score: 0.3,
-                confidence: Confidence::Low,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation:
-                    "New contact showing excessive flattery toward a minor — monitoring closely"
-                        .to_string(),
-            });
+            signals.push(DetectionSignal::context(
+                ThreatType::Grooming,
+                0.3,
+                Confidence::Low,
+                SignalFamily::Conversation,
+                "conversation.grooming.new_contact_flattery",
+                "New contact showing excessive flattery toward a minor — monitoring closely",
+            ));
         }
 
         // Secret Keeping Escalation: repeated secrecy requests from same sender
@@ -139,28 +157,128 @@ impl GroomingDetector {
             .filter(|e| e.kind == EventKind::SecrecyRequest)
             .count();
         if secrecy_count >= 3 {
-            let secrecy_score =
-                (0.6 + (secrecy_count as f32 - 3.0) * 0.1).min(0.9);
+            let secrecy_score = (0.6 + (secrecy_count as f32 - 3.0) * 0.1).min(0.9);
             let already_has_higher = signals.iter().any(|s| s.score >= secrecy_score);
             if !already_has_higher {
-                signals.push(DetectionSignal {
-                    threat_type: ThreatType::Grooming,
-                    score: secrecy_score,
-                    confidence: if secrecy_count >= 5 {
+                signals.push(DetectionSignal::context(
+                    ThreatType::Grooming,
+                    secrecy_score,
+                    if secrecy_count >= 5 {
                         Confidence::High
                     } else {
                         Confidence::Medium
                     },
-                    layer: DetectionLayer::ContextAnalysis,
-                    explanation: format!(
+                    SignalFamily::Conversation,
+                    "conversation.grooming.repeated_secrecy",
+                    format!(
                         "Repeated secrecy requests detected: {} instances of 'keep this secret' from the same sender",
                         secrecy_count
                     ),
-                });
+                ));
             }
         }
 
         signals
+    }
+
+    fn peer_courtship_dampening(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+        stage_counts: &[usize; 6],
+        contact_profiler: &ContactProfiler,
+    ) -> f32 {
+        if timeline.conversation_type != ConversationType::Direct {
+            return 0.0;
+        }
+
+        let has_trust_building = stage_counts[0] > 0;
+        let has_boundary_crossing = stage_counts[3] > 0;
+        let has_higher_risk_stage = stage_counts[1] > 0
+            || stage_counts[2] > 0
+            || stage_counts[4] > 0
+            || stage_counts[5] > 0;
+        if !has_trust_building || !has_boundary_crossing || has_higher_risk_stage {
+            return 0.0;
+        }
+
+        if contact_profiler.contacts_many_minors(sender_id) {
+            return 0.0;
+        }
+
+        if contact_profiler
+            .profile(sender_id)
+            .and_then(|profile| profile.inferred_age)
+            .is_some_and(|age| age >= 18)
+        {
+            return 0.0;
+        }
+
+        let sender_events = timeline.events_from_sender(sender_id, window_start);
+        if sender_events.len() < 2 || sender_events.len() > 3 {
+            return 0.0;
+        }
+
+        if sender_events.iter().any(|event| {
+            !matches!(
+                event.kind,
+                EventKind::Flattery
+                    | EventKind::LoveBombing
+                    | EventKind::CasualMeetingRequest
+                    | EventKind::MeetingRequest
+            )
+        }) {
+            return 0.0;
+        }
+
+        let all_events = timeline.events_since(window_start);
+        let mut other_senders: HashSet<&str> = HashSet::new();
+        let mut other_events = Vec::new();
+        for event in all_events {
+            if event.sender_id != sender_id {
+                other_senders.insert(event.sender_id.as_str());
+                other_events.push(event);
+            }
+        }
+
+        if other_senders.len() != 1 || other_events.is_empty() {
+            return 0.0;
+        }
+
+        let first_sender_ts = sender_events.iter().map(|event| event.timestamp_ms).min();
+        let last_sender_ts = sender_events.iter().map(|event| event.timestamp_ms).max();
+        let has_interleaved_reply = match (first_sender_ts, last_sender_ts) {
+            (Some(first_ts), Some(last_ts)) => other_events
+                .iter()
+                .any(|event| event.timestamp_ms > first_ts && event.timestamp_ms < last_ts),
+            _ => false,
+        };
+        if !has_interleaved_reply {
+            return 0.0;
+        }
+
+        let reciprocal_meeting = other_events.iter().any(|event| {
+            matches!(
+                event.kind,
+                EventKind::CasualMeetingRequest | EventKind::MeetingRequest
+            )
+        });
+        let reciprocal_social_reply = other_events.iter().any(|event| {
+            matches!(
+                event.kind,
+                EventKind::NormalConversation | EventKind::Flattery | EventKind::LoveBombing
+            )
+        });
+        if !reciprocal_meeting && !reciprocal_social_reply {
+            return 0.0;
+        }
+
+        if reciprocal_meeting {
+            0.20
+        } else {
+            0.15
+        }
     }
 
     fn classify_stage(&self, kind: &EventKind) -> Option<GroomingStage> {
@@ -172,20 +290,20 @@ impl GroomingDetector {
             EventKind::GiftOffer | EventKind::MoneyOffer | EventKind::FinancialGrooming => {
                 Some(GroomingStage::FinancialDependency)
             }
-            EventKind::SecrecyRequest
-            | EventKind::PlatformSwitch
-            | EventKind::NetworkPoisoning => Some(GroomingStage::Isolation),
+            EventKind::SecrecyRequest | EventKind::PlatformSwitch | EventKind::NetworkPoisoning => {
+                Some(GroomingStage::Isolation)
+            }
             EventKind::PersonalInfoRequest
             | EventKind::PhotoRequest
             | EventKind::VideoCallRequest
             | EventKind::CasualMeetingRequest => Some(GroomingStage::BoundaryCrossing),
             EventKind::PiiSelfDisclosure => Some(GroomingStage::BoundaryCrossing),
-            EventKind::SexualContent
-            | EventKind::AgeInappropriate
-            | EventKind::FalseConsensus => Some(GroomingStage::Sexualization),
-            EventKind::EmotionalBlackmail
-            | EventKind::GuildTripping
-            | EventKind::DebtCreation => Some(GroomingStage::Control),
+            EventKind::SexualContent | EventKind::AgeInappropriate | EventKind::FalseConsensus => {
+                Some(GroomingStage::Sexualization)
+            }
+            EventKind::EmotionalBlackmail | EventKind::GuiltTripping | EventKind::DebtCreation => {
+                Some(GroomingStage::Control)
+            }
             _ => None,
         }
     }
@@ -204,11 +322,13 @@ impl GroomingDetector {
     }
 
     fn escalation_speed_bonus(&self, timestamps: &[Option<u64>; 6]) -> Option<f32> {
-        let present: Vec<u64> = timestamps.iter().filter_map(|t| *t).collect();
+        let mut present: Vec<u64> = timestamps.iter().filter_map(|t| *t).collect();
         if present.len() < 2 {
             return None;
         }
 
+        // Stage slots are semantic order, not chronological order. Sort before measuring span.
+        present.sort_unstable();
         let first = present[0];
         let last = present[present.len() - 1];
         let span_hours = (last - first) as f32 / (1000.0 * 60.0 * 60.0);
@@ -234,7 +354,13 @@ impl GroomingDetector {
         }
     }
 
-    fn build_explanation(&self, stages: usize, counts: &[usize; 6], score: f32) -> String {
+    fn build_explanation(
+        &self,
+        stages: usize,
+        counts: &[usize; 6],
+        score: f32,
+        peer_courtship_dampened: bool,
+    ) -> String {
         let stage_names = [
             "trust building",
             "financial dependency",
@@ -250,10 +376,16 @@ impl GroomingDetector {
             .map(|(i, _)| stage_names[i])
             .collect();
 
-        format!(
+        let mut explanation = format!(
             "Grooming pattern detected: {stages} of 6 stages present ({active}). Risk score: {score:.2}.",
             active = active.join(", ")
-        )
+        );
+        if peer_courtship_dampened {
+            explanation.push_str(
+                " Mutual peer-style reciprocity and public-meeting context reduced this early-stage score.",
+            );
+        }
+        explanation
     }
 }
 
@@ -268,8 +400,24 @@ mod tests {
         let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
         for (kind, ts) in events {
             timeline.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms: ts,
                 sender_id: "predator".to_string(),
+                conversation_id: "conv_1".to_string(),
+                kind,
+                confidence: 0.8,
+            });
+        }
+        timeline
+    }
+
+    fn make_multi_sender_timeline(events: Vec<(&str, EventKind, u64)>) -> ConversationTimeline {
+        let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
+        for (sender, kind, ts) in events {
+            timeline.push(ContextEvent {
+                event_id: 0,
+                timestamp_ms: ts,
+                sender_id: sender.to_string(),
                 conversation_id: "conv_1".to_string(),
                 kind,
                 confidence: 0.8,
@@ -443,6 +591,22 @@ mod tests {
     }
 
     #[test]
+    fn non_monotonic_stage_timestamps_do_not_overflow() {
+        let detector = GroomingDetector::new(false);
+        let timeline = make_timeline(vec![
+            (EventKind::DebtCreation, 1000),
+            (EventKind::LoveBombing, 2000),
+        ]);
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        assert!(
+            !signals.is_empty(),
+            "Out-of-order stage timestamps should not panic or suppress grooming analysis"
+        );
+    }
+
+    #[test]
     fn six_stage_max_score() {
         let detector = GroomingDetector::new(true);
         let timeline = make_timeline(vec![
@@ -479,6 +643,7 @@ mod tests {
 
         let mut profiler_adult = ContactProfiler::new();
         profiler_adult.record_event(&ContextEvent {
+            event_id: 0,
             timestamp_ms: 500,
             sender_id: "predator".to_string(),
             conversation_id: "conv_1".to_string(),
@@ -495,6 +660,66 @@ mod tests {
             "Adult sender ({}) should score higher than unknown age ({})",
             signals_adult[0].score,
             signals_no_age[0].score
+        );
+    }
+
+    #[test]
+    fn mutual_peer_courtship_is_dampened_as_ambiguous() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_multi_sender_timeline(vec![
+            ("teen_1", EventKind::Flattery, 1_000),
+            ("teen_2", EventKind::NormalConversation, 2_000),
+            ("teen_1", EventKind::CasualMeetingRequest, 3_000),
+        ]);
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "teen_1", 0, &profiler);
+        let grooming = signals
+            .iter()
+            .find(|signal| signal.threat_type == ThreatType::Grooming)
+            .expect("expected grooming signal");
+
+        assert!(
+            grooming.score <= 0.40,
+            "Mutual peer courtship should be dampened below high concern, got {}",
+            grooming.score
+        );
+        assert!(
+            grooming
+                .explanation
+                .contains("Mutual peer-style reciprocity"),
+            "Expected ambiguity explanation, got {}",
+            grooming.explanation
+        );
+    }
+
+    #[test]
+    fn secrecy_prevents_peer_courtship_dampening() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_multi_sender_timeline(vec![
+            ("teen_1", EventKind::Flattery, 1_000),
+            ("teen_2", EventKind::NormalConversation, 2_000),
+            ("teen_1", EventKind::CasualMeetingRequest, 3_000),
+            ("teen_1", EventKind::SecrecyRequest, 4_000),
+        ]);
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "teen_1", 0, &profiler);
+        let grooming = signals
+            .iter()
+            .find(|signal| signal.threat_type == ThreatType::Grooming)
+            .expect("expected grooming signal");
+
+        assert!(
+            grooming.score >= 0.60,
+            "Secrecy should keep the pattern elevated, got {}",
+            grooming.score
+        );
+        assert!(
+            !grooming
+                .explanation
+                .contains("Mutual peer-style reciprocity"),
+            "Higher-risk stages should not receive peer-courtship dampening"
         );
     }
 
@@ -554,9 +779,7 @@ mod tests {
         let profiler = ContactProfiler::new();
 
         let signals = detector.analyze(&timeline, "predator", 0, &profiler);
-        let secrecy = signals
-            .iter()
-            .find(|s| s.explanation.contains("secrecy"));
+        let secrecy = signals.iter().find(|s| s.explanation.contains("secrecy"));
         assert!(
             secrecy.is_some(),
             "Expected secrecy escalation, got: {signals:?}"
@@ -613,6 +836,7 @@ mod tests {
 
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&ContextEvent {
+            event_id: 0,
             timestamp_ms: 500,
             sender_id: "predator".to_string(),
             conversation_id: "conv_1".to_string(),
@@ -709,5 +933,4 @@ mod tests {
             grooming.unwrap().score
         );
     }
-
 }

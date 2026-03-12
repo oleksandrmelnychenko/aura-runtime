@@ -1,128 +1,173 @@
 # AURA Core
 
-Intelligent protection system for Ecliptix Messenger: content moderation, threat detection (grooming, bullying, manipulation, self-harm, coercion, sextortion), context-aware analysis, and longitudinal behavioral profiling.
+AURA Core is a messenger-native trust and safety runtime for child and teen protection. It combines per-message moderation with stateful conversation analysis, contact profiling, policy actions, and evidence-driven evaluation.
+
+Current product direction is narrow on purpose:
+
+- Messenger-only safety runtime
+- Protobuf-only wire contract
+- Rust domain model inside the core
+- C ABI at the boundary
+- Evaluation-first stabilization before any broader product expansion
+
+## Current State
+
+- **Messenger-native runtime**: content, conversation, link, and abuse signals are combined into one analysis result
+- **Stateful context engine**: timelines, contact profiles, trust decay, weekly snapshots, and behavioral trend detection
+- **Messenger policy layer**: `UiAction` outputs such as warn, blur, report, block, crisis support, guardian escalation
+- **3 languages**: English, Ukrainian, Russian, including slang, shorthand, and noisy chat normalization
+- **Protobuf-only FFI**: stable C ABI over encoded bytes via `AuraBuffer`
+- **Evaluation stack**: canonical scenarios, manipulation track, multilingual, noisy/slang, robustness, corpus-style, social-context, realistic curated, and external curated suites
+- **679 Rust tests** across the workspace, all green
 
 ## Key Capabilities
 
-- **3-Layer Analysis Pipeline**: Pattern matching (<1ms) + ML classification (5-20ms) + Context analysis
-- **46 Event Types**: From flattery to suicide coercion, identity erosion, network poisoning, fake vulnerability
-- **7 Context Detectors**: Grooming (6 stages), Bullying, Manipulation, Self-Harm, Coercion, Raid, Timing
-- **Contact Rating System**: Per-contact score (0-100) with trust decay, social circles, weekly snapshots
-- **Behavioral Trend Detection**: Stable, Improving, GradualWorsening, RapidWorsening, RoleReversal
-- **20 Signal Enricher Categories**: PII self-disclosure, dare/challenge, screenshot blackmail, suicide coercion, false consensus, debt creation, reputation threats, identity erosion, network poisoning, fake vulnerability, platform migration, emotional withdrawal
-- **3 Languages**: English, Ukrainian, Russian (including teen slang)
-- **577 Tests**, 0 warnings
+- **3-layer analysis pipeline**: pattern matching, ML classification, context analysis
+- **46 event types** across grooming, bullying, manipulation, self-harm, coercion, abuse, and protective signals
+- **7 context detectors**: grooming, bullying, manipulation, self-harm, coercion, raid, timing
+- **20 enricher categories**: PII, probing, screenshot blackmail, suicide coercion, false consensus, debt leverage, platform migration, identity erosion, network poisoning, and more
+- **Contact intelligence**: rating, trust level, circle tier, behavioral trend, shift signals
+- **Messenger policy actions**: `WarnBeforeSend`, `WarnBeforeDisplay`, `BlurUntilTap`, `ConfirmBeforeOpenLink`, `SuggestBlockContact`, `SuggestReport`, `RestrictUnknownContact`, `SlowDownConversation`, `ShowCrisisSupport`, `EscalateToGuardian`
+- **Robustness layers**: mixed-language chats, slang, typos, shorthand, social-context slices, realistic curated corpora
 
 ## Architecture
 
-```
-aura-core       Orchestration: Analyzer, Action Engine, Context Engine
-aura-patterns   Pattern matching, emoji threats, text normalizer, URL checker
-aura-ml         ML pipeline: toxicity + sentiment (rule-based fallback + optional ONNX)
-aura-ffi        C API for Android NDK, iOS, desktop
+```text
+aura-core       Analyzer, action engine, context engine, evaluation stack
+aura-patterns   Pattern matching, boundary-safe matcher, normalizer, URL checker, emoji signals
+aura-ml         Toxicity + sentiment (rule-based fallback, optional ONNX)
+aura-proto      Protobuf contracts for messenger runtime and FFI
+aura-ffi        Protobuf-only C ABI for mobile and desktop clients
 ```
 
-### Analysis Pipeline
+### Runtime Flow
 
+```text
+Message / Event
+    │
+    ├─ Layer 1: Pattern matching
+    │   ├─ keyword + phrase matcher
+    │   ├─ URL safety
+    │   ├─ text normalization
+    │   └─ emoji threat signals
+    │
+    ├─ Layer 2: ML classification
+    │   └─ toxicity + sentiment
+    │
+    └─ Layer 3: Context analysis
+        ├─ signal enricher
+        ├─ grooming
+        ├─ bullying
+        ├─ manipulation
+        ├─ self-harm
+        ├─ coercion
+        ├─ raid
+        ├─ timing
+        └─ contact profiler
 ```
-Message Input
-    │
-    ├─ Layer 1: Pattern Matching (<1ms)
-    │   └─ aura-patterns: AhoCorasick, emoji threats, URL check, text normalization
-    │
-    ├─ Layer 2: ML Classification (5-20ms)
-    │   └─ aura-ml: toxicity + sentiment (rule-based fallback, optional ONNX)
-    │
-    └─ Layer 3: Context Analysis
-        └─ aura-core context engine:
-            ├─ Signal Enricher (20 categories, EN/UK/RU)
-            ├─ Grooming Detector (6 stages)
-            ├─ Bullying Detector
-            ├─ Manipulation Detector
-            ├─ Self-Harm Detector
-            ├─ Coercion Detector
-            ├─ Raid Detector
-            ├─ Timing Detector
-            └─ Contact Profiler
-                ├─ Rating (0-100)
-                ├─ Trust Decay (0.0-1.0)
-                ├─ Circle Tier (Inner/Regular/Occasional/New)
-                ├─ Weekly Snapshots (26-week window)
-                ├─ Trend Detection
-                └─ Behavioral Shift Signals
-```
+
+### Core Runtime Outputs
+
+`AnalysisResult` is messenger-oriented rather than model-oriented. It includes:
+
+- primary threat summary
+- detected threats and scores
+- `risk_breakdown` across `content`, `conversation`, `link`, `abuse`
+- `contact_snapshot`
+- `reason_codes`
+- `ui_actions`
+- inference summary for uncertainty, horizon, escalation likelihood, latent states
+
+## Context and Psychology
 
 ### Context Detectors
 
 | Detector | What it catches |
-|----------|----------------|
-| Grooming | 6-stage progression: Trust Building → Isolation → Boundary Testing → Sexual Escalation → Financial Dependency → Meeting |
-| Bullying | Sustained harassment, target isolation, pile-on, bystander silence |
-| Manipulation | Gaslighting, DARVO, love-bomb/devalue cycle, emotional blackmail |
-| Self-Harm | Suicidal ideation, hopelessness, farewell messages, contagion patterns |
-| Coercion | Suicide coercion, reputation blackmail, debt leverage, combined tactics |
-| Contact Profiler | Rating (0-100), trust decay, social circles, behavioral trend detection, shift signals |
-| Timing | Response asymmetry, late-night messaging, message frequency |
+| --- | --- |
+| Grooming | trust building, secrecy, platform migration, dependency, staged escalation |
+| Bullying | sustained harassment, isolation, pile-on, bystander silence |
+| Manipulation | gaslighting, DARVO, love-bomb/devalue, emotional blackmail, screenshot/reputation threats |
+| Self-Harm | hopelessness, ideation, farewell, contagion, protective signals |
+| Coercion | suicide coercion, debt leverage, reputation blackmail, combined tactics |
+| Raid | many hostile senders in a short window |
+| Timing | late-night contact, response asymmetry, message bombing, rapid attachment |
 
-### Signal Enricher (20 Categories)
+### Contact Profiling
 
-| Category | Examples |
-|----------|----------|
-| Compliment / Love Bombing | "you're so beautiful and amazing" / "ти така красива" |
-| Personal Probing | "where do you live?" / "де ти живеш?" |
-| Urgency / Pressure | "do it right now" / "прямо зараз" |
-| Isolation | "only i understand you" / "тільки я тебе розумію" |
-| Financial / Gaming Bribery | "gift card", "vbucks", "free robux" / "закину на карту" |
-| PII Self-Disclosure | "my number is..." / "мій номер телефону" |
-| Dare / Challenge | "i dare you", "bet you won't" / "тобі слабо" |
-| Screenshot Blackmail | "i have screenshots" / "в мене є скріншоти" |
-| Suicide Coercion | "if u leave ill kms" / "без тебе мені кінець" |
-| False Consensus | "everyone does it" / "всі так роблять" |
-| Debt Creation | "after everything i did for u" / "ти мені винна" |
-| Reputation Threat | "ill tell everyone at school" / "вся школа дізнається" |
-| Identity Erosion | "ur so mature for ur age" / "ти не як інші діти" |
-| Network Poisoning | "they laugh at u behind ur back" / "тебе за очі обсирають" |
-| Fake Vulnerability | "ur the only one who gets me" / "ти єдина хто мене розуміє" |
-| Platform Migration | "add me on snap", "го в тг" |
-| Emotional Withdrawal | "fine whatever", "не пиши мені більше" |
-| Defense of Victim | "leave them alone" / "припиніть" |
-| Farewell | "goodbye forever" / "прощавайте всі" |
-| Hopelessness | "nobody cares" / "нікому не потрібна" |
+Per-contact state includes:
 
-### Contact Rating & Behavioral Profiling (Novel)
+- rating `0..100`
+- trust `0.0..1.0`
+- circle tier
+- weekly snapshots
+- behavioral trend
+- shift signals such as `RoleReversal` and `RapidWorsening`
 
-No commercial product (Bark, Qustodio, Thorn) or academic paper implements per-contact longitudinal behavioral shift detection. AURA is first.
+This is one of the main differentiators of AURA: it reasons over contact behavior over time, not only over isolated messages.
 
-- **Rating**: 0-100 per contact, event-driven updates, clamped
-- **Trust**: Graduated 0.0-1.0, decays on hostile events (severity × 0.15 per event)
-- **Social Circles**: Inner (daily) / Regular (weekly) / Occasional / New (<14 days)
-- **Weekly Snapshots**: 26-week rolling window (~52 bytes per snapshot, ~1.3KB per contact)
-- **Trend Detection**: Compares baseline (first half) vs recent (last 2 weeks)
-- **Shift Signals**: RoleReversal (friend→bully), RapidWorsening, GradualWorsening generate DetectionSignals
-- **State**: Schema v2, backward-compatible with v1
+## Evaluation Stack
+
+AURA now has multiple evaluation layers, each targeting a different failure mode.
+
+### Scenario Suites
+
+- **Canonical messenger pack**: baseline child-safety scenarios
+- **Manipulation pack**: gaslighting, coercive control, blackmail, DARVO
+- **Multilingual pack**: EN/UK/RU and mixed-language transitions
+- **Noisy/slang pack**: shorthand, typos, teen chat noise
+
+### Robustness and Corpus Layers
+
+- **Robustness profiles**: teen shorthand profiles by language
+- **Corpus-style suite**: style-mutated variants from data banks
+- **Social-context suite**: cohorts such as trusted adult, peer intimacy, group pressure, support boundary
+- **Realistic curated suite**: more natural messenger-like chats with support-aware slice gates
+- **External curated suite**: provenance-aware dataset contract with manifest metadata and reviewer-oriented ingestion
+
+### Policy Evaluation
+
+Detection is not enough. AURA also gates policy quality:
+
+- required actions must appear for risky cases
+- forbidden actions must not appear for safe or mismatched cases
+- onset-aware policy checks verify that critical actions happen by escalation time
+
+### Examples
+
+You can run the evaluation layers directly:
+
+```bash
+cargo run --example scenario_eval -p aura-core
+cargo run --example manipulation_eval -p aura-core
+cargo run --example multilingual_eval -p aura-core
+cargo run --example noisy_eval -p aura-core
+cargo run --example robustness_eval -p aura-core
+cargo run --example corpus_eval -p aura-core
+cargo run --example social_context_eval -p aura-core
+cargo run --example realistic_eval -p aura-core
+cargo run --example external_curated_eval -p aura-core
+```
 
 ## Test Coverage
 
-577 tests across the workspace:
+**679 Rust tests** across the workspace:
 
-| Crate | Tests | Coverage |
-|-------|-------|----------|
-| aura-core | 383 | Analyzer (65), Contact profiler (95), Enricher (66), Events (15), Tracker (20), Coercion (12), Grooming, Bullying, Manipulation, Self-Harm, Raid, Timing |
-| aura-ffi | 21 | FFI C API, error handling, batch processing |
-| aura-ml | 113 | Toxicity, sentiment, tokenizer, boundary detection |
-| aura-patterns | 60 | Pattern matching, normalization, emoji, URL checking |
+| Crate | Tests | Focus |
+| --- | ---: | --- |
+| `aura-core` | 481 | detectors, analyzer, contact profiler, tracker, evaluation, scenarios, policy |
+| `aura-ffi` | 19 | protobuf-only C ABI, errors, context import/export, batch processing |
+| `aura-ml` | 113 | toxicity, sentiment, tokenization, boundary logic |
+| `aura-patterns` | 66 | matcher, normalizer, URL checker, emoji signals |
+| `aura-proto` | 0 | generated protobuf contract crate |
 
-### Test Categories
+Coverage areas include:
 
-- **Unit tests**: Every detector, event classification, rating math
-- **Integration tests**: Full pipeline (Analyzer → Enricher → ML → Context)
-- **Real-world scenarios**: Friend-to-bully over 3 months, trusted adult grooming, teen drama false positives, holiday recovery patterns
-- **Property-based**: Rating always [0,100], trust always [0,1], risk always [0,1], monotonicity under hostile events
-- **Fuzz / Edge cases**: u64::MAX timestamps, empty strings, emoji sender IDs, corrupt deserialized state, out-of-order events
-- **Stress tests**: 1000 contacts × 52 weeks, 10K events single contact, sort 1000 contacts by risk
-- **Mixed-language**: 15 tests with Ukrainian+English+Russian teen slang combinations
-- **Skipped weeks**: Communication gaps, holiday patterns, no empty snapshots during gaps
-- **Concurrent access**: Interleaved device events, export/import sync simulation, cleanup during active use
+- unit tests for each detector and event family
+- integration tests for end-to-end analyzer behavior
+- property/stress tests for contact rating and tracker behavior
+- multilingual and noisy-language regressions
+- policy-action gates
+- realistic and external curated evaluation suites
 
 ## Build
 
@@ -131,55 +176,156 @@ cargo build
 cargo test --workspace
 ```
 
-With ONNX (optional):
+Optional ONNX path:
 
 ```bash
-brew install onnxruntime   # macOS
+brew install onnxruntime
 cargo test --all-features --workspace
 ```
-
-ONNX Runtime path is configured in `.cargo/config.toml` for macOS (Homebrew).
 
 ## Usage (Rust)
 
 ```rust
-use aura_core::{Analyzer, AuraConfig};
+use aura_core::{Analyzer, AuraConfig, ContentType, MessageInput};
 use aura_patterns::PatternDatabase;
 
 let config = AuraConfig::default();
-let db = PatternDatabase::default_mvp();
-let analyzer = Analyzer::new(config, &db);
+let patterns = PatternDatabase::default_mvp();
+let analyzer = Analyzer::new(config, &patterns);
 
-let input = aura_core::MessageInput {
-    content_type: aura_core::ContentType::Text,
+let input = MessageInput {
+    content_type: ContentType::Text,
     text: Some("Hello".into()),
     image_data: None,
     sender_id: "user_1".into(),
     conversation_id: "conv_1".into(),
     language: None,
+    conversation_type: Default::default(),
+    member_count: None,
 };
 
 let result = analyzer.analyze(&input);
 ```
 
-## FFI (C / Kotlin / Swift)
+## FFI (C ABI)
 
-- **Create:** `aura_init(config_json)` → handle (or null; check `aura_last_error()`).
-- **Analyse:** `aura_analyze(handle, text, sender_id, conversation_id)` or `aura_analyze_json(handle, message_json)` → JSON string.
-- **Context:** `aura_analyze_context(handle, message_json, timestamp_ms)` for stateful analysis.
-- **Batch:** `aura_analyze_batch(handle, messages_json)` — up to 1000 messages.
-- **Config:** `aura_update_config(handle, config_json)` — update at runtime.
-- **Patterns:** `aura_reload_patterns(handle, json)` — hot-reload pattern database.
-- **Errors:** `aura_last_error()` — thread-local last error string (or null).
-- **Cleanup:** **`aura_free(handle)`** when done; **`aura_free_string(ptr)`** for every string returned by the API.
+Public header: `include/aura_ffi.h`
 
-Text is truncated at 10,000 chars internally. All returned strings are UTF-8. Invalid UTF-8 or null pointers return error JSON with structured error codes.
+- Wire format is **protobuf only**
+- Requests and responses are encoded byte buffers
+- `AuraBuffer` is the output transport type
+- `aura_last_error()` is the only string-based error channel
+
+Main functions:
+
+- `aura_init`
+- `aura_analyze`
+- `aura_analyze_context`
+- `aura_analyze_batch`
+- `aura_update_config`
+- `aura_reload_patterns`
+- `aura_export_context`
+- `aura_import_context`
+- `aura_cleanup_context`
+- `aura_get_contacts_by_risk`
+- `aura_get_contact_profile`
+- `aura_mark_contact_trusted`
+- `aura_get_conversation_summary`
+- `aura_free`
+- `aura_free_buffer`
+- `aura_free_string`
+
+Context export/import now uses native protobuf tracker/contact state end-to-end.
+
+## Data Artifacts
+
+The evaluation stack is data-driven. Important artifacts currently include:
+
+- `crates/aura-patterns/data/patterns_mvp.json`
+- `crates/aura-core/data/corpus_style_profiles.json`
+- `crates/aura-core/data/corpus_curated_cases.json`
+- `crates/aura-core/data/social_context_cohorts.json`
+- `crates/aura-core/data/realistic_chat_cases.json`
+- `crates/aura-core/data/external_curated_chat_cases.json`
+
+The external curated corpus now carries manifest metadata:
+
+- `schema_version`
+- `dataset_id`
+- `dataset_label`
+- `curation_status`
+- `maintainer`
+- `created_at_ms`
+- `updated_at_ms`
+
+This is the contract intended for future reviewer-curated external datasets.
+
+## How To Move Forward
+
+The next steps should stay focused on stabilizing **one strong v1**, not adding unrelated product layers.
+
+### Phase 1: Gold-Reviewed Corpus
+
+- Add a second external corpus tier: `gold_reviewed` / `human_curated`
+- Keep the current external manifest contract, but feed it real reviewer-curated excerpts
+- Introduce stronger gates for `gold_reviewed` than for `seed_reviewed`
+
+### Phase 2: Calibration Discipline
+
+- Add per-language, per-age-band, and per-threat calibration reports
+- Split stronger gates for `child`, `trusted_adult`, `support boundary`, and `group pressure`
+- Track calibration drift between canonical, realistic, and external corpora
+
+### Phase 3: Psychological Modeling
+
+- Expand latent psychological state tracking
+- Separate self-harm ideation from attempt-proximity logic more explicitly
+- Improve coercive-control and reputation/image-abuse pathways
+- Preserve protective-factor reasoning, not only threat accumulation
+
+### Phase 4: Mathematical Upgrades
+
+After the corpus and evaluation base is strong enough:
+
+- changepoint detection over contact time series
+- better uncertainty and abstention handling
+- escalation / hazard modeling
+- stronger family-specific calibration instead of global tuning
+
+### Phase 5: Release Discipline
+
+Before calling anything stable:
+
+- protobuf contract stable
+- policy gates stable
+- realistic and external curated suites green
+- regression packs green across EN/UK/RU
+- no reliance on synthetic-only confidence
+
+## Boundaries
+
+What AURA Core is:
+
+- contextual safety runtime
+- messenger policy engine
+- evidence-driven safety infrastructure
+
+What AURA Core is not:
+
+- generic moderation SDK for the whole internet
+- AI friend / companion runtime
+- engagement product
+
+If an AI companion ever exists, it should be a separate layer on top of AURA, not part of the safety-critical core.
 
 ## Data and Privacy
 
-- Analysis runs in-process; message text, `sender_id`, and `conversation_id` are kept in memory only for the duration of context windows (configurable).
-- Context state (timelines, contact profiles, ratings, behavioral snapshots) can be exported/imported; do not persist or log it without user consent and a clear privacy policy.
-- No data is sent to external services by default; optional ONNX models are loaded from local paths.
+- analysis runs in-process
+- no external network calls by default
+- optional ONNX models are local
+- context state can be exported/imported, so storage and logging need explicit privacy rules
+
+For child-safety use cases, privacy and explainability should be treated as product requirements, not optional polish.
 
 ## License
 

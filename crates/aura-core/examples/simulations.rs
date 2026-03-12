@@ -6,7 +6,7 @@ fn main() {
     let db = PatternDatabase::default_mvp();
 
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              AURA v0.3.0 — Attack Simulations              ║");
+    println!("║              AURA — Attack Simulations                     ║");
     println!("║         26 реальних сценаріїв атак на дітей                 ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();

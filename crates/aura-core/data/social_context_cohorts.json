@@ -1,0 +1,166 @@
+{
+  "cohorts": [
+    {
+      "id": "child_stranger_direct",
+      "description": "Direct stranger-style grooming and probing against child accounts should surface early.",
+      "base_case_names": [
+        "classic_grooming",
+        "mixed_language_grooming",
+        "curated_en_grooming_probe"
+      ],
+      "account_types": ["child"],
+      "conversation_types": ["direct"],
+      "gates": {
+        "max_brier_score": 0.24,
+        "max_expected_calibration_error": 0.26,
+        "min_positive_detection_rate": 0.85,
+        "max_negative_false_positive_rate": 0.10,
+        "min_pre_onset_detection_rate": 0.25,
+        "per_threat": [
+          {
+            "threat_type": "grooming",
+            "min_example_count": 8,
+            "max_brier_score": 0.22,
+            "max_expected_calibration_error": 0.24
+          }
+        ]
+      }
+    },
+    {
+      "id": "trusted_adult_authority_boundary",
+      "description": "Authority-adjacent adult contact must catch secrecy grooming without flagging routine logistics.",
+      "base_case_names": [
+        "trusted_adult_grooming",
+        "negative_control_trusted_adult",
+        "curated_negative_uk_school_logistics"
+      ],
+      "account_types": ["child"],
+      "conversation_types": ["direct"],
+      "gates": {
+        "max_brier_score": 0.24,
+        "max_expected_calibration_error": 0.28,
+        "min_positive_detection_rate": 0.60,
+        "max_negative_false_positive_rate": 0.10,
+        "min_pre_onset_detection_rate": 0.20,
+        "per_threat": [
+          {
+            "threat_type": "grooming",
+            "min_example_count": 4,
+            "max_brier_score": 0.22,
+            "max_expected_calibration_error": 0.24
+          }
+        ]
+      }
+    },
+    {
+      "id": "peer_intimacy_boundary",
+      "description": "Peer intimacy contexts should separate flirting and support from coercion, password pressure, and image abuse.",
+      "base_case_names": [
+        "coercive_control_password_pressure",
+        "screenshot_blackmail",
+        "image_based_abuse_escalation",
+        "negative_control_teen_flirting",
+        "false_positive_friends",
+        "curated_negative_en_peer_support",
+        "curated_negative_en_peer_banter",
+        "curated_en_screenshot_blackmail"
+      ],
+      "gates": {
+        "max_brier_score": 0.28,
+        "max_expected_calibration_error": 0.30,
+        "min_positive_detection_rate": 0.70,
+        "max_negative_false_positive_rate": 0.10,
+        "min_pre_onset_detection_rate": 0.20,
+        "per_threat": [
+          {
+            "threat_type": "manipulation",
+            "min_example_count": 10,
+            "max_brier_score": 0.28,
+            "max_expected_calibration_error": 0.30
+          }
+        ]
+      }
+    },
+    {
+      "id": "school_group_social_pressure",
+      "description": "School-group pile-ons should stay visible while routine peer banter remains clean.",
+      "base_case_names": [
+        "group_bullying",
+        "mixed_language_group_bullying",
+        "curated_uk_group_bullying",
+        "bystander_rescue",
+        "curated_negative_en_peer_banter",
+        "negative_control_multilingual_peer_chat"
+      ],
+      "conversation_types": ["group_chat", "group"],
+      "gates": {
+        "max_brier_score": 0.24,
+        "max_expected_calibration_error": 0.28,
+        "min_positive_detection_rate": 0.75,
+        "max_negative_false_positive_rate": 0.10,
+        "min_pre_onset_detection_rate": 0.25,
+        "per_threat": [
+          {
+            "threat_type": "bullying",
+            "min_example_count": 10,
+            "max_brier_score": 0.22,
+            "max_expected_calibration_error": 0.26
+          }
+        ]
+      }
+    },
+    {
+      "id": "selfharm_disclosure_support_boundary",
+      "description": "Acute self-harm disclosures must be caught without over-flagging supportive peer responses.",
+      "base_case_names": [
+        "acute_selfharm",
+        "mixed_language_selfharm_crisis",
+        "curated_en_high_noise_selfharm",
+        "curated_negative_en_peer_support",
+        "negative_control_multilingual_support"
+      ],
+      "conversation_types": ["direct"],
+      "gates": {
+        "max_brier_score": 0.24,
+        "max_expected_calibration_error": 0.28,
+        "min_positive_detection_rate": 0.75,
+        "max_negative_false_positive_rate": 0.10,
+        "min_pre_onset_detection_rate": 0.50,
+        "per_threat": [
+          {
+            "threat_type": "self_harm",
+            "min_example_count": 8,
+            "max_brier_score": 0.24,
+            "max_expected_calibration_error": 0.26
+          }
+        ]
+      }
+    },
+    {
+      "id": "image_blackmail_reputation_control",
+      "description": "Image and screenshot blackmail should elevate manipulation risk early across language and style shifts.",
+      "base_case_names": [
+        "screenshot_blackmail",
+        "image_based_abuse_escalation",
+        "mixed_language_image_blackmail",
+        "curated_en_screenshot_blackmail"
+      ],
+      "conversation_types": ["direct"],
+      "gates": {
+        "max_brier_score": 0.26,
+        "max_expected_calibration_error": 0.28,
+        "min_positive_detection_rate": 0.85,
+        "max_negative_false_positive_rate": 0.10,
+        "min_pre_onset_detection_rate": 0.25,
+        "per_threat": [
+          {
+            "threat_type": "manipulation",
+            "min_example_count": 8,
+            "max_brier_score": 0.24,
+            "max_expected_calibration_error": 0.26
+          }
+        ]
+      }
+    }
+  ]
+}

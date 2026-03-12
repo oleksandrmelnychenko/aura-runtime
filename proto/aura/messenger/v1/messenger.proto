@@ -1,0 +1,420 @@
+syntax = "proto3";
+
+package aura.messenger.v1;
+
+enum ProtectionLevel {
+  PROTECTION_LEVEL_UNSPECIFIED = 0;
+  PROTECTION_LEVEL_OFF = 1;
+  PROTECTION_LEVEL_LOW = 2;
+  PROTECTION_LEVEL_MEDIUM = 3;
+  PROTECTION_LEVEL_HIGH = 4;
+}
+
+enum AccountType {
+  ACCOUNT_TYPE_UNSPECIFIED = 0;
+  ACCOUNT_TYPE_ADULT = 1;
+  ACCOUNT_TYPE_TEEN = 2;
+  ACCOUNT_TYPE_CHILD = 3;
+}
+
+enum CulturalContextKind {
+  CULTURAL_CONTEXT_KIND_UNSPECIFIED = 0;
+  CULTURAL_CONTEXT_KIND_UKRAINIAN = 1;
+  CULTURAL_CONTEXT_KIND_RUSSIAN = 2;
+  CULTURAL_CONTEXT_KIND_ENGLISH = 3;
+  CULTURAL_CONTEXT_KIND_CUSTOM = 4;
+}
+
+message CulturalContext {
+  CulturalContextKind kind = 1;
+  optional string custom_value = 2;
+}
+
+enum ThreatType {
+  THREAT_TYPE_UNSPECIFIED = 0;
+  THREAT_TYPE_NONE = 1;
+  THREAT_TYPE_BULLYING = 2;
+  THREAT_TYPE_GROOMING = 3;
+  THREAT_TYPE_EXPLICIT = 4;
+  THREAT_TYPE_THREAT = 5;
+  THREAT_TYPE_SELF_HARM = 6;
+  THREAT_TYPE_SPAM = 7;
+  THREAT_TYPE_SCAM = 8;
+  THREAT_TYPE_PHISHING = 9;
+  THREAT_TYPE_MANIPULATION = 10;
+  THREAT_TYPE_NSFW = 11;
+  THREAT_TYPE_HATE_SPEECH = 12;
+  THREAT_TYPE_DOXXING = 13;
+  THREAT_TYPE_PII_LEAKAGE = 14;
+}
+
+enum Confidence {
+  CONFIDENCE_UNSPECIFIED = 0;
+  CONFIDENCE_LOW = 1;
+  CONFIDENCE_MEDIUM = 2;
+  CONFIDENCE_HIGH = 3;
+}
+
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  ACTION_ALLOW = 1;
+  ACTION_MARK = 2;
+  ACTION_BLUR = 3;
+  ACTION_WARN = 4;
+  ACTION_BLOCK = 5;
+}
+
+enum DetectionLayer {
+  DETECTION_LAYER_UNSPECIFIED = 0;
+  DETECTION_LAYER_PATTERN_MATCHING = 1;
+  DETECTION_LAYER_ML_CLASSIFICATION = 2;
+  DETECTION_LAYER_CONTEXT_ANALYSIS = 3;
+}
+
+enum SignalFamily {
+  SIGNAL_FAMILY_UNSPECIFIED = 0;
+  SIGNAL_FAMILY_CONTENT = 1;
+  SIGNAL_FAMILY_CONVERSATION = 2;
+  SIGNAL_FAMILY_LINK = 3;
+  SIGNAL_FAMILY_ABUSE = 4;
+}
+
+enum UiAction {
+  UI_ACTION_UNSPECIFIED = 0;
+  UI_ACTION_WARN_BEFORE_SEND = 1;
+  UI_ACTION_WARN_BEFORE_DISPLAY = 2;
+  UI_ACTION_BLUR_UNTIL_TAP = 3;
+  UI_ACTION_CONFIRM_BEFORE_OPEN_LINK = 4;
+  UI_ACTION_SUGGEST_BLOCK_CONTACT = 5;
+  UI_ACTION_SUGGEST_REPORT = 6;
+  UI_ACTION_RESTRICT_UNKNOWN_CONTACT = 7;
+  UI_ACTION_SLOW_DOWN_CONVERSATION = 8;
+  UI_ACTION_SHOW_CRISIS_SUPPORT = 9;
+  UI_ACTION_ESCALATE_TO_GUARDIAN = 10;
+}
+
+enum AlertPriority {
+  ALERT_PRIORITY_UNSPECIFIED = 0;
+  ALERT_PRIORITY_NONE = 1;
+  ALERT_PRIORITY_LOW = 2;
+  ALERT_PRIORITY_MEDIUM = 3;
+  ALERT_PRIORITY_HIGH = 4;
+  ALERT_PRIORITY_URGENT = 5;
+}
+
+enum FollowUpAction {
+  FOLLOW_UP_ACTION_UNSPECIFIED = 0;
+  FOLLOW_UP_ACTION_MONITOR_CONVERSATION = 1;
+  FOLLOW_UP_ACTION_BLOCK_SUGGESTED = 2;
+  FOLLOW_UP_ACTION_REVIEW_CONTACT_PROFILE = 3;
+  FOLLOW_UP_ACTION_REPORT_TO_AUTHORITIES = 4;
+}
+
+enum CircleTier {
+  CIRCLE_TIER_UNSPECIFIED = 0;
+  CIRCLE_TIER_INNER = 1;
+  CIRCLE_TIER_REGULAR = 2;
+  CIRCLE_TIER_OCCASIONAL = 3;
+  CIRCLE_TIER_NEW = 4;
+}
+
+enum BehavioralTrend {
+  BEHAVIORAL_TREND_UNSPECIFIED = 0;
+  BEHAVIORAL_TREND_STABLE = 1;
+  BEHAVIORAL_TREND_IMPROVING = 2;
+  BEHAVIORAL_TREND_GRADUAL_WORSENING = 3;
+  BEHAVIORAL_TREND_RAPID_WORSENING = 4;
+  BEHAVIORAL_TREND_ROLE_REVERSAL = 5;
+}
+
+enum ConversationType {
+  CONVERSATION_TYPE_UNSPECIFIED = 0;
+  CONVERSATION_TYPE_DIRECT = 1;
+  CONVERSATION_TYPE_GROUP_CHAT = 2;
+  CONVERSATION_TYPE_GROUP = 3;
+}
+
+enum ContentType {
+  CONTENT_TYPE_UNSPECIFIED = 0;
+  CONTENT_TYPE_TEXT = 1;
+  CONTENT_TYPE_IMAGE = 2;
+  CONTENT_TYPE_VOICE = 3;
+  CONTENT_TYPE_VIDEO = 4;
+  CONTENT_TYPE_URL = 5;
+}
+
+enum EventKind {
+  EVENT_KIND_UNSPECIFIED = 0;
+  EVENT_KIND_FLATTERY = 1;
+  EVENT_KIND_GIFT_OFFER = 2;
+  EVENT_KIND_SECRECY_REQUEST = 3;
+  EVENT_KIND_PLATFORM_SWITCH = 4;
+  EVENT_KIND_PERSONAL_INFO_REQUEST = 5;
+  EVENT_KIND_PHOTO_REQUEST = 6;
+  EVENT_KIND_VIDEO_CALL_REQUEST = 7;
+  EVENT_KIND_FINANCIAL_GROOMING = 8;
+  EVENT_KIND_MEETING_REQUEST = 9;
+  EVENT_KIND_SEXUAL_CONTENT = 10;
+  EVENT_KIND_AGE_INAPPROPRIATE = 11;
+  EVENT_KIND_INSULT = 12;
+  EVENT_KIND_DENIGRATION = 13;
+  EVENT_KIND_HARM_ENCOURAGEMENT = 14;
+  EVENT_KIND_PHYSICAL_THREAT = 15;
+  EVENT_KIND_RUMOR_SPREADING = 16;
+  EVENT_KIND_EXCLUSION = 17;
+  EVENT_KIND_MOCKERY = 18;
+  EVENT_KIND_GUILT_TRIPPING = 19;
+  EVENT_KIND_GASLIGHTING = 20;
+  EVENT_KIND_EMOTIONAL_BLACKMAIL = 21;
+  EVENT_KIND_PEER_PRESSURE = 22;
+  EVENT_KIND_LOVE_BOMBING = 23;
+  EVENT_KIND_DARVO = 24;
+  EVENT_KIND_DEVALUATION = 25;
+  EVENT_KIND_SUICIDAL_IDEATION = 26;
+  EVENT_KIND_HOPELESSNESS = 27;
+  EVENT_KIND_FAREWELL_MESSAGE = 28;
+  EVENT_KIND_DOXXING_ATTEMPT = 29;
+  EVENT_KIND_SCREENSHOT_THREAT = 30;
+  EVENT_KIND_HATE_SPEECH = 31;
+  EVENT_KIND_LOCATION_REQUEST = 32;
+  EVENT_KIND_MONEY_OFFER = 33;
+  EVENT_KIND_PII_SELF_DISCLOSURE = 34;
+  EVENT_KIND_CASUAL_MEETING_REQUEST = 35;
+  EVENT_KIND_DARE_CHALLENGE = 36;
+  EVENT_KIND_SUICIDE_COERCION = 37;
+  EVENT_KIND_FALSE_CONSENSUS = 38;
+  EVENT_KIND_DEBT_CREATION = 39;
+  EVENT_KIND_REPUTATION_THREAT = 40;
+  EVENT_KIND_IDENTITY_EROSION = 41;
+  EVENT_KIND_NETWORK_POISONING = 42;
+  EVENT_KIND_FAKE_VULNERABILITY = 43;
+  EVENT_KIND_NORMAL_CONVERSATION = 44;
+  EVENT_KIND_TRUSTED_CONTACT = 45;
+  EVENT_KIND_DEFENSE_OF_VICTIM = 46;
+}
+
+message AuraConfig {
+  ProtectionLevel protection_level = 1;
+  AccountType account_type = 2;
+  string language = 3;
+  CulturalContext cultural_context = 4;
+  bool enabled = 5;
+  optional string patterns_path = 6;
+  optional string models_path = 7;
+  optional uint32 account_holder_age = 8;
+  uint32 ttl_days = 9;
+  int32 timezone_offset_minutes = 10;
+}
+
+message MessageInput {
+  ContentType content_type = 1;
+  optional string text = 2;
+  optional bytes image_data = 3;
+  string sender_id = 4;
+  string conversation_id = 5;
+  optional string language = 6;
+  ConversationType conversation_type = 7;
+  optional uint32 member_count = 8;
+}
+
+message AnalyzeContextRequest {
+  MessageInput message = 1;
+  uint64 timestamp_ms = 2;
+}
+
+message ThreatScore {
+  ThreatType threat_type = 1;
+  float score = 2;
+}
+
+message DetectionSignal {
+  ThreatType threat_type = 1;
+  float score = 2;
+  Confidence confidence = 3;
+  DetectionLayer layer = 4;
+  SignalFamily family = 5;
+  string reason_code = 6;
+  string explanation = 7;
+}
+
+message RiskBreakdown {
+  float content = 1;
+  float conversation = 2;
+  float link = 3;
+  float abuse = 4;
+}
+
+message ContactSnapshot {
+  string sender_id = 1;
+  float rating = 2;
+  float trust_level = 3;
+  CircleTier circle_tier = 4;
+  BehavioralTrend trend = 5;
+  bool is_trusted = 6;
+  bool is_new_contact = 7;
+  uint64 first_seen_ms = 8;
+  uint64 last_seen_ms = 9;
+  uint64 conversation_count = 10;
+}
+
+message ActionRecommendation {
+  AlertPriority parent_alert = 1;
+  repeated FollowUpAction follow_ups = 2;
+  bool crisis_resources = 3;
+  repeated UiAction ui_actions = 4;
+  repeated string reason_codes = 5;
+}
+
+message AnalysisResult {
+  ThreatType threat_type = 1;
+  Confidence confidence = 2;
+  Action action = 3;
+  float score = 4;
+  string explanation = 5;
+  repeated ThreatScore detected_threats = 6;
+  repeated DetectionSignal signals = 7;
+  ActionRecommendation recommended_action = 8;
+  RiskBreakdown risk_breakdown = 9;
+  ContactSnapshot contact_snapshot = 10;
+  repeated string reason_codes = 11;
+  uint64 analysis_time_us = 12;
+}
+
+message ContactProfileRequest {
+  string sender_id = 1;
+}
+
+message ContactProfile {
+  string sender_id = 1;
+  float risk_score = 2;
+  float rating = 3;
+  float trust_level = 4;
+  CircleTier circle_tier = 5;
+  BehavioralTrend trend = 6;
+  uint64 first_seen_ms = 7;
+  uint64 last_seen_ms = 8;
+  uint64 total_messages = 9;
+  uint64 grooming_events = 10;
+  uint64 bullying_events = 11;
+  uint64 manipulation_events = 12;
+  bool is_trusted = 13;
+  bool is_new_contact = 14;
+  uint64 conversation_count = 15;
+  float average_severity = 16;
+}
+
+message ContactProfileResponse {
+  bool found = 1;
+  ContactProfile profile = 2;
+}
+
+message ContactsByRiskResponse {
+  repeated ContactProfile contacts = 1;
+}
+
+message BatchAnalyzeItem {
+  MessageInput message = 1;
+  optional uint64 timestamp_ms = 2;
+}
+
+message BatchAnalyzeRequest {
+  repeated BatchAnalyzeItem items = 1;
+}
+
+message BatchAnalyzeResponse {
+  repeated AnalysisResult results = 1;
+}
+
+message ReloadPatternsRequest {
+  string patterns_path = 1;
+}
+
+message MarkContactTrustedRequest {
+  string sender_id = 1;
+}
+
+message StatusResponse {
+  bool ok = 1;
+  optional string message = 2;
+}
+
+message ExportContextResponse {
+  TrackerState state = 1;
+}
+
+message ImportContextRequest {
+  TrackerState state = 1;
+}
+
+message ConversationSummaryItem {
+  string conversation_id = 1;
+  uint64 total_events = 2;
+  repeated string unique_senders = 3;
+  uint64 threat_event_count = 4;
+  uint64 latest_event_ms = 5;
+}
+
+message ConversationSummaryResponse {
+  uint64 total_conversations = 1;
+  repeated ConversationSummaryItem conversations = 2;
+}
+
+message ContextEvent {
+  uint64 event_id = 1;
+  uint64 timestamp_ms = 2;
+  string sender_id = 3;
+  string conversation_id = 4;
+  EventKind kind = 5;
+  float confidence = 6;
+}
+
+message ConversationTimelineState {
+  string conversation_id = 1;
+  ConversationType conversation_type = 2;
+  repeated ContextEvent events = 3;
+}
+
+message BehavioralSnapshotState {
+  uint64 period_start_ms = 1;
+  uint64 period_end_ms = 2;
+  uint32 total_messages = 3;
+  uint32 hostile_count = 4;
+  uint32 supportive_count = 5;
+  uint32 neutral_count = 6;
+  uint32 grooming_count = 7;
+  uint32 manipulation_count = 8;
+  float avg_severity = 9;
+}
+
+message ContactProfileState {
+  string sender_id = 1;
+  uint64 first_seen_ms = 2;
+  uint64 last_seen_ms = 3;
+  uint64 total_messages = 4;
+  uint64 conversation_count = 5;
+  repeated string conversations = 6;
+  uint64 grooming_event_count = 7;
+  uint64 bullying_event_count = 8;
+  uint64 manipulation_event_count = 9;
+  bool is_trusted = 10;
+  float severity_sum = 11;
+  uint64 severity_count = 12;
+  optional uint32 inferred_age = 13;
+  float rating = 14;
+  float trust_level = 15;
+  CircleTier circle_tier = 16;
+  BehavioralTrend trend = 17;
+  repeated BehavioralSnapshotState weekly_snapshots = 18;
+  BehavioralSnapshotState current_snapshot = 19;
+  repeated uint32 active_days = 20;
+}
+
+message ContactProfilerState {
+  repeated ContactProfileState profiles = 1;
+}
+
+message TrackerState {
+  uint32 schema_version = 1;
+  repeated ConversationTimelineState timelines = 2;
+  ContactProfilerState contact_profiler = 3;
+}

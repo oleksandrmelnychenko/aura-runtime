@@ -1,4 +1,4 @@
-use crate::types::{Confidence, DetectionLayer, DetectionSignal, ThreatType};
+use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 
 use super::contact::ContactProfiler;
 use super::tracker::ConversationTimeline;
@@ -35,16 +35,17 @@ impl RaidDetector {
         let hostile_10min = self.count_hostile_senders(timeline, window_10min, contact_profiler);
 
         if hostile_10min >= self.critical_senders_10min {
-            signals.push(DetectionSignal {
-                threat_type: ThreatType::Bullying,
-                score: 0.95,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            signals.push(DetectionSignal::context(
+                ThreatType::Bullying,
+                0.95,
+                Confidence::High,
+                SignalFamily::Abuse,
+                "abuse.raid.coordinated_critical",
+                format!(
                     "Coordinated raid detected: {} hostile senders in 10 minutes",
                     hostile_10min
                 ),
-            });
+            ));
             return signals;
         }
 
@@ -52,16 +53,17 @@ impl RaidDetector {
         let hostile_30min = self.count_hostile_senders(timeline, window_30min, contact_profiler);
 
         if hostile_30min >= self.high_senders_30min {
-            signals.push(DetectionSignal {
-                threat_type: ThreatType::Bullying,
-                score: 0.80,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            signals.push(DetectionSignal::context(
+                ThreatType::Bullying,
+                0.80,
+                Confidence::High,
+                SignalFamily::Abuse,
+                "abuse.raid.coordinated_high",
+                format!(
                     "Possible coordinated raid: {} hostile senders in 30 minutes",
                     hostile_30min
                 ),
-            });
+            ));
         }
 
         signals
@@ -90,6 +92,7 @@ mod tests {
 
     fn make_event(sender: &str, conv: &str, kind: EventKind, ts: u64) -> ContextEvent {
         ContextEvent {
+            event_id: 0,
             timestamp_ms: ts,
             sender_id: sender.to_string(),
             conversation_id: conv.to_string(),

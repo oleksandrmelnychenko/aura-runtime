@@ -1,5 +1,8 @@
+use std::collections::HashSet;
+
 use aho_corasick::AhoCorasick;
 use aura_ml::boundary::aho_match_at_boundary;
+use aura_patterns::TextNormalizer;
 
 use super::events::{ContextEvent, EventKind};
 
@@ -27,7 +30,7 @@ impl Default for EnricherConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum EnricherCategory {
     Compliment,
     Urgency,
@@ -63,6 +66,7 @@ struct EnricherMatcher {
 pub struct SignalEnricher {
     config: EnricherConfig,
     matcher: EnricherMatcher,
+    normalizer: TextNormalizer,
 }
 
 impl SignalEnricher {
@@ -70,6 +74,7 @@ impl SignalEnricher {
         Self {
             config,
             matcher: build_enricher_matcher(),
+            normalizer: TextNormalizer::new(),
         }
     }
 
@@ -93,6 +98,8 @@ impl SignalEnricher {
     ) -> EnrichmentResult {
         let mut events = Vec::new();
         let lower = text.to_lowercase();
+        let normalized = self.normalizer.normalize_semantic(text);
+        let mut match_counts = vec![0usize; self.matcher.entries.len()];
 
         let mut compliment_count: usize = 0;
         let mut urgency_count: usize = 0;
@@ -115,38 +122,60 @@ impl SignalEnricher {
         let mut platform_migration_found = false;
         let mut emotional_withdrawal_found = false;
 
-        for m in self.matcher.automaton.find_iter(&lower) {
-            if !aho_match_at_boundary(&lower, m.start(), m.end()) {
+        for m in self.matcher.automaton.find_iter(&normalized) {
+            if !aho_match_at_boundary(&normalized, m.start(), m.end()) {
+                continue;
+            }
+            match_counts[m.pattern().as_usize()] += 1;
+        }
+
+        for (idx, count) in match_counts.into_iter().enumerate() {
+            if count == 0 {
                 continue;
             }
 
-            let entry = &self.matcher.entries[m.pattern().as_usize()];
-            match entry.category {
-                EnricherCategory::Compliment => compliment_count += 1,
-                EnricherCategory::Urgency => urgency_count += 1,
-                EnricherCategory::PersonalQuestion => probing_count += 1,
-                EnricherCategory::Defense => defense_count += 1,
+            match self.matcher.entries[idx].category {
+                EnricherCategory::Compliment => compliment_count += count,
+                EnricherCategory::Urgency => urgency_count += count,
+                EnricherCategory::PersonalQuestion => probing_count += count,
+                EnricherCategory::Defense => defense_count += count,
                 EnricherCategory::Farewell => farewell_found = true,
                 EnricherCategory::Hopelessness => hopelessness_found = true,
                 EnricherCategory::Isolation => isolation_found = true,
                 EnricherCategory::Financial => financial_found = true,
-                EnricherCategory::PiiSelfDisclosure => pii_disclosure_count += 1,
-                EnricherCategory::DareChallenge => dare_count += 1,
+                EnricherCategory::PiiSelfDisclosure => pii_disclosure_count += count,
+                EnricherCategory::DareChallenge => dare_count += count,
                 EnricherCategory::Blackmail => blackmail_found = true,
-                EnricherCategory::SuicideCoercion => suicide_coercion_count += 1,
-                EnricherCategory::FalseConsensus => false_consensus_count += 1,
-                EnricherCategory::DebtCreation => debt_creation_count += 1,
-                EnricherCategory::ReputationThreat => reputation_threat_count += 1,
-                EnricherCategory::IdentityErosion => identity_erosion_count += 1,
-                EnricherCategory::NetworkPoisoning => network_poisoning_count += 1,
-                EnricherCategory::FakeVulnerability => fake_vulnerability_count += 1,
+                EnricherCategory::SuicideCoercion => suicide_coercion_count += count,
+                EnricherCategory::FalseConsensus => false_consensus_count += count,
+                EnricherCategory::DebtCreation => debt_creation_count += count,
+                EnricherCategory::ReputationThreat => reputation_threat_count += count,
+                EnricherCategory::IdentityErosion => identity_erosion_count += count,
+                EnricherCategory::NetworkPoisoning => network_poisoning_count += count,
+                EnricherCategory::FakeVulnerability => fake_vulnerability_count += count,
                 EnricherCategory::PlatformMigration => platform_migration_found = true,
                 EnricherCategory::EmotionalWithdrawal => emotional_withdrawal_found = true,
             }
         }
 
+        if contains_high_risk_phrase(
+            &normalized,
+            &self.normalizer,
+            &[
+                "i'll show this to everyone at school",
+                "ill show this to everyone at school",
+                "я покажу це всім в школі",
+                "покажу це всім в школі",
+                "я покажу это всем в школе",
+            ],
+        ) {
+            blackmail_found = true;
+            reputation_threat_count += 1;
+        }
+
         if probing_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -163,6 +192,7 @@ impl SignalEnricher {
 
         if compliment_count >= threshold {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -171,6 +201,7 @@ impl SignalEnricher {
             });
         } else if compliment_count >= 1 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -181,6 +212,7 @@ impl SignalEnricher {
 
         if urgency_count >= 2 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -197,6 +229,7 @@ impl SignalEnricher {
 
         if defense_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -207,6 +240,7 @@ impl SignalEnricher {
 
         if farewell_found {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -217,6 +251,7 @@ impl SignalEnricher {
 
         if hopelessness_found {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -227,6 +262,7 @@ impl SignalEnricher {
 
         if isolation_found {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -237,6 +273,7 @@ impl SignalEnricher {
 
         if financial_found {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -247,6 +284,7 @@ impl SignalEnricher {
 
         if pii_disclosure_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -257,6 +295,7 @@ impl SignalEnricher {
 
         if dare_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -267,6 +306,7 @@ impl SignalEnricher {
 
         if blackmail_found {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -277,6 +317,7 @@ impl SignalEnricher {
 
         if suicide_coercion_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -287,6 +328,7 @@ impl SignalEnricher {
 
         if false_consensus_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -297,6 +339,7 @@ impl SignalEnricher {
 
         if debt_creation_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -307,6 +350,7 @@ impl SignalEnricher {
 
         if reputation_threat_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -317,6 +361,7 @@ impl SignalEnricher {
 
         if identity_erosion_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -327,6 +372,7 @@ impl SignalEnricher {
 
         if network_poisoning_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -337,6 +383,7 @@ impl SignalEnricher {
 
         if fake_vulnerability_count > 0 {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -347,6 +394,7 @@ impl SignalEnricher {
 
         if platform_migration_found {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -357,6 +405,7 @@ impl SignalEnricher {
 
         if emotional_withdrawal_found {
             events.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -394,6 +443,7 @@ impl SignalEnricher {
 
         if ratio >= self.config.question_probe_threshold {
             Some(ContextEvent {
+                event_id: 0,
                 timestamp_ms,
                 sender_id: sender_id.to_string(),
                 conversation_id: conversation_id.to_string(),
@@ -448,6 +498,13 @@ impl SignalEnricher {
         }
         None
     }
+}
+
+fn contains_high_risk_phrase(text: &str, normalizer: &TextNormalizer, phrases: &[&str]) -> bool {
+    phrases.iter().any(|phrase| {
+        let normalized_phrase = normalizer.normalize_semantic(phrase);
+        !normalized_phrase.is_empty() && text.contains(&normalized_phrase)
+    })
 }
 
 fn build_enricher_matcher() -> EnricherMatcher {
@@ -521,12 +578,17 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("зроби це зараз", Urgency),
         ("терміново", Urgency),
         ("where do you live", PersonalQuestion),
+        ("where u live", PersonalQuestion),
         ("what school", PersonalQuestion),
+        ("what school u go to", PersonalQuestion),
         ("where is your school", PersonalQuestion),
         ("what's your address", PersonalQuestion),
+        ("whats ur real name", PersonalQuestion),
         ("where are you from", PersonalQuestion),
         ("are you home alone", PersonalQuestion),
+        ("u home alone", PersonalQuestion),
         ("when are your parents", PersonalQuestion),
+        ("when ur parents home", PersonalQuestion),
         ("do you have brothers", PersonalQuestion),
         ("do you have sisters", PersonalQuestion),
         ("what neighborhood", PersonalQuestion),
@@ -535,7 +597,9 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("what's your real name", PersonalQuestion),
         ("what's your full name", PersonalQuestion),
         ("де ти живеш", PersonalQuestion),
+        ("де живеш", PersonalQuestion),
         ("в якій школі", PersonalQuestion),
+        ("в якій школі вчишся", PersonalQuestion),
         ("де твоя школа", PersonalQuestion),
         ("яка твоя адреса", PersonalQuestion),
         ("звідки ти", PersonalQuestion),
@@ -726,6 +790,8 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("i screenshotted this", Blackmail),
         ("i took a screenshot", Blackmail),
         ("i have screenshots", Blackmail),
+        ("i got screenshots", Blackmail),
+        ("got screenshots of our chat", Blackmail),
         ("i recorded you", Blackmail),
         ("i'll post this everywhere", Blackmail),
         ("i'll show everyone", Blackmail),
@@ -733,6 +799,7 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("i saved everything", Blackmail),
         ("я заскрінив", Blackmail),
         ("в мене є скріншоти", Blackmail),
+        ("в мене є скріни", Blackmail),
         ("я записав тебе", Blackmail),
         ("я покажу це всім", Blackmail),
         ("всі побачать", Blackmail),
@@ -740,6 +807,7 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("я все зберіг", Blackmail),
         ("я заскринил", Blackmail),
         ("у меня есть скриншоты", Blackmail),
+        ("у меня есть скрины", Blackmail),
         ("я записал тебя", Blackmail),
         ("я покажу это всем", Blackmail),
         ("все увидят", Blackmail),
@@ -763,6 +831,7 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("я зроблю щось з собою якщо ти не відпишеш", SuicideCoercion),
         ("тобі буде пофіг коли мене не стане", SuicideCoercion),
         ("якщо заблокуєш я закінчу це все", SuicideCoercion),
+        ("якщо заблочиш я закінчу це все", SuicideCoercion),
         ("я не можу без тебе жити", SuicideCoercion),
         ("без тебе мені кінець", SuicideCoercion),
         ("ти навіть не думаєш шо зі мною буде", SuicideCoercion),
@@ -772,6 +841,7 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("без тебя я просто сдохну", SuicideCoercion),
         ("тебе будет пофиг когда меня не станет", SuicideCoercion),
         ("если заблокируешь я покончу с этим", SuicideCoercion),
+        ("если заблочишь я покончу с этим", SuicideCoercion),
         ("я не могу без тебя жить", SuicideCoercion),
         ("без тебя мне конец", SuicideCoercion),
         // False Consensus / Normalization — "everyone does it"
@@ -845,15 +915,21 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("я зроблю так шо тебе будуть цькувати", ReputationThreat),
         ("уяви шо про тебе скажуть", ReputationThreat),
         ("вся школа дізнається", ReputationThreat),
+        ("я покажу це всім в школі", ReputationThreat),
+        ("покажу це всім в школі", ReputationThreat),
         ("я скажу твоїм подругам", ReputationThreat),
         ("зачекай поки всі дізнаються", ReputationThreat),
-        ("ніхто з тобою не буде спілкуватись після цього", ReputationThreat),
+        (
+            "ніхто з тобою не буде спілкуватись після цього",
+            ReputationThreat,
+        ),
         // RU teen
         ("я расскажу всей школе", ReputationThreat),
         ("все узнают", ReputationThreat),
         ("никто с тобой не будет дружить", ReputationThreat),
         ("представь что скажут", ReputationThreat),
         ("вся школа узнает", ReputationThreat),
+        ("я покажу это всем в школе", ReputationThreat),
         // Identity Erosion — "ur so mature for ur age"
         // EN teen
         ("ur not like other kids", IdentityErosion),
@@ -943,6 +1019,9 @@ fn build_enricher_matcher() -> EnricherMatcher {
         // EN teen
         ("add me on snap", PlatformMigration),
         ("dm me on insta", PlatformMigration),
+        ("msg me on insta", PlatformMigration),
+        ("add me on ig", PlatformMigration),
+        ("text me on tg", PlatformMigration),
         ("hmu on discord", PlatformMigration),
         ("got discord", PlatformMigration),
         ("lets talk on telegram", PlatformMigration),
@@ -951,6 +1030,8 @@ fn build_enricher_matcher() -> EnricherMatcher {
         // UK teen
         ("го в тг", PlatformMigration),
         ("пиши в снеп", PlatformMigration),
+        ("пиши в інст", PlatformMigration),
+        ("го в інст", PlatformMigration),
         ("є дс", PlatformMigration),
         ("в інсті пиши", PlatformMigration),
         ("давай в телегу", PlatformMigration),
@@ -960,6 +1041,8 @@ fn build_enricher_matcher() -> EnricherMatcher {
         // RU teen
         ("го в тг", PlatformMigration),
         ("пиши в снап", PlatformMigration),
+        ("пиши в инст", PlatformMigration),
+        ("го в инст", PlatformMigration),
         ("есть дс", PlatformMigration),
         ("давай в телегу", PlatformMigration),
         ("тут палево", PlatformMigration),
@@ -996,11 +1079,23 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("могу накрутить подписчиков", Financial),
     ];
 
-    let patterns: Vec<&str> = all.iter().map(|(w, _)| *w).collect();
-    let entries: Vec<EnricherEntry> = all
-        .iter()
-        .map(|(_, cat)| EnricherEntry { category: *cat })
-        .collect();
+    let normalizer = TextNormalizer::new();
+    let mut seen = HashSet::new();
+    let mut patterns = Vec::new();
+    let mut entries = Vec::new();
+
+    for (pattern, category) in all {
+        let normalized = normalizer.normalize_semantic(pattern);
+        if normalized.is_empty() {
+            continue;
+        }
+        if seen.insert((normalized.clone(), *category)) {
+            patterns.push(normalized);
+            entries.push(EnricherEntry {
+                category: *category,
+            });
+        }
+    }
 
     let automaton = AhoCorasick::builder()
         .match_kind(aho_corasick::MatchKind::LeftmostLongest)
@@ -1047,6 +1142,23 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| e.kind == EventKind::PersonalInfoRequest));
+    }
+
+    #[test]
+    fn detects_personal_probing_shorthand_with_typos_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "wh4t schoooool u go to? where u live??",
+            "stranger",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::PersonalInfoRequest),
+            "Expected shorthand probing with typos to be detected, got: {events:?}"
+        );
     }
 
     #[test]
@@ -1192,6 +1304,23 @@ mod tests {
         assert!(
             events.iter().any(|e| e.kind == EventKind::DefenseOfVictim),
             "Expected DefenseOfVictim, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn normalized_matcher_preserves_defense_phrases() {
+        let matcher = build_enricher_matcher();
+        let normalizer = TextNormalizer::new();
+        let normalized = normalizer.normalize_semantic("Stop it! Leave her alone! That's mean!");
+        let hits = matcher
+            .automaton
+            .find_iter(&normalized)
+            .filter(|m| aho_match_at_boundary(&normalized, m.start(), m.end()))
+            .count();
+
+        assert!(
+            hits > 0,
+            "Expected normalized matcher to hit defense phrases, normalized text: {normalized}"
         );
     }
 
@@ -1453,12 +1582,7 @@ mod tests {
     #[test]
     fn detects_pii_school_uk() {
         let enricher = default_enricher();
-        let events = enricher.enrich(
-            "Моя школа номер 5 на Шевченка",
-            "child",
-            "conv_1",
-            1000,
-        );
+        let events = enricher.enrich("Моя школа номер 5 на Шевченка", "child", "conv_1", 1000);
         assert!(
             events
                 .iter()
@@ -1541,9 +1665,7 @@ mod tests {
             1000,
         );
         assert!(
-            events
-                .iter()
-                .any(|e| e.kind == EventKind::ScreenshotThreat),
+            events.iter().any(|e| e.kind == EventKind::ScreenshotThreat),
             "Expected screenshot threat, got: {events:?}"
         );
     }
@@ -1558,10 +1680,27 @@ mod tests {
             1000,
         );
         assert!(
-            events
-                .iter()
-                .any(|e| e.kind == EventKind::ScreenshotThreat),
+            events.iter().any(|e| e.kind == EventKind::ScreenshotThreat),
             "Expected screenshot threat (UK), got: {events:?}"
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::ReputationThreat),
+            "Expected reputation threat (UK), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_blackmail_with_chat_noise_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "i g0t screeeenshots of our chat, ill show everyone",
+            "bully",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::ScreenshotThreat),
+            "Expected noisy screenshot threat, got: {events:?}"
         );
     }
 
@@ -1570,7 +1709,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "if u block me ill end it, i cant live without u",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::SuicideCoercion),
@@ -1583,7 +1724,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "якщо ти підеш мені нема сенсу жити, без тебе мені кінець",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::SuicideCoercion),
@@ -1596,7 +1739,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "everyone does it, its totally normal between friends",
-            "predator", "conv_1", 1000,
+            "predator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::FalseConsensus),
@@ -1609,7 +1754,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "я розкажу всій школі, всі дізнаються",
-            "bully", "conv_1", 1000,
+            "bully",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::ReputationThreat),
@@ -1622,7 +1769,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ur so mature for ur age, u dont need those friends",
-            "predator", "conv_1", 1000,
+            "predator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::IdentityErosion),
@@ -1635,7 +1784,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "лол бро твоя Маша вчора про тебе таке казала шо ти тупа",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::NetworkPoisoning),
@@ -1648,10 +1799,14 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ur the only one who gets me, i have no one else",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
-            events.iter().any(|e| e.kind == EventKind::FakeVulnerability),
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::FakeVulnerability),
             "Expected FakeVulnerability, got: {events:?}"
         );
     }
@@ -1659,13 +1814,25 @@ mod tests {
     #[test]
     fn detects_platform_switch_teen_uk() {
         let enricher = default_enricher();
-        let events = enricher.enrich(
-            "го в тг тут палево",
-            "stranger", "conv_1", 1000,
-        );
+        let events = enricher.enrich("го в тг тут палево", "stranger", "conv_1", 1000);
         assert!(
             events.iter().any(|e| e.kind == EventKind::PlatformSwitch),
             "Expected PlatformSwitch from teen slang, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_platform_switch_with_noisy_typos_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "msg me on in$ta rn, delete this ch4t",
+            "stranger",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::PlatformSwitch),
+            "Expected noisy PlatformSwitch from shorthand, got: {events:?}"
         );
     }
 
@@ -1674,7 +1841,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ill get u vbucks if u do what i say, want free skins?",
-            "stranger", "conv_1", 1000,
+            "stranger",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::MoneyOffer),
@@ -1687,7 +1856,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "Everyone does their homework before class",
-            "teacher", "conv_1", 1000,
+            "teacher",
+            "conv_1",
+            1000,
         );
         assert!(
             !events.iter().any(|e| e.kind == EventKind::FalseConsensus),
@@ -1703,11 +1874,15 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ти така cute і gorgeous, ваще amazing",
-            "stranger", "conv_1", 1000,
+            "stranger",
+            "conv_1",
+            1000,
         );
         // Should detect at least Flattery from "cute" + "gorgeous" + "amazing"
         assert!(
-            events.iter().any(|e| e.kind == EventKind::Flattery || e.kind == EventKind::LoveBombing),
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::Flattery || e.kind == EventKind::LoveBombing),
             "Mixed UK/EN compliments should detect flattery: {events:?}"
         );
     }
@@ -1718,10 +1893,14 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "Хей, where do you live? В якій школі навчаєшся?",
-            "stranger", "conv_1", 1000,
+            "stranger",
+            "conv_1",
+            1000,
         );
         assert!(
-            events.iter().any(|e| e.kind == EventKind::PersonalInfoRequest),
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::PersonalInfoRequest),
             "Mixed UK/EN personal questions should be detected: {events:?}"
         );
     }
@@ -1732,10 +1911,15 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "i have screenshots и я покажу всей школе lol",
-            "bully", "conv_1", 1000,
+            "bully",
+            "conv_1",
+            1000,
         );
         assert!(
-            events.iter().any(|e| e.kind == EventKind::ScreenshotThreat || e.kind == EventKind::ReputationThreat),
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::ScreenshotThreat
+                    || e.kind == EventKind::ReputationThreat),
             "Mixed RU/EN blackmail + reputation should be detected: {events:?}"
         );
     }
@@ -1746,7 +1930,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "если ты уйдешь мне нет смысла жить, i cant live without u",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::SuicideCoercion),
@@ -1760,7 +1946,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "го в тг, this app is trash lets go",
-            "stranger", "conv_1", 1000,
+            "stranger",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::PlatformSwitch),
@@ -1774,10 +1962,14 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ти така beautiful, тільки я тебе розумію, hurry прямо зараз, быстрее",
-            "predator", "conv_1", 1000,
+            "predator",
+            "conv_1",
+            1000,
         );
         // Should detect multiple signals from three-language input
-        let has_flattery = events.iter().any(|e| e.kind == EventKind::Flattery || e.kind == EventKind::LoveBombing);
+        let has_flattery = events
+            .iter()
+            .any(|e| e.kind == EventKind::Flattery || e.kind == EventKind::LoveBombing);
         assert!(
             has_flattery,
             "Three-language mix should detect flattery: {events:?}"
@@ -1795,7 +1987,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "i dare you бро, тобі слабо, bet you wont",
-            "peer", "conv_1", 1000,
+            "peer",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::DareChallenge),
@@ -1809,10 +2003,14 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "my number is 0501234567, я ходжу в школу номер 42",
-            "child", "conv_1", 1000,
+            "child",
+            "conv_1",
+            1000,
         );
         assert!(
-            events.iter().any(|e| e.kind == EventKind::PiiSelfDisclosure),
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::PiiSelfDisclosure),
             "Mixed PII self-disclosure should be detected: {events:?}"
         );
     }
@@ -1823,7 +2021,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "after everything i did for u, неблагодарная, u owe me",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::DebtCreation),
@@ -1837,7 +2037,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ur not like other kids, ти занадто розумна для своїх ровесників",
-            "groomer", "conv_1", 1000,
+            "groomer",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::IdentityErosion),
@@ -1851,7 +2053,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "they dont really like u, они с тебя смеются за спиной",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::NetworkPoisoning),
@@ -1865,10 +2069,14 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "im going through so much rn, в мене нікого крім тебе немає",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
-            events.iter().any(|e| e.kind == EventKind::FakeVulnerability),
+            events
+                .iter()
+                .any(|e| e.kind == EventKind::FakeVulnerability),
             "Mixed fake vulnerability should be detected: {events:?}"
         );
     }
@@ -1879,7 +2087,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "everyone does it, все так делают, its totally normal",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::FalseConsensus),
@@ -1893,7 +2103,9 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "nobody cares, я тягар, what's the point",
-            "child", "conv_1", 1000,
+            "child",
+            "conv_1",
+            1000,
         );
         assert!(
             events.iter().any(|e| e.kind == EventKind::Hopelessness || e.kind == EventKind::SuicidalIdeation),
@@ -1907,12 +2119,15 @@ mod tests {
         let enricher = default_enricher();
         let events = enricher.enrich(
             "fine whatever ну ясно тобі пофіг ill find someone who actually cares",
-            "manipulator", "conv_1", 1000,
+            "manipulator",
+            "conv_1",
+            1000,
         );
         assert!(
-            events.iter().any(|e| e.kind == EventKind::EmotionalBlackmail || e.kind == EventKind::Devaluation),
+            events.iter().any(
+                |e| e.kind == EventKind::EmotionalBlackmail || e.kind == EventKind::Devaluation
+            ),
             "Mixed emotional withdrawal should be detected: {events:?}"
         );
     }
-
 }

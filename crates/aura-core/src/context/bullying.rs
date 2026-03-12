@@ -1,4 +1,4 @@
-use crate::types::{Confidence, DetectionLayer, DetectionSignal, ThreatType};
+use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 
 use super::events::EventKind;
 use super::tracker::ConversationTimeline;
@@ -103,19 +103,20 @@ impl BullyingDetector {
 
         if bullying_count >= thresholds.repeated_min_count {
             let score = calculate_repeated_score(bullying_count);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Bullying,
+            Some(DetectionSignal::context(
+                ThreatType::Bullying,
                 score,
-                confidence: if bullying_count >= 5 {
+                if bullying_count >= 5 {
                     Confidence::High
                 } else {
                     Confidence::Medium
                 },
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                SignalFamily::Conversation,
+                "conversation.bullying.repeated",
+                format!(
                     "Repeated bullying detected: {bullying_count} hostile messages from the same sender in the past week"
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -140,16 +141,17 @@ impl BullyingDetector {
 
         if bully_senders.len() >= thresholds.pileon_min_senders {
             let score = calculate_pileon_score(bully_senders.len());
-            Some(DetectionSignal {
-                threat_type: ThreatType::Bullying,
+            Some(DetectionSignal::context(
+                ThreatType::Bullying,
                 score,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                Confidence::High,
+                SignalFamily::Abuse,
+                "abuse.bullying.pile_on",
+                format!(
                     "Group bullying detected: {} different people sent hostile messages in the past 24 hours",
                     bully_senders.len()
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -179,15 +181,16 @@ impl BullyingDetector {
 
         if late_severity > early_severity + 0.15 {
             let score = 0.6 + (late_severity - early_severity).min(0.3);
-            Some(DetectionSignal {
-                threat_type: ThreatType::Bullying,
+            Some(DetectionSignal::context(
+                ThreatType::Bullying,
                 score,
-                confidence: Confidence::Medium,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                Confidence::Medium,
+                SignalFamily::Conversation,
+                "conversation.bullying.escalation",
+                format!(
                     "Escalating bullying detected: hostility increasing over time (severity {early_severity:.2} → {late_severity:.2})"
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -220,20 +223,21 @@ impl BullyingDetector {
                 4 => 0.75,
                 _ => 0.85,
             };
-            Some(DetectionSignal {
-                threat_type: ThreatType::Bullying,
+            Some(DetectionSignal::context(
+                ThreatType::Bullying,
                 score,
-                confidence: if days.len() >= 5 {
+                if days.len() >= 5 {
                     Confidence::High
                 } else {
                     Confidence::Medium
                 },
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                SignalFamily::Conversation,
+                "conversation.bullying.sustained_harassment",
+                format!(
                     "Sustained harassment: same sender bullied on {} distinct days",
                     days.len()
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -251,16 +255,17 @@ impl BullyingDetector {
             timeline.unique_senders_matching(window_start, |e| e.kind == EventKind::Denigration);
 
         if exclusion_count >= 1 && denigration_senders.len() >= 2 {
-            Some(DetectionSignal {
-                threat_type: ThreatType::Bullying,
-                score: 0.7,
-                confidence: Confidence::High,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            Some(DetectionSignal::context(
+                ThreatType::Bullying,
+                0.7,
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.bullying.target_isolation",
+                format!(
                     "Target isolation: exclusion + denigration from {} different senders",
                     denigration_senders.len()
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -281,17 +286,18 @@ impl BullyingDetector {
             timeline.unique_senders_matching(window_start, |e| e.kind.is_bullying_indicator());
 
         if bullying_count >= 5 && defense_count == 0 && bully_senders.len() >= 2 {
-            Some(DetectionSignal {
-                threat_type: ThreatType::Bullying,
-                score: 0.5,
-                confidence: Confidence::Low,
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+            Some(DetectionSignal::context(
+                ThreatType::Bullying,
+                0.5,
+                Confidence::Low,
+                SignalFamily::Abuse,
+                "abuse.bullying.bystander_silence",
+                format!(
                     "Bystander silence: {} bullying events from {} senders with no defense observed",
                     bullying_count,
                     bully_senders.len()
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -310,21 +316,22 @@ impl BullyingDetector {
                 timeline.unique_senders_matching(window_start, |e| e.kind == EventKind::Exclusion);
             let score = 0.6 + (senders.len() as f32 * 0.1).min(0.3);
 
-            Some(DetectionSignal {
-                threat_type: ThreatType::Bullying,
+            Some(DetectionSignal::context(
+                ThreatType::Bullying,
                 score,
-                confidence: if senders.len() >= 2 {
+                if senders.len() >= 2 {
                     Confidence::High
                 } else {
                     Confidence::Medium
                 },
-                layer: DetectionLayer::ContextAnalysis,
-                explanation: format!(
+                SignalFamily::Conversation,
+                "conversation.bullying.isolation",
+                format!(
                     "Isolation pattern detected: {} exclusion attempts from {} different people",
                     exclusion_count,
                     senders.len()
                 ),
-            })
+            ))
         } else {
             None
         }
@@ -361,6 +368,7 @@ mod tests {
         let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
         for (sender, kind, ts) in events {
             timeline.push(ContextEvent {
+                event_id: 0,
                 timestamp_ms: ts,
                 sender_id: sender.to_string(),
                 conversation_id: "conv_1".to_string(),
