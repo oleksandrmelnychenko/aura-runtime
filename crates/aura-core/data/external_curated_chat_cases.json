@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "dataset_id": "aura_external_curated_seed",
-  "dataset_label": "AURA External Curated Seed Corpus",
-  "curation_status": "seed_reviewed",
+  "dataset_id": "aura_external_curated_mixed",
+  "dataset_label": "AURA External Curated Mixed Review Corpus",
+  "curation_status": "mixed_review_tiers",
   "maintainer": "aura_core_team",
   "created_at_ms": 1773273600000,
   "updated_at_ms": 1773273600000,
@@ -10,7 +10,7 @@
     {
       "id": "external_en_child_stranger_secrecy_probe",
       "source_family": "research_seed",
-      "review_status": "seed_reviewed",
+      "review_status": "gold_reviewed",
       "default_language": "en",
       "age_band": "child",
       "relationship": "stranger",
@@ -86,7 +86,7 @@
     {
       "id": "external_en_selfharm_goodbye_window",
       "source_family": "support_boundary_seed",
-      "review_status": "seed_reviewed",
+      "review_status": "gold_reviewed",
       "default_language": "en",
       "age_band": "teen",
       "relationship": "self",
@@ -165,7 +165,7 @@
     {
       "id": "external_en_group_class_pile_on",
       "source_family": "school_context_seed",
-      "review_status": "seed_reviewed",
+      "review_status": "gold_reviewed",
       "default_language": "en",
       "age_band": "teen",
       "relationship": "group_peer",
@@ -198,7 +198,7 @@
     {
       "id": "external_uk_supportive_friend_help_path",
       "source_family": "support_boundary_seed",
-      "review_status": "seed_reviewed",
+      "review_status": "gold_reviewed",
       "default_language": "uk",
       "age_band": "teen",
       "relationship": "supportive_peer",

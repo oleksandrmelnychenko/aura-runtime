@@ -1,13 +1,22 @@
 use aura_core::{
     evaluate_external_curated_policy_suite, evaluate_external_curated_suite,
-    pre_release_external_curated_gates, pre_release_external_curated_policy_gates,
-    run_external_curated_suite, ExternalCuratedSliceSummary, GateComparison, ScenarioGateReport,
+    pre_release_external_curated_gates_for_manifest, pre_release_external_curated_policy_gates,
+    run_external_curated_gold_suite, run_external_curated_suite, ExternalCuratedSliceSummary,
+    ExternalCuratedSuiteSummary, GateComparison, ScenarioGateReport,
 };
 use aura_patterns::PatternDatabase;
 
 fn main() {
     let db = PatternDatabase::default_mvp();
-    let summary = run_external_curated_suite(&db, 6);
+    let mixed_summary = run_external_curated_suite(&db, 6);
+    print_suite("AURA external curated corpus evaluation", &mixed_summary);
+
+    println!();
+    let gold_summary = run_external_curated_gold_suite(&db, 6);
+    print_suite("AURA external curated gold-only evaluation", &gold_summary);
+}
+
+fn print_suite(title: &str, summary: &ExternalCuratedSuiteSummary) {
     let (
         overall_eval,
         by_source_family_eval,
@@ -15,7 +24,10 @@ fn main() {
         by_language_eval,
         by_relationship_eval,
         by_age_eval,
-    ) = evaluate_external_curated_suite(&summary, &pre_release_external_curated_gates());
+    ) = evaluate_external_curated_suite(
+        summary,
+        &pre_release_external_curated_gates_for_manifest(&summary.manifest),
+    );
     let (
         overall_policy,
         by_source_family_policy,
@@ -24,11 +36,11 @@ fn main() {
         by_relationship_policy,
         by_age_policy,
     ) = evaluate_external_curated_policy_suite(
-        &summary,
+        summary,
         &pre_release_external_curated_policy_gates(),
     );
 
-    println!("AURA external curated corpus evaluation");
+    println!("{title}");
     println!(
         "  dataset: id={} label=\"{}\" schema={} curation_status={} maintainer={}",
         summary.manifest.dataset_id,

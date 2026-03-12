@@ -16,6 +16,9 @@ use crate::{
 const MIN_EXTERNAL_SLICE_CALIBRATION_EXAMPLES: usize = 12;
 const MIN_EXTERNAL_SLICE_LEAD_TIME_CASES: usize = 8;
 const EXTERNAL_CURATED_SCHEMA_VERSION: u32 = 1;
+const EXTERNAL_CURATED_SEED_REVIEWED: &str = "seed_reviewed";
+const EXTERNAL_CURATED_GOLD_REVIEWED: &str = "gold_reviewed";
+const EXTERNAL_CURATED_MIXED_REVIEW_TIERS: &str = "mixed_review_tiers";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalCuratedManifest {
@@ -158,6 +161,29 @@ pub fn pre_release_external_curated_gates() -> ScenarioQualityGates {
     }
 }
 
+pub fn pre_release_external_curated_gold_gates() -> ScenarioQualityGates {
+    ScenarioQualityGates {
+        max_brier_score: Some(0.20),
+        max_expected_calibration_error: Some(0.15),
+        min_positive_detection_rate: Some(0.90),
+        max_negative_false_positive_rate: Some(0.03),
+        min_pre_onset_detection_rate: Some(0.30),
+        per_threat: Vec::new(),
+    }
+}
+
+pub fn pre_release_external_curated_gates_for_manifest(
+    manifest: &ExternalCuratedManifest,
+) -> ScenarioQualityGates {
+    match manifest.curation_status.as_str() {
+        EXTERNAL_CURATED_GOLD_REVIEWED => merge_stricter_quality_gates(
+            &pre_release_external_curated_gates(),
+            &pre_release_external_curated_gold_gates(),
+        ),
+        _ => pre_release_external_curated_gates(),
+    }
+}
+
 pub fn pre_release_external_curated_policy_gates() -> PolicyActionQualityGates {
     pre_release_policy_action_gates()
 }
@@ -167,6 +193,20 @@ pub fn run_external_curated_suite(
     bin_count: usize,
 ) -> ExternalCuratedSuiteSummary {
     let bundle = external_curated_bundle();
+    run_external_curated_suite_for_bundle(&bundle, pattern_db, bin_count)
+}
+
+pub fn external_curated_gold_bundle() -> ExternalCuratedBundle {
+    let bundle = external_curated_bundle();
+    filter_external_curated_bundle_by_review_status(&bundle, EXTERNAL_CURATED_GOLD_REVIEWED)
+        .expect("builtin external curated corpus contains gold-reviewed cases")
+}
+
+pub fn run_external_curated_gold_suite(
+    pattern_db: &PatternDatabase,
+    bin_count: usize,
+) -> ExternalCuratedSuiteSummary {
+    let bundle = external_curated_gold_bundle();
     run_external_curated_suite_for_bundle(&bundle, pattern_db, bin_count)
 }
 
@@ -277,6 +317,45 @@ pub fn run_external_curated_suite_for_scenarios(
     }
 }
 
+pub fn filter_external_curated_bundle_by_review_status(
+    bundle: &ExternalCuratedBundle,
+    review_status: &str,
+) -> Result<ExternalCuratedBundle, String> {
+    if !is_supported_external_review_status(review_status) {
+        return Err(format!(
+            "external curated review_status {} is unsupported",
+            review_status
+        ));
+    }
+
+    let scenarios = bundle
+        .scenarios
+        .iter()
+        .filter(|scenario| scenario.metadata.review_status == review_status)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if scenarios.is_empty() {
+        return Err(format!(
+            "external curated bundle {} contains no {} cases",
+            bundle.manifest.dataset_id, review_status
+        ));
+    }
+
+    Ok(ExternalCuratedBundle {
+        manifest: ExternalCuratedManifest {
+            schema_version: bundle.manifest.schema_version,
+            dataset_id: format!("{}_{}", bundle.manifest.dataset_id, review_status),
+            dataset_label: format!("{} ({review_status})", bundle.manifest.dataset_label),
+            curation_status: review_status.to_string(),
+            maintainer: bundle.manifest.maintainer.clone(),
+            created_at_ms: bundle.manifest.created_at_ms,
+            updated_at_ms: bundle.manifest.updated_at_ms,
+        },
+        scenarios,
+    })
+}
+
 fn build_external_curated_bundle(file: &ExternalCuratedFile) -> ExternalCuratedBundle {
     ExternalCuratedBundle {
         manifest: ExternalCuratedManifest {
@@ -323,7 +402,8 @@ pub fn evaluate_external_curated_suite(
         .by_review_status
         .iter()
         .map(|slice| {
-            let slice_gates = external_slice_quality_gates(&slice.evaluation, gates);
+            let review_gates = external_review_status_quality_gates(&slice.slice_id, gates);
+            let slice_gates = external_slice_quality_gates(&slice.evaluation, &review_gates);
             (
                 slice.slice_id.clone(),
                 evaluate_scenario_quality_gates(&slice.evaluation, &slice_gates),
@@ -479,6 +559,62 @@ fn external_slice_quality_gates(
     adapted
 }
 
+fn external_review_status_quality_gates(
+    review_status: &str,
+    gates: &ScenarioQualityGates,
+) -> ScenarioQualityGates {
+    match review_status {
+        EXTERNAL_CURATED_GOLD_REVIEWED => {
+            merge_stricter_quality_gates(gates, &pre_release_external_curated_gold_gates())
+        }
+        _ => gates.clone(),
+    }
+}
+
+fn merge_stricter_quality_gates(
+    base: &ScenarioQualityGates,
+    stricter: &ScenarioQualityGates,
+) -> ScenarioQualityGates {
+    ScenarioQualityGates {
+        max_brier_score: stricter_max_threshold(base.max_brier_score, stricter.max_brier_score),
+        max_expected_calibration_error: stricter_max_threshold(
+            base.max_expected_calibration_error,
+            stricter.max_expected_calibration_error,
+        ),
+        min_positive_detection_rate: stricter_min_threshold(
+            base.min_positive_detection_rate,
+            stricter.min_positive_detection_rate,
+        ),
+        max_negative_false_positive_rate: stricter_max_threshold(
+            base.max_negative_false_positive_rate,
+            stricter.max_negative_false_positive_rate,
+        ),
+        min_pre_onset_detection_rate: stricter_min_threshold(
+            base.min_pre_onset_detection_rate,
+            stricter.min_pre_onset_detection_rate,
+        ),
+        per_threat: base.per_threat.clone(),
+    }
+}
+
+fn stricter_max_threshold(base: Option<f32>, stricter: Option<f32>) -> Option<f32> {
+    match (base, stricter) {
+        (Some(base), Some(stricter)) => Some(base.min(stricter)),
+        (Some(base), None) => Some(base),
+        (None, Some(stricter)) => Some(stricter),
+        (None, None) => None,
+    }
+}
+
+fn stricter_min_threshold(base: Option<f32>, stricter: Option<f32>) -> Option<f32> {
+    match (base, stricter) {
+        (Some(base), Some(stricter)) => Some(base.max(stricter)),
+        (Some(base), None) => Some(base),
+        (None, Some(stricter)) => Some(stricter),
+        (None, None) => None,
+    }
+}
+
 fn summarize_external_slices<F>(
     scenarios: &[ExternalCuratedScenario],
     runs: &[ScenarioRunResult],
@@ -581,6 +717,12 @@ fn validate_external_curated_file(file: &ExternalCuratedFile) -> Result<(), Stri
     if file.curation_status.trim().is_empty() {
         return Err("external curated corpus curation_status must not be empty".to_string());
     }
+    if !is_supported_external_curation_status(&file.curation_status) {
+        return Err(format!(
+            "external curated corpus curation_status {} is unsupported",
+            file.curation_status
+        ));
+    }
     if file.maintainer.trim().is_empty() {
         return Err("external curated corpus maintainer must not be empty".to_string());
     }
@@ -598,6 +740,7 @@ fn validate_external_curated_file(file: &ExternalCuratedFile) -> Result<(), Stri
         .map(|expectation| expectation.scenario_name)
         .collect::<BTreeSet<_>>();
     let mut ids = BTreeSet::new();
+    let mut review_statuses = BTreeSet::new();
 
     for case in &file.cases {
         if case.id.trim().is_empty() {
@@ -618,6 +761,13 @@ fn validate_external_curated_file(file: &ExternalCuratedFile) -> Result<(), Stri
                 case.id
             ));
         }
+        if !is_supported_external_review_status(&case.review_status) {
+            return Err(format!(
+                "external curated case {} has unsupported review_status {}",
+                case.id, case.review_status
+            ));
+        }
+        review_statuses.insert(case.review_status.clone());
         if case.default_language.trim().is_empty() {
             return Err(format!(
                 "external curated case {} has empty default_language",
@@ -687,7 +837,58 @@ fn validate_external_curated_file(file: &ExternalCuratedFile) -> Result<(), Stri
         }
     }
 
+    match file.curation_status.as_str() {
+        EXTERNAL_CURATED_SEED_REVIEWED => {
+            if review_statuses.len() != 1
+                || !review_statuses.contains(EXTERNAL_CURATED_SEED_REVIEWED)
+            {
+                return Err(
+                    "external curated corpus curation_status seed_reviewed must contain only seed_reviewed cases"
+                        .to_string(),
+                );
+            }
+        }
+        EXTERNAL_CURATED_GOLD_REVIEWED => {
+            if review_statuses.len() != 1
+                || !review_statuses.contains(EXTERNAL_CURATED_GOLD_REVIEWED)
+            {
+                return Err(
+                    "external curated corpus curation_status gold_reviewed must contain only gold_reviewed cases"
+                        .to_string(),
+                );
+            }
+        }
+        EXTERNAL_CURATED_MIXED_REVIEW_TIERS => {
+            if review_statuses.len() < 2
+                || !review_statuses.contains(EXTERNAL_CURATED_SEED_REVIEWED)
+                || !review_statuses.contains(EXTERNAL_CURATED_GOLD_REVIEWED)
+            {
+                return Err(
+                    "external curated corpus curation_status mixed_review_tiers must contain both seed_reviewed and gold_reviewed cases"
+                        .to_string(),
+                );
+            }
+        }
+        _ => unreachable!("validated external curated curation_status"),
+    }
+
     Ok(())
+}
+
+fn is_supported_external_curation_status(status: &str) -> bool {
+    matches!(
+        status,
+        EXTERNAL_CURATED_SEED_REVIEWED
+            | EXTERNAL_CURATED_GOLD_REVIEWED
+            | EXTERNAL_CURATED_MIXED_REVIEW_TIERS
+    )
+}
+
+fn is_supported_external_review_status(status: &str) -> bool {
+    matches!(
+        status,
+        EXTERNAL_CURATED_SEED_REVIEWED | EXTERNAL_CURATED_GOLD_REVIEWED
+    )
 }
 
 fn build_external_curated_scenario(spec: &ExternalCuratedCaseSpec) -> ExternalCuratedScenario {
@@ -781,7 +982,8 @@ mod tests {
     fn external_curated_file_loads_expected_cases() {
         let file = external_curated_chat_file();
         assert_eq!(file.schema_version, EXTERNAL_CURATED_SCHEMA_VERSION);
-        assert_eq!(file.dataset_id, "aura_external_curated_seed");
+        assert_eq!(file.dataset_id, "aura_external_curated_mixed");
+        assert_eq!(file.curation_status, EXTERNAL_CURATED_MIXED_REVIEW_TIERS);
         assert!(file.cases.len() >= 8);
         assert!(file
             .cases
@@ -791,6 +993,14 @@ mod tests {
             .cases
             .iter()
             .any(|case| case.id == "external_uk_supportive_friend_help_path"));
+        assert!(file
+            .cases
+            .iter()
+            .any(|case| case.review_status == EXTERNAL_CURATED_GOLD_REVIEWED));
+        assert!(file
+            .cases
+            .iter()
+            .any(|case| case.review_status == EXTERNAL_CURATED_SEED_REVIEWED));
     }
 
     #[test]
@@ -811,7 +1021,7 @@ mod tests {
             parsed.manifest.schema_version,
             EXTERNAL_CURATED_SCHEMA_VERSION
         );
-        assert_eq!(parsed.manifest.dataset_id, "aura_external_curated_seed");
+        assert_eq!(parsed.manifest.dataset_id, "aura_external_curated_mixed");
         assert!(!parsed.scenarios.is_empty());
     }
 
@@ -820,13 +1030,67 @@ mod tests {
         let db = PatternDatabase::default_mvp();
         let summary = run_external_curated_suite(&db, 5);
 
-        assert_eq!(summary.manifest.dataset_id, "aura_external_curated_seed");
+        assert_eq!(summary.manifest.dataset_id, "aura_external_curated_mixed");
         assert!(!summary.by_source_family.is_empty());
         assert!(!summary.by_review_status.is_empty());
         assert!(!summary.by_language.is_empty());
         assert!(!summary.by_relationship.is_empty());
         assert!(!summary.by_age_band.is_empty());
         assert_eq!(summary.policy.total_scenarios, summary.scenarios.len());
+    }
+
+    #[test]
+    fn gold_reviewed_external_gates_are_stricter_than_base() {
+        let base = pre_release_external_curated_gates();
+        let gold = pre_release_external_curated_gold_gates();
+
+        assert!(gold.max_brier_score.unwrap() < base.max_brier_score.unwrap());
+        assert!(
+            gold.max_expected_calibration_error.unwrap()
+                < base.max_expected_calibration_error.unwrap()
+        );
+        assert!(
+            gold.min_positive_detection_rate.unwrap() > base.min_positive_detection_rate.unwrap()
+        );
+        assert!(
+            gold.max_negative_false_positive_rate.unwrap()
+                < base.max_negative_false_positive_rate.unwrap()
+        );
+        assert!(
+            gold.min_pre_onset_detection_rate.unwrap() > base.min_pre_onset_detection_rate.unwrap()
+        );
+    }
+
+    #[test]
+    fn gold_only_external_bundle_derives_gold_manifest() {
+        let gold_bundle = external_curated_gold_bundle();
+
+        assert_eq!(
+            gold_bundle.manifest.curation_status,
+            EXTERNAL_CURATED_GOLD_REVIEWED
+        );
+        assert!(gold_bundle
+            .manifest
+            .dataset_id
+            .ends_with(EXTERNAL_CURATED_GOLD_REVIEWED));
+        assert!(!gold_bundle.scenarios.is_empty());
+        assert!(gold_bundle
+            .scenarios
+            .iter()
+            .all(|scenario| scenario.metadata.review_status == EXTERNAL_CURATED_GOLD_REVIEWED));
+    }
+
+    #[test]
+    fn gold_only_external_suite_passes_manifest_aware_gates() {
+        let db = PatternDatabase::default_mvp();
+        let summary = run_external_curated_gold_suite(&db, 5);
+        let gates = pre_release_external_curated_gates_for_manifest(&summary.manifest);
+        let (overall, _, _, _, _, _) = evaluate_external_curated_suite(&summary, &gates);
+
+        assert!(
+            overall.passed,
+            "gold-only external curated gates failed: {overall:?}"
+        );
     }
 
     #[test]
@@ -934,5 +1198,19 @@ mod tests {
                 "age-band eval slice {slice} failed: {report:?}"
             );
         }
+    }
+
+    #[test]
+    fn external_curated_review_status_slices_include_gold_and_seed() {
+        let db = PatternDatabase::default_mvp();
+        let summary = run_external_curated_suite(&db, 5);
+        let slice_ids = summary
+            .by_review_status
+            .iter()
+            .map(|slice| slice.slice_id.as_str())
+            .collect::<BTreeSet<_>>();
+
+        assert!(slice_ids.contains(EXTERNAL_CURATED_GOLD_REVIEWED));
+        assert!(slice_ids.contains(EXTERNAL_CURATED_SEED_REVIEWED));
     }
 }
