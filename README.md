@@ -18,7 +18,7 @@ Current product direction is narrow on purpose:
 - **3 languages**: English, Ukrainian, Russian, including slang, shorthand, and noisy chat normalization
 - **Protobuf-only FFI**: stable C ABI over encoded bytes via `AuraBuffer`
 - **Evaluation stack**: canonical scenarios, manipulation track, multilingual, noisy/slang, robustness, corpus-style, social-context, realistic curated, and external curated suites
-- **679 Rust tests** across the workspace, all green
+- **688 Rust tests** across the workspace, all green
 
 ## Key Capabilities
 
@@ -122,7 +122,7 @@ AURA now has multiple evaluation layers, each targeting a different failure mode
 - **Corpus-style suite**: style-mutated variants from data banks
 - **Social-context suite**: cohorts such as trusted adult, peer intimacy, group pressure, support boundary
 - **Realistic curated suite**: more natural messenger-like chats with support-aware slice gates
-- **External curated suite**: provenance-aware dataset contract with manifest metadata and reviewer-oriented ingestion
+- **External curated suite**: provenance-aware dataset contract with manifest metadata, tiered review quality (`seed_reviewed` / `gold_reviewed` / `mixed_review_tiers`), and manifest-aware quality gates
 
 ### Policy Evaluation
 
@@ -150,11 +150,11 @@ cargo run --example external_curated_eval -p aura-core
 
 ## Test Coverage
 
-**679 Rust tests** across the workspace:
+**688 Rust tests** across the workspace:
 
 | Crate | Tests | Focus |
 | --- | ---: | --- |
-| `aura-core` | 481 | detectors, analyzer, contact profiler, tracker, evaluation, scenarios, policy |
+| `aura-core` | 490 | detectors, analyzer, contact profiler, tracker, evaluation, scenarios, policy |
 | `aura-ffi` | 19 | protobuf-only C ABI, errors, context import/export, batch processing |
 | `aura-ml` | 113 | toxicity, sentiment, tokenization, boundary logic |
 | `aura-patterns` | 66 | matcher, normalizer, URL checker, emoji signals |
@@ -248,27 +248,29 @@ The evaluation stack is data-driven. Important artifacts currently include:
 - `crates/aura-core/data/realistic_chat_cases.json`
 - `crates/aura-core/data/external_curated_chat_cases.json`
 
-The external curated corpus now carries manifest metadata:
+The external curated corpus carries manifest metadata and tiered review quality:
 
 - `schema_version`
 - `dataset_id`
 - `dataset_label`
-- `curation_status`
+- `curation_status` (`seed_reviewed` | `gold_reviewed` | `mixed_review_tiers`)
 - `maintainer`
 - `created_at_ms`
 - `updated_at_ms`
 
-This is the contract intended for future reviewer-curated external datasets.
+Each case has an independent `review_status`. Gold-reviewed cases are held to stricter quality gates (lower Brier score, tighter calibration, higher detection rate, lower false positive rate). Mixed corpora validate consistency between corpus-level `curation_status` and per-case `review_status`.
 
 ## How To Move Forward
 
 The next steps should stay focused on stabilizing **one strong v1**, not adding unrelated product layers.
 
-### Phase 1: Gold-Reviewed Corpus
+### Phase 1: Gold-Reviewed Corpus — Done
 
-- Add a second external corpus tier: `gold_reviewed` / `human_curated`
-- Keep the current external manifest contract, but feed it real reviewer-curated excerpts
-- Introduce stronger gates for `gold_reviewed` than for `seed_reviewed`
+- Two review tiers: `seed_reviewed` and `gold_reviewed`
+- Stricter quality gates for gold-reviewed cases (Brier <= 0.20, ECE <= 0.15, detection >= 90%, FPR <= 3%)
+- Mixed corpus mode (`mixed_review_tiers`) with per-slice gate adaptation
+- Validation enforces consistency between corpus-level `curation_status` and per-case `review_status`
+- Gold-only suite can be run independently with `run_external_curated_gold_suite`
 
 ### Phase 2: Calibration Discipline
 
