@@ -14,10 +14,10 @@ Current product direction is narrow on purpose:
 
 - **Messenger-native runtime**: content, conversation, link, and abuse signals are combined into one analysis result
 - **Stateful context engine**: timelines, contact profiles, trust decay, weekly snapshots, and behavioral trend detection
-- **Messenger policy layer**: `UiAction` outputs such as warn, blur, report, block, crisis support, guardian escalation
+- **Inference-aware messenger policy layer**: `UiAction` outputs are refined by risk horizon, escalation likelihood, and latent psychological states
 - **3 languages**: English, Ukrainian, Russian, including slang, shorthand, and noisy chat normalization
 - **Protobuf-only FFI**: stable C ABI over encoded bytes via `AuraBuffer`
-- **Evaluation stack**: canonical scenarios, manipulation track, multilingual, noisy/slang, robustness, corpus-style, social-context, realistic curated, and external curated suites
+- **Evaluation stack**: canonical scenarios, manipulation track, multilingual, noisy/slang, robustness, corpus-style, social-context, realistic curated, and external curated mixed/gold suites
 - **688 Rust tests** across the workspace, all green
 
 ## Key Capabilities
@@ -28,6 +28,7 @@ Current product direction is narrow on purpose:
 - **20 enricher categories**: PII, probing, screenshot blackmail, suicide coercion, false consensus, debt leverage, platform migration, identity erosion, network poisoning, and more
 - **Contact intelligence**: rating, trust level, circle tier, behavioral trend, shift signals
 - **Messenger policy actions**: `WarnBeforeSend`, `WarnBeforeDisplay`, `BlurUntilTap`, `ConfirmBeforeOpenLink`, `SuggestBlockContact`, `SuggestReport`, `RestrictUnknownContact`, `SlowDownConversation`, `ShowCrisisSupport`, `EscalateToGuardian`
+- **Inference-aware refinement**: policy is adjusted by uncertainty, risk horizon, escalation likelihood, protective factors, and latent states such as coercive control or crisis vulnerability
 - **Robustness layers**: mixed-language chats, slang, typos, shorthand, social-context slices, realistic curated corpora
 
 ## Architecture
@@ -76,7 +77,9 @@ Message / Event
 - `contact_snapshot`
 - `reason_codes`
 - `ui_actions`
-- inference summary for uncertainty, horizon, escalation likelihood, latent states
+- `inference` summary for uncertainty, horizon, escalation likelihood, protective-factor strength, and latent states
+
+That inference summary is active policy input, not passive metadata. Immediate self-harm, coercive-control escalation, and group-escalation pathways now refine `UiAction`, `parent_alert`, and short-horizon intervention behavior.
 
 ## Context and Psychology
 
@@ -122,7 +125,7 @@ AURA now has multiple evaluation layers, each targeting a different failure mode
 - **Corpus-style suite**: style-mutated variants from data banks
 - **Social-context suite**: cohorts such as trusted adult, peer intimacy, group pressure, support boundary
 - **Realistic curated suite**: more natural messenger-like chats with support-aware slice gates
-- **External curated suite**: provenance-aware dataset contract with manifest metadata, tiered review quality (`seed_reviewed` / `gold_reviewed` / `mixed_review_tiers`), and manifest-aware quality gates
+- **External curated suite**: provenance-aware dataset contract with manifest metadata, tiered review quality (`seed_reviewed` / `gold_reviewed` / `mixed_review_tiers`), manifest-aware quality gates, and a derived gold-only suite with stricter thresholds
 
 ### Policy Evaluation
 
@@ -148,6 +151,8 @@ cargo run --example realistic_eval -p aura-core
 cargo run --example external_curated_eval -p aura-core
 ```
 
+`external_curated_eval` prints both the mixed manifest run and the derived gold-only run.
+
 ## Test Coverage
 
 **688 Rust tests** across the workspace:
@@ -167,6 +172,7 @@ Coverage areas include:
 - property/stress tests for contact rating and tracker behavior
 - multilingual and noisy-language regressions
 - policy-action gates
+- inference-aware policy refinement gates
 - realistic and external curated evaluation suites
 
 ## Build
@@ -260,6 +266,8 @@ The external curated corpus carries manifest metadata and tiered review quality:
 
 Each case has an independent `review_status`. Gold-reviewed cases are held to stricter quality gates (lower Brier score, tighter calibration, higher detection rate, lower false positive rate). Mixed corpora validate consistency between corpus-level `curation_status` and per-case `review_status`.
 
+The built-in external artifact is currently a mixed review corpus. From that manifest, AURA can derive a gold-only bundle and run the stricter external suite without changing the contract.
+
 ## How To Move Forward
 
 The next steps should stay focused on stabilizing **one strong v1**, not adding unrelated product layers.
@@ -277,13 +285,15 @@ The next steps should stay focused on stabilizing **one strong v1**, not adding 
 - Add per-language, per-age-band, and per-threat calibration reports
 - Split stronger gates for `child`, `trusted_adult`, `support boundary`, and `group pressure`
 - Track calibration drift between canonical, realistic, and external corpora
+- Start comparing mixed external metrics against derived gold-only metrics as a release signal, not only as diagnostics
 
-### Phase 3: Psychological Modeling
+### Phase 3: Core Policy and Psychological Modeling
 
 - Expand latent psychological state tracking
 - Separate self-harm ideation from attempt-proximity logic more explicitly
 - Improve coercive-control and reputation/image-abuse pathways
 - Preserve protective-factor reasoning, not only threat accumulation
+- Extend inference-aware policy beyond `ui_actions` into `parent_alert` and `follow_ups`, especially for trusted-adult boundary and supportive self-harm boundary cases
 
 ### Phase 4: Mathematical Upgrades
 
@@ -300,7 +310,9 @@ Before calling anything stable:
 
 - protobuf contract stable
 - policy gates stable
+- inference-aware policy stable
 - realistic and external curated suites green
+- mixed and gold external suites green
 - regression packs green across EN/UK/RU
 - no reliance on synthetic-only confidence
 
