@@ -76,6 +76,16 @@ pub struct ExternalCuratedSuiteSummary {
     pub scenarios: Vec<ExternalCuratedMetadata>,
 }
 
+type SliceGateReports = Vec<(String, ScenarioGateReport)>;
+type ExternalSuiteGateResult = (
+    ScenarioGateReport,
+    SliceGateReports,
+    SliceGateReports,
+    SliceGateReports,
+    SliceGateReports,
+    SliceGateReports,
+);
+
 #[derive(Debug, Clone, Deserialize)]
 struct ExternalCuratedFile {
     schema_version: u32,
@@ -378,14 +388,7 @@ fn build_external_curated_bundle(file: &ExternalCuratedFile) -> ExternalCuratedB
 pub fn evaluate_external_curated_suite(
     summary: &ExternalCuratedSuiteSummary,
     gates: &ScenarioQualityGates,
-) -> (
-    ScenarioGateReport,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-) {
+) -> ExternalSuiteGateResult {
     let overall = evaluate_scenario_quality_gates(&summary.evaluation, gates);
     let by_source_family = summary
         .by_source_family
@@ -457,14 +460,7 @@ pub fn evaluate_external_curated_suite(
 pub fn evaluate_external_curated_policy_suite(
     summary: &ExternalCuratedSuiteSummary,
     gates: &PolicyActionQualityGates,
-) -> (
-    ScenarioGateReport,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-) {
+) -> ExternalSuiteGateResult {
     let overall = evaluate_policy_action_gates(&summary.policy, gates);
     let by_source_family = summary
         .by_source_family

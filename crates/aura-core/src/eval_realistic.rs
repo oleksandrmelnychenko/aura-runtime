@@ -48,6 +48,14 @@ pub struct RealisticChatSuiteSummary {
     pub scenarios: Vec<RealisticChatMetadata>,
 }
 
+type SliceGateReports = Vec<(String, ScenarioGateReport)>;
+type RealisticSuiteGateResult = (
+    ScenarioGateReport,
+    SliceGateReports,
+    SliceGateReports,
+    SliceGateReports,
+);
+
 const MIN_REALISTIC_SLICE_CALIBRATION_EXAMPLES: usize = 12;
 const MIN_REALISTIC_SLICE_LEAD_TIME_CASES: usize = 8;
 const REALISTIC_CHAT_SCHEMA_VERSION: u32 = 1;
@@ -231,12 +239,7 @@ pub fn run_realistic_chat_suite(
 pub fn evaluate_realistic_chat_suite(
     summary: &RealisticChatSuiteSummary,
     gates: &ScenarioQualityGates,
-) -> (
-    ScenarioGateReport,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-) {
+) -> RealisticSuiteGateResult {
     let overall = evaluate_scenario_quality_gates(&summary.evaluation, gates);
     let by_language = summary
         .by_language
@@ -305,12 +308,7 @@ fn realistic_slice_quality_gates(
 pub fn evaluate_realistic_chat_policy_suite(
     summary: &RealisticChatSuiteSummary,
     gates: &PolicyActionQualityGates,
-) -> (
-    ScenarioGateReport,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-    Vec<(String, ScenarioGateReport)>,
-) {
+) -> RealisticSuiteGateResult {
     let overall = evaluate_policy_action_gates(&summary.policy, gates);
     let by_language = summary
         .by_language

@@ -359,7 +359,7 @@ pub fn summarize_lead_time_results(results: &[LeadTimeResult]) -> LeadTimeSummar
         None
     } else {
         let mid = lead_times.len() / 2;
-        Some(if lead_times.len() % 2 == 0 {
+        Some(if lead_times.len().is_multiple_of(2) {
             let lower = lead_times[mid - 1];
             let upper = lead_times[mid];
             lower + (upper - lower) / 2

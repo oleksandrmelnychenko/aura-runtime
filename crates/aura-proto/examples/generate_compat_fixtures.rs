@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use aura_proto::compat_fixtures::{
     analysis_result_fixture, batch_analyze_response_fixture, tracker_state_fixture,
@@ -29,7 +29,7 @@ fn main() {
     );
 }
 
-fn write_fixture(output_dir: &PathBuf, file_name: &str, bytes: Vec<u8>) {
+fn write_fixture(output_dir: &Path, file_name: &str, bytes: Vec<u8>) {
     let path = output_dir.join(file_name);
     fs::write(&path, bytes)
         .unwrap_or_else(|error| panic!("write compatibility fixture {}: {error}", path.display()));

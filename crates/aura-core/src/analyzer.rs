@@ -3187,7 +3187,7 @@ mod tests {
             result.score
         );
         assert!(
-            result.detected_threats.len() >= 1,
+            !result.detected_threats.is_empty(),
             "Should detect multiple threat types, got: {:?}",
             result.detected_threats
         );
@@ -3352,7 +3352,7 @@ mod tests {
         for i in 0..20 {
             analyzer.analyze_with_context(
                 &child_input("hey, how's school? want to study together?", friend, conv),
-                i * 3600_000,
+                i * 3_600_000,
             );
         }
 
@@ -3605,7 +3605,7 @@ mod tests {
         let mut analyzer = Analyzer::new(child_config(), &db);
 
         // Genuinely friendly messages that could be misinterpreted
-        let messages = vec![
+        let messages = [
             "omg you're literally the best person ever haha",
             "let's hang out after school tomorrow at the mall",
             "don't tell anyone but I have a crush on someone lol",

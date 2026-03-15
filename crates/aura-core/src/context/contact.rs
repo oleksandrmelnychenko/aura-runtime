@@ -379,9 +379,10 @@ impl ContactProfile {
         }
 
         // Check if week boundary crossed — finalize before mutating
-        let needs_finalize = self.current_snapshot.as_ref().map_or(false, |s| {
-            event.timestamp_ms >= s.period_start_ms.saturating_add(WEEK_MS)
-        });
+        let needs_finalize = self
+            .current_snapshot
+            .as_ref()
+            .is_some_and(|s| event.timestamp_ms >= s.period_start_ms.saturating_add(WEEK_MS));
 
         if needs_finalize {
             if let Some(mut old) = self.current_snapshot.take() {
@@ -428,7 +429,7 @@ impl ContactProfile {
         }
 
         // Baseline: first half (2-4 snapshots)
-        let baseline_count = (snapshots.len() / 2).max(2).min(4);
+        let baseline_count = (snapshots.len() / 2).clamp(2, 4);
         let baseline_hostile = avg_hostile_ratio(snapshots.iter().take(baseline_count));
         let baseline_supportive = avg_supportive_ratio(snapshots.iter().take(baseline_count));
 
@@ -3370,7 +3371,7 @@ mod tests {
             "Rating should drop after hostile return"
         );
         // Snapshot from week 0 should still be there
-        assert!(p.weekly_snapshots().len() >= 1);
+        assert!(!p.weekly_snapshots().is_empty());
     }
 
     #[test]

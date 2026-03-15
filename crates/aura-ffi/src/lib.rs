@@ -216,7 +216,7 @@ fn conversation_summary_to_proto(
     let mut conversations = Vec::new();
 
     for conv_id in tracker.conversation_ids() {
-        if let Some(timeline) = tracker.timeline(&conv_id) {
+        if let Some(timeline) = tracker.timeline(conv_id) {
             let events = timeline.all_events();
             let mut unique_senders: Vec<String> = events
                 .iter()

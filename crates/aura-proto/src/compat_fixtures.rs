@@ -136,7 +136,7 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
                 trust_level: 0.08,
                 circle_tier: proto::CircleTier::New as i32,
                 trend: proto::BehavioralTrend::RapidWorsening as i32,
-                weekly_snapshots: vec![weekly_snapshot.clone()],
+                weekly_snapshots: vec![weekly_snapshot],
                 current_snapshot: Some(current_snapshot),
                 active_days: vec![1, 2, 4],
             }],
