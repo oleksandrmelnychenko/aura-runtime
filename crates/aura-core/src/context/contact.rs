@@ -16,6 +16,7 @@ use super::events::ContextEvent;
 const WEEK_MS: u64 = 7 * 24 * 60 * 60 * 1000; // 604_800_000
 const DAY_MS: u64 = 24 * 60 * 60 * 1000; // 86_400_000
 const MAX_SNAPSHOTS: usize = 26; // 6 months of weekly snapshots
+pub const DEFAULT_MAX_CONTACT_PROFILES: usize = 1_000;
 
 fn default_rating() -> f32 {
     50.0
@@ -552,6 +553,7 @@ fn trend_severity(trend: &BehavioralTrend) -> u8 {
 
 pub struct ContactProfiler {
     profiles: HashMap<String, ContactProfile>,
+    max_profiles: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -567,12 +569,18 @@ impl Default for ContactProfiler {
 
 impl ContactProfiler {
     pub fn new() -> Self {
+        Self::with_max_profiles(DEFAULT_MAX_CONTACT_PROFILES)
+    }
+
+    pub fn with_max_profiles(max_profiles: usize) -> Self {
         Self {
             profiles: HashMap::new(),
+            max_profiles: max_profiles.max(1),
         }
     }
 
     pub fn record_event(&mut self, event: &ContextEvent) {
+        self.ensure_capacity_for_sender(&event.sender_id);
         let profile = self
             .profiles
             .entry(event.sender_id.clone())
@@ -604,6 +612,11 @@ impl ContactProfiler {
 
         // Phase 7: update rating & behavioral tracking
         profile.update_rating(event);
+    }
+
+    pub fn update_max_profiles(&mut self, max_profiles: usize) {
+        self.max_profiles = max_profiles.max(1);
+        self.enforce_profile_limit();
     }
 
     pub fn is_new_contact(&self, sender_id: &str) -> bool {
@@ -874,6 +887,7 @@ impl ContactProfiler {
             profile.post_deserialize_fixup();
             self.profiles.insert(profile.sender_id.clone(), profile);
         }
+        self.enforce_profile_limit();
     }
 
     /// Merge-based import: preserves local profiles, takes the most cautious values.
@@ -928,6 +942,7 @@ impl ContactProfiler {
                 }
             }
         }
+        self.enforce_profile_limit();
     }
 
     pub fn import_wire_state(&mut self, state: ContactProfilerWireState) {
@@ -961,6 +976,52 @@ impl ContactProfiler {
                 .retain(|&d| d >= cutoff_day.saturating_sub(90));
             true
         });
+    }
+
+    fn ensure_capacity_for_sender(&mut self, sender_id: &str) {
+        if self.profiles.contains_key(sender_id) {
+            return;
+        }
+
+        self.enforce_profile_limit_for_incoming(sender_id);
+    }
+
+    fn enforce_profile_limit(&mut self) {
+        while self.profiles.len() > self.max_profiles {
+            if self.evict_oldest_profile(None).is_none() {
+                break;
+            }
+        }
+    }
+
+    fn enforce_profile_limit_for_incoming(&mut self, incoming_sender_id: &str) {
+        while self.profiles.len() >= self.max_profiles {
+            if self
+                .evict_oldest_profile(Some(incoming_sender_id))
+                .is_none()
+            {
+                break;
+            }
+        }
+    }
+
+    fn evict_oldest_profile(
+        &mut self,
+        protected_sender_id: Option<&str>,
+    ) -> Option<ContactProfile> {
+        let oldest_sender = self
+            .profiles
+            .iter()
+            .filter(|(sender_id, _)| Some(sender_id.as_str()) != protected_sender_id)
+            .min_by(|(left_id, left), (right_id, right)| {
+                left.last_seen_ms
+                    .cmp(&right.last_seen_ms)
+                    .then_with(|| left.first_seen_ms.cmp(&right.first_seen_ms))
+                    .then_with(|| left_id.cmp(right_id))
+            })
+            .map(|(sender_id, _)| sender_id.clone())?;
+
+        self.profiles.remove(&oldest_sender)
     }
 }
 
@@ -3004,6 +3065,49 @@ mod tests {
         let mut profiler2 = ContactProfiler::new();
         profiler2.import(state);
         // Should not panic
+    }
+
+    #[test]
+    fn max_profile_limit_evicts_oldest_sender() {
+        let mut profiler = ContactProfiler::with_max_profiles(2);
+        profiler.record_event(&make_event(
+            "oldest",
+            "c1",
+            EventKind::NormalConversation,
+            1_000,
+        ));
+        profiler.record_event(&make_event(
+            "middle",
+            "c2",
+            EventKind::NormalConversation,
+            2_000,
+        ));
+        profiler.record_event(&make_event(
+            "newest",
+            "c3",
+            EventKind::NormalConversation,
+            3_000,
+        ));
+
+        assert!(profiler.profile("oldest").is_none());
+        assert!(profiler.profile("middle").is_some());
+        assert!(profiler.profile("newest").is_some());
+    }
+
+    #[test]
+    fn import_respects_profile_limit() {
+        let mut profiler = ContactProfiler::with_max_profiles(2);
+        profiler.import(ContactProfilerState {
+            profiles: vec![
+                ContactProfile::new("alice".to_string(), 1_000),
+                ContactProfile::new("bob".to_string(), 2_000),
+                ContactProfile::new("carol".to_string(), 3_000),
+            ],
+        });
+
+        assert!(profiler.profile("alice").is_none());
+        assert!(profiler.profile("bob").is_some());
+        assert!(profiler.profile("carol").is_some());
     }
 
     #[test]

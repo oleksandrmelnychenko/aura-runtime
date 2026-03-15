@@ -1,5 +1,32 @@
 # AURA Core — Changelog
 
+## Unreleased — Production Hardening and Release Discipline
+
+**Current release candidate posture | Unified evidence bundle | All-features CI**
+
+- Added a structured release report and unified evidence manifest for release,
+  contract, dataset, audit, FFI smoke, and FFI state-sync soak evidence.
+- Promotion and CI workflows now run the all-targets/all-features build and
+  test path, generate machine-readable artifacts, and fail on red evidence.
+- Hardened protobuf and FFI boundaries with request-size limits, malformed-input
+  rejection, export/import stress coverage, and C header smoke checks.
+- Pinned protobuf compatibility fixtures for key messages and stamped runtime,
+  wire, and state-schema versions into contract evidence.
+- Expanded realistic and external curated corpora to support release-critical
+  child, trusted-adult, stranger, group-peer, self, RU, UK, and gold-review
+  slices.
+- Added dataset evidence and a lightweight dataset changelog to make corpus
+  changes attributable and reviewable in promotion.
+- Tightened privacy/audit discipline with machine-readable audit evidence,
+  forbidden-field checks, and salted tokenization for restricted identifiers.
+- Hardened pattern and link inputs with strict regex/domain validation,
+  fail-closed matcher construction, and IDN-aware URL normalization.
+- Fixed several production-path issues in the runtime, including ONNX dispatch,
+  pile-on handling, score inflation, median calculation, per-threat gate
+  preservation, and bounded contact-profile memory.
+
+---
+
 ## v0.7.0 — Contact Rating & Behavioral Profiling
 
 **469 тестів | 37 EventKind variants | Longitudinal behavioral shift detection**

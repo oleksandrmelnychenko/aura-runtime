@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "datasets": [
+    {
+      "dataset_id": "aura_realistic_chat_v1",
+      "entries": [
+        {
+          "change_id": "2026-03-14-realistic-phase2-slice-hardening",
+          "changed_at_ms": 1773492300000,
+          "author": "aura_core_team",
+          "change_kind": "coverage_expansion",
+          "summary": "Expanded realistic child, trusted_adult, stranger, group_peer, and self coverage to support release-blocking calibration slices.",
+          "affected_slices": [
+            "age_band:child",
+            "relationship:trusted_adult",
+            "relationship:stranger",
+            "relationship:group_peer",
+            "relationship:self"
+          ],
+          "support_impact": "increase",
+          "review_ticket": "phase2-production"
+        }
+      ]
+    },
+    {
+      "dataset_id": "aura_external_curated_mixed",
+      "entries": [
+        {
+          "change_id": "2026-03-13-external-phase2-coverage-and-gold-balance",
+          "changed_at_ms": 1773394214722,
+          "author": "aura_core_team",
+          "change_kind": "coverage_expansion",
+          "summary": "Expanded external curated ru, uk, child, trusted_adult, supportive_peer, and group_peer coverage and aligned mixed/gold release support.",
+          "affected_slices": [
+            "language:ru",
+            "language:uk",
+            "age_band:child",
+            "relationship:trusted_adult",
+            "relationship:supportive_peer",
+            "relationship:group_peer",
+            "review_status:gold_reviewed"
+          ],
+          "support_impact": "increase",
+          "review_ticket": "phase2-production"
+        }
+      ]
+    }
+  ]
+}

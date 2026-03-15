@@ -1,0 +1,174 @@
+name: Promotion Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Promotion target
+        required: true
+        type: choice
+        default: staging
+        options:
+          - staging
+          - release
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+  AURA_RELEASE_REPORT_PATH: artifacts/release-report.json
+  AURA_CONTRACT_EVIDENCE_PATH: artifacts/contract-evidence.json
+  AURA_FFI_SMOKE_EVIDENCE_PATH: artifacts/ffi-header-smoke.json
+  AURA_FFI_SOAK_EVIDENCE_PATH: artifacts/ffi-state-sync-soak.json
+  AURA_DATASET_EVIDENCE_PATH: artifacts/dataset-evidence.json
+  AURA_AUDIT_EVIDENCE_PATH: artifacts/audit-evidence.json
+  AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
+
+jobs:
+  promotion-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Resolve Promotion Target
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "AURA_PROMOTION_TARGET=${{ inputs.target }}" >> "$GITHUB_ENV"
+        else
+          echo "AURA_PROMOTION_TARGET=release" >> "$GITHUB_ENV"
+        fi
+    - name: Build
+      run: cargo build --workspace --all-features --all-targets --verbose
+    - name: Run tests
+      run: cargo test --workspace --all-features --all-targets --verbose
+    - name: Run FFI State Sync Soak
+      run: python3 ci/run_ffi_soak.py --output "$AURA_FFI_SOAK_EVIDENCE_PATH" --iterations 5 --label promotion-${AURA_PROMOTION_TARGET}
+    - name: Generate Release Report
+      if: ${{ always() }}
+      run: cargo run --quiet --example release_report -p aura-core -- --output "$AURA_RELEASE_REPORT_PATH" --require-pass
+    - name: Generate Contract Evidence
+      if: ${{ always() }}
+      run: cargo run --quiet --example contract_evidence -p aura-core -- --output "$AURA_CONTRACT_EVIDENCE_PATH"
+    - name: Generate Dataset Evidence
+      if: ${{ always() }}
+      run: python3 ci/generate_dataset_evidence.py --output "$AURA_DATASET_EVIDENCE_PATH"
+    - name: Generate Audit Evidence
+      if: ${{ always() }}
+      run: cargo run --quiet --example audit_evidence -p aura-core -- --output "$AURA_AUDIT_EVIDENCE_PATH"
+    - name: Compile FFI Header Smoke
+      if: ${{ always() }}
+      run: |
+        mkdir -p artifacts
+        cc -std=c11 -Wall -Wextra -pedantic -I. -c ci/ffi_header_smoke.c -o artifacts/ffi-header-smoke.o
+
+        python3 - <<'PY'
+        import json
+        import os
+        import pathlib
+        import subprocess
+
+        compiler = subprocess.check_output(["cc", "--version"], text=True).splitlines()[0]
+        evidence = {
+            "status": "pass",
+            "compiler": compiler,
+            "header_path": "include/aura_ffi.h",
+            "source_path": "ci/ffi_header_smoke.c",
+            "object_path": "artifacts/ffi-header-smoke.o",
+        }
+        pathlib.Path(os.environ["AURA_FFI_SMOKE_EVIDENCE_PATH"]).write_text(
+            json.dumps(evidence, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        PY
+    - name: Generate Evidence Manifest
+      if: ${{ always() }}
+      run: |
+        python3 ci/generate_evidence_manifest.py \
+          --output "$AURA_EVIDENCE_MANIFEST_PATH" \
+          --label "promotion-${AURA_PROMOTION_TARGET}" \
+          --release-report "$AURA_RELEASE_REPORT_PATH" \
+          --contract-evidence "$AURA_CONTRACT_EVIDENCE_PATH" \
+          --ffi-soak "$AURA_FFI_SOAK_EVIDENCE_PATH" \
+          --dataset-evidence "$AURA_DATASET_EVIDENCE_PATH" \
+          --audit-evidence "$AURA_AUDIT_EVIDENCE_PATH" \
+          --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
+    - name: Summarize Promotion Gate
+      if: ${{ always() }}
+      run: |
+        if [ ! -f "$AURA_EVIDENCE_MANIFEST_PATH" ]; then
+          {
+            echo "## AURA Promotion Gate"
+            echo
+            echo "- target: \`${AURA_PROMOTION_TARGET}\`"
+            echo "- evidence manifest: missing"
+            echo "- release report: $([ -f "$AURA_RELEASE_REPORT_PATH" ] && echo present || echo missing)"
+            echo "- contract evidence: $([ -f "$AURA_CONTRACT_EVIDENCE_PATH" ] && echo present || echo missing)"
+            echo "- dataset evidence: $([ -f "$AURA_DATASET_EVIDENCE_PATH" ] && echo present || echo missing)"
+            echo "- audit evidence: $([ -f "$AURA_AUDIT_EVIDENCE_PATH" ] && echo present || echo missing)"
+            echo "- ffi smoke evidence: $([ -f "$AURA_FFI_SMOKE_EVIDENCE_PATH" ] && echo present || echo missing)"
+            echo "- ffi soak evidence: $([ -f "$AURA_FFI_SOAK_EVIDENCE_PATH" ] && echo present || echo missing)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        python3 - <<'PY'
+        import json
+        import os
+        import pathlib
+
+        manifest = json.loads(
+            pathlib.Path(os.environ["AURA_EVIDENCE_MANIFEST_PATH"]).read_text(encoding="utf-8")
+        )
+        summary_data = manifest["summary"]
+        artifacts = manifest.get("artifacts", {})
+        soak_artifact = artifacts.get("ffi_soak", {})
+
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+            summary.write("## AURA Promotion Gate\n\n")
+            summary.write(f"- target: `{os.environ['AURA_PROMOTION_TARGET']}`\n")
+            summary.write(f"- evidence_status: `{manifest['evidence_status']}`\n")
+            summary.write(f"- schema_version: `{manifest['schema_version']}`\n")
+            summary.write(f"- generated_at_utc: `{manifest['generated_at_utc']}`\n")
+            summary.write(f"- overall_status: `{summary_data['release_report_status']}`\n")
+            summary.write(f"- release_report_schema_version: `{summary_data['release_report_schema_version']}`\n")
+            summary.write(f"- runtime_release_version: `{summary_data['runtime_release_version']}`\n")
+            summary.write(f"- wire_package: `{summary_data['wire_package']}`\n")
+            summary.write(f"- wire_major_version: `{summary_data['wire_major_version']}`\n")
+            summary.write(f"- state_schema_version: `{summary_data['state_schema_version']}`\n")
+            summary.write(f"- ffi_export_count: `{summary_data['ffi_export_count']}`\n")
+            summary.write(f"- ffi_request_limit_count: `{summary_data['ffi_request_limit_count']}`\n")
+            summary.write(f"- import_context_max_bytes: `{summary_data['ffi_import_context_max_bytes']}`\n")
+            summary.write(f"- dataset_evidence: `{summary_data['dataset_evidence_status']}`\n")
+            summary.write(f"- audit_evidence: `{summary_data['audit_evidence_status']}`\n")
+            summary.write(f"- audit_forbidden_fields_absent: `{summary_data['audit_forbidden_fields_absent']}`\n")
+            summary.write(f"- ffi_header_smoke: `{summary_data['ffi_smoke_status']}`\n")
+            summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
+            summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
+            summary.write(f"- ffi_state_sync_attempts: `{summary_data['ffi_soak_attempts_run']}`\n")
+            if summary_data["ffi_soak_status"] != "pass":
+                summary.write(f"- ffi_state_sync_failure_category: `{summary_data.get('ffi_soak_failure_category', 'missing')}`\n")
+                summary.write(f"- ffi_state_sync_failure_summary: `{summary_data.get('ffi_soak_failure_summary', 'missing')}`\n")
+                highlights = soak_artifact.get("failure_highlights", [])
+                if highlights:
+                    summary.write("- ffi_state_sync_highlights:\n")
+                    for highlight in highlights[:4]:
+                        summary.write(f"  - `{highlight}`\n")
+        PY
+    - name: Upload Promotion Evidence
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-promotion-evidence-${{ env.AURA_PROMOTION_TARGET }}
+        path: |
+          ${{ env.AURA_RELEASE_REPORT_PATH }}
+          ${{ env.AURA_CONTRACT_EVIDENCE_PATH }}
+          ${{ env.AURA_DATASET_EVIDENCE_PATH }}
+          ${{ env.AURA_AUDIT_EVIDENCE_PATH }}
+          ${{ env.AURA_FFI_SMOKE_EVIDENCE_PATH }}
+          ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}
+          ${{ env.AURA_EVIDENCE_MANIFEST_PATH }}
+        if-no-files-found: warn

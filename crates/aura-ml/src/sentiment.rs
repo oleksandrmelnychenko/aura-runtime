@@ -66,6 +66,10 @@ impl SentimentAnalyzer {
     }
 
     pub fn predict(&mut self, text: &str) -> Option<SentimentPrediction> {
+        self.predict_with_runtime(text)
+    }
+
+    fn predict_with_runtime(&mut self, text: &str) -> Option<SentimentPrediction> {
         #[cfg(feature = "onnx")]
         {
             let has_onnx = self.session.is_some() && self.tokenizer.is_some();
@@ -532,8 +536,8 @@ pub enum SentimentError {
 }
 
 impl crate::backend::SentimentBackend for SentimentAnalyzer {
-    fn predict(&self, text: &str) -> Option<SentimentPrediction> {
-        Some(self.predict_fallback(text))
+    fn predict(&mut self, text: &str) -> Option<SentimentPrediction> {
+        self.predict_with_runtime(text)
     }
 
     fn name(&self) -> &str {

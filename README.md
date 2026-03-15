@@ -17,8 +17,12 @@ Current product direction is narrow on purpose:
 - **Inference-aware messenger policy layer**: `UiAction` outputs are refined by risk horizon, escalation likelihood, and latent psychological states
 - **3 languages**: English, Ukrainian, Russian, including slang, shorthand, and noisy chat normalization
 - **Protobuf-only FFI**: stable C ABI over encoded bytes via `AuraBuffer`
+- **Production release discipline**: persisted release, contract, dataset, audit, FFI smoke, and FFI soak artifacts are aggregated into one machine-readable evidence manifest
+- **Boundary hardening**: size-bounded protobuf decode, atomic failure on malformed batch inputs, bounded contact-profile memory, and panic-free FFI behavior from the caller's perspective
+- **Pattern and link hardening**: strict pattern-database validation, fail-closed regex loading, and IDN-aware URL normalization
+- **Privacy-safe audit path**: structured audit records keep reasons and actions while tokenizing identifiers under a declared salted scheme
 - **Evaluation stack**: canonical scenarios, manipulation track, multilingual, noisy/slang, robustness, corpus-style, social-context, realistic curated, and external curated mixed/gold suites
-- **688 Rust tests** across the workspace, all green
+- **Green verification path**: `cargo test --workspace --all-targets --all-features` is the default workspace gate used locally and in CI
 
 ## Key Capabilities
 
@@ -35,8 +39,8 @@ Current product direction is narrow on purpose:
 
 ```text
 aura-core       Analyzer, action engine, context engine, evaluation stack
-aura-patterns   Pattern matching, boundary-safe matcher, normalizer, URL checker, emoji signals
-aura-ml         Toxicity + sentiment (rule-based fallback, optional ONNX)
+aura-patterns   Pattern matching, strict rule validation, normalizer, IDN-aware URL checker, emoji signals
+aura-ml         Toxicity + sentiment (fallback + optional local ONNX runtime)
 aura-proto      Protobuf contracts for messenger runtime and FFI
 aura-ffi        Protobuf-only C ABI for mobile and desktop clients
 ```
@@ -153,17 +157,14 @@ cargo run --example external_curated_eval -p aura-core
 
 `external_curated_eval` prints both the mixed manifest run and the derived gold-only run.
 
-## Test Coverage
+## Verification
 
-**688 Rust tests** across the workspace:
+The default production-oriented verification path is:
 
-| Crate | Tests | Focus |
-| --- | ---: | --- |
-| `aura-core` | 490 | detectors, analyzer, contact profiler, tracker, evaluation, scenarios, policy |
-| `aura-ffi` | 19 | protobuf-only C ABI, errors, context import/export, batch processing |
-| `aura-ml` | 113 | toxicity, sentiment, tokenization, boundary logic |
-| `aura-patterns` | 66 | matcher, normalizer, URL checker, emoji signals |
-| `aura-proto` | 0 | generated protobuf contract crate |
+```bash
+cargo build --workspace --all-targets --all-features
+cargo test --workspace --all-targets --all-features
+```
 
 Coverage areas include:
 
@@ -174,19 +175,63 @@ Coverage areas include:
 - policy-action gates
 - inference-aware policy refinement gates
 - realistic and external curated evaluation suites
+- protobuf wire-compat fixtures for key messages
+- FFI invalid-input, request-limit, export/import, and state-sync stress coverage
+- artifact-level release, contract, dataset, and audit evidence generation
 
 ## Build
-
-```bash
-cargo build
-cargo test --workspace
-```
 
 Optional ONNX path:
 
 ```bash
 brew install onnxruntime
-cargo test --all-features --workspace
+python scripts/download_models.py
+AURA_REQUIRE_ONNX_MODELS=1 cargo test --workspace --all-targets --all-features
+```
+
+If models are not present, the ONNX integration tests skip by default so a
+clean checkout still has a reproducible full-workspace verification path:
+
+```bash
+cargo test --workspace --all-targets --all-features
+```
+
+Current CI automation uses the same all-targets/all-features build and test
+path in both `Rust` and `Promotion Gate` workflows.
+
+Local promotion rehearsal:
+
+```bash
+python ci/run_promotion_rehearsal.py --target staging
+```
+
+This writes a full local evidence bundle under `artifacts/promotion-rehearsal/`.
+If no C compiler is installed locally, the rehearsal records a clearly labeled
+`ffi_smoke` stub, the manifest will not go green locally, and the real compile
+is left to GitHub Actions on `ubuntu-latest`.
+
+## Release Discipline
+
+Promotion is driven by machine-readable evidence, not by manually reading
+example output. The current release bundle includes:
+
+- release report (`schema_version = 3`)
+- contract evidence for protobuf, ABI, request limits, and state schema
+- dataset evidence with coverage snapshot and changelog linkage
+- audit evidence proving forbidden plaintext fields are absent
+- FFI header smoke evidence
+- FFI state-sync soak evidence
+- unified evidence manifest (`aura.evidence_manifest.v1`)
+
+Default workflow entrypoints:
+
+```bash
+cargo run --quiet --example release_report -p aura-core -- --output artifacts/release-report.json --require-pass
+cargo run --quiet --example contract_evidence -p aura-core -- --output artifacts/contract-evidence.json
+python ci/generate_dataset_evidence.py --output artifacts/dataset-evidence.json
+cargo run --quiet --example audit_evidence -p aura-core -- --output artifacts/audit-evidence.json
+python ci/run_ffi_soak.py --output artifacts/ffi-state-sync-soak.json --iterations 2 --label local-check
+python ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.json --label local-check --release-report artifacts/release-report.json --contract-evidence artifacts/contract-evidence.json --dataset-evidence artifacts/dataset-evidence.json --audit-evidence artifacts/audit-evidence.json --ffi-soak artifacts/ffi-state-sync-soak.json --ffi-smoke artifacts/ffi-header-smoke.json
 ```
 
 ## Usage (Rust)
@@ -237,6 +282,8 @@ Main functions:
 - `aura_get_contact_profile`
 - `aura_mark_contact_trusted`
 - `aura_get_conversation_summary`
+- `aura_version`
+- `aura_last_error`
 - `aura_free`
 - `aura_free_buffer`
 - `aura_free_string`
@@ -253,6 +300,7 @@ The evaluation stack is data-driven. Important artifacts currently include:
 - `crates/aura-core/data/social_context_cohorts.json`
 - `crates/aura-core/data/realistic_chat_cases.json`
 - `crates/aura-core/data/external_curated_chat_cases.json`
+- `crates/aura-core/data/dataset_changelog.json`
 
 The external curated corpus carries manifest metadata and tiered review quality:
 
@@ -268,9 +316,15 @@ Each case has an independent `review_status`. Gold-reviewed cases are held to st
 
 The built-in external artifact is currently a mixed review corpus. From that manifest, AURA can derive a gold-only bundle and run the stricter external suite without changing the contract.
 
-## How To Move Forward
+The current corpus snapshot, coverage counts, and changelog linkage are tracked
+in [`docs/dataset-governance.md`](docs/dataset-governance.md) and the
+machine-readable dataset evidence artifact.
 
-The next steps should stay focused on stabilizing **one strong v1**, not adding unrelated product layers.
+## Roadmap Status
+
+The release-hardening track for **Phase 2** is operational. The codebase now
+has support-aware release reports, persisted evidence artifacts, compatibility
+proofs, privacy-safe audit evidence, and promotion automation.
 
 ### Phase 1: Gold-Reviewed Corpus — Done
 
@@ -280,14 +334,17 @@ The next steps should stay focused on stabilizing **one strong v1**, not adding 
 - Validation enforces consistency between corpus-level `curation_status` and per-case `review_status`
 - Gold-only suite can be run independently with `run_external_curated_gold_suite`
 
-### Phase 2: Calibration Discipline
+### Phase 2: Production-Oriented Calibration Discipline — Operational
 
-- Add per-language, per-age-band, and per-threat calibration reports
-- Split stronger gates for `child`, `trusted_adult`, `support boundary`, and `group pressure`
-- Track calibration drift between canonical, realistic, and external corpora
-- Start comparing mixed external metrics against derived gold-only metrics as a release signal, not only as diagnostics
+- Structured release report with `PASS`, `FAIL`, `INSUFFICIENT_SUPPORT`, and `BLOCKED`
+- Drift comparisons across canonical, realistic, and external corpora
+- Mixed-vs-gold external comparison as a real release signal
+- CI and promotion bundles with release, contract, dataset, audit, smoke, and soak evidence
+- Stable protobuf/ABI/state version stamping and request-limit evidence
+- Privacy-safe audit schema with tokenized identifiers and forbidden-field checks
+- Dataset governance with coverage snapshots and changelog discipline
 
-### Phase 3: Core Policy and Psychological Modeling
+### Next Major Focus: Phase 3 Core Policy and Psychological Modeling
 
 - Expand latent psychological state tracking
 - Separate self-harm ideation from attempt-proximity logic more explicitly
@@ -297,24 +354,12 @@ The next steps should stay focused on stabilizing **one strong v1**, not adding 
 
 ### Phase 4: Mathematical Upgrades
 
-After the corpus and evaluation base is strong enough:
+After policy and psychological pathways are stronger:
 
 - changepoint detection over contact time series
 - better uncertainty and abstention handling
 - escalation / hazard modeling
 - stronger family-specific calibration instead of global tuning
-
-### Phase 5: Release Discipline
-
-Before calling anything stable:
-
-- protobuf contract stable
-- policy gates stable
-- inference-aware policy stable
-- realistic and external curated suites green
-- mixed and gold external suites green
-- regression packs green across EN/UK/RU
-- no reliance on synthetic-only confidence
 
 ## Boundaries
 
@@ -338,8 +383,16 @@ If an AI companion ever exists, it should be a separate layer on top of AURA, no
 - no external network calls by default
 - optional ONNX models are local
 - context state can be exported/imported, so storage and logging need explicit privacy rules
+- routine audit identifiers are tokenized under a declared salted scheme rather than logged in plaintext
+- release and promotion paths include explicit audit evidence that forbidden plaintext fields are absent
 
 For child-safety use cases, privacy and explainability should be treated as product requirements, not optional polish.
+
+## Planning and Operations
+
+Production-oriented stabilization docs now live in [`docs/README.md`](docs/README.md).
+The main closeout and handoff document for the release-hardening track is
+[`docs/phase-2-production-roadmap.md`](docs/phase-2-production-roadmap.md).
 
 ## License
 

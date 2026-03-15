@@ -81,7 +81,7 @@
     {"id":"scam_impersonation_uk","threat_type":"scam","kind":{"type":"keyword","words":["це технічна підтримка","ваш акаунт зламали","виявлено підозрілу активність","підтвердіть свою особу","ваш акаунт буде заблоковано","підтвердіть пароль","нам потрібен ваш логін","ваш банківський рахунок","оновіть спосіб оплати","перейдіть за посиланням для підтвердження"]},"score":0.75,"languages":["uk"],"explanation":"Виявлено шахрайство з імітацією авторитету"},
 
     {"id":"spam_pattern_001","threat_type":"spam","kind":{"type":"regex","pattern":"(?i)(?:buy now|discount \\d+%|free trial|click here|subscribe now|unsubscribe).*(?:http|www\\.)"},"score":0.5,"languages":[],"explanation":"Spam pattern detected"},
-    {"id":"spam_repetitive","threat_type":"spam","kind":{"type":"regex","pattern":"(?i)(\\b\\w{3,}\\b)(?:\\s+\\1){3,}"},"score":0.4,"languages":[],"explanation":"Repetitive text pattern detected (potential spam/flooding)"},
+    {"id":"spam_repetitive","threat_type":"spam","kind":{"type":"regex","pattern":"(?i)\\b(?:buy|free|deal|win|click|subscribe|promo)\\b(?:[\\s!,.]+(?:buy|free|deal|win|click|subscribe|promo)\\b){3,}"},"score":0.4,"languages":[],"explanation":"Repetitive spam keyword burst detected"},
 
     {"id":"nsfw_explicit_en","threat_type":"nsfw","kind":{"type":"keyword","words":["porn","xxx","onlyfans link","adult content","nsfw","explicit video","sex tape","leaked nudes","adult site"]},"score":0.8,"languages":["en"],"explanation":"NSFW/adult content reference detected"},
 

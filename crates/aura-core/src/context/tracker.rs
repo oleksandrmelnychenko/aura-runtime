@@ -5,11 +5,11 @@ use serde::{Deserialize, Serialize};
 use crate::error::AuraError;
 use crate::types::{ConversationType, DetectionSignal};
 
-const TRACKER_STATE_VERSION: u32 = 2;
+pub const TRACKER_STATE_VERSION: u32 = 2;
 
 use super::bullying::BullyingDetector;
 use super::coercion::CoercionDetector;
-use super::contact::{ContactProfiler, ContactProfilerWireState};
+use super::contact::{ContactProfiler, ContactProfilerWireState, DEFAULT_MAX_CONTACT_PROFILES};
 use super::events::{ContextEvent, EventKind};
 use super::grooming::GroomingDetector;
 use super::manipulation::ManipulationDetector;
@@ -23,6 +23,9 @@ pub struct TrackerConfig {
     pub analysis_window_ms: u64,
 
     pub max_conversations: usize,
+
+    #[serde(default = "default_max_contact_profiles")]
+    pub max_contact_profiles: usize,
 
     pub is_child_account: bool,
 
@@ -47,6 +50,7 @@ impl Default for TrackerConfig {
             analysis_window_ms: 30 * 24 * 60 * 60 * 1000,
 
             max_conversations: 200,
+            max_contact_profiles: default_max_contact_profiles(),
             is_child_account: false,
             is_teen_account: false,
             account_holder_age: None,
@@ -54,6 +58,10 @@ impl Default for TrackerConfig {
             timezone_offset_minutes: 0,
         }
     }
+}
+
+fn default_max_contact_profiles() -> usize {
+    DEFAULT_MAX_CONTACT_PROFILES
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -242,7 +250,7 @@ impl ConversationTracker {
         let selfharm_detector = SelfHarmDetector::new();
         let coercion_detector = CoercionDetector::new();
         let raid_detector = RaidDetector::new();
-        let contact_profiler = ContactProfiler::new();
+        let contact_profiler = ContactProfiler::with_max_profiles(config.max_contact_profiles);
 
         Self {
             config,
@@ -261,6 +269,26 @@ impl ConversationTracker {
 
     pub fn config(&self) -> &TrackerConfig {
         &self.config
+    }
+
+    pub fn update_config(&mut self, config: TrackerConfig) {
+        self.config = config;
+        self.grooming_detector =
+            GroomingDetector::new(self.config.is_child_account || self.config.is_teen_account);
+
+        for timeline in self.timelines.values_mut() {
+            timeline.max_events = self.config.max_events_per_conversation;
+            if timeline.events.len() > timeline.max_events {
+                let overflow = timeline.events.len() - timeline.max_events;
+                timeline.events.drain(0..overflow);
+            }
+        }
+
+        while self.timelines.len() > self.config.max_conversations {
+            self.evict_oldest_conversation();
+        }
+        self.contact_profiler
+            .update_max_profiles(self.config.max_contact_profiles);
     }
 
     pub fn set_conversation_type(

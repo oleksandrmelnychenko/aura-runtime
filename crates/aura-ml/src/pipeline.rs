@@ -40,7 +40,7 @@ impl MlPipeline {
         })
     }
 
-    pub fn analyze_text(&self, text: &str) -> MlResult {
+    pub fn analyze_text(&mut self, text: &str) -> MlResult {
         let start = Instant::now();
 
         let toxicity = self.toxicity.predict(text);
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn pipeline_fallback_works() {
-        let pipeline = MlPipeline::fallback();
+        let mut pipeline = MlPipeline::fallback();
         assert!(pipeline.is_active());
 
         let result = pipeline.analyze_text("Hello, how are you?");
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn pipeline_detects_toxic_english() {
-        let pipeline = MlPipeline::fallback();
+        let mut pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("You're a worthless idiot, I'll kill you");
 
         let tox = result.toxicity.unwrap();
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn pipeline_detects_toxic_ukrainian() {
-        let pipeline = MlPipeline::fallback();
+        let mut pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("Ти тупий дебіл, я тебе вб'ю");
 
         let tox = result.toxicity.unwrap();
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn pipeline_positive_sentiment() {
-        let pipeline = MlPipeline::fallback();
+        let mut pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("I love this! Amazing, wonderful experience!");
 
         let sent = result.sentiment.unwrap();
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn pipeline_negative_sentiment() {
-        let pipeline = MlPipeline::fallback();
+        let mut pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("I hate everything. Terrible. So sad and depressed.");
 
         let sent = result.sentiment.unwrap();
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn pipeline_clean_message_low_toxicity() {
-        let pipeline = MlPipeline::fallback();
+        let mut pipeline = MlPipeline::fallback();
         let result = pipeline.analyze_text("Let's meet at the park tomorrow at 3pm");
 
         let tox = result.toxicity.unwrap();
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn pipeline_inference_is_fast() {
-        let pipeline = MlPipeline::fallback();
+        let mut pipeline = MlPipeline::fallback();
         let start = std::time::Instant::now();
 
         for _ in 0..1000 {
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn pipeline_bilingual_threat() {
-        let pipeline = MlPipeline::fallback();
+        let mut pipeline = MlPipeline::fallback();
 
         let en = pipeline.analyze_text("I will kill you");
         assert_eq!(

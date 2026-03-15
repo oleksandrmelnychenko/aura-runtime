@@ -1,7 +1,9 @@
 /target/
+artifacts/
 **/*.rs.bk
 Cargo.lock
 .idea/
 .vscode/
+.claude/
 *.swp
 .DS_Store

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use aho_corasick::AhoCorasick;
 use regex::Regex;
-use tracing::debug;
+use thiserror::Error;
 
 use crate::database::{PatternDatabase, PatternKind};
 use crate::normalizer::TextNormalizer;
@@ -39,8 +39,25 @@ struct RegexMatcher {
     regex: Regex,
 }
 
+#[derive(Debug, Error)]
+pub enum PatternMatcherBuildError {
+    #[error("failed to build keyword matcher for rule '{0}': {1}")]
+    InvalidKeywordMatcher(String, String),
+
+    #[error("invalid regex in rule '{0}': {1}")]
+    InvalidRegex(String, String),
+}
+
 impl PatternMatcher {
     pub fn from_database(db: &PatternDatabase, language: &str) -> Self {
+        Self::try_from_database(db, language)
+            .expect("pattern database must be validated before building matchers")
+    }
+
+    pub fn try_from_database(
+        db: &PatternDatabase,
+        language: &str,
+    ) -> Result<Self, PatternMatcherBuildError> {
         let rules = db.rules_for_language(language);
         let mut keyword_matchers = Vec::new();
         let mut regex_matchers = Vec::new();
@@ -52,43 +69,45 @@ impl PatternMatcher {
                         continue;
                     }
                     let lower_words: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
-                    if let Ok(automaton) = AhoCorasick::builder()
+                    let automaton = AhoCorasick::builder()
                         .ascii_case_insensitive(true)
                         .build(&lower_words)
-                    {
-                        keyword_matchers.push(KeywordMatcher {
-                            rule_id: rule.id.clone(),
-                            threat_type: rule.threat_type.clone(),
-                            score: rule.score,
-                            explanation: rule.explanation.clone(),
-                            automaton,
-                            words: lower_words,
-                        });
-                    }
+                        .map_err(|error| {
+                            PatternMatcherBuildError::InvalidKeywordMatcher(
+                                rule.id.clone(),
+                                error.to_string(),
+                            )
+                        })?;
+                    keyword_matchers.push(KeywordMatcher {
+                        rule_id: rule.id.clone(),
+                        threat_type: rule.threat_type.clone(),
+                        score: rule.score,
+                        explanation: rule.explanation.clone(),
+                        automaton,
+                        words: lower_words,
+                    });
                 }
-                PatternKind::Regex { pattern } => match Regex::new(pattern) {
-                    Ok(regex) => {
-                        regex_matchers.push(RegexMatcher {
-                            rule_id: rule.id.clone(),
-                            threat_type: rule.threat_type.clone(),
-                            score: rule.score,
-                            explanation: rule.explanation.clone(),
-                            regex,
-                        });
-                    }
-                    Err(e) => {
-                        debug!(rule_id = %rule.id, error = %e, "skipping invalid regex pattern");
-                    }
-                },
+                PatternKind::Regex { pattern } => {
+                    let regex = Regex::new(pattern).map_err(|error| {
+                        PatternMatcherBuildError::InvalidRegex(rule.id.clone(), error.to_string())
+                    })?;
+                    regex_matchers.push(RegexMatcher {
+                        rule_id: rule.id.clone(),
+                        threat_type: rule.threat_type.clone(),
+                        score: rule.score,
+                        explanation: rule.explanation.clone(),
+                        regex,
+                    });
+                }
                 PatternKind::UrlDomain { .. } => {}
             }
         }
 
-        Self {
+        Ok(Self {
             keyword_matchers,
             regex_matchers,
             normalizer: TextNormalizer::new(),
-        }
+        })
     }
 
     pub fn scan(&self, text: &str) -> Vec<MatchResult> {
@@ -270,7 +289,7 @@ mod tests {
                 }
             ]
         }"#;
-        PatternDatabase::from_json(json).unwrap()
+        PatternDatabase::from_json_validated(json).unwrap()
     }
 
     #[test]
@@ -395,5 +414,30 @@ mod tests {
                 .all(|result| result.rule_id != "profanity_en_obfuscation"),
             "Obfuscation regex should not fire on 'class': {results:?}"
         );
+    }
+
+    #[test]
+    fn invalid_regex_is_rejected_during_build() {
+        let json = r#"{
+            "version": "test",
+            "updated_at": "2026-01-01",
+            "rules": [
+                {
+                    "id": "bad_regex",
+                    "threat_type": "threat",
+                    "kind": { "type": "regex", "pattern": "(unclosed" },
+                    "score": 0.9,
+                    "languages": ["en"],
+                    "explanation": "Broken regex"
+                }
+            ]
+        }"#;
+        let db = PatternDatabase::from_json(json).unwrap();
+        let err = match PatternMatcher::try_from_database(&db, "en") {
+            Ok(_) => panic!("invalid regex should fail matcher build"),
+            Err(err) => err,
+        };
+
+        assert!(err.to_string().contains("bad_regex"));
     }
 }

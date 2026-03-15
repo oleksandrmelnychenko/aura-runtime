@@ -19,8 +19,15 @@ use aura_core::{config::CulturalContext, Analyzer, AuraConfig, MessageInput};
 use aura_patterns::PatternDatabase;
 use aura_proto::messenger::v1 as proto;
 use prost::Message as ProstMessage;
+use tracing::warn;
 
 const MAX_BATCH_SIZE: usize = 1000;
+const MAX_CONFIG_REQUEST_BYTES: usize = 64 * 1024;
+const MAX_MESSAGE_REQUEST_BYTES: usize = 1024 * 1024;
+const MAX_ANALYZE_CONTEXT_REQUEST_BYTES: usize = 1024 * 1024;
+const MAX_BATCH_REQUEST_BYTES: usize = 4 * 1024 * 1024;
+const MAX_IMPORT_CONTEXT_REQUEST_BYTES: usize = 4 * 1024 * 1024;
+const MAX_SMALL_CONTROL_REQUEST_BYTES: usize = 16 * 1024;
 
 thread_local! {
     static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
@@ -95,12 +102,20 @@ fn prepare_output(out: *mut AuraBuffer) -> Result<(), String> {
     Ok(())
 }
 
-unsafe fn decode_proto<M>(ptr: *const u8, len: usize, label: &str) -> Result<M, String>
+unsafe fn decode_proto_bounded<M>(
+    ptr: *const u8,
+    len: usize,
+    label: &str,
+    max_len: usize,
+) -> Result<M, String>
 where
     M: ProstMessage + Default,
 {
     if ptr.is_null() {
         return Err(format!("null {label} pointer"));
+    }
+    if len > max_len {
+        return Err(format!("{label} exceeds limit of {max_len} bytes"));
     }
 
     M::decode(std::slice::from_raw_parts(ptr, len))
@@ -131,8 +146,9 @@ fn bytes_to_buffer(bytes: Vec<u8>) -> AuraBuffer {
 }
 
 fn decode_config_request(config_ptr: *const u8, config_len: usize) -> Result<AuraConfig, String> {
-    let config_proto: proto::AuraConfig =
-        unsafe { decode_proto(config_ptr, config_len, "config")? };
+    let config_proto: proto::AuraConfig = unsafe {
+        decode_proto_bounded(config_ptr, config_len, "config", MAX_CONFIG_REQUEST_BYTES)?
+    };
     aura_config_from_proto(config_proto)
 }
 
@@ -140,22 +156,34 @@ fn decode_message_request(
     request_ptr: *const u8,
     request_len: usize,
 ) -> Result<MessageInput, String> {
-    let message: proto::MessageInput =
-        unsafe { decode_proto(request_ptr, request_len, "message")? };
+    let message: proto::MessageInput = unsafe {
+        decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "message",
+            MAX_MESSAGE_REQUEST_BYTES,
+        )?
+    };
     Ok(message_input_from_proto(message))
 }
 
-fn apply_config_update(instance: &mut AuraInstance, config: AuraConfig) {
-    if let Some(ref path) = config.patterns_path {
-        if let Ok(json) = std::fs::read_to_string(path) {
-            if let Ok(db) = PatternDatabase::from_json(&json) {
-                instance.pattern_db = db;
-            }
-        }
+fn validate_batch_items(
+    items: Vec<proto::BatchAnalyzeItem>,
+) -> Result<Vec<(MessageInput, Option<u64>)>, String> {
+    let mut validated = Vec::with_capacity(items.len());
+    for item in items {
+        let Some(message) = item.message else {
+            return Err("missing message in batch item".to_string());
+        };
+        validated.push((message_input_from_proto(message), item.timestamp_ms));
     }
+    Ok(validated)
+}
 
-    let db_ptr = &instance.pattern_db as *const PatternDatabase;
-    instance.analyzer.update_config(config, unsafe { &*db_ptr });
+fn apply_config_update(instance: &mut AuraInstance, config: AuraConfig) {
+    let next_pattern_db = resolve_pattern_db_for_update(&instance.pattern_db, &config);
+    instance.analyzer.update_config(config, &next_pattern_db);
+    instance.pattern_db = next_pattern_db;
 }
 
 fn contact_profile_to_proto(
@@ -289,14 +317,18 @@ pub unsafe extern "C" fn aura_analyze_context(
         return false;
     }
 
-    let request: proto::AnalyzeContextRequest =
-        match decode_proto(request_ptr, request_len, "analyze_context request") {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
+    let request: proto::AnalyzeContextRequest = match decode_proto_bounded(
+        request_ptr,
+        request_len,
+        "analyze_context request",
+        MAX_ANALYZE_CONTEXT_REQUEST_BYTES,
+    ) {
+        Ok(request) => request,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
 
     let Some(message) = request.message else {
         set_last_error("missing message in analyze_context request");
@@ -332,14 +364,18 @@ pub unsafe extern "C" fn aura_analyze_batch(
         return false;
     }
 
-    let request: proto::BatchAnalyzeRequest =
-        match decode_proto(request_ptr, request_len, "batch analyze request") {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
+    let request: proto::BatchAnalyzeRequest = match decode_proto_bounded(
+        request_ptr,
+        request_len,
+        "batch analyze request",
+        MAX_BATCH_REQUEST_BYTES,
+    ) {
+        Ok(request) => request,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
 
     if request.items.len() > MAX_BATCH_SIZE {
         set_last_error(format!(
@@ -349,14 +385,18 @@ pub unsafe extern "C" fn aura_analyze_batch(
         return false;
     }
 
+    let items = match validate_batch_items(request.items) {
+        Ok(items) => items,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
+
     match with_instance(handle, |instance| {
-        let mut results = Vec::with_capacity(request.items.len());
-        for item in request.items {
-            let Some(message) = item.message else {
-                return Err("missing message in batch item".to_string());
-            };
-            let input = message_input_from_proto(message);
-            let result = match item.timestamp_ms {
+        let mut results = Vec::with_capacity(items.len());
+        for (input, timestamp_ms) in items {
+            let result = match timestamp_ms {
                 Some(ts) => instance.analyzer.analyze_with_context(&input, ts),
                 None => instance.analyzer.analyze(&input),
             };
@@ -418,14 +458,18 @@ pub unsafe extern "C" fn aura_reload_patterns(
         return false;
     }
 
-    let request: proto::ReloadPatternsRequest =
-        match decode_proto(request_ptr, request_len, "reload_patterns request") {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
+    let request: proto::ReloadPatternsRequest = match decode_proto_bounded(
+        request_ptr,
+        request_len,
+        "reload_patterns request",
+        MAX_SMALL_CONTROL_REQUEST_BYTES,
+    ) {
+        Ok(request) => request,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
 
     let db = match PatternDatabase::from_file(&request.patterns_path) {
         Ok(db) => db,
@@ -483,14 +527,18 @@ pub unsafe extern "C" fn aura_import_context(
 ) -> bool {
     clear_last_error();
 
-    let request: proto::ImportContextRequest =
-        match decode_proto(request_ptr, request_len, "import_context request") {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
+    let request: proto::ImportContextRequest = match decode_proto_bounded(
+        request_ptr,
+        request_len,
+        "import_context request",
+        MAX_IMPORT_CONTEXT_REQUEST_BYTES,
+    ) {
+        Ok(request) => request,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
 
     let Some(state) = request.state else {
         set_last_error("missing state in import_context request");
@@ -581,14 +629,18 @@ pub unsafe extern "C" fn aura_get_contact_profile(
         return false;
     }
 
-    let request: proto::ContactProfileRequest =
-        match decode_proto(request_ptr, request_len, "contact profile request") {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
+    let request: proto::ContactProfileRequest = match decode_proto_bounded(
+        request_ptr,
+        request_len,
+        "contact profile request",
+        MAX_SMALL_CONTROL_REQUEST_BYTES,
+    ) {
+        Ok(request) => request,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
 
     match with_instance(handle, |instance| {
         let profiler = instance.analyzer.context_tracker().contact_profiler();
@@ -624,14 +676,18 @@ pub unsafe extern "C" fn aura_mark_contact_trusted(
 ) -> bool {
     clear_last_error();
 
-    let request: proto::MarkContactTrustedRequest =
-        match decode_proto(request_ptr, request_len, "mark_contact_trusted request") {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
+    let request: proto::MarkContactTrustedRequest = match decode_proto_bounded(
+        request_ptr,
+        request_len,
+        "mark_contact_trusted request",
+        MAX_SMALL_CONTROL_REQUEST_BYTES,
+    ) {
+        Ok(request) => request,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
 
     match with_instance(handle, |instance| {
         instance.analyzer.mark_contact_trusted(&request.sender_id);
@@ -718,14 +774,43 @@ fn string_to_c(s: String) -> *mut c_char {
 
 fn load_pattern_db(config: &AuraConfig) -> PatternDatabase {
     if let Some(ref path) = config.patterns_path {
-        match std::fs::read_to_string(path) {
-            Ok(json) => {
-                PatternDatabase::from_json(&json).unwrap_or_else(|_| PatternDatabase::default_mvp())
+        match try_load_pattern_db(path) {
+            Ok(db) => db,
+            Err(error) => {
+                warn!(
+                    patterns_path = %path,
+                    error = %error,
+                    "falling back to built-in MVP patterns during init"
+                );
+                PatternDatabase::default_mvp()
             }
-            Err(_) => PatternDatabase::default_mvp(),
         }
     } else {
         PatternDatabase::default_mvp()
+    }
+}
+
+fn try_load_pattern_db(path: &str) -> Result<PatternDatabase, String> {
+    PatternDatabase::from_file(path).map_err(|error| error.to_string())
+}
+
+fn resolve_pattern_db_for_update(
+    current_db: &PatternDatabase,
+    config: &AuraConfig,
+) -> PatternDatabase {
+    match config.patterns_path.as_deref() {
+        Some(path) => match try_load_pattern_db(path) {
+            Ok(db) => db,
+            Err(error) => {
+                warn!(
+                    patterns_path = %path,
+                    error = %error,
+                    "keeping existing pattern database during config update"
+                );
+                current_db.clone()
+            }
+        },
+        None => PatternDatabase::default_mvp(),
     }
 }
 
@@ -1378,6 +1463,9 @@ mod tests {
     use super::*;
     use prost::Message as ProstMessage;
     use std::ffi::CStr;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn proto_config(account_type: proto::AccountType, enabled: bool) -> proto::AuraConfig {
         proto::AuraConfig {
@@ -1481,6 +1569,12 @@ mod tests {
         decode_buffer(out)
     }
 
+    unsafe fn import_context_state(handle: *mut c_void, state: proto::TrackerState) {
+        let request = proto::ImportContextRequest { state: Some(state) };
+        let bytes = encode_proto(&request);
+        assert!(aura_import_context(handle, bytes.as_ptr(), bytes.len()));
+    }
+
     unsafe fn get_contacts_by_risk(handle: *mut c_void) -> proto::ContactsByRiskResponse {
         let mut out = AuraBuffer::empty();
         assert!(aura_get_contacts_by_risk(handle, &mut out));
@@ -1509,6 +1603,88 @@ mod tests {
         let mut out = AuraBuffer::empty();
         assert!(aura_get_conversation_summary(handle, &mut out));
         decode_buffer(out)
+    }
+
+    fn temp_fixture_path(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "aura_ffi_{name}_{}_{}.json",
+            std::process::id(),
+            nonce
+        ))
+    }
+
+    fn write_temp_patterns_file(name: &str, json: &str) -> PathBuf {
+        let path = temp_fixture_path(name);
+        fs::write(&path, json)
+            .unwrap_or_else(|error| panic!("write temp patterns file {}: {error}", path.display()));
+        path
+    }
+
+    fn empty_ruleset_patterns_json() -> &'static str {
+        r#"{"version":"test-empty","updated_at":"2026-03-13","rules":[]}"#
+    }
+
+    fn custom_keyword_patterns_json(keyword: &str) -> String {
+        format!(
+            r#"{{
+  "version":"test-custom",
+  "updated_at":"2026-03-13",
+  "rules":[
+    {{
+      "id":"custom_threat_rule",
+      "threat_type":"threat",
+      "kind":{{"type":"keyword","words":["{keyword}"]}},
+      "score":0.95,
+      "languages":["en"],
+      "explanation":"custom threat fixture"
+    }}
+  ]
+}}"#
+        )
+    }
+
+    fn invalid_regex_patterns_json() -> &'static str {
+        r#"{
+  "version":"test-invalid-regex",
+  "updated_at":"2026-03-15",
+  "rules":[
+    {
+      "id":"broken_regex_rule",
+      "threat_type":"threat",
+      "kind":{"type":"regex","pattern":"(unclosed"},
+      "score":0.95,
+      "languages":["en"],
+      "explanation":"broken regex fixture"
+    }
+  ]
+}"#
+    }
+
+    fn has_pattern_signal(result: &proto::AnalysisResult) -> bool {
+        result.signals.iter().any(|signal| {
+            signal.layer == proto::DetectionLayer::PatternMatching as i32 && signal.score > 0.0
+        })
+    }
+
+    fn truncate_proto(bytes: &[u8]) -> Vec<u8> {
+        assert!(bytes.len() > 1, "fixture bytes must be truncatable");
+        bytes[..bytes.len() - 1].to_vec()
+    }
+
+    fn oversized_request_bytes(limit: usize) -> Vec<u8> {
+        vec![0_u8; limit + 1]
+    }
+
+    unsafe fn last_error_string() -> String {
+        let err = aura_last_error();
+        assert!(!err.is_null(), "expected last_error to be set");
+        let err_str = CStr::from_ptr(err).to_str().unwrap().to_string();
+        aura_free_string(err);
+        err_str
     }
 
     #[test]
@@ -1619,6 +1795,116 @@ mod tests {
 
             aura_free(handle);
             aura_free(handle2);
+        }
+    }
+
+    #[test]
+    fn repeated_import_of_same_state_is_idempotent() {
+        unsafe {
+            let source = init_handle(proto_config(proto::AccountType::Child, true));
+            let _ = analyze_context_result(
+                source,
+                proto_message("don't tell your parents", "stranger", "conv_1"),
+                1000,
+            );
+            let exported = export_context(source)
+                .state
+                .expect("missing exported state");
+
+            let replica = init_handle(proto_config(proto::AccountType::Child, true));
+            for _ in 0..25 {
+                import_context_state(replica, exported.clone());
+            }
+
+            let summary = get_conversation_summary(replica);
+            assert_eq!(summary.total_conversations, 1);
+            assert_eq!(summary.conversations.len(), 1);
+            assert_eq!(summary.conversations[0].conversation_id, "conv_1");
+            assert_eq!(summary.conversations[0].total_events, 1);
+
+            let profile = get_contact_profile(replica, "stranger");
+            assert!(profile.found);
+            let profile = profile.profile.expect("missing contact profile");
+            assert_eq!(profile.total_messages, 1);
+
+            aura_free(source);
+            aura_free(replica);
+        }
+    }
+
+    #[test]
+    fn repeated_export_import_roundtrips_preserve_growth() {
+        unsafe {
+            let handle_a = init_handle(proto_config(proto::AccountType::Child, true));
+            let handle_b = init_handle(proto_config(proto::AccountType::Child, true));
+
+            let timeline = [
+                ("Hey, you seem really cool", 1000_u64),
+                ("don't tell your parents about us", 2000),
+                ("you're beautiful and amazing", 3000),
+                ("send me a pic, just for me", 4000),
+                ("why are you ignoring me, answer now", 5000),
+                ("keep this secret between us", 6000),
+            ];
+
+            for (index, (text, timestamp_ms)) in timeline.iter().enumerate() {
+                let active = if index % 2 == 0 { handle_a } else { handle_b };
+                let standby = if index % 2 == 0 { handle_b } else { handle_a };
+
+                let _ = analyze_context_result(
+                    active,
+                    proto_message(text, "stranger", "conv_sync"),
+                    *timestamp_ms,
+                );
+                let state = export_context(active)
+                    .state
+                    .expect("missing exported state");
+                import_context_state(standby, state);
+            }
+
+            let final_state = export_context(handle_a).state.expect("missing final state");
+            import_context_state(handle_b, final_state);
+
+            let summary_a = get_conversation_summary(handle_a);
+            let summary_b = get_conversation_summary(handle_b);
+            assert_eq!(summary_a.total_conversations, 1);
+            assert_eq!(summary_b.total_conversations, 1);
+            assert_eq!(summary_a.conversations[0].conversation_id, "conv_sync");
+            assert_eq!(summary_b.conversations[0].conversation_id, "conv_sync");
+            assert_eq!(
+                summary_a.conversations[0].total_events,
+                timeline.len() as u64
+            );
+            assert_eq!(
+                summary_b.conversations[0].total_events,
+                timeline.len() as u64
+            );
+            assert_eq!(summary_a.conversations[0].latest_event_ms, 6000);
+            assert_eq!(summary_b.conversations[0].latest_event_ms, 6000);
+
+            let profile_a = get_contact_profile(handle_a, "stranger");
+            let profile_b = get_contact_profile(handle_b, "stranger");
+            assert!(profile_a.found);
+            assert!(profile_b.found);
+            assert_eq!(
+                profile_a
+                    .profile
+                    .as_ref()
+                    .expect("profile a")
+                    .total_messages,
+                timeline.len() as u64
+            );
+            assert_eq!(
+                profile_b
+                    .profile
+                    .as_ref()
+                    .expect("profile b")
+                    .total_messages,
+                timeline.len() as u64
+            );
+
+            aura_free(handle_a);
+            aura_free(handle_b);
         }
     }
 
@@ -1787,6 +2073,117 @@ mod tests {
     }
 
     #[test]
+    fn analyze_context_missing_message_sets_last_error_and_preserves_state() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let _ = analyze_context_result(
+                handle,
+                proto_message("don't tell your parents", "stranger", "conv_1"),
+                1000,
+            );
+
+            let request = proto::AnalyzeContextRequest {
+                message: None,
+                timestamp_ms: 2000,
+            };
+            let bytes = encode_proto(&request);
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_analyze_context(
+                handle,
+                bytes.as_ptr(),
+                bytes.len(),
+                &mut out,
+            ));
+            assert!(out.ptr.is_null());
+
+            let err_str = last_error_string();
+            assert!(
+                err_str.contains("missing message in analyze_context request"),
+                "Got: {err_str}"
+            );
+
+            let profile = get_contact_profile(handle, "stranger");
+            assert!(profile.found, "existing context should remain intact");
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn batch_missing_message_is_atomic_and_preserves_state() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let request = proto::BatchAnalyzeRequest {
+                items: vec![
+                    proto::BatchAnalyzeItem {
+                        message: Some(proto_message(
+                            "don't tell your parents",
+                            "stranger",
+                            "conv_1",
+                        )),
+                        timestamp_ms: Some(1000),
+                    },
+                    proto::BatchAnalyzeItem {
+                        message: None,
+                        timestamp_ms: Some(2000),
+                    },
+                ],
+            };
+            let bytes = encode_proto(&request);
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_analyze_batch(
+                handle,
+                bytes.as_ptr(),
+                bytes.len(),
+                &mut out,
+            ));
+            assert!(out.ptr.is_null());
+
+            let err_str = last_error_string();
+            assert!(
+                err_str.contains("missing message in batch item"),
+                "Got: {err_str}"
+            );
+
+            let profile = get_contact_profile(handle, "stranger");
+            assert!(
+                !profile.found,
+                "failed batch should not partially mutate context"
+            );
+
+            let summary = get_conversation_summary(handle);
+            assert_eq!(summary.total_conversations, 0);
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn oversized_batch_request_is_rejected_before_decode() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let request = oversized_request_bytes(MAX_BATCH_REQUEST_BYTES);
+            let mut out = AuraBuffer::empty();
+
+            assert!(!aura_analyze_batch(
+                handle,
+                request.as_ptr(),
+                request.len(),
+                &mut out,
+            ));
+            assert!(out.ptr.is_null());
+
+            let err_str = last_error_string();
+            assert!(
+                err_str.contains("batch analyze request exceeds limit"),
+                "Got: {err_str}"
+            );
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
     fn recommended_action_in_output() {
         unsafe {
             let handle = init_handle(proto_config(proto::AccountType::Child, true));
@@ -1859,6 +2256,35 @@ mod tests {
     }
 
     #[test]
+    fn reload_patterns_invalid_regex_returns_error() {
+        unsafe {
+            let invalid_path =
+                write_temp_patterns_file("invalid_regex_reload", invalid_regex_patterns_json());
+            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+            let request = encode_proto(&proto::ReloadPatternsRequest {
+                patterns_path: invalid_path.to_string_lossy().into_owned(),
+            });
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_reload_patterns(
+                handle,
+                request.as_ptr(),
+                request.len(),
+                &mut out,
+            ));
+
+            let err = aura_last_error();
+            assert!(!err.is_null());
+            let err_str = CStr::from_ptr(err).to_str().unwrap();
+            assert!(err_str.contains("pattern load failed"), "Got: {err_str}");
+            assert!(err_str.contains("broken_regex_rule"), "Got: {err_str}");
+            aura_free_string(err);
+
+            aura_free(handle);
+            let _ = fs::remove_file(invalid_path);
+        }
+    }
+
+    #[test]
     fn mark_contact_trusted_is_applied() {
         unsafe {
             let handle = init_handle(proto_config(proto::AccountType::Child, true));
@@ -1903,6 +2329,65 @@ mod tests {
     }
 
     #[test]
+    fn oversized_config_is_rejected_during_init() {
+        unsafe {
+            let request = oversized_request_bytes(MAX_CONFIG_REQUEST_BYTES);
+            let handle = aura_init(request.as_ptr(), request.len());
+            assert!(handle.is_null());
+
+            let err_str = last_error_string();
+            assert!(err_str.contains("config exceeds limit"), "Got: {err_str}");
+        }
+    }
+
+    #[test]
+    fn init_with_missing_patterns_path_falls_back_to_builtin_patterns() {
+        unsafe {
+            let mut config = proto_config(proto::AccountType::Child, true);
+            config.patterns_path = Some("/definitely/missing/patterns.json".to_string());
+            let handle = init_handle(config);
+            assert!(!handle.is_null());
+
+            let result = analyze_result(
+                handle,
+                proto_message(
+                    "don't tell your parents about our chats",
+                    "stranger",
+                    "conv_1",
+                ),
+            );
+            assert!(has_pattern_signal(&result));
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn init_with_empty_ruleset_falls_back_to_builtin_patterns() {
+        unsafe {
+            let path =
+                write_temp_patterns_file("empty_ruleset_init", empty_ruleset_patterns_json());
+            let mut config = proto_config(proto::AccountType::Child, true);
+            config.patterns_path = Some(path.to_string_lossy().into_owned());
+            let handle = init_handle(config);
+            assert!(!handle.is_null());
+
+            let result = analyze_result(
+                handle,
+                proto_message(
+                    "don't tell your parents about our chats",
+                    "stranger",
+                    "conv_1",
+                ),
+            );
+            assert!(has_pattern_signal(&result));
+
+            aura_free(handle);
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    #[test]
     fn invalid_proto_request_sets_last_error() {
         unsafe {
             let handle = init_handle(proto_config(proto::AccountType::Adult, true));
@@ -1916,6 +2401,300 @@ mod tests {
             let err_str = CStr::from_ptr(err).to_str().unwrap();
             assert!(err_str.contains("invalid protobuf"), "Got: {err_str}");
             aura_free_string(err);
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn update_config_with_empty_ruleset_preserves_existing_pattern_db() {
+        unsafe {
+            let custom_keyword = "moonlit_badger_alarm_phrase";
+            let custom_path = write_temp_patterns_file(
+                "custom_rule_update",
+                &custom_keyword_patterns_json(custom_keyword),
+            );
+            let empty_path =
+                write_temp_patterns_file("empty_ruleset_update", empty_ruleset_patterns_json());
+
+            let mut config = proto_config(proto::AccountType::Adult, true);
+            config.patterns_path = Some(custom_path.to_string_lossy().into_owned());
+            let handle = init_handle(config);
+            assert!(!handle.is_null());
+
+            let baseline = analyze_result(
+                handle,
+                proto_message(custom_keyword, "user_1", "conv_custom"),
+            );
+            assert!(has_pattern_signal(&baseline));
+
+            let mut update = proto_config(proto::AccountType::Adult, true);
+            update.patterns_path = Some(empty_path.to_string_lossy().into_owned());
+            let update_bytes = encode_proto(&update);
+            assert!(aura_update_config(
+                handle,
+                update_bytes.as_ptr(),
+                update_bytes.len()
+            ));
+
+            let after_update = analyze_result(
+                handle,
+                proto_message(custom_keyword, "user_1", "conv_custom"),
+            );
+            assert!(
+                has_pattern_signal(&after_update),
+                "expected existing pattern database to remain active"
+            );
+
+            aura_free(handle);
+            let _ = fs::remove_file(custom_path);
+            let _ = fs::remove_file(empty_path);
+        }
+    }
+
+    #[test]
+    fn update_config_without_patterns_path_resets_to_builtin_patterns() {
+        unsafe {
+            let custom_keyword = "obsidian_badger_alarm_phrase";
+            let custom_path = write_temp_patterns_file(
+                "custom_rule_reset",
+                &custom_keyword_patterns_json(custom_keyword),
+            );
+
+            let mut config = proto_config(proto::AccountType::Child, true);
+            config.patterns_path = Some(custom_path.to_string_lossy().into_owned());
+            let handle = init_handle(config);
+            assert!(!handle.is_null());
+
+            let custom_result = analyze_result(
+                handle,
+                proto_message(custom_keyword, "user_1", "conv_custom"),
+            );
+            assert!(has_pattern_signal(&custom_result));
+
+            let reset_update = encode_proto(&proto_config(proto::AccountType::Child, true));
+            assert!(aura_update_config(
+                handle,
+                reset_update.as_ptr(),
+                reset_update.len()
+            ));
+
+            let after_reset = analyze_result(
+                handle,
+                proto_message(custom_keyword, "user_1", "conv_custom"),
+            );
+            assert!(
+                !has_pattern_signal(&after_reset),
+                "expected custom-only pattern database to be removed"
+            );
+
+            let builtin_result = analyze_result(
+                handle,
+                proto_message(
+                    "don't tell your parents about our chats",
+                    "stranger",
+                    "conv_builtin",
+                ),
+            );
+            assert!(
+                has_pattern_signal(&builtin_result),
+                "expected built-in pattern database to become active again"
+            );
+
+            aura_free(handle);
+            let _ = fs::remove_file(custom_path);
+        }
+    }
+
+    #[test]
+    fn null_out_pointer_sets_last_error() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+            let message = encode_proto(&proto_message("test", "u1", "c1"));
+
+            assert!(!aura_analyze(
+                handle,
+                message.as_ptr(),
+                message.len(),
+                std::ptr::null_mut(),
+            ));
+
+            let err_str = last_error_string();
+            assert!(err_str.contains("null out pointer"), "Got: {err_str}");
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn oversized_message_request_is_rejected_before_decode() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+            let request = oversized_request_bytes(MAX_MESSAGE_REQUEST_BYTES);
+            let mut out = AuraBuffer::empty();
+
+            assert!(!aura_analyze(
+                handle,
+                request.as_ptr(),
+                request.len(),
+                &mut out,
+            ));
+            assert!(out.ptr.is_null());
+
+            let err_str = last_error_string();
+            assert!(err_str.contains("message exceeds limit"), "Got: {err_str}");
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn truncated_analyze_context_request_sets_last_error() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let request = proto::AnalyzeContextRequest {
+                message: Some(proto_message(
+                    "don't tell your parents",
+                    "stranger",
+                    "conv_1",
+                )),
+                timestamp_ms: 1000,
+            };
+            let bytes = encode_proto(&request);
+            let truncated = truncate_proto(&bytes);
+            let mut out = AuraBuffer::empty();
+
+            assert!(!aura_analyze_context(
+                handle,
+                truncated.as_ptr(),
+                truncated.len(),
+                &mut out,
+            ));
+            assert!(out.ptr.is_null());
+
+            let err_str = last_error_string();
+            assert!(err_str.contains("invalid protobuf"), "Got: {err_str}");
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn truncated_import_context_request_preserves_existing_state() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let _ = analyze_context_result(
+                handle,
+                proto_message("don't tell your parents", "stranger", "conv_1"),
+                1000,
+            );
+
+            let exported = export_context(handle);
+            let request = proto::ImportContextRequest {
+                state: exported.state,
+            };
+            let bytes = encode_proto(&request);
+            let truncated = truncate_proto(&bytes);
+
+            assert!(!aura_import_context(
+                handle,
+                truncated.as_ptr(),
+                truncated.len(),
+            ));
+
+            let err_str = last_error_string();
+            assert!(err_str.contains("invalid protobuf"), "Got: {err_str}");
+
+            let profile = get_contact_profile(handle, "stranger");
+            assert!(profile.found, "existing state should remain intact");
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn future_schema_import_via_ffi_preserves_existing_state() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let _ = analyze_context_result(
+                handle,
+                proto_message("don't tell your parents", "stranger", "conv_1"),
+                1000,
+            );
+
+            let mut state = export_context(handle).state.expect("missing state");
+            state.schema_version = aura_core::context::tracker::TRACKER_STATE_VERSION + 1;
+            let request = proto::ImportContextRequest { state: Some(state) };
+            let bytes = encode_proto(&request);
+
+            assert!(!aura_import_context(handle, bytes.as_ptr(), bytes.len()));
+
+            let err_str = last_error_string();
+            assert!(
+                err_str.contains("incompatible state version"),
+                "Got: {err_str}"
+            );
+
+            let profile = get_contact_profile(handle, "stranger");
+            assert!(profile.found, "existing state should remain intact");
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn missing_state_import_via_ffi_preserves_existing_state() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let _ = analyze_context_result(
+                handle,
+                proto_message("don't tell your parents", "stranger", "conv_1"),
+                1000,
+            );
+
+            let request = proto::ImportContextRequest { state: None };
+            let bytes = encode_proto(&request);
+
+            assert!(!aura_import_context(handle, bytes.as_ptr(), bytes.len()));
+
+            let err_str = last_error_string();
+            assert!(
+                err_str.contains("missing state in import_context request"),
+                "Got: {err_str}"
+            );
+
+            let profile = get_contact_profile(handle, "stranger");
+            assert!(profile.found, "existing state should remain intact");
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn oversized_import_context_request_preserves_existing_state() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let _ = analyze_context_result(
+                handle,
+                proto_message("don't tell your parents", "stranger", "conv_1"),
+                1000,
+            );
+
+            let request = oversized_request_bytes(MAX_IMPORT_CONTEXT_REQUEST_BYTES);
+            assert!(!aura_import_context(
+                handle,
+                request.as_ptr(),
+                request.len()
+            ));
+
+            let err_str = last_error_string();
+            assert!(
+                err_str.contains("import_context request exceeds limit"),
+                "Got: {err_str}"
+            );
+
+            let profile = get_contact_profile(handle, "stranger");
+            assert!(profile.found, "existing state should remain intact");
 
             aura_free(handle);
         }

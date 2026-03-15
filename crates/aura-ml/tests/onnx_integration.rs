@@ -1,39 +1,61 @@
 #![cfg(feature = "onnx")]
 #![allow(unused_mut)]
 
+use std::env;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use aura_ml::{MlConfig, MlPipeline, SentimentLabel, WordPieceTokenizer};
 
-fn models_dir() -> String {
+struct ModelAssets {
+    toxicity_model_path: String,
+    sentiment_model_path: String,
+    vocab_path: String,
+}
+
+fn discover_models() -> Option<ModelAssets> {
     let candidates = ["../../models", "models", "../models"];
     for candidate in &candidates {
-        if Path::new(candidate).join("toxicity.onnx").exists() {
-            return candidate.to_string();
+        let root = Path::new(candidate);
+        let toxicity = root.join("toxicity.onnx");
+        let sentiment = root.join("sentiment.onnx");
+        let vocab = root.join("vocab.txt");
+        if toxicity.exists() && sentiment.exists() && vocab.exists() {
+            return Some(ModelAssets {
+                toxicity_model_path: toxicity.to_string_lossy().into_owned(),
+                sentiment_model_path: sentiment.to_string_lossy().into_owned(),
+                vocab_path: vocab.to_string_lossy().into_owned(),
+            });
         }
     }
-    panic!(
-        "Models not found! Run: cd <project_root> && source .venv/bin/activate && python scripts/download_models.py"
-    );
+    None
 }
 
-fn toxicity_model_path() -> String {
-    format!("{}/toxicity.onnx", models_dir())
+fn require_models(test_name: &str) -> Option<&'static ModelAssets> {
+    static ASSETS: OnceLock<Option<ModelAssets>> = OnceLock::new();
+    let assets = ASSETS.get_or_init(discover_models);
+    if let Some(assets) = assets.as_ref() {
+        return Some(assets);
+    }
+
+    let message =
+        "Models not found! Run: python scripts/download_models.py or set AURA_REQUIRE_ONNX_MODELS=0";
+    let require_models = env::var("AURA_REQUIRE_ONNX_MODELS")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false);
+    if require_models {
+        panic!("{message}");
+    }
+
+    eprintln!("skipping {test_name}: {message}");
+    None
 }
 
-fn sentiment_model_path() -> String {
-    format!("{}/sentiment.onnx", models_dir())
-}
-
-fn vocab_path() -> String {
-    format!("{}/vocab.txt", models_dir())
-}
-
-fn onnx_config() -> MlConfig {
+fn onnx_config(assets: &ModelAssets) -> MlConfig {
     MlConfig {
-        toxicity_model_path: Some(toxicity_model_path()),
-        sentiment_model_path: Some(sentiment_model_path()),
-        vocab_path: Some(vocab_path()),
+        toxicity_model_path: Some(assets.toxicity_model_path.clone()),
+        sentiment_model_path: Some(assets.sentiment_model_path.clone()),
+        vocab_path: Some(assets.vocab_path.clone()),
         max_seq_length: 128,
         toxicity_threshold: 0.5,
         use_fallback: true,
@@ -43,7 +65,10 @@ fn onnx_config() -> MlConfig {
 
 #[test]
 fn tokenizer_loads_vocab() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("tokenizer_loads_vocab") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     assert!(
         tok.vocab_size() > 20000,
         "BERT vocab should have 30k+ tokens, got {}",
@@ -53,7 +78,10 @@ fn tokenizer_loads_vocab() {
 
 #[test]
 fn tokenizer_encodes_english() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("tokenizer_encodes_english") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let encoded = tok.encode("Hello, how are you?");
     assert_eq!(encoded.input_ids.len(), 128);
     assert_eq!(encoded.attention_mask.len(), 128);
@@ -67,7 +95,10 @@ fn tokenizer_encodes_english() {
 
 #[test]
 fn tokenizer_encodes_ukrainian() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("tokenizer_encodes_ukrainian") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let encoded = tok.encode("Привіт, як справи?");
     let real_tokens: usize = encoded.attention_mask.iter().filter(|&&m| m == 1).count();
     assert!(
@@ -78,8 +109,12 @@ fn tokenizer_encodes_ukrainian() {
 
 #[test]
 fn toxicity_onnx_loads() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
-    let classifier = aura_ml::toxicity::ToxicityClassifier::with_model(&toxicity_model_path(), tok);
+    let Some(assets) = require_models("toxicity_onnx_loads") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
+    let classifier =
+        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok);
     assert!(
         classifier.is_ok(),
         "Failed to load toxicity model: {:?}",
@@ -89,9 +124,13 @@ fn toxicity_onnx_loads() {
 
 #[test]
 fn toxicity_onnx_detects_threat() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("toxicity_onnx_detects_threat") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut classifier =
-        aura_ml::toxicity::ToxicityClassifier::with_model(&toxicity_model_path(), tok).unwrap();
+        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok)
+            .unwrap();
     let pred = classifier
         .predict("I will kill you, you worthless piece of garbage")
         .unwrap();
@@ -109,9 +148,13 @@ fn toxicity_onnx_detects_threat() {
 
 #[test]
 fn toxicity_onnx_detects_insult() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("toxicity_onnx_detects_insult") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut classifier =
-        aura_ml::toxicity::ToxicityClassifier::with_model(&toxicity_model_path(), tok).unwrap();
+        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok)
+            .unwrap();
     let pred = classifier
         .predict("You're such a stupid ugly idiot")
         .unwrap();
@@ -129,9 +172,13 @@ fn toxicity_onnx_detects_insult() {
 
 #[test]
 fn toxicity_onnx_clean_message() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("toxicity_onnx_clean_message") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut classifier =
-        aura_ml::toxicity::ToxicityClassifier::with_model(&toxicity_model_path(), tok).unwrap();
+        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok)
+            .unwrap();
     let pred = classifier
         .predict("Hello! How are you doing today? The weather is lovely.")
         .unwrap();
@@ -144,8 +191,12 @@ fn toxicity_onnx_clean_message() {
 
 #[test]
 fn sentiment_onnx_loads() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
-    let analyzer = aura_ml::sentiment::SentimentAnalyzer::with_model(&sentiment_model_path(), tok);
+    let Some(assets) = require_models("sentiment_onnx_loads") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
+    let analyzer =
+        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok);
     assert!(
         analyzer.is_ok(),
         "Failed to load sentiment model: {:?}",
@@ -155,9 +206,13 @@ fn sentiment_onnx_loads() {
 
 #[test]
 fn sentiment_onnx_positive() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("sentiment_onnx_positive") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut analyzer =
-        aura_ml::sentiment::SentimentAnalyzer::with_model(&sentiment_model_path(), tok).unwrap();
+        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok)
+            .unwrap();
     let pred = analyzer
         .predict("I love this! It's amazing and wonderful!")
         .unwrap();
@@ -174,9 +229,13 @@ fn sentiment_onnx_positive() {
 
 #[test]
 fn sentiment_onnx_negative() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("sentiment_onnx_negative") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut analyzer =
-        aura_ml::sentiment::SentimentAnalyzer::with_model(&sentiment_model_path(), tok).unwrap();
+        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok)
+            .unwrap();
     let pred = analyzer
         .predict("I hate this, it's terrible and awful")
         .unwrap();
@@ -193,9 +252,13 @@ fn sentiment_onnx_negative() {
 
 #[test]
 fn sentiment_onnx_neutral() {
-    let tok = WordPieceTokenizer::from_file(&vocab_path(), 128).unwrap();
+    let Some(assets) = require_models("sentiment_onnx_neutral") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut analyzer =
-        aura_ml::sentiment::SentimentAnalyzer::with_model(&sentiment_model_path(), tok).unwrap();
+        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok)
+            .unwrap();
     let pred = analyzer
         .predict("The meeting is scheduled for 3pm tomorrow")
         .unwrap();
@@ -209,7 +272,10 @@ fn sentiment_onnx_neutral() {
 
 #[test]
 fn pipeline_onnx_initializes() {
-    let mut pipeline = MlPipeline::new(onnx_config());
+    let Some(assets) = require_models("pipeline_onnx_initializes") else {
+        return;
+    };
+    let mut pipeline = MlPipeline::new(onnx_config(assets));
     assert!(pipeline.is_active());
 
     let result = pipeline.analyze_text("Hello world");
@@ -218,7 +284,10 @@ fn pipeline_onnx_initializes() {
 
 #[test]
 fn pipeline_onnx_toxic_message() {
-    let mut pipeline = MlPipeline::new(onnx_config());
+    let Some(assets) = require_models("pipeline_onnx_toxic_message") else {
+        return;
+    };
+    let mut pipeline = MlPipeline::new(onnx_config(assets));
     let result = pipeline.analyze_text("I'm going to kill you, you worthless idiot");
     let tox = result.toxicity.unwrap();
     assert!(
@@ -230,7 +299,10 @@ fn pipeline_onnx_toxic_message() {
 
 #[test]
 fn pipeline_onnx_clean_message() {
-    let mut pipeline = MlPipeline::new(onnx_config());
+    let Some(assets) = require_models("pipeline_onnx_clean_message") else {
+        return;
+    };
+    let mut pipeline = MlPipeline::new(onnx_config(assets));
     let result = pipeline.analyze_text("Good morning! How's your day going?");
     let tox = result.toxicity.unwrap();
     assert!(
@@ -253,7 +325,10 @@ fn pipeline_onnx_clean_message() {
 
 #[test]
 fn pipeline_onnx_inference_speed() {
-    let mut pipeline = MlPipeline::new(onnx_config());
+    let Some(assets) = require_models("pipeline_onnx_inference_speed") else {
+        return;
+    };
+    let mut pipeline = MlPipeline::new(onnx_config(assets));
 
     pipeline.analyze_text("warmup message");
 

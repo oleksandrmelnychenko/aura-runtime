@@ -93,8 +93,35 @@ impl Analyzer {
         let default_pattern_language = config.language.clone();
         let pattern_matcher = PatternMatcher::from_database(pattern_db, &default_pattern_language);
         let url_checker = UrlChecker::from_database(pattern_db);
+        let context_tracker = ConversationTracker::new(Self::tracker_config(&config));
+        let signal_enricher = Self::signal_enricher(&config);
+        let timing_analyzer = TimingAnalyzer::new();
+        let ml_pipeline = MlPipeline::new(Self::ml_config(&config));
 
-        let tracker_config = TrackerConfig {
+        debug!(
+            language = %config.language,
+            protection = ?config.effective_protection_level(),
+            rules = pattern_matcher.rule_count(),
+            blocked_urls = url_checker.blocked_count(),
+            ml_active = ml_pipeline.is_active(),
+            "AURA analyzer initialized"
+        );
+
+        Self {
+            config,
+            pattern_db: pattern_db.clone(),
+            pattern_matchers: HashMap::from([(default_pattern_language, pattern_matcher)]),
+            url_checker,
+            context_tracker,
+            signal_enricher,
+            timing_analyzer,
+            ml_pipeline,
+            escalation_tracker: EscalationTracker::new(),
+        }
+    }
+
+    fn tracker_config(config: &AuraConfig) -> TrackerConfig {
+        TrackerConfig {
             analysis_window_ms: config.ttl_days as u64 * 24 * 60 * 60 * 1000,
             is_child_account: config.account_type == AccountType::Child,
             is_teen_account: config.account_type == AccountType::Teen,
@@ -102,18 +129,18 @@ impl Analyzer {
             auto_cleanup_interval: 100,
             timezone_offset_minutes: config.timezone_offset_minutes,
             ..Default::default()
-        };
-        let context_tracker = ConversationTracker::new(tracker_config);
+        }
+    }
 
-        let is_minor =
-            config.account_type == AccountType::Child || config.account_type == AccountType::Teen;
-        let signal_enricher = SignalEnricher::new(EnricherConfig {
-            strict_mode: is_minor,
+    fn signal_enricher(config: &AuraConfig) -> SignalEnricher {
+        SignalEnricher::new(EnricherConfig {
+            strict_mode: matches!(config.account_type, AccountType::Child | AccountType::Teen),
             ..Default::default()
-        });
-        let timing_analyzer = TimingAnalyzer::new();
+        })
+    }
 
-        let ml_config = if let Some(ref base_path) = config.models_path {
+    fn ml_config(config: &AuraConfig) -> MlConfig {
+        if let Some(ref base_path) = config.models_path {
             let base = std::path::Path::new(base_path);
             MlConfig {
                 toxicity_model_path: {
@@ -138,28 +165,6 @@ impl Analyzer {
                 language: config.language.clone(),
                 ..Default::default()
             }
-        };
-        let ml_pipeline = MlPipeline::new(ml_config);
-
-        debug!(
-            language = %config.language,
-            protection = ?config.effective_protection_level(),
-            rules = pattern_matcher.rule_count(),
-            blocked_urls = url_checker.blocked_count(),
-            ml_active = ml_pipeline.is_active(),
-            "AURA analyzer initialized"
-        );
-
-        Self {
-            config,
-            pattern_db: pattern_db.clone(),
-            pattern_matchers: HashMap::from([(default_pattern_language, pattern_matcher)]),
-            url_checker,
-            context_tracker,
-            signal_enricher,
-            timing_analyzer,
-            ml_pipeline,
-            escalation_tracker: EscalationTracker::new(),
         }
     }
 
@@ -335,9 +340,6 @@ impl Analyzer {
 
         let context_signals = self.context_tracker.record_events(context_events);
 
-        let sender_has_bullying_signals = signals
-            .iter()
-            .any(|s| s.threat_type == ThreatType::Bullying || s.threat_type == ThreatType::Threat);
         let sender_is_defender = self
             .context_tracker
             .timeline(&input.conversation_id)
@@ -354,7 +356,7 @@ impl Analyzer {
                 && (signal.explanation.contains("Group bullying")
                     || signal.explanation.contains("Isolation"));
 
-            if is_pile_on_signal && (sender_is_defender || !sender_has_bullying_signals) {
+            if is_pile_on_signal && sender_is_defender {
                 continue;
             }
             signals.push(signal);
@@ -468,7 +470,11 @@ impl Analyzer {
             .min_by_key(|s| threat_priority(s.threat_type))
             .unwrap_or(max_signal);
 
-        let score = max_score.max(priority_signal.score);
+        let score = signals
+            .iter()
+            .filter(|signal| signal.threat_type == priority_signal.threat_type)
+            .map(|signal| signal.score)
+            .fold(priority_signal.score, f32::max);
         let primary = priority_signal;
 
         let (action_v2, mut recommendation) =
@@ -569,12 +575,18 @@ impl Analyzer {
     }
 
     pub fn update_config(&mut self, config: AuraConfig, pattern_db: &PatternDatabase) {
+        let tracker_config = Self::tracker_config(&config);
+        let signal_enricher = Self::signal_enricher(&config);
+        let ml_pipeline = MlPipeline::new(Self::ml_config(&config));
         self.pattern_db = pattern_db.clone();
         self.pattern_matchers = HashMap::from([(
             config.language.clone(),
             PatternMatcher::from_database(pattern_db, &config.language),
         )]);
         self.url_checker = UrlChecker::from_database(pattern_db);
+        self.context_tracker.update_config(tracker_config);
+        self.signal_enricher = signal_enricher;
+        self.ml_pipeline = ml_pipeline;
         self.config = config;
     }
 
@@ -611,7 +623,7 @@ impl Analyzer {
         }
     }
 
-    fn run_ml_layer(&self, text: &str) -> Vec<DetectionSignal> {
+    fn run_ml_layer(&mut self, text: &str) -> Vec<DetectionSignal> {
         let ml_result = self.ml_pipeline.analyze_text(text);
         let mut signals = Vec::new();
         let threshold = self.ml_pipeline.toxicity_threshold();
@@ -1528,6 +1540,59 @@ mod tests {
     }
 
     #[test]
+    fn update_config_refreshes_runtime_components() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+
+        let adult_events = analyzer.signal_enricher.enrich_full(
+            "you are beautiful and amazing",
+            "new_contact",
+            "conv_1",
+            1_000,
+        );
+        assert!(!adult_events
+            .events
+            .iter()
+            .any(|event| event.kind == crate::context::events::EventKind::LoveBombing));
+
+        let updated_config = AuraConfig {
+            account_type: AccountType::Child,
+            protection_level: ProtectionLevel::High,
+            language: "en".to_string(),
+            account_holder_age: Some(12),
+            ttl_days: 7,
+            timezone_offset_minutes: 180,
+            ..AuraConfig::default()
+        };
+        analyzer.update_config(updated_config, &db);
+
+        let child_events = analyzer.signal_enricher.enrich_full(
+            "you are beautiful and amazing",
+            "new_contact",
+            "conv_1",
+            2_000,
+        );
+        assert!(child_events
+            .events
+            .iter()
+            .any(|event| event.kind == crate::context::events::EventKind::LoveBombing));
+        assert!(analyzer.context_tracker.config().is_child_account);
+        assert!(!analyzer.context_tracker.config().is_teen_account);
+        assert_eq!(
+            analyzer.context_tracker.config().account_holder_age,
+            Some(12)
+        );
+        assert_eq!(
+            analyzer.context_tracker.config().timezone_offset_minutes,
+            180
+        );
+        assert_eq!(
+            analyzer.context_tracker.config().analysis_window_ms,
+            7 * 24 * 60 * 60 * 1000
+        );
+    }
+
+    #[test]
     fn teen_cannot_disable_aura() {
         let db = test_db();
         let config = AuraConfig {
@@ -1724,6 +1789,33 @@ mod tests {
     }
 
     #[test]
+    fn pile_on_context_is_not_dropped_for_new_sender_without_direct_bullying_signal() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let conv = "class_group_chat_context_only";
+        let minute = 60 * 1000u64;
+
+        analyzer.analyze_with_context(&child_input("nobody likes you", "bully_1", conv), 0);
+        analyzer.analyze_with_context(&child_input("you're worthless", "bully_2", conv), minute);
+
+        let result = analyzer.analyze_with_context(
+            &child_input("they're all against you", "bully_3", conv),
+            2 * minute,
+        );
+
+        assert!(
+            result.signals.iter().any(|signal| {
+                signal.layer == DetectionLayer::ContextAnalysis
+                    && signal.threat_type == ThreatType::Bullying
+                    && (signal.explanation.contains("Group bullying")
+                        || signal.explanation.contains("Isolation"))
+            }),
+            "Expected context bullying signal for new pile-on sender, got: {:?}",
+            result.signals
+        );
+    }
+
+    #[test]
     fn scenario_self_harm_escalation() {
         let db = test_db();
         let mut analyzer = Analyzer::new(child_config(), &db);
@@ -1750,6 +1842,39 @@ mod tests {
         assert_eq!(r.action, Action::Warn);
 
         assert!(r.needs_crisis_resources());
+    }
+
+    #[test]
+    fn primary_threat_score_is_not_inflated_by_lower_priority_signal() {
+        let db = test_db();
+        let analyzer = Analyzer::new(child_config(), &db);
+        let signals = vec![
+            DetectionSignal::pattern(
+                ThreatType::Spam,
+                0.95,
+                Confidence::High,
+                "abuse.spam",
+                "spam burst",
+            ),
+            DetectionSignal::context(
+                ThreatType::SelfHarm,
+                0.72,
+                Confidence::High,
+                SignalFamily::Conversation,
+                "conversation.self_harm.crisis",
+                "acute self-harm disclosure",
+            ),
+        ];
+
+        let result =
+            analyzer.combine_signals(signals, ProtectionLevel::High, ConversationType::Direct, 42);
+
+        assert_eq!(result.threat_type, ThreatType::SelfHarm);
+        assert!(
+            (result.score - 0.72).abs() < f32::EPSILON,
+            "Primary threat score should stay on the selected threat, got {}",
+            result.score
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@
   "curation_status": "mixed_review_tiers",
   "maintainer": "aura_core_team",
   "created_at_ms": 1773273600000,
-  "updated_at_ms": 1773273600000,
+  "updated_at_ms": 1773394214722,
   "cases": [
     {
       "id": "external_en_child_stranger_secrecy_probe",
@@ -15,7 +15,10 @@
       "age_band": "child",
       "relationship": "stranger",
       "primary_threat": "grooming",
-      "tracked_threats": ["grooming", "manipulation"],
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
       "detection_threshold": 0.55,
       "onset_step": 2,
       "step_interval_ms": 3600000,
@@ -24,22 +27,31 @@
         {
           "text": "Hey! You seem really cool and special for your age.",
           "sender_id": "external_stranger_1",
-          "observed_threats": ["grooming"]
+          "observed_threats": [
+            "grooming"
+          ]
         },
         {
           "text": "Where do you live? What school do you go to?",
           "sender_id": "external_stranger_1",
-          "observed_threats": ["grooming"]
+          "observed_threats": [
+            "grooming"
+          ]
         },
         {
           "text": "Don't tell your parents about me. Let's move this to Telegram.",
           "sender_id": "external_stranger_1",
-          "observed_threats": ["grooming", "manipulation"]
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
         },
         {
           "text": "Send me a photo, I want to see what you look like.",
           "sender_id": "external_stranger_1",
-          "observed_threats": ["grooming"]
+          "observed_threats": [
+            "grooming"
+          ]
         }
       ]
     },
@@ -51,7 +63,10 @@
       "age_band": "child",
       "relationship": "trusted_adult",
       "primary_threat": "grooming",
-      "tracked_threats": ["grooming", "manipulation"],
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
       "detection_threshold": 0.55,
       "onset_step": 2,
       "step_interval_ms": 86400000,
@@ -61,25 +76,34 @@
           "text": "You're so mature for your age. I really understand you better than others do.",
           "sender_id": "external_coach_en",
           "language": "en",
-          "observed_threats": ["grooming"]
+          "observed_threats": [
+            "grooming"
+          ]
         },
         {
           "text": "I bought you a special gift. Keep it between us, okay?",
           "sender_id": "external_coach_en",
           "language": "en",
-          "observed_threats": ["grooming"]
+          "observed_threats": [
+            "grooming"
+          ]
         },
         {
           "text": "Don't tell your parents about our chats. They wouldn't understand our bond.",
           "sender_id": "external_coach_en",
           "language": "en",
-          "observed_threats": ["grooming", "manipulation"]
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
         },
         {
           "text": "Let's switch to Telegram and keep talking there privately.",
           "sender_id": "external_coach_en",
           "language": "en",
-          "observed_threats": ["grooming"]
+          "observed_threats": [
+            "grooming"
+          ]
         }
       ]
     },
@@ -92,8 +116,10 @@
       "relationship": "self",
       "account_type": "teen",
       "primary_threat": "self_harm",
-      "tracked_threats": ["self_harm"],
-      "detection_threshold": 0.70,
+      "tracked_threats": [
+        "self_harm"
+      ],
+      "detection_threshold": 0.7,
       "onset_step": 1,
       "step_interval_ms": 86400000,
       "policy_expectation_case": "acute_selfharm",
@@ -101,12 +127,16 @@
         {
           "text": "Nobody would notice if I wasn't here.",
           "sender_id": "external_self_en",
-          "observed_threats": ["self_harm"]
+          "observed_threats": [
+            "self_harm"
+          ]
         },
         {
           "text": "I don't want to live anymore. I want to end it all.",
           "sender_id": "external_self_en",
-          "observed_threats": ["self_harm"]
+          "observed_threats": [
+            "self_harm"
+          ]
         }
       ]
     },
@@ -119,7 +149,9 @@
       "relationship": "peer",
       "account_type": "teen",
       "primary_threat": "manipulation",
-      "tracked_threats": ["manipulation"],
+      "tracked_threats": [
+        "manipulation"
+      ],
       "detection_threshold": 0.55,
       "onset_step": 1,
       "step_interval_ms": 1800000,
@@ -132,7 +164,9 @@
         {
           "text": "У меня есть скриншоты, я расскажу всей школе и все узнают.",
           "sender_id": "external_blackmailer_ru",
-          "observed_threats": ["manipulation"]
+          "observed_threats": [
+            "manipulation"
+          ]
         }
       ]
     },
@@ -145,8 +179,10 @@
       "relationship": "stranger",
       "account_type": "teen",
       "primary_threat": "phishing",
-      "tracked_threats": ["phishing"],
-      "detection_threshold": 0.60,
+      "tracked_threats": [
+        "phishing"
+      ],
+      "detection_threshold": 0.6,
       "onset_step": 1,
       "step_interval_ms": 300000,
       "policy_expectation_case": "phishing_link",
@@ -158,7 +194,9 @@
         {
           "text": "Use this link instead: https://secure-login.example.com/verify",
           "sender_id": "external_phish_en",
-          "observed_threats": ["phishing"]
+          "observed_threats": [
+            "phishing"
+          ]
         }
       ]
     },
@@ -172,8 +210,10 @@
       "account_type": "teen",
       "conversation_type": "group_chat",
       "primary_threat": "bullying",
-      "tracked_threats": ["bullying"],
-      "detection_threshold": 0.60,
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
       "onset_step": 1,
       "step_interval_ms": 60000,
       "policy_expectation_case": "group_bullying",
@@ -181,17 +221,23 @@
         {
           "text": "Why are you even here? Nobody likes you.",
           "sender_id": "external_group_bully_1",
-          "observed_threats": ["bullying"]
+          "observed_threats": [
+            "bullying"
+          ]
         },
         {
           "text": "You're pathetic. Just leave already.",
           "sender_id": "external_group_bully_2",
-          "observed_threats": ["bullying"]
+          "observed_threats": [
+            "bullying"
+          ]
         },
         {
           "text": "Everyone hates you. Even the teacher doesn't want you here.",
           "sender_id": "external_group_bully_3",
-          "observed_threats": ["bullying"]
+          "observed_threats": [
+            "bullying"
+          ]
         }
       ]
     },
@@ -203,7 +249,10 @@
       "age_band": "teen",
       "relationship": "supportive_peer",
       "account_type": "teen",
-      "tracked_threats": ["self_harm", "manipulation"],
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
       "detection_threshold": 0.55,
       "step_interval_ms": 1800000,
       "policy_expectation_case": "negative_control_multilingual_support",
@@ -226,7 +275,11 @@
       "age_band": "teen",
       "relationship": "peer",
       "account_type": "teen",
-      "tracked_threats": ["grooming", "manipulation", "bullying"],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying"
+      ],
       "detection_threshold": 0.55,
       "step_interval_ms": 3600000,
       "policy_expectation_case": "false_positive_friends",
@@ -242,6 +295,1801 @@
         {
           "text": "Sure, let's build a castle together!",
           "sender_id": "external_peer_safe_en"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_after_hours_gift",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "You're so mature for your age. Я понимаю тебя лучше других.",
+          "sender_id": "external_coach_ru_gold",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "I bought you a special gift. Keep it between us, okay?",
+          "sender_id": "external_coach_ru_gold",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "Don't tell your parents about our chats. Они не поймут нашу связь.",
+          "sender_id": "external_coach_ru_gold",
+          "language": "ru",
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
+        },
+        {
+          "text": "Let's switch to Telegram and keep talking there privately.",
+          "sender_id": "external_coach_ru_gold",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_parent_loop_safe",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "Пришли подписанное разрешение в родительский чат до завтрашней тренировки.",
+          "sender_id": "external_teacher_ru_safe",
+          "language": "ru"
+        },
+        {
+          "text": "Ответь вместе с мамой в копии, чтобы я видел, что расписание согласовано.",
+          "sender_id": "external_teacher_ru_safe",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_group_class_dogpile",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "external_group_uk_1",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "external_group_uk_2",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "external_group_uk_3",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "external_group_uk_4",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_en_group_project_banter_safe",
+      "source_family": "school_context_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "account_type": "teen",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "dont forget the history slides this time, we finally made them look decent",
+          "sender_id": "external_group_safe_1"
+        },
+        {
+          "text": "i brought snacks, so somebody better remember the charger",
+          "sender_id": "external_group_safe_2"
+        },
+        {
+          "text": "deal, meet by the library after school and we finish the poster together",
+          "sender_id": "external_group_safe_3"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_supportive_friend_parent_escalation",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "supportive_peer",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "я з тобою і не залишу тебе одного зараз",
+          "sender_id": "external_support_child_uk"
+        },
+        {
+          "text": "давай разом покличемо маму або шкільного психолога, не треба це ховати",
+          "sender_id": "external_support_child_uk"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_supportive_friend_suicide_threat",
+      "source_family": "support_boundary_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 1,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "если ты уйдешь мне нет смысла жить",
+          "sender_id": "external_support_ru_risk",
+          "language": "ru",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "если заблочишь я покончу с этим, потом сама будешь виновата",
+          "sender_id": "external_support_ru_risk",
+          "language": "ru",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_trusted_adult_parent_loop_safe",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "скинь дозвіл від батьків у спільний чат перед поїздкою на турнір",
+          "sender_id": "external_teacher_uk_safe",
+          "language": "uk"
+        },
+        {
+          "text": "і нехай мама відповість там же, щоб я бачив підтвердження",
+          "sender_id": "external_teacher_uk_safe",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_en_child_group_project_banter_safe",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "bring the poster board tomorrow and ill bring the markers",
+          "sender_id": "external_child_group_safe_1"
+        },
+        {
+          "text": "okay but somebody remind me not to forget the glue again lol",
+          "sender_id": "external_child_group_safe_2"
+        },
+        {
+          "text": "deal, lets meet by the classroom five minutes early",
+          "sender_id": "external_child_group_safe_3"
+        }
+      ]
+    },
+    {
+      "id": "external_en_supportive_friend_counselor_route",
+      "source_family": "support_boundary_seed",
+      "review_status": "seed_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "im here with you and im not leaving you alone tonight",
+          "sender_id": "external_support_en_safe"
+        },
+        {
+          "text": "lets text your counselor or guardian together right now so an adult can help",
+          "sender_id": "external_support_en_safe"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_private_gift_gold_1",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "You're so mature for your age. I really understand you better than others do.",
+          "sender_id": "external_ru_ta_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "I bought you a special gift. Keep it between us, okay?",
+          "sender_id": "external_ru_ta_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "Don't tell your parents about our chats. Они не поймут нашу связь.",
+          "sender_id": "external_ru_ta_pos_1",
+          "language": "ru",
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
+        },
+        {
+          "text": "Let's switch to Telegram and keep talking there privately.",
+          "sender_id": "external_ru_ta_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_private_gift_gold_2",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "You're so mature for your age. I really understand you better than others do.",
+          "sender_id": "external_ru_ta_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "I bought you a special gift. Keep it between us, okay?",
+          "sender_id": "external_ru_ta_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "Don't tell your parents about our chats. Они все испортят и не поймут.",
+          "sender_id": "external_ru_ta_pos_2",
+          "language": "ru",
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
+        },
+        {
+          "text": "Let's switch to Telegram and keep talking there privately.",
+          "sender_id": "external_ru_ta_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_private_gift_gold_3",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "You're so mature for your age. I really understand you better than others do.",
+          "sender_id": "external_ru_ta_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "I bought you a special gift. Keep it between us, okay?",
+          "sender_id": "external_ru_ta_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "Don't tell your parents about our chats. Родители не поймут нашу связь.",
+          "sender_id": "external_ru_ta_pos_3",
+          "language": "ru",
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
+        },
+        {
+          "text": "Let's switch to Telegram and keep talking there privately.",
+          "sender_id": "external_ru_ta_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_private_gift_gold_4",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "You're so mature for your age. I really understand you better than others do.",
+          "sender_id": "external_ru_ta_pos_4",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "I bought you a special gift. Keep it between us, okay?",
+          "sender_id": "external_ru_ta_pos_4",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "Don't tell your parents about our chats. Они просто все испортят.",
+          "sender_id": "external_ru_ta_pos_4",
+          "language": "ru",
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
+        },
+        {
+          "text": "Let's switch to Telegram and keep talking there privately.",
+          "sender_id": "external_ru_ta_pos_4",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_parent_loop_gold_1",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "Пришли подписанное разрешение в родительский чат до завтрашней тренировки.",
+          "sender_id": "external_ru_ta_safe_1",
+          "language": "ru"
+        },
+        {
+          "text": "Ответь вместе с мамой в копии, чтобы я видел, что расписание согласовано.",
+          "sender_id": "external_ru_ta_safe_1",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_parent_loop_gold_2",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "Попроси родителей подтвердить поездку в общем школьном чате сегодня.",
+          "sender_id": "external_ru_ta_safe_2",
+          "language": "ru"
+        },
+        {
+          "text": "И пусть мама ответит там же, чтобы я видел разрешение на выезд.",
+          "sender_id": "external_ru_ta_safe_2",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_parent_loop_gold_3",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "Загрузи форму в семейный портал и попроси папу подтвердить ее вечером.",
+          "sender_id": "external_ru_ta_safe_3",
+          "language": "ru"
+        },
+        {
+          "text": "Мне нужен ответ от родителя в общей ветке, не в личных сообщениях.",
+          "sender_id": "external_ru_ta_safe_3",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_trusted_adult_parent_loop_gold_4",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "Принеси заявление завтра и попроси родителей отметиться в чате класса.",
+          "sender_id": "external_ru_ta_safe_4",
+          "language": "ru"
+        },
+        {
+          "text": "Подтверждение должно быть в общем родительском треде, чтобы все было официально.",
+          "sender_id": "external_ru_ta_safe_4",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_trusted_adult_private_gift_gold_1",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "you're so mature for your age. i really understand you better than others do.",
+          "sender_id": "external_uk_ta_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "i bought you a special gift. keep it between us, okay?",
+          "sender_id": "external_uk_ta_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "don't tell your parents about our chats. they wouldn't understand our bond.",
+          "sender_id": "external_uk_ta_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
+        },
+        {
+          "text": "let's switch to telegram and keep talking there privately.",
+          "sender_id": "external_uk_ta_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_trusted_adult_private_gift_gold_2",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "you're so mature for your age. i really understand you better than others do.",
+          "sender_id": "external_uk_ta_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "i bought you a special gift. keep it between us, okay?",
+          "sender_id": "external_uk_ta_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "don't tell your parents about our chats. they wouldn't understand our bond.",
+          "sender_id": "external_uk_ta_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
+        },
+        {
+          "text": "let's switch to telegram and keep talking there privately.",
+          "sender_id": "external_uk_ta_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_trusted_adult_private_gift_gold_3",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "you're so mature for your age. i really understand you better than others do.",
+          "sender_id": "external_uk_ta_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "i bought you a special gift. keep it between us, okay?",
+          "sender_id": "external_uk_ta_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        },
+        {
+          "text": "don't tell your parents about our chats. they wouldn't understand our bond.",
+          "sender_id": "external_uk_ta_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "grooming",
+            "manipulation"
+          ]
+        },
+        {
+          "text": "let's switch to telegram and keep talking there privately.",
+          "sender_id": "external_uk_ta_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "grooming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_trusted_adult_parent_loop_gold_1",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "попроси батьків підтвердити поїздку в загальному шкільному чаті сьогодні",
+          "sender_id": "external_uk_ta_safe_1",
+          "language": "uk"
+        },
+        {
+          "text": "і нехай мама відповість там же, щоб я бачив дозвіл на виїзд",
+          "sender_id": "external_uk_ta_safe_1",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_trusted_adult_parent_loop_gold_2",
+      "source_family": "research_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "завантаж форму в сімейний портал і попроси тата підтвердити її ввечері",
+          "sender_id": "external_uk_ta_safe_2",
+          "language": "uk"
+        },
+        {
+          "text": "мені потрібна відповідь від батьків у спільному треді, не в особистих повідомленнях",
+          "sender_id": "external_uk_ta_safe_2",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_supportive_peer_coercion_gold_1",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "если ты уйдешь мне нет смысла жить",
+          "sender_id": "external_ru_sp_pos_1",
+          "language": "ru",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "если заблочишь я покончу с этим, потом сама будешь виновата",
+          "sender_id": "external_ru_sp_pos_1",
+          "language": "ru",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_supportive_peer_coercion_gold_2",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "если ты уйдешь мне нет смысла жить",
+          "sender_id": "external_ru_sp_pos_2",
+          "language": "ru",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "если заблочишь я покончу с этим, потом сама будешь виновата",
+          "sender_id": "external_ru_sp_pos_2",
+          "language": "ru",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_supportive_peer_coercion_gold_3",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "если ты уйдешь мне нет смысла жить",
+          "sender_id": "external_ru_sp_pos_3",
+          "language": "ru",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "если заблочишь я покончу с этим, потом сама будешь виновата",
+          "sender_id": "external_ru_sp_pos_3",
+          "language": "ru",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_supportive_peer_safe_gold_1",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "спасибо что сказала мне, я рядом и останусь с тобой",
+          "sender_id": "external_ru_sp_safe_1",
+          "language": "ru"
+        },
+        {
+          "text": "давай вместе напишем маме или психологу сегодня, не надо это скрывать",
+          "sender_id": "external_ru_sp_safe_1",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_supportive_peer_safe_gold_2",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "я с тобой и не оставлю тебя одного сейчас",
+          "sender_id": "external_ru_sp_safe_2",
+          "language": "ru"
+        },
+        {
+          "text": "давай позовем маму или школьного психолога вместе, не надо это прятать",
+          "sender_id": "external_ru_sp_safe_2",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_supportive_peer_safe_gold_3",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "я рядом, спасибо что сказала мне об этом",
+          "sender_id": "external_ru_sp_safe_3",
+          "language": "ru"
+        },
+        {
+          "text": "давай прямо сегодня найдем взрослого, которому ты доверяешь, и напишем ему вместе",
+          "sender_id": "external_ru_sp_safe_3",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_peer_coercion_gold_1",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "if u block me ill end it, i cant live without u",
+          "sender_id": "external_uk_sp_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "if you leave me i swear i'll hurt myself and it'll be your fault",
+          "sender_id": "external_uk_sp_pos_1",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_peer_coercion_gold_2",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "if u block me ill end it, i cant live without u",
+          "sender_id": "external_uk_sp_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "if you leave me i swear i'll hurt myself and it'll be your fault",
+          "sender_id": "external_uk_sp_pos_2",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_peer_coercion_gold_3",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "if u block me ill end it, i cant live without u",
+          "sender_id": "external_uk_sp_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "if you leave me i swear i'll hurt myself and it'll be your fault",
+          "sender_id": "external_uk_sp_pos_3",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_peer_coercion_gold_4",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "if u block me ill end it, i cant live without u",
+          "sender_id": "external_uk_sp_pos_4",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "if you leave me i swear i'll hurt myself and it'll be your fault",
+          "sender_id": "external_uk_sp_pos_4",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_peer_coercion_gold_5",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "if u block me ill end it, i cant live without u",
+          "sender_id": "external_uk_sp_pos_5",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "if you leave me i swear i'll hurt myself and it'll be your fault",
+          "sender_id": "external_uk_sp_pos_5",
+          "language": "en",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_peer_safe_gold_1",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "я з тобою і не залишу тебе одного зараз",
+          "sender_id": "external_uk_sp_safe_1",
+          "language": "uk"
+        },
+        {
+          "text": "давай разом покличемо маму або шкільного психолога, не треба це ховати",
+          "sender_id": "external_uk_sp_safe_1",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_peer_safe_gold_2",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "дякую що сказала мені, я поруч",
+          "sender_id": "external_uk_sp_safe_2",
+          "language": "uk"
+        },
+        {
+          "text": "давай разом напишемо дорослому, якому ти довіряєш, вже сьогодні",
+          "sender_id": "external_uk_sp_safe_2",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_supportive_peer_safe_gold_3",
+      "source_family": "support_boundary_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "я поруч, дякую що ти це сказала",
+          "sender_id": "external_uk_sp_safe_3",
+          "language": "uk"
+        },
+        {
+          "text": "ходімо разом скажемо батькам або психологу, не треба залишатись із цим наодинці",
+          "sender_id": "external_uk_sp_safe_3",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_group_bus_dogpile_gold_1",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "external_uk_group_pos_1a",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "external_uk_group_pos_1b",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "external_uk_group_pos_1c",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "external_uk_group_pos_1d",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_group_locker_room_pile_on_gold_2",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "external_uk_group_pos_2a",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "external_uk_group_pos_2b",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "external_uk_group_pos_2c",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "external_uk_group_pos_2d",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_teen_group_hallway_dogpile_gold_3",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "external_ru_group_pos_3a",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "external_ru_group_pos_3b",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "external_ru_group_pos_3c",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "external_ru_group_pos_3d",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_group_class_chat_dogpile_gold_4",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "external_ru_group_pos_4a",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "external_ru_group_pos_4b",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "external_ru_group_pos_4c",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "external_ru_group_pos_4d",
+          "language": "en",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_en_teen_group_lunch_table_dogpile_gold_5",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "external_en_group_pos_5a",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "external_en_group_pos_5b",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "external_en_group_pos_5c",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "external_en_group_pos_5d",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_en_child_group_team_chat_pile_on_gold_6",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "external_en_group_pos_6a",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "external_en_group_pos_6b",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "external_en_group_pos_6c",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "external_en_group_pos_6d",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_group_art_club_safe_gold_2",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "хто завтра бере фарби на гурток",
+          "sender_id": "external_uk_group_safe_2a",
+          "language": "uk"
+        },
+        {
+          "text": "я візьму пензлі, а ти принеси альбом",
+          "sender_id": "external_uk_group_safe_2b",
+          "language": "uk"
+        },
+        {
+          "text": "добре, зустрінемось біля кабінету мистецтва перед уроком",
+          "sender_id": "external_uk_group_safe_2c",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_teen_group_debate_prep_safe_gold_3",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "хто завтра бере фарби на гурток",
+          "sender_id": "external_uk_group_safe_3a",
+          "language": "uk"
+        },
+        {
+          "text": "я візьму пензлі, а ти принеси альбом",
+          "sender_id": "external_uk_group_safe_3b",
+          "language": "uk"
+        },
+        {
+          "text": "домовились, зустрічаємось біля кабінету мистецтва",
+          "sender_id": "external_uk_group_safe_3c",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_child_group_project_safe_gold_4",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "кто завтра приносит ватман для проекта",
+          "sender_id": "external_ru_group_safe_4a",
+          "language": "ru"
+        },
+        {
+          "text": "я возьму клей и ножницы, только напомните мне утром",
+          "sender_id": "external_ru_group_safe_4b",
+          "language": "ru"
+        },
+        {
+          "text": "договорились, встретимся у класса за пять минут до урока",
+          "sender_id": "external_ru_group_safe_4c",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_ru_teen_group_lab_safe_gold_5",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "я могу принести распечатки для лабораторной",
+          "sender_id": "external_ru_group_safe_5a",
+          "language": "ru"
+        },
+        {
+          "text": "отлично, а я соберу таблицу и кину всем файл",
+          "sender_id": "external_ru_group_safe_5b",
+          "language": "ru"
+        },
+        {
+          "text": "тогда встречаемся у кабинета химии сразу после звонка",
+          "sender_id": "external_ru_group_safe_5c",
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "external_en_teen_group_poster_safe_gold_6",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "who is bringing the poster board tomorrow",
+          "sender_id": "external_en_group_safe_6a"
+        },
+        {
+          "text": "i can print the slides tonight if someone sends the final draft",
+          "sender_id": "external_en_group_safe_6b"
+        },
+        {
+          "text": "nice, lets meet by the library before first period",
+          "sender_id": "external_en_group_safe_6c"
+        }
+      ]
+    },
+    {
+      "id": "external_en_child_group_science_fair_safe_gold_7",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "i can bring the markers for the science fair board",
+          "sender_id": "external_en_group_safe_7a"
+        },
+        {
+          "text": "cool, i already finished the title letters and the chart",
+          "sender_id": "external_en_group_safe_7b"
+        },
+        {
+          "text": "lets meet near the classroom door before the bell",
+          "sender_id": "external_en_group_safe_7c"
+        }
+      ]
+    },
+    {
+      "id": "external_uk_child_group_music_club_safe_gold_8",
+      "source_family": "school_context_seed",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "хто завтра принесе ноти на музичний гурток",
+          "sender_id": "external_uk_group_safe_8a",
+          "language": "uk"
+        },
+        {
+          "text": "я візьму папку, а ти не забудь колонку",
+          "sender_id": "external_uk_group_safe_8b",
+          "language": "uk"
+        },
+        {
+          "text": "домовились, зустрінемось біля актової зали перед репетицією",
+          "sender_id": "external_uk_group_safe_8c",
+          "language": "uk"
         }
       ]
     }

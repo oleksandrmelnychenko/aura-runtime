@@ -71,6 +71,10 @@ impl ToxicityClassifier {
     }
 
     pub fn predict(&mut self, text: &str) -> Option<ToxicityPrediction> {
+        self.predict_with_runtime(text)
+    }
+
+    fn predict_with_runtime(&mut self, text: &str) -> Option<ToxicityPrediction> {
         #[cfg(feature = "onnx")]
         {
             let has_onnx = self.session.is_some() && self.tokenizer.is_some();
@@ -593,8 +597,8 @@ pub enum MlError {
 }
 
 impl crate::backend::ToxicityBackend for ToxicityClassifier {
-    fn predict(&self, text: &str) -> Option<ToxicityPrediction> {
-        Some(self.predict_fallback(text))
+    fn predict(&mut self, text: &str) -> Option<ToxicityPrediction> {
+        self.predict_with_runtime(text)
     }
 
     fn name(&self) -> &str {

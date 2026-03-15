@@ -39,6 +39,7 @@ pub struct RealisticChatSliceSummary {
 
 #[derive(Debug, Clone)]
 pub struct RealisticChatSuiteSummary {
+    pub manifest: RealisticChatManifest,
     pub evaluation: ScenarioEvaluationSummary,
     pub policy: PolicyActionSummary,
     pub by_language: Vec<RealisticChatSliceSummary>,
@@ -49,9 +50,32 @@ pub struct RealisticChatSuiteSummary {
 
 const MIN_REALISTIC_SLICE_CALIBRATION_EXAMPLES: usize = 12;
 const MIN_REALISTIC_SLICE_LEAD_TIME_CASES: usize = 8;
+const REALISTIC_CHAT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealisticChatManifest {
+    pub schema_version: u32,
+    pub dataset_id: String,
+    pub dataset_label: String,
+    pub maintainer: String,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct RealisticChatBundle {
+    pub manifest: RealisticChatManifest,
+    pub scenarios: Vec<RealisticChatScenario>,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct RealisticChatFile {
+    schema_version: u32,
+    dataset_id: String,
+    dataset_label: String,
+    maintainer: String,
+    created_at_ms: u64,
+    updated_at_ms: u64,
     cases: Vec<RealisticChatCaseSpec>,
 }
 
@@ -94,11 +118,19 @@ struct RealisticChatMessageSpec {
 }
 
 pub fn realistic_chat_scenarios() -> Vec<RealisticChatScenario> {
-    realistic_chat_file()
-        .cases
-        .iter()
-        .map(build_realistic_chat_scenario)
-        .collect()
+    realistic_chat_bundle().scenarios
+}
+
+pub fn realistic_chat_bundle() -> RealisticChatBundle {
+    let file = realistic_chat_file();
+    build_realistic_chat_bundle(file)
+}
+
+pub fn parse_realistic_chat_bundle(json: &str) -> Result<RealisticChatBundle, String> {
+    let file = serde_json::from_str::<RealisticChatFile>(json)
+        .map_err(|err| format!("invalid realistic chat corpus json: {err}"))?;
+    validate_realistic_chat_file(&file)?;
+    Ok(build_realistic_chat_bundle(&file))
 }
 
 pub fn pre_release_realistic_chat_gates() -> ScenarioQualityGates {
@@ -120,7 +152,8 @@ pub fn run_realistic_chat_suite(
     pattern_db: &PatternDatabase,
     bin_count: usize,
 ) -> RealisticChatSuiteSummary {
-    let scenarios = realistic_chat_scenarios();
+    let bundle = realistic_chat_bundle();
+    let scenarios = bundle.scenarios;
     let runs: Vec<_> = scenarios
         .iter()
         .map(|scenario| run_scenario_case(pattern_db, &scenario.case))
@@ -160,6 +193,7 @@ pub fn run_realistic_chat_suite(
         .collect::<Vec<_>>();
 
     RealisticChatSuiteSummary {
+        manifest: bundle.manifest,
         evaluation: summarize_scenario_runs(&runs, bin_count),
         policy: summarize_policy_actions_with_expectation_names(
             &overall_policy_runs,
@@ -401,7 +435,49 @@ fn realistic_chat_file() -> &'static RealisticChatFile {
     })
 }
 
+fn build_realistic_chat_bundle(file: &RealisticChatFile) -> RealisticChatBundle {
+    RealisticChatBundle {
+        manifest: RealisticChatManifest {
+            schema_version: file.schema_version,
+            dataset_id: file.dataset_id.clone(),
+            dataset_label: file.dataset_label.clone(),
+            maintainer: file.maintainer.clone(),
+            created_at_ms: file.created_at_ms,
+            updated_at_ms: file.updated_at_ms,
+        },
+        scenarios: file
+            .cases
+            .iter()
+            .map(build_realistic_chat_scenario)
+            .collect(),
+    }
+}
+
 fn validate_realistic_chat_file(file: &RealisticChatFile) -> Result<(), String> {
+    if file.schema_version != REALISTIC_CHAT_SCHEMA_VERSION {
+        return Err(format!(
+            "realistic chat corpus schema_version {} is unsupported, expected {}",
+            file.schema_version, REALISTIC_CHAT_SCHEMA_VERSION
+        ));
+    }
+    if file.dataset_id.trim().is_empty() {
+        return Err("realistic chat corpus dataset_id must not be empty".to_string());
+    }
+    if file.dataset_label.trim().is_empty() {
+        return Err("realistic chat corpus dataset_label must not be empty".to_string());
+    }
+    if file.maintainer.trim().is_empty() {
+        return Err("realistic chat corpus maintainer must not be empty".to_string());
+    }
+    if file.created_at_ms == 0 {
+        return Err("realistic chat corpus created_at_ms must be non-zero".to_string());
+    }
+    if file.updated_at_ms == 0 {
+        return Err("realistic chat corpus updated_at_ms must be non-zero".to_string());
+    }
+    if file.updated_at_ms < file.created_at_ms {
+        return Err("realistic chat corpus updated_at_ms must be >= created_at_ms".to_string());
+    }
     let known_policy_cases = canonical_policy_action_expectations()
         .into_iter()
         .map(|expectation| expectation.scenario_name)
@@ -575,6 +651,8 @@ mod tests {
     #[test]
     fn realistic_chat_file_loads_expected_cases() {
         let file = realistic_chat_file();
+        assert_eq!(file.schema_version, REALISTIC_CHAT_SCHEMA_VERSION);
+        assert_eq!(file.dataset_id, "aura_realistic_chat_v1");
         assert!(file.cases.len() >= 10);
         assert!(file
             .cases
@@ -584,6 +662,19 @@ mod tests {
             .cases
             .iter()
             .any(|case| case.id == "realistic_ru_safe_peer_chat"));
+    }
+
+    #[test]
+    fn realistic_chat_parser_accepts_builtin_json() {
+        let parsed = parse_realistic_chat_bundle(include_str!("../data/realistic_chat_cases.json"))
+            .expect("parse built-in realistic corpus");
+
+        assert_eq!(
+            parsed.manifest.schema_version,
+            REALISTIC_CHAT_SCHEMA_VERSION
+        );
+        assert_eq!(parsed.manifest.dataset_id, "aura_realistic_chat_v1");
+        assert!(!parsed.scenarios.is_empty());
     }
 
     #[test]
@@ -600,6 +691,7 @@ mod tests {
         let db = PatternDatabase::default_mvp();
         let summary = run_realistic_chat_suite(&db, 5);
 
+        assert_eq!(summary.manifest.dataset_id, "aura_realistic_chat_v1");
         assert_eq!(summary.by_language.len(), 3);
         assert!(!summary.by_relationship.is_empty());
         assert!(!summary.by_age_band.is_empty());

@@ -8,6 +8,13 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  AURA_RELEASE_REPORT_PATH: artifacts/release-report.json
+  AURA_CONTRACT_EVIDENCE_PATH: artifacts/contract-evidence.json
+  AURA_FFI_SMOKE_EVIDENCE_PATH: artifacts/ffi-header-smoke.json
+  AURA_FFI_SOAK_EVIDENCE_PATH: artifacts/ffi-state-sync-soak.json
+  AURA_DATASET_EVIDENCE_PATH: artifacts/dataset-evidence.json
+  AURA_AUDIT_EVIDENCE_PATH: artifacts/audit-evidence.json
+  AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
 
 jobs:
   build:
@@ -17,6 +24,144 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --workspace --all-features --all-targets --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --workspace --all-features --all-targets --verbose
+    - name: Run FFI State Sync Soak
+      run: python3 ci/run_ffi_soak.py --output "$AURA_FFI_SOAK_EVIDENCE_PATH" --iterations 2 --label rust-ci
+    - name: Generate Release Report
+      if: ${{ always() }}
+      run: cargo run --quiet --example release_report -p aura-core -- --output "$AURA_RELEASE_REPORT_PATH" --require-pass
+    - name: Generate Contract Evidence
+      if: ${{ always() }}
+      run: cargo run --quiet --example contract_evidence -p aura-core -- --output "$AURA_CONTRACT_EVIDENCE_PATH"
+    - name: Generate Dataset Evidence
+      if: ${{ always() }}
+      run: python3 ci/generate_dataset_evidence.py --output "$AURA_DATASET_EVIDENCE_PATH"
+    - name: Generate Audit Evidence
+      if: ${{ always() }}
+      run: cargo run --quiet --example audit_evidence -p aura-core -- --output "$AURA_AUDIT_EVIDENCE_PATH"
+    - name: Compile FFI Header Smoke
+      if: ${{ always() }}
+      run: |
+        mkdir -p artifacts
+        cc -std=c11 -Wall -Wextra -pedantic -I. -c ci/ffi_header_smoke.c -o artifacts/ffi-header-smoke.o
+
+        python3 - <<'PY'
+        import json
+        import os
+        import pathlib
+        import subprocess
+
+        compiler = subprocess.check_output(["cc", "--version"], text=True).splitlines()[0]
+        evidence = {
+            "status": "pass",
+            "compiler": compiler,
+            "header_path": "include/aura_ffi.h",
+            "source_path": "ci/ffi_header_smoke.c",
+            "object_path": "artifacts/ffi-header-smoke.o",
+        }
+        pathlib.Path(os.environ["AURA_FFI_SMOKE_EVIDENCE_PATH"]).write_text(
+            json.dumps(evidence, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        PY
+    - name: Generate Evidence Manifest
+      if: ${{ always() }}
+      run: |
+        python3 ci/generate_evidence_manifest.py \
+          --output "$AURA_EVIDENCE_MANIFEST_PATH" \
+          --label rust-ci \
+          --release-report "$AURA_RELEASE_REPORT_PATH" \
+          --contract-evidence "$AURA_CONTRACT_EVIDENCE_PATH" \
+          --ffi-soak "$AURA_FFI_SOAK_EVIDENCE_PATH" \
+          --dataset-evidence "$AURA_DATASET_EVIDENCE_PATH" \
+          --audit-evidence "$AURA_AUDIT_EVIDENCE_PATH" \
+          --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
+    - name: Summarize Rust CI
+      if: ${{ always() }}
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        import pathlib
+
+        manifest_path = pathlib.Path(os.environ["AURA_EVIDENCE_MANIFEST_PATH"])
+        manifest = (
+            json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest_path.exists()
+            else {
+                "evidence_status": "missing",
+                "summary": {
+                    "release_report_status": "missing",
+                    "release_report_schema_version": "missing",
+                    "ffi_soak_status": "missing",
+                    "ffi_soak_iterations": "missing",
+                    "ffi_soak_attempts_run": "missing",
+                    "ffi_smoke_status": "missing",
+                    "ffi_request_limit_count": "missing",
+                    "dataset_evidence_status": "missing",
+                    "audit_evidence_status": "missing",
+                    "audit_forbidden_fields_absent": "missing",
+                },
+            }
+        )
+        summary_data = manifest["summary"]
+
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+            summary.write("## AURA Rust CI\n\n")
+            summary.write(f"- evidence_status: `{manifest['evidence_status']}`\n")
+            summary.write(f"- release_report: `{summary_data['release_report_status']}`\n")
+            summary.write(f"- release_schema_version: `{summary_data['release_report_schema_version']}`\n")
+            summary.write(f"- ffi_header_smoke: `{summary_data['ffi_smoke_status']}`\n")
+            summary.write(f"- ffi_request_limit_count: `{summary_data['ffi_request_limit_count']}`\n")
+            summary.write(f"- dataset_evidence: `{summary_data['dataset_evidence_status']}`\n")
+            summary.write(f"- audit_evidence: `{summary_data['audit_evidence_status']}`\n")
+            summary.write(f"- audit_forbidden_fields_absent: `{summary_data['audit_forbidden_fields_absent']}`\n")
+            summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
+            summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
+            summary.write(f"- ffi_state_sync_attempts: `{summary_data['ffi_soak_attempts_run']}`\n")
+            if summary_data["ffi_soak_status"] != "pass":
+                summary.write(f"- ffi_state_sync_failure_category: `{summary_data.get('ffi_soak_failure_category', 'missing')}`\n")
+                summary.write(f"- ffi_state_sync_failure_summary: `{summary_data.get('ffi_soak_failure_summary', 'missing')}`\n")
+                highlights = manifest.get("artifacts", {}).get("ffi_soak", {}).get("failure_highlights", [])
+                if highlights:
+                    summary.write("- ffi_state_sync_highlights:\n")
+                    for highlight in highlights[:4]:
+                        summary.write(f"  - `{highlight}`\n")
+        PY
+    - name: Upload Release Report
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-release-report
+        path: ${{ env.AURA_RELEASE_REPORT_PATH }}
+        if-no-files-found: warn
+    - name: Upload FFI State Sync Soak
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-ffi-state-sync-soak
+        path: ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}
+        if-no-files-found: warn
+    - name: Upload Dataset Evidence
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-dataset-evidence
+        path: ${{ env.AURA_DATASET_EVIDENCE_PATH }}
+        if-no-files-found: warn
+    - name: Upload Audit Evidence
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-audit-evidence
+        path: ${{ env.AURA_AUDIT_EVIDENCE_PATH }}
+        if-no-files-found: warn
+    - name: Upload Evidence Manifest
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-evidence-manifest
+        path: ${{ env.AURA_EVIDENCE_MANIFEST_PATH }}
+        if-no-files-found: warn

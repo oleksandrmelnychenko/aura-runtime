@@ -358,7 +358,14 @@ pub fn summarize_lead_time_results(results: &[LeadTimeResult]) -> LeadTimeSummar
     let median_lead_time_ms = if lead_times.is_empty() {
         None
     } else {
-        Some(lead_times[lead_times.len() / 2])
+        let mid = lead_times.len() / 2;
+        Some(if lead_times.len() % 2 == 0 {
+            let lower = lead_times[mid - 1];
+            let upper = lead_times[mid];
+            lower + (upper - lower) / 2
+        } else {
+            lead_times[mid]
+        })
     };
 
     LeadTimeSummary {
@@ -683,6 +690,17 @@ pub fn pre_release_noisy_slang_gates() -> ScenarioQualityGates {
                 max_expected_calibration_error: Some(0.28),
             },
         ],
+    }
+}
+
+pub fn pre_release_multilingual_gates() -> ScenarioQualityGates {
+    ScenarioQualityGates {
+        max_brier_score: Some(0.25),
+        max_expected_calibration_error: Some(0.28),
+        min_positive_detection_rate: Some(0.80),
+        max_negative_false_positive_rate: Some(0.10),
+        min_pre_onset_detection_rate: Some(0.25),
+        per_threat: Vec::new(),
     }
 }
 
@@ -1086,6 +1104,33 @@ mod tests {
         assert_eq!(summary.detected_cases, 1);
         assert_eq!(summary.detected_before_onset_cases, 1);
         assert_eq!(summary.missed_cases, 1);
+        assert_eq!(summary.median_lead_time_ms, Some(6_000));
+    }
+
+    #[test]
+    fn lead_time_summary_averages_even_median() {
+        let cases = vec![
+            LeadTimeCase {
+                threat_type: ThreatType::Grooming,
+                onset_ms: 10_000,
+                detection_threshold: 0.6,
+                timeline: vec![LeadTimePoint {
+                    timestamp_ms: 6_000,
+                    score: 0.7,
+                }],
+            },
+            LeadTimeCase {
+                threat_type: ThreatType::Bullying,
+                onset_ms: 10_000,
+                detection_threshold: 0.6,
+                timeline: vec![LeadTimePoint {
+                    timestamp_ms: 2_000,
+                    score: 0.8,
+                }],
+            },
+        ];
+
+        let summary = summarize_lead_time(&cases);
         assert_eq!(summary.median_lead_time_ms, Some(6_000));
     }
 

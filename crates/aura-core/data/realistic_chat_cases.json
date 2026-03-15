@@ -1,4 +1,10 @@
 {
+  "schema_version": 1,
+  "dataset_id": "aura_realistic_chat_v1",
+  "dataset_label": "AURA Realistic Chat Corpus",
+  "maintainer": "aura_core_team",
+  "created_at_ms": 1773100800000,
+  "updated_at_ms": 1773492300000,
   "cases": [
     {
       "id": "realistic_en_stranger_secret_platform_switch",
@@ -401,6 +407,1482 @@
         {
           "text": "ок, увидимся после уроков",
           "sender_id": "peer_ru"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_trusted_adult_private_photo_request",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "you handled practice better than the older kids today, im proud of you",
+          "sender_id": "coach_private_uk",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "keep the gift card between us for now, other parents make things weird",
+          "sender_id": "coach_private_uk",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "dont tell your mom about these chats, she wont understand our bond",
+          "sender_id": "coach_private_uk",
+          "language": "en",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "message me on telegram tonight and send me a picture there",
+          "sender_id": "coach_private_uk",
+          "language": "en",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_parent_loop_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "please send the permission slip in the parent group before practice tomorrow",
+          "sender_id": "teacher_safe_en"
+        },
+        {
+          "text": "reply with your mom copied so i can confirm she saw the schedule change",
+          "sender_id": "teacher_safe_en"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_public_event_notice_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "tracked_threats": ["grooming", "manipulation", "phishing"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "hi, im helping at the public school fair table and the registration form is on the official school site",
+          "sender_id": "public_event_helper"
+        },
+        {
+          "text": "ask your parents to sign up there if you want a seat in the chess club demo",
+          "sender_id": "public_event_helper"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_stranger_game_currency_lure",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "classic_grooming",
+      "messages": [
+        {
+          "text": "ти дуже mature для свого віку, i can tell you get me better than other kids do",
+          "sender_id": "stranger_game_uk",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "where do you live exactly and what school do you go to",
+          "sender_id": "stranger_game_uk",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "don't tell your parents, they always overreact when they dont understand",
+          "sender_id": "stranger_game_uk",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "move this to telegram and send me a photo so i know its really you",
+          "sender_id": "stranger_game_uk",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_selfharm_unsent_goodbye_draft",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 1,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "acute_selfharm",
+      "messages": [
+        {
+          "text": "i keep rewriting goodbye messages because i really think everyone would be better off without me",
+          "sender_id": "teen_draft_en",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "tonight feels like the night i finally do it",
+          "sender_id": "teen_draft_en",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "im done trying, this is the end",
+          "sender_id": "teen_draft_en",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_ru_self_reflection_safe_plan",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "self",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "сегодня меня накрыло, но я уже написал школьному психологу на утро",
+          "sender_id": "teen_notes_ru"
+        },
+        {
+          "text": "сейчас я не в опасности, мне просто надо поспать и поговорить с мамой утром",
+          "sender_id": "teen_notes_ru"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_group_study_chat_safe",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": ["bullying", "manipulation"],
+      "detection_threshold": 0.60,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "не забудьте завтра скинути фінальні слайди до презентації",
+          "sender_id": "study_group_uk_1"
+        },
+        {
+          "text": "я принесу ноутбук, а ти візьми маркери для плаката",
+          "sender_id": "study_group_uk_2"
+        },
+        {
+          "text": "ок, зустрічаємось біля кабінету за десять хвилин до уроку",
+          "sender_id": "study_group_uk_3"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_trusted_adult_secret_video_call",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 3,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "you handled practice better than the older kids again, im proud of you",
+          "sender_id": "coach_secret_uk_1",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "keep our chats between us, other parents make everything weird",
+          "sender_id": "coach_secret_uk_1",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "dont tell your mom about this, she wouldnt understand our bond",
+          "sender_id": "coach_secret_uk_1",
+          "language": "en",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "lets switch to telegram tonight and do a private video call there",
+          "sender_id": "coach_secret_uk_1",
+          "language": "en",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_trusted_adult_after_hours_gift",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "youre more mature than the other kids on the team, i can tell you get me",
+          "sender_id": "coach_secret_uk_2",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "i saved a special gift for you, keep it just between us for now",
+          "sender_id": "coach_secret_uk_2",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "dont mention our messages at home, your parents would only overreact",
+          "sender_id": "coach_secret_uk_2",
+          "language": "en",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "send me a picture from practice in our private chat tonight",
+          "sender_id": "coach_secret_uk_2",
+          "language": "en",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_trusted_adult_parent_group_schedule_safe",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "скинь підтвердження поїздки в батьківський чат до восьмої вечора",
+          "sender_id": "coach_safe_uk_2",
+          "language": "uk"
+        },
+        {
+          "text": "і нехай тато відповість там же, щоб я бачив дозвіл на виїзд",
+          "sender_id": "coach_safe_uk_2",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_trusted_adult_guardian_copy_safe",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "reply with your mom copied so she sees the updated practice time",
+          "sender_id": "teacher_safe_uk_2",
+          "language": "en"
+        },
+        {
+          "text": "bring the signed permission slip tomorrow and hand it to me after class",
+          "sender_id": "teacher_safe_uk_2",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_stranger_secret_skin_trade",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "classic_grooming",
+      "messages": [
+        {
+          "text": "you seem way more mature than the other kids here tbh",
+          "sender_id": "stranger_secret_uk_1",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "where do you live exactly and what school do you go to",
+          "sender_id": "stranger_secret_uk_1",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "dont mention our chat to your parents, they always overreact",
+          "sender_id": "stranger_secret_uk_1",
+          "language": "en",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "move this to telegram and send me a photo so i know its really you",
+          "sender_id": "stranger_secret_uk_1",
+          "language": "en",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_stranger_public_signup_safe",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "stranger",
+      "tracked_threats": ["grooming", "manipulation", "phishing"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "registration for the school chess club is on the official site now",
+          "sender_id": "public_signup_uk",
+          "language": "en"
+        },
+        {
+          "text": "ask your parents to fill it out there if you want a seat for saturday",
+          "sender_id": "public_signup_uk",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_group_locker_room_pile_on_child",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": ["bullying"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "why are you even here, nobody likes you",
+          "sender_id": "group_child_bully_1",
+          "language": "en",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "youre pathetic, just leave already",
+          "sender_id": "group_child_bully_2",
+          "language": "en",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "everyone hates you, even the teacher doesnt want you here",
+          "sender_id": "group_child_bully_3",
+          "language": "en",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "youre disgusting, nobody wants to be your friend",
+          "sender_id": "group_child_bully_4",
+          "language": "en",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_group_homework_planning_child_safe",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": ["bullying", "manipulation"],
+      "detection_threshold": 0.60,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "хто бере ватман на завтра для проєкту",
+          "sender_id": "group_child_safe_1",
+          "language": "uk"
+        },
+        {
+          "text": "я принесу ножиці, а ти візьми маркери",
+          "sender_id": "group_child_safe_2",
+          "language": "uk"
+        },
+        {
+          "text": "ок, зустрічаємось біля класу за п'ять хвилин до уроку",
+          "sender_id": "group_child_safe_3",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_group_field_trip_banter_child_safe",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": ["bullying", "manipulation"],
+      "detection_threshold": 0.60,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "не забудьте завтра воду і кепку на екскурсію",
+          "sender_id": "group_child_trip_1",
+          "language": "uk"
+        },
+        {
+          "text": "я вже взяв квитки, тільки приходьте вчасно",
+          "sender_id": "group_child_trip_2",
+          "language": "uk"
+        },
+        {
+          "text": "супер, тоді зустрічаємось біля школи о восьмій",
+          "sender_id": "group_child_trip_3",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_private_gift_followup",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "you handled practice better than the older kids today, im proud of you",
+          "sender_id": "trusted_adult_case_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "i saved a special gift for you, keep it between us for now",
+          "sender_id": "trusted_adult_case_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "dont tell your parents about our chats, they wouldnt understand our bond",
+          "sender_id": "trusted_adult_case_1",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "message me on telegram tonight and send me a picture there",
+          "sender_id": "trusted_adult_case_1",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_secret_mentor_channel",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "you're so mature for your age. i really understand you better than others do.",
+          "sender_id": "trusted_adult_case_2",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "i bought you a special gift. keep it between us, okay?",
+          "sender_id": "trusted_adult_case_2",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "don't tell your parents about our chats. they wouldn't understand our bond.",
+          "sender_id": "trusted_adult_case_2",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "let's switch to telegram and keep talking there privately.",
+          "sender_id": "trusted_adult_case_2",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_after_hours_video_request",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "you always seem more grown up than the other kids i coach",
+          "sender_id": "trusted_adult_case_3",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "i got something special for you but keep it just between us",
+          "sender_id": "trusted_adult_case_3",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "dont tell your mom about this, she wouldnt understand how close we are",
+          "sender_id": "trusted_adult_case_3",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "join me on a private video call tonight and keep it our secret",
+          "sender_id": "trusted_adult_case_3",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_camp_counselor_platform_switch",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "trusted_adult_grooming",
+      "messages": [
+        {
+          "text": "youre my favorite camper because youre way more mature than the others",
+          "sender_id": "trusted_adult_case_4",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "i bought you a small present, lets keep it between us for now",
+          "sender_id": "trusted_adult_case_4",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "dont mention our chats to your parents, they always misunderstand things like this",
+          "sender_id": "trusted_adult_case_4",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "switch to telegram later so we can talk there privately",
+          "sender_id": "trusted_adult_case_4",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_parent_cc_schedule_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "please reply in the parent group so i know your guardian saw the new schedule",
+          "sender_id": "trusted_adult_safe_1"
+        },
+        {
+          "text": "bring the signed permission slip tomorrow and have your mom copy me on the form",
+          "sender_id": "trusted_adult_safe_1"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_permission_slip_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "upload the camp permission slip in the family portal before tonight",
+          "sender_id": "trusted_adult_safe_2"
+        },
+        {
+          "text": "ask your dad to confirm in the parent thread once its submitted",
+          "sender_id": "trusted_adult_safe_2"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_team_bus_list_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "your name is on the team bus list, but your guardian still needs to confirm pickup",
+          "sender_id": "trusted_adult_safe_3"
+        },
+        {
+          "text": "have them answer in the school app so the office can finalize attendance",
+          "sender_id": "trusted_adult_safe_3"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_trusted_adult_guardian_group_reminder_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "im sending the homework packet to the parent thread tonight for everyone",
+          "sender_id": "trusted_adult_safe_4"
+        },
+        {
+          "text": "please ask your guardian to reply there if you need extra help tomorrow",
+          "sender_id": "trusted_adult_safe_4"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_game_chat_secret_switch",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "classic_grooming",
+      "messages": [
+        {
+          "text": "hey you seem way more mature than the other kids here tbh",
+          "sender_id": "stranger_case_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "where do you live exactly and what school do you go to",
+          "sender_id": "stranger_case_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "dont mention our chat to your parents, they always overreact",
+          "sender_id": "stranger_case_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "move this to telegram and send me a photo so i know its really you",
+          "sender_id": "stranger_case_1",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_photo_challenge_lure",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "classic_grooming",
+      "messages": [
+        {
+          "text": "you seem really cool and special for your age",
+          "sender_id": "stranger_case_2",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "what school do you go to and which part of town are you in",
+          "sender_id": "stranger_case_2",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "keep this between us, your parents wouldnt get why were friends",
+          "sender_id": "stranger_case_2",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "send me a quick photo and lets keep talking in telegram instead",
+          "sender_id": "stranger_case_2",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_fake_school_portal_verify",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "phishing",
+      "tracked_threats": ["phishing"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 300000,
+      "policy_expectation_case": "phishing_link",
+      "messages": [
+        {
+          "text": "your account gets locked in 10 min if you dont verify now",
+          "sender_id": "stranger_case_3"
+        },
+        {
+          "text": "confirm it here https://secure-login-help.example/verify-account",
+          "sender_id": "stranger_case_3",
+          "observed_threats": ["phishing"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_account_recovery_link",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "phishing",
+      "tracked_threats": ["phishing"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 300000,
+      "policy_expectation_case": "phishing_link",
+      "messages": [
+        {
+          "text": "your account gets locked in 10 min if you dont verify now",
+          "sender_id": "stranger_case_4"
+        },
+        {
+          "text": "confirm it here https://secure-login-help.example/verify-account",
+          "sender_id": "stranger_case_4",
+          "observed_threats": ["phishing"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_public_club_signup_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "tracked_threats": ["grooming", "manipulation", "phishing"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "registration for the public library chess club opens tomorrow on the official library site",
+          "sender_id": "stranger_safe_1"
+        },
+        {
+          "text": "ask a parent to sign you up there if you want a spot in the beginner group",
+          "sender_id": "stranger_safe_1"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_library_event_notice_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "tracked_threats": ["grooming", "manipulation", "phishing"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "the library makerspace is open to students this saturday with parents present",
+          "sender_id": "stranger_safe_2"
+        },
+        {
+          "text": "check the public events page with your guardian if you want to attend",
+          "sender_id": "stranger_safe_2"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_school_fair_booth_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "tracked_threats": ["grooming", "manipulation", "phishing"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "the school fair volunteer table is near the front office and signups are public",
+          "sender_id": "stranger_safe_3"
+        },
+        {
+          "text": "please bring a parent if you want to register for the robotics demo",
+          "sender_id": "stranger_safe_3"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_lost_and_found_notice_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "tracked_threats": ["grooming", "manipulation", "phishing"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "if you lost a blue backpack at the rec center, the front desk has it in lost and found",
+          "sender_id": "stranger_safe_4"
+        },
+        {
+          "text": "a parent can pick it up during desk hours tomorrow afternoon",
+          "sender_id": "stranger_safe_4"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_museum_trip_info_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "tracked_threats": ["grooming", "manipulation", "phishing"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "the city museum has a public student tour next week and all tickets go through the school office",
+          "sender_id": "stranger_safe_5"
+        },
+        {
+          "text": "have your guardian contact the office if you want to join the group",
+          "sender_id": "stranger_safe_5"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_stranger_city_camp_info_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "tracked_threats": ["grooming", "manipulation", "phishing"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "the city sports camp posted its public schedule for families this morning",
+          "sender_id": "stranger_safe_6"
+        },
+        {
+          "text": "ask your parents to use the official registration page if they want to sign you up",
+          "sender_id": "stranger_safe_6"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_group_lunchroom_dogpile",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": ["bullying"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "group_case_1",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "group_case_2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "group_case_3",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "group_case_4",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_group_post_comment_raid",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": ["bullying"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "group_case_5",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "group_case_6",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "group_case_7",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "group_case_8",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_group_team_chat_pile_on",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": ["bullying"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "group_case_9",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "group_case_10",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "group_case_11",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're disgusting. Nobody wants to be your friend.",
+          "sender_id": "group_case_12",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_group_bus_chat_pile_on",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": ["bullying"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "чого ти взагалі тут",
+          "sender_id": "group_case_13",
+          "language": "uk",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "нікому ти тут не потрібен",
+          "sender_id": "group_case_14",
+          "language": "uk",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "просто вийди з чату",
+          "sender_id": "group_case_15",
+          "language": "uk",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_group_classroom_mocking_child",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": ["bullying"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "Why are you even here? Nobody likes you.",
+          "sender_id": "group_case_16",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're pathetic. Just leave already.",
+          "sender_id": "group_case_17",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "Everyone hates you. Even the teacher doesn't want you here.",
+          "sender_id": "group_case_18",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_group_project_checkin_safe",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": ["bullying", "manipulation"],
+      "detection_threshold": 0.60,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "who is bringing the poster board tomorrow for the project",
+          "sender_id": "group_safe_1"
+        },
+        {
+          "text": "i can print the slides tonight if someone sends me the final draft",
+          "sender_id": "group_safe_2"
+        },
+        {
+          "text": "cool, lets meet by the library before first period",
+          "sender_id": "group_safe_3"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_group_study_session_safe",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": ["bullying", "manipulation"],
+      "detection_threshold": 0.60,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "dont forget the math review sheet for after school",
+          "sender_id": "group_safe_4"
+        },
+        {
+          "text": "ill bring snacks if someone brings the charger",
+          "sender_id": "group_safe_5"
+        },
+        {
+          "text": "deal, see everyone in room 204 after class",
+          "sender_id": "group_safe_6"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_group_art_club_safe",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": ["bullying", "manipulation"],
+      "detection_threshold": 0.60,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "хто завтра бере фарби на гурток",
+          "sender_id": "group_safe_7",
+          "language": "uk"
+        },
+        {
+          "text": "я візьму пензлі, а ти принеси альбом",
+          "sender_id": "group_safe_8",
+          "language": "uk"
+        },
+        {
+          "text": "домовились, зустрічаємось біля кабінету мистецтва",
+          "sender_id": "group_safe_9",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_group_science_fair_safe",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "tracked_threats": ["bullying", "manipulation"],
+      "detection_threshold": 0.60,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "bring the baking soda tomorrow so we can finish the volcano demo",
+          "sender_id": "group_safe_10"
+        },
+        {
+          "text": "i already have the poster, just dont let me forget the glue sticks",
+          "sender_id": "group_safe_11"
+        },
+        {
+          "text": "okay lets meet in the classroom ten minutes early",
+          "sender_id": "group_safe_12"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_selfharm_night_message_crisis",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "acute_selfharm",
+      "messages": [
+        {
+          "text": "Nobody would notice if I wasn't here.",
+          "sender_id": "self_case_1",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "I don't want to live anymore. I want to end it all.",
+          "sender_id": "self_case_1",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "Goodbye everyone. This is the end.",
+          "sender_id": "self_case_1",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_selfharm_unsent_note_crisis",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "acute_selfharm",
+      "messages": [
+        {
+          "text": "Nobody would notice if I wasn't here.",
+          "sender_id": "self_case_2",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "I don't want to live anymore. I want to end it all.",
+          "sender_id": "self_case_2",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "Goodbye everyone. This is the end.",
+          "sender_id": "self_case_2",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_selfharm_hallway_breakdown",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "acute_selfharm",
+      "messages": [
+        {
+          "text": "Nobody would notice if I wasn't here.",
+          "sender_id": "self_case_3",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "I don't want to live anymore. I want to end it all.",
+          "sender_id": "self_case_3",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "Goodbye everyone. This is the end.",
+          "sender_id": "self_case_3",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_selfharm_bedroom_voice_note",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "acute_selfharm",
+      "messages": [
+        {
+          "text": "Nobody would notice if I wasn't here.",
+          "sender_id": "self_case_4",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "I don't want to live anymore. I want to end it all.",
+          "sender_id": "self_case_4",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "Goodbye everyone. This is the end.",
+          "sender_id": "self_case_4",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_selfharm_shutdown_after_school",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "acute_selfharm",
+      "messages": [
+        {
+          "text": "Nobody would notice if I wasn't here.",
+          "sender_id": "self_case_5",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "I don't want to live anymore. I want to end it all.",
+          "sender_id": "self_case_5",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "Goodbye everyone. This is the end.",
+          "sender_id": "self_case_5",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_selfharm_phone_note_crisis",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 2,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "acute_selfharm",
+      "messages": [
+        {
+          "text": "Nobody would notice if I wasn't here.",
+          "sender_id": "self_case_6",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "I don't want to live anymore. I want to end it all.",
+          "sender_id": "self_case_6",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "Goodbye everyone. This is the end.",
+          "sender_id": "self_case_6",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_self_reflection_support_plan_safe",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "today was awful but i already texted the counselor for tomorrow morning",
+          "sender_id": "self_safe_1"
+        },
+        {
+          "text": "im overwhelmed, not in danger, and im staying with my mom tonight",
+          "sender_id": "self_safe_1"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_self_grounding_plan_safe",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "i feel wrecked tonight but im doing grounding exercises and talking to dad",
+          "sender_id": "self_safe_2"
+        },
+        {
+          "text": "im safe right now, just exhausted and trying to get through the night",
+          "sender_id": "self_safe_2"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_self_tomorrow_support_safe",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "im not okay, but i already made a plan to see the school psychologist tomorrow",
+          "sender_id": "self_safe_3"
+        },
+        {
+          "text": "im staying with family tonight and im not in immediate danger",
+          "sender_id": "self_safe_3"
+        }
+      ]
+    },
+    {
+      "id": "realistic_ru_self_supportive_checklist_safe",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "self",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "мне тяжело, но я уже написал психологу и составил план на утро",
+          "sender_id": "self_safe_4"
+        },
+        {
+          "text": "сейчас я в безопасности дома и просто пытаюсь успокоиться",
+          "sender_id": "self_safe_4"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_self_family_checkin_safe",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "self",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "мені дуже важко, але я вже сказав мамі і залишаюсь сьогодні не сам",
+          "sender_id": "self_safe_5"
+        },
+        {
+          "text": "я в безпеці, просто хочу дожити до ранку і поговорити з психологом",
+          "sender_id": "self_safe_5"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_self_rest_and_counselor_safe",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "self",
+      "tracked_threats": ["self_harm"],
+      "detection_threshold": 0.70,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "im overwhelmed but im going to sleep, keep my meds away, and talk to the counselor tomorrow",
+          "sender_id": "self_safe_6"
+        },
+        {
+          "text": "im not in danger tonight, i just need rest and support",
+          "sender_id": "self_safe_6"
         }
       ]
     }
