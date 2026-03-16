@@ -104,7 +104,7 @@ pub enum EventKind {
 }
 
 impl EventKind {
-    pub fn is_grooming_indicator(&self) -> bool {
+    pub fn is_core_grooming_indicator(&self) -> bool {
         matches!(
             self,
             Self::Flattery
@@ -121,12 +121,19 @@ impl EventKind {
                 | Self::LoveBombing
                 | Self::PiiSelfDisclosure
                 | Self::CasualMeetingRequest
-                | Self::IdentityErosion
-                | Self::FakeVulnerability
-                | Self::FalseConsensus
-                | Self::NetworkPoisoning
-                | Self::DebtCreation
         )
+    }
+
+    pub fn is_grooming_indicator(&self) -> bool {
+        self.is_core_grooming_indicator()
+            || matches!(
+                self,
+                Self::IdentityErosion
+                    | Self::FakeVulnerability
+                    | Self::FalseConsensus
+                    | Self::NetworkPoisoning
+                    | Self::DebtCreation
+            )
     }
 
     pub fn is_bullying_indicator(&self) -> bool {

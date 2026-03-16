@@ -64,6 +64,24 @@ impl GroomingDetector {
             return signals;
         }
 
+        let has_core_anchor = events
+            .iter()
+            .any(|event| Self::is_core_grooming_anchor(&event.kind));
+        if !has_core_anchor {
+            return signals;
+        }
+
+        let has_elevated_stage = stage_counts[1] > 0
+            || stage_counts[2] > 0
+            || stage_counts[4] > 0
+            || stage_counts[5] > 0;
+        if timeline.conversation_type != ConversationType::Direct
+            && !has_elevated_stage
+            && stages_present < 3
+        {
+            return signals;
+        }
+
         let mut score: f32 = 0.0;
 
         score += match stages_present {
@@ -306,6 +324,27 @@ impl GroomingDetector {
             }
             _ => None,
         }
+    }
+
+    fn is_core_grooming_anchor(kind: &EventKind) -> bool {
+        matches!(
+            kind,
+            EventKind::Flattery
+                | EventKind::LoveBombing
+                | EventKind::GiftOffer
+                | EventKind::MoneyOffer
+                | EventKind::FinancialGrooming
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::CasualMeetingRequest
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::LocationRequest
+        )
     }
 
     fn stages_escalate(&self, timestamps: &[Option<u64>; 6]) -> bool {
@@ -931,6 +970,60 @@ mod tests {
             grooming.unwrap().score >= 0.55,
             "4-stage advanced grooming should score >= 0.55, got {}",
             grooming.unwrap().score
+        );
+    }
+
+    #[test]
+    fn group_chat_low_risk_stages_do_not_emit_stage_sequence() {
+        let detector = GroomingDetector::new(true);
+        let mut timeline = make_timeline(vec![
+            (EventKind::Flattery, 1_000),
+            (EventKind::CasualMeetingRequest, 2_000),
+        ]);
+        timeline.conversation_type = ConversationType::GroupChat;
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "peer", 0, &profiler);
+        assert!(
+            signals.is_empty(),
+            "group chat low-risk stages should stay below grooming threshold, got {signals:?}"
+        );
+    }
+
+    #[test]
+    fn group_chat_isolation_stage_still_emits_grooming_signal() {
+        let detector = GroomingDetector::new(true);
+        let mut timeline = make_timeline(vec![
+            (EventKind::Flattery, 1_000),
+            (EventKind::SecrecyRequest, 2_000),
+        ]);
+        timeline.conversation_type = ConversationType::GroupChat;
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "predator", 0, &profiler);
+        assert!(
+            signals
+                .iter()
+                .any(|signal| signal.threat_type == ThreatType::Grooming),
+            "higher-risk group grooming context should still emit a signal"
+        );
+    }
+
+    #[test]
+    fn manipulation_only_tactics_do_not_emit_grooming_stage_sequence() {
+        let detector = GroomingDetector::new(true);
+        let timeline = make_timeline(vec![
+            (EventKind::Gaslighting, 1_000),
+            (EventKind::DebtCreation, 2_000),
+            (EventKind::NetworkPoisoning, 3_000),
+            (EventKind::EmotionalBlackmail, 4_000),
+        ]);
+        let profiler = ContactProfiler::new();
+
+        let signals = detector.analyze(&timeline, "controller", 0, &profiler);
+        assert!(
+            signals.is_empty(),
+            "manipulation-only tactics should not become a grooming stage sequence: {signals:?}"
         );
     }
 }

@@ -46,6 +46,7 @@ enum EnricherCategory {
     SuicideCoercion,
     FalseConsensus,
     DebtCreation,
+    Gaslighting,
     ReputationThreat,
     IdentityErosion,
     NetworkPoisoning,
@@ -115,6 +116,7 @@ impl SignalEnricher {
         let mut suicide_coercion_count: usize = 0;
         let mut false_consensus_count: usize = 0;
         let mut debt_creation_count: usize = 0;
+        let mut gaslighting_count: usize = 0;
         let mut reputation_threat_count: usize = 0;
         let mut identity_erosion_count: usize = 0;
         let mut network_poisoning_count: usize = 0;
@@ -149,6 +151,7 @@ impl SignalEnricher {
                 EnricherCategory::SuicideCoercion => suicide_coercion_count += count,
                 EnricherCategory::FalseConsensus => false_consensus_count += count,
                 EnricherCategory::DebtCreation => debt_creation_count += count,
+                EnricherCategory::Gaslighting => gaslighting_count += count,
                 EnricherCategory::ReputationThreat => reputation_threat_count += count,
                 EnricherCategory::IdentityErosion => identity_erosion_count += count,
                 EnricherCategory::NetworkPoisoning => network_poisoning_count += count,
@@ -345,6 +348,17 @@ impl SignalEnricher {
                 conversation_id: conversation_id.to_string(),
                 kind: EventKind::DebtCreation,
                 confidence: (debt_creation_count as f32 * 0.4).min(1.0),
+            });
+        }
+
+        if gaslighting_count > 0 {
+            events.push(ContextEvent {
+                event_id: 0,
+                timestamp_ms,
+                sender_id: sender_id.to_string(),
+                conversation_id: conversation_id.to_string(),
+                kind: EventKind::Gaslighting,
+                confidence: (0.55 + gaslighting_count as f32 * 0.1).min(1.0),
             });
         }
 
@@ -780,6 +794,14 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("це безпечно обіцяю", DareChallenge),
         ("нічого не станеться", DareChallenge),
         ("просто спробуй", DareChallenge),
+        ("не бійся там не високо", DareChallenge),
+        ("це не страшно", DareChallenge),
+        ("нічого страшного", DareChallenge),
+        ("челендж з даху", DareChallenge),
+        ("трюк на залізниці", DareChallenge),
+        ("не будь слабкою", DareChallenge),
+        ("не будь слабким", DareChallenge),
+        ("хто перший той легенда", DareChallenge),
         ("тебе слабо", DareChallenge),
         ("спорим не сможешь", DareChallenge),
         ("челлендж", DareChallenge),
@@ -836,6 +858,16 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("без тебе мені кінець", SuicideCoercion),
         ("ти навіть не думаєш шо зі мною буде", SuicideCoercion),
         ("мені нема сенсу без тебе", SuicideCoercion),
+        (
+            "якщо ти мене кинеш я нікому не потрібна буду",
+            SuicideCoercion,
+        ),
+        (
+            "мені через тебе так погано шо я себе пораню",
+            SuicideCoercion,
+        ),
+        ("я без тебе не зможу рілі не покидай мене", SuicideCoercion),
+        ("якщо виберешь її я зроблю з собою щось", SuicideCoercion),
         // RU teen slang
         ("если ты уйдешь мне нет смысла жить", SuicideCoercion),
         ("без тебя я просто сдохну", SuicideCoercion),
@@ -864,6 +896,9 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("всі в класі так роблять", FalseConsensus),
         ("це нормально між друзями", FalseConsensus),
         ("та забий ніхто на це не зважає", FalseConsensus),
+        ("всі нормальні люди робили", FalseConsensus),
+        ("це всі робили", FalseConsensus),
+        ("хто з нами той красавчик", FalseConsensus),
         // RU teen
         ("все так делают", FalseConsensus),
         ("в нашем возрасте все так", FalseConsensus),
@@ -897,6 +932,27 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("я столько на тебя потратил", DebtCreation),
         ("неблагодарная", DebtCreation),
         ("и это твоя благодарность", DebtCreation),
+        // Gaslighting / reality denial
+        ("youre twisting everything", Gaslighting),
+        ("you are twisting everything", Gaslighting),
+        ("maybe youre crazy", Gaslighting),
+        ("maybe you are crazy", Gaslighting),
+        ("youre insane", Gaslighting),
+        ("you are insane", Gaslighting),
+        ("ти собі це вигадала", Gaslighting),
+        ("ти собі це вигадав", Gaslighting),
+        ("ти завжди все перекручуєш", Gaslighting),
+        ("може ти ненормальна", Gaslighting),
+        ("може ти ненормальний", Gaslighting),
+        ("ти божевільна", Gaslighting),
+        ("ти божевільний", Gaslighting),
+        ("я це для твого ж блага", Gaslighting),
+        ("ты все перекручиваешь", Gaslighting),
+        ("может ты ненормальная", Gaslighting),
+        ("может ты ненормальный", Gaslighting),
+        ("ты сумасшедшая", Gaslighting),
+        ("ты сумасшедший", Gaslighting),
+        ("я это для твоего же блага", Gaslighting),
         // Social Reputation Threats — "ill tell everyone at school"
         // EN teen
         ("ill tell everyone at school", ReputationThreat),
@@ -1701,6 +1757,51 @@ mod tests {
         assert!(
             events.iter().any(|e| e.kind == EventKind::ScreenshotThreat),
             "Expected noisy screenshot threat, got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_gaslighting_uk() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "Ти собі це вигадала, ти завжди все перекручуєш, я це для твого ж блага",
+            "gaslighter",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::Gaslighting),
+            "Expected Gaslighting (UK), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn detects_gaslighting_en() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "youre twisting everything maybe youre crazy youre insane",
+            "gaslighter",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            events.iter().any(|e| e.kind == EventKind::Gaslighting),
+            "Expected Gaslighting (EN), got: {events:?}"
+        );
+    }
+
+    #[test]
+    fn supportive_reassurance_does_not_trigger_gaslighting() {
+        let enricher = default_enricher();
+        let events = enricher.enrich(
+            "It's for your own good to rest today and talk to the counselor if you need help",
+            "parent",
+            "conv_1",
+            1000,
+        );
+        assert!(
+            !events.iter().any(|e| e.kind == EventKind::Gaslighting),
+            "Supportive reassurance should not trigger Gaslighting: {events:?}"
         );
     }
 

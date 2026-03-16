@@ -338,7 +338,11 @@ impl ContactProfile {
         score += self.average_severity() * 0.2;
 
         let hours_known = self.relationship_age_ms() as f32 / (1000.0 * 3600.0);
-        if hours_known < 24.0 && (self.grooming_event_count > 0 || self.bullying_event_count > 0) {
+        if hours_known < 24.0
+            && (self.grooming_event_count > 0
+                || self.bullying_event_count > 0
+                || self.manipulation_event_count > 0)
+        {
             score += 0.1;
         }
 
@@ -347,6 +351,24 @@ impl ContactProfile {
         score *= trust_discount;
 
         score.min(1.0)
+    }
+
+    fn dominant_contact_risk_threat(&self) -> ThreatType {
+        let mut dominant = ThreatType::Grooming;
+        let mut best_score = (self.grooming_event_count as f32 * 0.1).min(0.4);
+
+        let manipulation_score = (self.manipulation_event_count as f32 * 0.1).min(0.3);
+        if manipulation_score >= best_score && manipulation_score > 0.0 {
+            dominant = ThreatType::Manipulation;
+            best_score = manipulation_score;
+        }
+
+        let bullying_score = (self.bullying_event_count as f32 * 0.08).min(0.3);
+        if bullying_score > best_score && bullying_score > 0.0 {
+            dominant = ThreatType::Bullying;
+        }
+
+        dominant
     }
 
     // --- Rating & Behavioral methods ---
@@ -408,7 +430,7 @@ impl ContactProfile {
         } else {
             snapshot.neutral_count += 1;
         }
-        if event.kind.is_grooming_indicator() {
+        if event.kind.is_core_grooming_indicator() {
             snapshot.grooming_count += 1;
         }
         if event.kind.is_manipulation_indicator() {
@@ -595,7 +617,7 @@ impl ContactProfiler {
             profile.conversation_count = profile.conversations.len();
         }
 
-        if event.kind.is_grooming_indicator() {
+        if event.kind.is_core_grooming_indicator() {
             profile.grooming_event_count += 1;
         }
         if event.kind.is_bullying_indicator() {
@@ -743,15 +765,17 @@ impl ContactProfiler {
         let risk = profile.risk_score();
 
         if is_child_account && self.is_new_contact(sender_id) && risk >= 0.3 {
+            let dominant_threat = profile.dominant_contact_risk_threat();
             signals.push(DetectionSignal::context(
-                ThreatType::Grooming,
+                dominant_threat,
                 risk,
                 Confidence::Medium,
                 SignalFamily::Conversation,
                 "conversation.contact.new_risky_contact",
                 format!(
-                    "New contact with suspicious behavior pattern (risk: {risk:.2}). {} grooming indicators, {} bullying indicators.",
+                    "New contact with suspicious behavior pattern (risk: {risk:.2}). {} grooming indicators, {} manipulation indicators, {} bullying indicators.",
                     profile.grooming_event_count,
+                    profile.manipulation_event_count,
                     profile.bullying_event_count,
                 ),
             ));
@@ -1225,6 +1249,37 @@ mod tests {
         assert!(
             !signals.is_empty(),
             "Expected anomaly signal for risky new contact"
+        );
+    }
+
+    #[test]
+    fn new_risky_contact_uses_manipulation_when_profile_is_manipulation_dominant() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event(
+            "controller",
+            "conv_1",
+            EventKind::Gaslighting,
+            1000,
+        ));
+        profiler.record_event(&make_event(
+            "controller",
+            "conv_1",
+            EventKind::DebtCreation,
+            2000,
+        ));
+        profiler.record_event(&make_event(
+            "controller",
+            "conv_1",
+            EventKind::NetworkPoisoning,
+            3000,
+        ));
+
+        let signals = profiler.check_anomalies("controller", true);
+        assert!(
+            signals
+                .iter()
+                .any(|signal| signal.threat_type == ThreatType::Manipulation),
+            "manipulation-dominant new contact should emit manipulation anomaly: {signals:?}"
         );
     }
 

@@ -27,3 +27,13 @@ prost = "0.13"
 prost-build = "0.13"
 protoc-bin-vendored = "3"
 sha2 = "0.10"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+strip = "none"

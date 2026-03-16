@@ -12,6 +12,10 @@ an evaluation-heavy prototype into a production-grade safety runtime.
 - [Dataset Governance](./dataset-governance.md)
 - [Incidents and Rollbacks](./incidents-and-rollbacks.md)
 
+## Product and Scenario Docs
+
+- [How AURA Protects Olena (Ukrainian)](./olena-scenarios-uk.md)
+
 ## Historical and Research Docs
 
 - [Messenger Psychology Research Spec](./messenger-psychology-research-spec.md)
@@ -30,5 +34,7 @@ an evaluation-heavy prototype into a production-grade safety runtime.
   curated corpora.
 - Use the incident runbook when planning operational safeguards, kill switches,
   and rollback behavior.
+- Use the Olena scenarios doc when preparing product demos, guardian-facing
+  explanations, or copy that must stay aligned with current policy semantics.
 - Use [`../CHANGELOG.md`](../CHANGELOG.md) for the high-level change record
   when preparing a release note or promotion review.

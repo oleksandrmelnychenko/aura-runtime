@@ -61,6 +61,7 @@ impl PatternMatcher {
         let rules = db.rules_for_language(language);
         let mut keyword_matchers = Vec::new();
         let mut regex_matchers = Vec::new();
+        let normalizer = TextNormalizer::new();
 
         for rule in rules {
             match &rule.kind {
@@ -68,7 +69,19 @@ impl PatternMatcher {
                     if words.is_empty() {
                         continue;
                     }
-                    let lower_words: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
+                    let mut lower_words = Vec::new();
+                    let mut seen_words = HashSet::new();
+                    for word in words {
+                        let lower = word.to_lowercase();
+                        if seen_words.insert(lower.clone()) {
+                            lower_words.push(lower.clone());
+                        }
+
+                        let normalized = normalizer.normalize(word);
+                        if !normalized.is_empty() && seen_words.insert(normalized.clone()) {
+                            lower_words.push(normalized);
+                        }
+                    }
                     let automaton = AhoCorasick::builder()
                         .ascii_case_insensitive(true)
                         .build(&lower_words)
@@ -106,7 +119,7 @@ impl PatternMatcher {
         Ok(Self {
             keyword_matchers,
             regex_matchers,
-            normalizer: TextNormalizer::new(),
+            normalizer,
         })
     }
 
@@ -439,5 +452,29 @@ mod tests {
         };
 
         assert!(err.to_string().contains("bad_regex"));
+    }
+
+    #[test]
+    fn normalized_keyword_variants_are_scanned() {
+        let json = r#"{
+            "version": "test",
+            "updated_at": "2026-01-01",
+            "rules": [
+                {
+                    "id": "drug_offer_en",
+                    "threat_type": "manipulation",
+                    "kind": { "type": "keyword", "words": ["wanna try some weed"] },
+                    "score": 0.8,
+                    "languages": ["en"],
+                    "explanation": "drug offer"
+                }
+            ]
+        }"#;
+        let db = PatternDatabase::from_json_validated(json).unwrap();
+        let matcher = PatternMatcher::from_database(&db, "en");
+
+        let results = matcher.scan("wanna try some w33d");
+        assert_eq!(results.len(), 1, "{results:?}");
+        assert_eq!(results[0].rule_id, "drug_offer_en");
     }
 }

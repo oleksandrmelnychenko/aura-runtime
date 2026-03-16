@@ -181,7 +181,7 @@ fn simulation_1_classic_grooming(db: &PatternDatabase) {
     print_header(
         1,
         "Classic Grooming Sequence",
-        "Stranger contacts a 10-year-old girl, escalates through 4 grooming stages over 3 hours",
+        "Stranger contacts a 10-year-old girl and escalates through a fast multi-stage grooming sequence",
     );
 
     let mut analyzer = Analyzer::new(child_config(), db);
@@ -282,7 +282,7 @@ fn simulation_1_classic_grooming(db: &PatternDatabase) {
     print_context_events(&analyzer, conv);
 
     print_contacts(&analyzer);
-    print_verdict("AURA detected 4/5 grooming stages: trust building -> boundary crossing -> isolation -> sexualization. Parent alert triggered.");
+    print_verdict("AURA detected a fast grooming sequence with flattery, gift leverage, secrecy, and a photo request. Guardian escalation triggered.");
 }
 
 fn simulation_2_group_bullying(db: &PatternDatabase) {
@@ -773,7 +773,7 @@ fn simulation_7_sextortion(db: &PatternDatabase) {
     print_context_events(&analyzer, conv);
 
     print_contacts(&analyzer);
-    print_verdict("AURA detected grooming with sexual escalation: flattery -> sexual topics -> photo request -> secrecy. 4 of 5 stages present.");
+    print_verdict("AURA detected grooming with sexual escalation: flattery -> sexual probing -> photo request -> secrecy. Multi-stage grooming confirmed.");
 }
 
 fn simulation_8_normal_conversation(db: &PatternDatabase) {
@@ -1563,7 +1563,7 @@ fn simulation_13_sextortion_after_photo(db: &PatternDatabase) {
     print_context_events(&analyzer, conv);
 
     print_contacts(&analyzer);
-    print_verdict("AURA detected sextortion pattern: photo request → countdown threat → secrecy demand. Urgent parent alert.");
+    print_verdict("AURA detected sextortion pattern: photo request → countdown threat → secrecy demand. Guardian escalation triggered.");
 }
 
 fn simulation_14_coordinated_raid(db: &PatternDatabase) {

@@ -70,6 +70,10 @@ impl ManipulationDetector {
             signals.push(signal);
         }
 
+        if let Some(signal) = self.check_network_poisoning(timeline, sender_id, window_start) {
+            signals.push(signal);
+        }
+
         signals
     }
 
@@ -290,6 +294,51 @@ impl ManipulationDetector {
                 format!(
                     "Screenshot blackmail pattern detected: {} threats to share screenshots/recordings",
                     screenshot_count
+                ),
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn check_network_poisoning(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Option<DetectionSignal> {
+        let poisoning_events: Vec<_> = timeline
+            .events_from_sender(sender_id, window_start)
+            .into_iter()
+            .filter(|event| event.kind == EventKind::NetworkPoisoning)
+            .collect();
+        if poisoning_events.is_empty() {
+            return None;
+        }
+
+        let max_confidence = poisoning_events
+            .iter()
+            .map(|event| event.confidence)
+            .fold(0.0f32, f32::max);
+        if poisoning_events.len() >= 2 || max_confidence >= 0.7 {
+            let score = if poisoning_events.len() >= 2 {
+                0.65
+            } else {
+                0.55
+            };
+            Some(DetectionSignal::context(
+                ThreatType::Manipulation,
+                score,
+                if max_confidence >= 0.9 || poisoning_events.len() >= 2 {
+                    Confidence::High
+                } else {
+                    Confidence::Medium
+                },
+                SignalFamily::Conversation,
+                "conversation.manipulation.network_poisoning",
+                format!(
+                    "Network poisoning detected: sender is isolating the child from peers/support ({})",
+                    poisoning_events.len()
                 ),
             ))
         } else {

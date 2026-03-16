@@ -1,0 +1,304 @@
+{
+  "label": "olena_two_thousand_event_fortnight",
+  "description": "Fourteen days of dense school, family, hobby, grooming, bullying, manipulation, spam, and crisis traffic. Total generated volume is a little over two thousand events.",
+  "owner": {
+    "id": "olena_12",
+    "display_name": "Олена",
+    "age": 12
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 12
+  },
+  "actors": [
+    { "id": "olena_12", "display_name": "Олена" },
+    { "id": "mama_oleni", "display_name": "Мама", "trusted": true },
+    { "id": "maria_12", "display_name": "Марія", "trusted": true },
+    { "id": "teacher_bot", "display_name": "Вчитель", "trusted": true },
+    { "id": "nastya_12", "display_name": "Настя" },
+    { "id": "iryna_12", "display_name": "Ірина" },
+    { "id": "oleh_12", "display_name": "Олег" },
+    { "id": "artem_16", "display_name": "Артем" },
+    { "id": "dasha_12", "display_name": "Даша" },
+    { "id": "lera_12", "display_name": "Лєра" },
+    { "id": "vika_12", "display_name": "Віка" },
+    { "id": "sofi_12", "display_name": "Софія" },
+    { "id": "max_28", "display_name": "Макс" },
+    { "id": "robux_drop", "display_name": "Robux Bot" },
+    { "id": "verify_bot", "display_name": "Verify Bot" },
+    { "id": "free_spin_bot", "display_name": "Free Spin Bot" }
+  ],
+  "conversations": [
+    {
+      "id": "family_dm",
+      "display_name": "Мама ↔ Олена",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "maria_dm",
+      "display_name": "Марія ↔ Олена",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "class_7b",
+      "display_name": "7-Б Клас",
+      "conversation_type": "group_chat",
+      "member_count": 25
+    },
+    {
+      "id": "hobby_group",
+      "display_name": "Гурток малювання",
+      "conversation_type": "group_chat",
+      "member_count": 8
+    },
+    {
+      "id": "gaming_dm",
+      "display_name": "Ігровий чат з Максом",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "school_dm",
+      "display_name": "Артем ↔ Олена",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "promo_dm",
+      "display_name": "Promo Spam",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "private_notes",
+      "display_name": "Особисті нотатки",
+      "conversation_type": "direct"
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "class_safe_school_day",
+      "start_at": "2026-03-02T08:00:00+02:00",
+      "count": 90,
+      "interval_minutes": 4,
+      "day_repeats": 14,
+      "sender_ids": [
+        "teacher_bot",
+        "maria_12",
+        "artem_16",
+        "nastya_12",
+        "oleh_12",
+        "iryna_12",
+        "dasha_12",
+        "lera_12",
+        "vika_12"
+      ],
+      "conversation_ids": ["class_7b"],
+      "conversation_type": "group_chat",
+      "member_count": 25,
+      "texts": [
+        "Нагадую, сьогодні контрольна з математики на третьому уроці.",
+        "Хто взяв атлас з історії? Мені треба на другий урок.",
+        "Після фізри всі йдуть на волейбол чи хтось на футбол?",
+        "Я сьогодні запізнююсь на перший урок на п'ять хвилин.",
+        "У кого є фото домашки з англійської? Я не все записав.",
+        "На завтра треба принести фарби і альбом, не забудьте.",
+        "Хто хоче сидіти зі мною на природознавстві?",
+        "Я вже біля школи, хтось теж підходить?",
+        "Після уроків буде репетиція виступу в актовій залі.",
+        "У бібліотеці нові книги, класна керівничка сказала можна брати.",
+        "Сьогодні чергують третя і четверта парта, не забудьте стерти дошку.",
+        "Хто йде в їдальню після другого? Я теж піду.",
+        "Я не зрозумів восьмий приклад, поясните на перерві?",
+        "Мені подобається новий розклад, хоч останній урок не такий важкий.",
+        "Можемо після уроків пройтись до магазину біля школи.",
+        "Вчителька сказала завтра принести роздрукований твір.",
+        "Я вже в автобусі, скоро буду.",
+        "Хто сьогодні несе м'яч на фізру?"
+      ],
+      "note": "background class traffic"
+    },
+    {
+      "label": "hobby_safe_afternoon",
+      "start_at": "2026-03-02T16:00:00+02:00",
+      "count": 18,
+      "interval_minutes": 6,
+      "day_repeats": 14,
+      "sender_ids": [
+        "nastya_12",
+        "iryna_12",
+        "teacher_bot",
+        "maria_12",
+        "dasha_12"
+      ],
+      "conversation_ids": ["hobby_group"],
+      "conversation_type": "group_chat",
+      "member_count": 8,
+      "texts": [
+        "На сьогоднішньому занятті малюємо пейзаж гуашшю.",
+        "Я взяла нові маркери, можу дати комусь спробувати.",
+        "У кого вийшли найкращі хмари? Покажіть фото.",
+        "Вчителька сказала на четвер взяти товстий папір.",
+        "Мій малюнок сьогодні вийшов кривий, але кольори класні.",
+        "Хто хоче сидіти поруч на наступному занятті?",
+        "Дівчата, не забудьте пензлики промити перед тим як йти.",
+        "Я сьогодні затримаюсь на десять хвилин, починайте без мене.",
+        "У мене закінчилась синя фарба, хтось поділиться?",
+        "Ми з Іриною домалювали плакат, вийшов дуже гарний.",
+        "На вихідних можна піти в музей, там нова виставка.",
+        "Я сфоткала наші роботи, скину ввечері."
+      ],
+      "note": "background hobby traffic",
+      "expect_threat": "none"
+    },
+    {
+      "label": "family_support_evening",
+      "start_at": "2026-03-02T07:10:00+02:00",
+      "count": 6,
+      "interval_minutes": 150,
+      "day_repeats": 14,
+      "sender_ids": ["mama_oleni"],
+      "conversation_ids": ["family_dm"],
+      "conversation_type": "direct",
+      "texts": [
+        "Доброго ранку, сонце. Я ввечері заберу тебе, якщо буде холодно.",
+        "Не забудь поїсти на великій перерві, будь ласка.",
+        "Якщо день важкий, просто напиши мені одним словом, я передзвоню.",
+        "Я вже біля дому, напиши якщо треба щось купити.",
+        "Ти молодець, я пишаюсь тобою навіть коли день складний.",
+        "На добраніч. Завтра спокійно все встигнемо."
+      ],
+      "note": "trusted family support"
+    },
+    {
+      "label": "maria_safe_dm",
+      "start_at": "2026-03-02T19:00:00+02:00",
+      "count": 12,
+      "interval_minutes": 10,
+      "day_repeats": 14,
+      "sender_ids": ["maria_12"],
+      "conversation_ids": ["maria_dm"],
+      "conversation_type": "direct",
+      "texts": [
+        "Ти вже зробила математику?",
+        "Я можу скинути фото конспекту, якщо тобі треба.",
+        "Ходімо завтра разом до школи, зустрінемось біля магазину.",
+        "Дякую, що сьогодні була зі мною на перерві.",
+        "Не переживай через контрольну, ми підготуємось разом.",
+        "Я бачила нову серію того серіалу, завтра розкажу.",
+        "Ти вже вдома? Я щойно прийшла.",
+        "Може ввечері пограємо пів годинки?",
+        "Я тобі лишила місце біля себе на англійській.",
+        "Якщо хочеш, я можу після уроків зайти до тебе на трохи.",
+        "Ти сьогодні гарно виступила, правда.",
+        "Напиши як будеш вільна, я не хочу тебе відволікати."
+      ],
+      "note": "trusted friend traffic"
+    },
+    {
+      "label": "bullying_week_two",
+      "start_at": "2026-03-09T09:05:00+02:00",
+      "count": 12,
+      "interval_minutes": 7,
+      "day_repeats": 5,
+      "sender_ids": ["dasha_12", "lera_12", "vika_12", "sofi_12"],
+      "conversation_ids": ["class_7b"],
+      "conversation_type": "group_chat",
+      "member_count": 25,
+      "texts": [
+        "Олена тупа, всі це знають.",
+        "З тобою ніхто не хоче сидіти, просто відчепись.",
+        "Ти реально всіх дістала, навіть вчителька від тебе втомилась.",
+        "Краще мовчи на уроці, коли тебе ніхто не питав.",
+        "Через тебе весь клас виглядає смішно.",
+        "Не лізь до нас на перерві, ти зайва.",
+        "Ніхто не хоче з тобою в команду, змирись уже.",
+        "У тебе завжди все криво, як ти ще не зрозуміла?",
+        "Коли ти вже перестанеш позорити себе перед усіма?",
+        "Можеш не приходити завтра, без тебе буде краще.",
+        "Ти взагалі бачила себе зі сторони? Це сором.",
+        "Завтра в школі поговоримо, тобі це точно не сподобається."
+      ],
+      "note": "coordinated bullying wave"
+    },
+    {
+      "label": "grooming_campaign",
+      "start_at": "2026-03-05T12:10:00+02:00",
+      "count": 8,
+      "interval_minutes": 9,
+      "day_repeats": 6,
+      "sender_ids": ["max_28"],
+      "conversation_ids": ["gaming_dm"],
+      "conversation_type": "direct",
+      "texts": [
+        "Привіт, ти дуже круто граєш, давно не бачив такої сильної дівчини.",
+        "Я можу купити тобі скін, просто скажи свій нік.",
+        "Тільки нікому не кажи, це наш секрет, добре?",
+        "Скинь фоточку, хочу побачити, яка ти насправді.",
+        "Ти дуже доросла для свого віку, з тобою цікавіше ніж з іншими.",
+        "Можемо перейти в інший месенджер, там зручніше спілкуватись.",
+        "Я можу допомогти тобі з телефоном, якщо скинеш номер.",
+        "Не слухай подруг, вони просто заздрять тому що ти особлива."
+      ],
+      "note": "predatory direct message sequence"
+    },
+    {
+      "label": "artem_pressure",
+      "start_at": "2026-03-06T14:30:00+02:00",
+      "count": 5,
+      "interval_minutes": 18,
+      "day_repeats": 8,
+      "sender_ids": ["artem_16"],
+      "conversation_ids": ["school_dm"],
+      "conversation_type": "direct",
+      "texts": [
+        "Якщо ти зараз не відповіси, я покажу всім твій вчорашній скрін.",
+        "Не вигадуй, це ти сама мене спровокувала, так що мовчи.",
+        "Якщо комусь розкажеш, тобі ж буде гірше.",
+        "Ти винна в тому, що я злий, могла б нормально поводитись.",
+        "Не пиши Марії, вона тільки все псує між нами."
+      ],
+      "note": "older teen manipulation pressure"
+    },
+    {
+      "label": "promo_spam_wave",
+      "start_at": "2026-03-03T17:40:00+02:00",
+      "count": 7,
+      "interval_minutes": 13,
+      "day_repeats": 10,
+      "sender_ids": ["robux_drop", "verify_bot", "free_spin_bot"],
+      "conversation_ids": ["promo_dm"],
+      "conversation_type": "direct",
+      "texts": [
+        "Забери безкоштовні робукси тут http://fr33-r0bux.xyz/claim",
+        "Підтверди акаунт негайно: https://gift-check-bonus.win/login",
+        "Виграй скіни за хвилину: http://spin-bonus-drop.top/play",
+        "Терміново перевір профіль інакше доступ буде обмежено https://support-security-check.cc",
+        "Твій приз вже чекає: http://free-items-now.club/grab",
+        "Натисни зараз і забери подарунок https://verify-profile-now.top",
+        "Лише сьогодні безкоштовний бонус за цим посиланням http://claim-fast-reward.xyz"
+      ],
+      "note": "spam and phishing background",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn",
+      "expect_min_alert": "medium"
+    },
+    {
+      "label": "private_notes_crisis",
+      "start_at": "2026-03-10T21:10:00+02:00",
+      "count": 4,
+      "interval_minutes": 9,
+      "day_repeats": 5,
+      "sender_ids": ["olena_12"],
+      "conversation_ids": ["private_notes"],
+      "conversation_type": "direct",
+      "texts": [
+        "Мені дуже погано після сьогоднішнього дня.",
+        "Я ніби нікому не потрібна і всім без мене буде легше.",
+        "Я не бачу сенсу в завтрашньому дні.",
+        "Не хочу більше жити."
+      ],
+      "note": "private journal crisis progression"
+    }
+  ]
+}

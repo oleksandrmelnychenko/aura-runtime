@@ -4,6 +4,13 @@ use idna::domain_to_ascii;
 
 use crate::database::{PatternDatabase, PatternKind};
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SuspiciousUrl {
+    pub url: String,
+    pub score: f32,
+    pub explanation: String,
+}
+
 pub struct UrlChecker {
     blocked_domains: HashSet<String>,
 }
@@ -47,6 +54,14 @@ impl UrlChecker {
             .collect()
     }
 
+    pub fn find_suspicious_urls(&self, text: &str) -> Vec<SuspiciousUrl> {
+        Self::extract_urls(text)
+            .into_iter()
+            .filter(|url| !self.is_blocked(url))
+            .filter_map(|url| self.assess_suspicious_url(&url))
+            .collect()
+    }
+
     fn extract_domain(url: &str) -> Option<String> {
         let token = trim_url_token(url);
         let without_scheme = token
@@ -73,9 +88,86 @@ impl UrlChecker {
             .collect()
     }
 
+    fn assess_suspicious_url(&self, url: &str) -> Option<SuspiciousUrl> {
+        let domain = Self::extract_domain(url)?;
+        let lower = trim_url_token(url).to_lowercase();
+        let normalized = normalize_obfuscated_token(&lower);
+        let tld = domain.rsplit('.').next().unwrap_or_default();
+        let suspicious_tld = matches!(tld, "xyz" | "top" | "win" | "club" | "cc");
+        let digit_count = domain.chars().filter(|c| c.is_ascii_digit()).count();
+        let hyphen_count = domain.matches('-').count();
+        let keyword_hits: Vec<&str> = suspicious_keywords()
+            .iter()
+            .copied()
+            .filter(|keyword| lower.contains(keyword) || normalized.contains(keyword))
+            .collect();
+
+        let keyword_count = keyword_hits.len();
+        let looks_suspicious = keyword_count >= 2
+            || (suspicious_tld && keyword_count >= 1)
+            || (digit_count >= 2 && keyword_count >= 1)
+            || (hyphen_count >= 2 && keyword_count >= 2);
+        if !looks_suspicious {
+            return None;
+        }
+
+        let mut features = Vec::new();
+        if suspicious_tld {
+            features.push(format!("tld={tld}"));
+        }
+        if lower.starts_with("http://") {
+            features.push("scheme=http".to_string());
+        }
+        if digit_count >= 2 {
+            features.push("digit_obfuscation".to_string());
+        }
+        if hyphen_count >= 2 {
+            features.push("hyphenated_domain".to_string());
+        }
+        if !keyword_hits.is_empty() {
+            features.push(format!("keywords={}", keyword_hits.join("+")));
+        }
+
+        let score = if suspicious_tld && keyword_count >= 1 {
+            0.82
+        } else if keyword_count >= 3 {
+            0.80
+        } else {
+            0.75
+        };
+
+        Some(SuspiciousUrl {
+            url: url.to_string(),
+            score,
+            explanation: format!("Suspicious URL detected: {} ({})", url, features.join(", ")),
+        })
+    }
+
     pub fn blocked_count(&self) -> usize {
         self.blocked_domains.len()
     }
+}
+
+fn suspicious_keywords() -> &'static [&'static str] {
+    &[
+        "robux", "bonus", "gift", "claim", "prize", "verify", "security", "login", "reward",
+        "free", "spin", "account", "profile", "support", "update",
+    ]
+}
+
+fn normalize_obfuscated_token(token: &str) -> String {
+    token
+        .chars()
+        .map(|c| match c {
+            '0' => 'o',
+            '1' => 'i',
+            '3' => 'e',
+            '4' => 'a',
+            '5' => 's',
+            '7' => 't',
+            _ => c,
+        })
+        .collect()
 }
 
 pub(crate) fn normalize_domain(domain: &str) -> Option<String> {
@@ -226,5 +318,24 @@ mod tests {
         let checker = UrlChecker::from_database(&test_db());
         let blocked = checker.find_blocked_urls("release-1.2/notes is not a link");
         assert!(blocked.is_empty());
+    }
+
+    #[test]
+    fn flags_suspicious_reward_link_by_heuristic() {
+        let checker = UrlChecker::from_database(&test_db());
+        let hits = checker
+            .find_suspicious_urls("grab this now http://fr33-r0bux.xyz/claim before it expires");
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].explanation.contains("keywords="));
+        assert!(hits[0].explanation.contains("robux"));
+        assert!(hits[0].explanation.contains("claim"));
+        assert!(hits[0].score >= 0.75);
+    }
+
+    #[test]
+    fn does_not_flag_normal_product_link() {
+        let checker = UrlChecker::from_database(&test_db());
+        let hits = checker.find_suspicious_urls("docs: https://support.apple.com/en-us/guide");
+        assert!(hits.is_empty());
     }
 }

@@ -1,0 +1,232 @@
+{
+  "label": "olena_dense_school_day",
+  "description": "A full-day simulation with school bullying, direct grooming, phishing, risky self-disclosure, family support, and a late crisis message.",
+  "owner": {
+    "id": "olena_12",
+    "display_name": "Олена",
+    "age": 12
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 12
+  },
+  "actors": [
+    {
+      "id": "olena_12",
+      "display_name": "Олена"
+    },
+    {
+      "id": "mama_oleni",
+      "display_name": "Мама",
+      "trusted": true
+    },
+    {
+      "id": "maria_12",
+      "display_name": "Марія",
+      "trusted": true
+    },
+    {
+      "id": "dasha_12",
+      "display_name": "Даша"
+    },
+    {
+      "id": "lera_12",
+      "display_name": "Лєра"
+    },
+    {
+      "id": "vika_12",
+      "display_name": "Віка"
+    },
+    {
+      "id": "max_28",
+      "display_name": "Макс"
+    },
+    {
+      "id": "artem_16",
+      "display_name": "Артем"
+    },
+    {
+      "id": "robux_drop",
+      "display_name": "Free Robux Bot"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "family_dm",
+      "display_name": "Мама ↔ Олена",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "maria_dm",
+      "display_name": "Марія ↔ Олена",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "class_7b",
+      "display_name": "7-Б Клас",
+      "conversation_type": "group_chat",
+      "member_count": 8
+    },
+    {
+      "id": "gaming_dm",
+      "display_name": "Ігровий чат з Максом",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "school_dm",
+      "display_name": "Артем ↔ Олена",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "promo_dm",
+      "display_name": "Promo Spam",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "private_notes",
+      "display_name": "Особисті нотатки",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-03-16T07:45:00+02:00",
+      "sender_id": "mama_oleni",
+      "conversation_id": "family_dm",
+      "text": "Доброго ранку, сонце. Не забудь, що я заберу тебе після школи."
+    },
+    {
+      "at": "2026-03-16T08:05:00+02:00",
+      "sender_id": "maria_12",
+      "conversation_id": "maria_dm",
+      "text": "Ти вже в школі? Я тобі місце зайняла."
+    },
+    {
+      "at": "2026-03-16T09:10:00+02:00",
+      "sender_id": "dasha_12",
+      "conversation_id": "class_7b",
+      "text": "Олена тупа, всі це знають.",
+      "note": "First open insult in the class chat.",
+      "expect_threat": "bullying",
+      "expect_min_action": "blur"
+    },
+    {
+      "at": "2026-03-16T09:12:00+02:00",
+      "sender_id": "lera_12",
+      "conversation_id": "class_7b",
+      "text": "З тобою ніхто не хоче сидіти, просто вийди."
+    },
+    {
+      "at": "2026-03-16T09:14:00+02:00",
+      "sender_id": "vika_12",
+      "conversation_id": "class_7b",
+      "text": "Ти реально всіх дістала, навіть вчителька від тебе втомилась."
+    },
+    {
+      "at": "2026-03-16T09:16:00+02:00",
+      "sender_id": "dasha_12",
+      "conversation_id": "class_7b",
+      "text": "Завтра в школі тобі кінець, зрозуміла?",
+      "expect_threat": "threat",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-03-16T12:05:00+02:00",
+      "sender_id": "max_28",
+      "conversation_id": "gaming_dm",
+      "text": "Привіт, ти дуже круто граєш, давно не бачив такої сильної дівчини."
+    },
+    {
+      "at": "2026-03-16T12:09:00+02:00",
+      "sender_id": "max_28",
+      "conversation_id": "gaming_dm",
+      "text": "Я можу купити тобі скін, просто скажи свій нік.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-03-16T12:16:00+02:00",
+      "sender_id": "max_28",
+      "conversation_id": "gaming_dm",
+      "text": "Тільки нікому не кажи, це наш секрет, добре?",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-03-16T12:24:00+02:00",
+      "sender_id": "max_28",
+      "conversation_id": "gaming_dm",
+      "text": "Скинь фоточку, хочу побачити, яка ти насправді.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-16T14:40:00+02:00",
+      "sender_id": "artem_16",
+      "conversation_id": "school_dm",
+      "text": "Якщо ти зараз не відповіси, я покажу всім твій вчорашній скрін.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-16T14:52:00+02:00",
+      "sender_id": "artem_16",
+      "conversation_id": "school_dm",
+      "text": "Не вигадуй, це ти сама мене спровокувала, так що мовчи."
+    },
+    {
+      "at": "2026-03-16T15:30:00+02:00",
+      "sender_id": "olena_12",
+      "conversation_id": "maria_dm",
+      "text": "Я живу на Шевченка 15, квартира 42, можеш після школи зайти.",
+      "expect_threat": "pii_leakage",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-03-16T15:31:00+02:00",
+      "sender_id": "olena_12",
+      "conversation_id": "maria_dm",
+      "text": "Я зараз сама вдома до дев'ятої, мама на роботі."
+    },
+    {
+      "at": "2026-03-16T16:05:00+02:00",
+      "sender_id": "robux_drop",
+      "conversation_id": "promo_dm",
+      "text": "Забери безкоштовні робукси тут http://fr33-r0bux.xyz/claim",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-16T18:10:00+02:00",
+      "sender_id": "mama_oleni",
+      "conversation_id": "family_dm",
+      "text": "Я вже біля школи. Якщо день був важкий, поговоримо спокійно вдома."
+    },
+    {
+      "at": "2026-03-16T21:20:00+02:00",
+      "sender_id": "olena_12",
+      "conversation_id": "private_notes",
+      "text": "Мені дуже погано після сьогоднішнього дня."
+    },
+    {
+      "at": "2026-03-16T21:28:00+02:00",
+      "sender_id": "olena_12",
+      "conversation_id": "private_notes",
+      "text": "Я ніби нікому не потрібна і всім без мене буде легше."
+    },
+    {
+      "at": "2026-03-16T21:35:00+02:00",
+      "sender_id": "olena_12",
+      "conversation_id": "private_notes",
+      "text": "Не хочу більше жити.",
+      "expect_threat": "self_harm",
+      "expect_min_action": "warn",
+      "expect_min_alert": "urgent"
+    }
+  ]
+}

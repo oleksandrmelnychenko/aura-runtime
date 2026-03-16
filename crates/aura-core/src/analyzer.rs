@@ -210,6 +210,16 @@ impl Analyzer {
                     format!("Blocked URL detected: {url}"),
                 ));
             }
+
+            for finding in self.url_checker.find_suspicious_urls(text) {
+                signals.push(DetectionSignal::pattern(
+                    ThreatType::Phishing,
+                    finding.score,
+                    score_to_confidence(finding.score),
+                    "link.suspicious_url_heuristic",
+                    finding.explanation,
+                ));
+            }
         }
 
         if let Some(ref raw_text) = input.text {
@@ -286,6 +296,16 @@ impl Analyzer {
                     format!("Blocked URL detected: {url}"),
                 ));
             }
+
+            for finding in self.url_checker.find_suspicious_urls(text) {
+                signals.push(DetectionSignal::pattern(
+                    ThreatType::Phishing,
+                    finding.score,
+                    score_to_confidence(finding.score),
+                    "link.suspicious_url_heuristic",
+                    finding.explanation,
+                ));
+            }
         }
 
         if let Some(ref raw_text) = input.text {
@@ -335,6 +355,27 @@ impl Analyzer {
             signals.extend(ml_signals);
         }
 
+        if let Some(ref raw_text) = input.text {
+            self.apply_contextual_false_positive_filters(
+                input,
+                truncate_text(raw_text),
+                timestamp_ms,
+                &mut signals,
+                &mut context_events,
+            );
+        }
+
+        if context_events.is_empty() {
+            context_events.push(ContextEvent {
+                event_id: 0,
+                timestamp_ms,
+                sender_id: input.sender_id.clone(),
+                conversation_id: input.conversation_id.clone(),
+                kind: EventKind::NormalConversation,
+                confidence: 1.0,
+            });
+        }
+
         self.context_tracker
             .set_conversation_type(&input.conversation_id, input.conversation_type);
 
@@ -362,6 +403,15 @@ impl Analyzer {
             signals.push(signal);
         }
 
+        if let Some(ref raw_text) = input.text {
+            self.apply_post_context_signal_filters(
+                input,
+                truncate_text(raw_text),
+                timestamp_ms,
+                &mut signals,
+            );
+        }
+
         let is_child = self.config.account_type == AccountType::Child;
         if let Some(timeline) = self.context_tracker.timeline(&input.conversation_id) {
             let tz_offset = self.context_tracker.config().timezone_offset_minutes;
@@ -373,6 +423,15 @@ impl Analyzer {
                 tz_offset,
             );
             signals.extend(timing_signals);
+        }
+
+        if let Some(ref raw_text) = input.text {
+            self.apply_post_context_signal_filters(
+                input,
+                truncate_text(raw_text),
+                timestamp_ms,
+                &mut signals,
+            );
         }
 
         for s in &signals {
@@ -441,6 +500,10 @@ impl Analyzer {
         conversation_type: ConversationType,
         analysis_time_us: u64,
     ) -> AnalysisResult {
+        downweight_secondary_timing_grooming(&mut signals);
+        prioritize_direct_threat_signals(&mut signals);
+        prioritize_suicide_coercion_as_manipulation(&mut signals);
+
         let noise_factor = match conversation_type {
             ConversationType::Direct => 1.0,
             ConversationType::GroupChat => 0.85,
@@ -685,6 +748,842 @@ impl Analyzer {
         }
 
         signals
+    }
+
+    fn apply_contextual_false_positive_filters(
+        &self,
+        input: &MessageInput,
+        text: &str,
+        timestamp_ms: u64,
+        signals: &mut Vec<DetectionSignal>,
+        context_events: &mut Vec<ContextEvent>,
+    ) {
+        // Mild euphemisms like "блін" are too weak to justify an Explicit alert on their own.
+        signals.retain(|signal| signal.reason_code != "pattern.profanity_uk_euphemisms");
+
+        let has_substance_pressure_context = signals.iter().any(|signal| {
+            signal.reason_code.starts_with("pattern.substance_")
+                || signal.reason_code == "pattern.manipulation_pressure_uk"
+                || signal.reason_code == "pattern.manipulation_pressure_en"
+                || signal.reason_code == "pattern.false_consensus_uk"
+                || signal.reason_code == "pattern.false_consensus_en"
+        });
+        if has_substance_pressure_context {
+            signals.retain(|signal| {
+                !(signal.threat_type == ThreatType::Explicit
+                    && signal.reason_code.starts_with("pattern.profanity_uk_"))
+            });
+        }
+
+        if is_self_referential_distress_profanity_message(text) {
+            signals.retain(|signal| {
+                !(matches!(
+                    signal.threat_type,
+                    ThreatType::Explicit | ThreatType::Bullying
+                ) && signal.reason_code.starts_with("pattern.profanity_uk_"))
+            });
+            context_events.retain(|event| {
+                !matches!(
+                    event.kind,
+                    EventKind::Insult | EventKind::Denigration | EventKind::Mockery
+                )
+            });
+        }
+
+        let has_friendly_context = self.has_recent_playful_reciprocity(
+            &input.conversation_id,
+            &input.sender_id,
+            timestamp_ms,
+        ) || self
+            .context_tracker
+            .contact_profiler()
+            .snapshot(&input.sender_id)
+            .is_some_and(|snapshot| {
+                !snapshot.is_new_contact
+                    && snapshot.conversation_count > 0
+                    && (snapshot.is_trusted
+                        || snapshot.trust_level >= 0.60
+                        || snapshot.circle_tier != CircleTier::New)
+            });
+        let plain_peer_compliment = input.conversation_type == ConversationType::Direct
+            && (has_friendly_context || is_casual_appearance_compliment_message(text))
+            && is_plain_peer_compliment_message(text)
+            && !signals.iter().any(is_high_risk_grooming_signal);
+        if plain_peer_compliment {
+            signals.retain(|signal| {
+                !(signal.threat_type == ThreatType::Grooming && signal.score <= 0.30)
+            });
+            context_events.retain(|event| {
+                !matches!(event.kind, EventKind::Flattery | EventKind::LoveBombing)
+            });
+        }
+
+        let non_romantic_group_praise = input.conversation_type != ConversationType::Direct
+            && is_non_romantic_group_praise_message(text)
+            && !signals.iter().any(is_high_risk_grooming_signal);
+        if non_romantic_group_praise {
+            signals.retain(|signal| {
+                !(signal.threat_type == ThreatType::Grooming && signal.score <= 0.35)
+            });
+            context_events.retain(|event| {
+                !matches!(event.kind, EventKind::Flattery | EventKind::LoveBombing)
+            });
+        }
+
+        let gaming_banter = input.conversation_type != ConversationType::Direct
+            && (is_competitive_gaming_banter_message(text)
+                || is_lightweight_competitive_banter_message(text))
+            && !signals.iter().any(|signal| {
+                matches!(
+                    signal.threat_type,
+                    ThreatType::Threat | ThreatType::HateSpeech
+                ) && signal.score >= 0.75
+            });
+        if gaming_banter {
+            signals.retain(|signal| {
+                !(matches!(
+                    signal.threat_type,
+                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
+                ) && signal.score <= 0.60)
+            });
+            context_events.retain(|event| {
+                !matches!(
+                    event.kind,
+                    EventKind::Insult | EventKind::Denigration | EventKind::Mockery
+                )
+            });
+        }
+
+        let casual_media_share = is_casual_media_share_message(text);
+        if casual_media_share {
+            signals.retain(|signal| {
+                !(signal.threat_type == ThreatType::Grooming
+                    && signal.score <= 0.50
+                    && !is_high_risk_grooming_signal(signal))
+            });
+            context_events.retain(|event| {
+                !matches!(
+                    event.kind,
+                    EventKind::PhotoRequest
+                        | EventKind::SecrecyRequest
+                        | EventKind::CasualMeetingRequest
+                        | EventKind::Flattery
+                        | EventKind::LoveBombing
+                )
+            });
+        }
+
+        if self.is_playful_banter_message(input, text, timestamp_ms) {
+            signals.retain(|signal| {
+                !matches!(
+                    signal.threat_type,
+                    ThreatType::Threat
+                        | ThreatType::Bullying
+                        | ThreatType::Explicit
+                        | ThreatType::SelfHarm
+                )
+            });
+            context_events.retain(|event| {
+                !matches!(
+                    event.kind,
+                    EventKind::Insult
+                        | EventKind::Denigration
+                        | EventKind::Mockery
+                        | EventKind::PhysicalThreat
+                        | EventKind::SexualContent
+                        | EventKind::Hopelessness
+                        | EventKind::SuicidalIdeation
+                )
+            });
+        }
+    }
+
+    fn apply_post_context_signal_filters(
+        &self,
+        input: &MessageInput,
+        text: &str,
+        timestamp_ms: u64,
+        signals: &mut Vec<DetectionSignal>,
+    ) {
+        let friendly_context = self.has_recent_playful_reciprocity(
+            &input.conversation_id,
+            &input.sender_id,
+            timestamp_ms,
+        ) || self
+            .context_tracker
+            .contact_profiler()
+            .snapshot(&input.sender_id)
+            .is_some_and(|snapshot| {
+                !snapshot.is_new_contact
+                    && snapshot.conversation_count > 0
+                    && (snapshot.is_trusted
+                        || snapshot.trust_level >= 0.60
+                        || snapshot.circle_tier != CircleTier::New)
+            });
+
+        let safe_media_context = is_casual_media_share_message(text)
+            || is_non_romantic_group_praise_message(text)
+            || (friendly_context && is_lightweight_media_banter_message(text));
+        if safe_media_context {
+            signals.retain(|signal| {
+                !(signal.threat_type == ThreatType::Grooming
+                    && signal.score <= 0.50
+                    && !is_high_risk_grooming_signal(signal))
+            });
+        }
+
+        let safe_gaming_banter = input.conversation_type != ConversationType::Direct
+            && is_lightweight_competitive_banter_message(text);
+        if safe_gaming_banter {
+            signals.retain(|signal| {
+                !(matches!(
+                    signal.threat_type,
+                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
+                ) && signal.score <= 0.75)
+                    && !(signal.threat_type == ThreatType::Grooming
+                        && signal.score <= 0.35
+                        && signal.reason_code == "conversation.contact.new_risky_contact")
+            });
+        }
+
+        if friendly_context && self.is_playful_banter_message(input, text, timestamp_ms) {
+            signals.retain(|signal| {
+                !(matches!(
+                    signal.threat_type,
+                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
+                ) && signal.score <= 0.60)
+            });
+        }
+    }
+
+    fn is_playful_banter_message(
+        &self,
+        input: &MessageInput,
+        text: &str,
+        timestamp_ms: u64,
+    ) -> bool {
+        let lower = text.to_lowercase();
+        let joke_disclaimer = contains_any(
+            &lower,
+            &["жартую", "jk", "just kidding", "just kiddin", "kidding"],
+        );
+        let playful_marker = contains_any(
+            &lower,
+            &[
+                "ахаха",
+                "хаха",
+                "😂",
+                "🤣",
+                "😜",
+                "😈",
+                "💀",
+                "рофл",
+                "лол",
+                "мем",
+                "bro",
+                "бро",
+            ],
+        );
+        let mild_teasing_marker = contains_any(
+            &lower,
+            &[
+                "дурень",
+                "дурна",
+                "дебіли",
+                "дебіли",
+                "кринж",
+                "заткнись",
+                "ненавіджу вас",
+                "сук!",
+                "сук ",
+            ],
+        );
+        let silly_object = contains_any(
+            &lower,
+            &[
+                "бутерброд",
+                "бутік",
+                "обід",
+                "снідан",
+                "піц",
+                "pizza",
+                "sandwich",
+                "lunch",
+                "мем",
+            ],
+        );
+        let media_marker = contains_any(
+            &lower,
+            &[
+                "тікток",
+                "tiktok",
+                "мем",
+                "відео",
+                "video",
+                "пост",
+                "інста",
+                "instagram",
+                "селфі",
+                "selfie",
+                "скетч",
+                "зошит",
+            ],
+        );
+        let gaming_marker = contains_any(
+            &lower,
+            &[
+                "катк",
+                "лобі",
+                "клатч",
+                "кіл",
+                "кіли",
+                "сервер",
+                "хіліл",
+                "rank",
+                "рейд",
+                "матч",
+                "game",
+                "гру",
+                "катку",
+            ],
+        );
+        let crush_marker = contains_any(
+            &lower,
+            &[
+                "подобається",
+                "краш",
+                "подобаєшся",
+                "ти думаєш",
+                "😳",
+                "🥺",
+                "😍",
+                "💕",
+            ],
+        );
+        let exam_marker = contains_any(
+            &lower,
+            &["контрольн", "матеш", "урок", "екзам", "школи", "дз"],
+        );
+        let goodnight_marker = contains_any(
+            &lower,
+            &[
+                "на добраніч",
+                "добраніч",
+                "goodnight",
+                "gn",
+                "не проспи",
+                "соня",
+            ],
+        );
+        let reciprocal_play = self.has_recent_playful_reciprocity(
+            &input.conversation_id,
+            &input.sender_id,
+            timestamp_ms,
+        );
+
+        let self_nullified_teasing = joke_disclaimer && (playful_marker || reciprocal_play);
+        let playful_hyperbole = lower.contains("я тебе вб'ю за")
+            || lower.contains("kill you for")
+            || lower.contains("помру від сміх")
+            || lower.contains("здохну від")
+            || lower.contains("dying from laughing")
+            || lower.contains("dead from laughing")
+            || (lower.contains("монстр") && (playful_marker || reciprocal_play))
+            || ((lower.contains("вбивця") || lower.contains("знищ") || lower.contains("тікайте"))
+                && silly_object
+                && playful_marker);
+        let casual_death_hyperbole = contains_any(
+            &lower,
+            &[
+                "я здохла",
+                "я здох",
+                "я мертва",
+                "я мертвий",
+                "я помру",
+                "ми всі здохнемо",
+                "не здохніть",
+                "ледь жива",
+                "ледь живий",
+                "i'm dead",
+                "im dead",
+                "literally died",
+                "i died",
+            ],
+        ) && (playful_marker
+            || reciprocal_play
+            || media_marker
+            || gaming_marker
+            || crush_marker
+            || exam_marker);
+        let conditional_mock_threat = reciprocal_play
+            && (lower.contains("я тебе вб'ю якщо") || lower.contains("kill you if you"))
+            && !contains_any(
+                &lower,
+                &[
+                    "знаю де ти живеш",
+                    "i know where you live",
+                    "школ",
+                    "поб'ю",
+                    "beat you",
+                    "заріжу",
+                    "збро",
+                    "knife",
+                ],
+            );
+        let joking_mild_teasing = mild_teasing_marker
+            && (playful_marker || joke_disclaimer || reciprocal_play)
+            && !contains_any(
+                &lower,
+                &[
+                    "(ні)",
+                    "не жарт",
+                    "не шучу",
+                    "всі знають",
+                    "найтуп",
+                    "ніхто",
+                ],
+            );
+        let friendly_goodnight_teasing = goodnight_marker
+            && reciprocal_play
+            && (playful_marker || mild_teasing_marker || lower.contains("не проспи"));
+
+        self_nullified_teasing
+            || playful_hyperbole
+            || casual_death_hyperbole
+            || conditional_mock_threat
+            || joking_mild_teasing
+            || friendly_goodnight_teasing
+    }
+
+    fn has_recent_playful_reciprocity(
+        &self,
+        conversation_id: &str,
+        sender_id: &str,
+        now_ms: u64,
+    ) -> bool {
+        let Some(timeline) = self.context_tracker.timeline(conversation_id) else {
+            return false;
+        };
+        let since = now_ms.saturating_sub(15 * 60 * 1000);
+        let recent = timeline.events_since(since);
+
+        let sender_has_prior = recent.iter().any(|event| event.sender_id == sender_id);
+        let other_sender_replied = recent.iter().any(|event| {
+            event.sender_id != sender_id && event.kind == EventKind::NormalConversation
+        });
+
+        sender_has_prior && other_sender_replied
+    }
+}
+
+fn contains_any(text: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| text.contains(needle))
+}
+
+fn count_contains(text: &str, needles: &[&str]) -> usize {
+    needles
+        .iter()
+        .filter(|needle| text.contains(**needle))
+        .count()
+}
+
+fn is_plain_peer_compliment_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let compliment_markers = [
+        "beautiful",
+        "pretty",
+        "gorgeous",
+        "cute",
+        "amazing",
+        "perfect",
+        "incredible",
+        "special",
+        "wonderful",
+        "lovely",
+        "adorable",
+        "sweet",
+        "таланов",
+        "гарн",
+        "крас",
+        "подобає",
+        "зачіск",
+        "найкращ",
+        "чудов",
+        "мила",
+        "крутан",
+        "талант",
+        "ідеаль",
+        "неймовірн",
+        "особлив",
+        "чарівн",
+    ];
+    let grooming_anchors = [
+        "for your age",
+        "для свого віку",
+        "special connection",
+        "особливий зв'язок",
+        "не кажи",
+        "secret",
+        "секрет",
+        "зустрінем",
+        "meet",
+        "photo",
+        "фото",
+        "selfie",
+        "camera",
+        "камера",
+        "parents",
+        "батьк",
+        "where do you live",
+        "де ти живеш",
+        "gift",
+        "подар",
+        "money",
+        "грош",
+    ];
+
+    let compliment_count = count_contains(&lower, &compliment_markers);
+    compliment_count > 0 && compliment_count <= 2 && !contains_any(&lower, &grooming_anchors)
+}
+
+fn is_casual_appearance_compliment_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let simple_markers = [
+        "гарна сьогодні",
+        "гарно сьогодні",
+        "красива сьогодні",
+        "pretty today",
+        "look nice today",
+        "look good today",
+        "класна зачіска",
+        "класний лук",
+        "nice haircut",
+        "nice outfit",
+    ];
+    contains_any(&lower, &simple_markers)
+}
+
+fn is_non_romantic_group_praise_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let praise_markers = [
+        "ти бог",
+        "you are god",
+        "ти топ",
+        "рятівниц",
+        "шедевр",
+        "легенда",
+        "неймовірна",
+        "неймовірний",
+        "найкраща",
+        "найкращий",
+    ];
+    let context_markers = [
+        "катк",
+        "лобі",
+        "клатч",
+        "кіл",
+        "сервер",
+        "дз",
+        "зошит",
+        "проект",
+        "скетч",
+        "портрет",
+        "селфі",
+        "групове",
+        "фотограф",
+    ];
+    contains_any(&lower, &praise_markers)
+        && contains_any(&lower, &context_markers)
+        && !contains_any(
+            &lower,
+            &[
+                "секрет",
+                "батьк",
+                "мама",
+                "купальник",
+                "гола",
+                "тіло",
+                "адрес",
+            ],
+        )
+}
+
+fn is_casual_media_share_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let char_len = lower.chars().count();
+    let media_markers = [
+        "тікток",
+        "tiktok",
+        "мем",
+        "відео",
+        "video",
+        "пост",
+        "запостив",
+        "інста",
+        "instagram",
+        "селфі",
+        "selfie",
+        "скетч",
+        "зошит",
+        "проект",
+        "фотку зошита",
+        "групове селфі",
+        "фотограф",
+    ];
+    let share_markers = ["скинь", "покажи", "дивись", "кидаю", "покажи", "сфотк"];
+    let curiosity_markers = [
+        "який",
+        "шо там",
+        "що там",
+        "ні шо там",
+        "нi шо там",
+        "не покажу нікому",
+        "не скажу нікому",
+        "тільки не показуй нікому",
+        "клянусь",
+    ];
+    let risky_markers = [
+        "купальник",
+        "ліфчик",
+        "гола",
+        "голий",
+        "тіло",
+        "огол",
+        "камера",
+        "адрес",
+        "локац",
+        "де ти живеш",
+        "батьк",
+        "мама",
+        "зустрінем",
+    ];
+
+    (contains_any(&lower, &media_markers)
+        || (contains_any(&lower, &share_markers)
+            && (contains_any(
+                &lower,
+                &["мем", "відео", "тікток", "зошит", "селфі", "пост"],
+            ) || char_len <= 40))
+        || (contains_any(&lower, &curiosity_markers)
+            && (contains_any(&lower, &media_markers)
+                || contains_any(
+                    &lower,
+                    &["😂", "🤣", "💀", "😭", "кринж", "тіпа", "ахаха", "хахах"],
+                )
+                || char_len <= 14)))
+        && !contains_any(&lower, &risky_markers)
+}
+
+fn is_lightweight_media_banter_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "помирала від",
+            "помираю від цього",
+            "я мертва",
+            "який скинь",
+            "ні шо там",
+            "що там",
+            "покажи я помру",
+            "покажи я здохну",
+            "не скажу нікому",
+            "не покажу нікому",
+            "це реально він",
+            "групове селфі",
+        ],
+    ) && contains_any(
+        &lower,
+        &["😂", "🤣", "💀", "😭", "тікток", "мем", "відео", "селфі"],
+    )
+}
+
+fn is_high_risk_grooming_signal(signal: &DetectionSignal) -> bool {
+    signal.threat_type == ThreatType::Grooming
+        && (signal.score > 0.55
+            || contains_any(
+                &signal.reason_code,
+                &[
+                    "secrecy",
+                    "gift",
+                    "money",
+                    "photo",
+                    "meeting",
+                    "platform",
+                    "sexual",
+                    "location",
+                    "personal_info",
+                    "identity_erosion",
+                ],
+            ))
+}
+
+fn is_lightweight_competitive_banter_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "ти шо робиш там",
+            "ти шо робиш",
+            "мене вбили через",
+            "ти бог",
+            "ти топ",
+            "ми мусор",
+            "минулі 10 каток",
+            "ще катку",
+            "ненавіджу (жарт)",
+            "ненавіджу жарт",
+        ],
+    ) || (contains_any(&lower, &["😂", "🤣", "💀", "😤"])
+        && contains_any(&lower, &["катк", "лобі", "клатч", "кіл", "хіліл"]))
+}
+
+fn downweight_secondary_timing_grooming(signals: &mut [DetectionSignal]) {
+    let has_stronger_non_grooming = signals.iter().any(|signal| {
+        signal.threat_type != ThreatType::Grooming
+            && signal.threat_type != ThreatType::None
+            && signal.score >= 0.55
+    });
+    if !has_stronger_non_grooming {
+        return;
+    }
+
+    for signal in signals {
+        if signal.threat_type == ThreatType::Grooming
+            && (signal.reason_code.starts_with("conversation.timing.")
+                || signal.reason_code.starts_with("conversation.contact.")
+                || signal.reason_code == "conversation.grooming.stage_sequence")
+        {
+            signal.score = signal.score.min(0.20);
+            signal.confidence = score_to_confidence(signal.score);
+        }
+    }
+}
+
+fn is_self_referential_distress_profanity_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "мені мама дала",
+            "мене мама",
+            "мені пздц",
+            "мені пізда",
+            "мені п*зда",
+            "мені хана",
+            "ми в сраці",
+            "я в сраці",
+            "я в жопі",
+        ],
+    ) && !contains_any(
+        &lower,
+        &[
+            "тобі",
+            "тобе",
+            "ти ",
+            "тебе",
+            "він ",
+            "вона ",
+            "вони ",
+            "з тобою",
+        ],
+    )
+}
+
+fn is_competitive_gaming_banter_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let gaming_markers = [
+        "катк",
+        "лобі",
+        "клатч",
+        "кіл",
+        "кіли",
+        "хіліл",
+        "сервер",
+        "game",
+        "гру",
+        "катку",
+        "матч",
+    ];
+    let banter_markers = [
+        "лол",
+        "ахах",
+        "😂",
+        "🤣",
+        "💀",
+        "😤",
+        "го",
+        "рілі",
+        "бог",
+        "топ",
+        "мусор",
+    ];
+    let severe_abuse = [
+        "потвора",
+        "шмара",
+        "урод",
+        "здохни",
+        "нехай здохне",
+        "нікому не потрібна",
+        "всі тебе ненавидять",
+    ];
+
+    contains_any(&lower, &gaming_markers)
+        && (contains_any(&lower, &banter_markers)
+            || lower.contains("ти шо робиш")
+            || lower.contains("ще катку"))
+        && !contains_any(&lower, &severe_abuse)
+}
+
+fn prioritize_direct_threat_signals(signals: &mut [DetectionSignal]) {
+    let has_strong_direct_threat = signals.iter().any(|signal| {
+        matches!(signal.threat_type, ThreatType::Threat | ThreatType::Doxxing)
+            && signal.score >= 0.75
+            && (signal.reason_code.starts_with("pattern.threat_")
+                || signal.reason_code.starts_with("pattern.doxxing"))
+    });
+    if !has_strong_direct_threat {
+        return;
+    }
+
+    for signal in signals {
+        if signal.threat_type == ThreatType::Explicit
+            && signal.reason_code.starts_with("pattern.profanity_")
+        {
+            signal.score = signal.score.min(0.25);
+            signal.confidence = score_to_confidence(signal.score);
+        }
+
+        if signal.threat_type == ThreatType::Grooming
+            && (signal.layer == DetectionLayer::ContextAnalysis
+                || signal.reason_code.starts_with("contact.")
+                || signal.reason_code.starts_with("conversation.grooming")
+                || signal.reason_code.starts_with("conversation.timing")
+                || signal.reason_code.starts_with("pattern.grooming_meeting_")
+                || signal.reason_code.starts_with("pattern.grooming_location_"))
+        {
+            signal.score = signal.score.min(0.20);
+            signal.confidence = score_to_confidence(signal.score);
+        }
+    }
+}
+
+fn prioritize_suicide_coercion_as_manipulation(signals: &mut [DetectionSignal]) {
+    let has_strong_suicide_coercion = signals.iter().any(|signal| {
+        signal.threat_type == ThreatType::Manipulation
+            && signal.score >= 0.75
+            && (signal.reason_code.contains("coercion_suicide")
+                || signal.reason_code.contains("suicide_coercion"))
+    });
+    if !has_strong_suicide_coercion {
+        return;
+    }
+
+    for signal in signals {
+        if signal.threat_type == ThreatType::SelfHarm {
+            signal.score = signal.score.min(0.35);
+            signal.confidence = score_to_confidence(signal.score);
+        }
     }
 }
 
@@ -1184,7 +2083,7 @@ fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKi
     if rule_id.starts_with("manipulation_intermittent") {
         return Some(EventKind::Devaluation);
     }
-    if rule_id.starts_with("substance_pressure") {
+    if rule_id.starts_with("substance_") {
         return Some(EventKind::PeerPressure);
     }
     if rule_id.starts_with("grooming_video_call") {
@@ -2023,6 +2922,90 @@ mod tests {
     }
 
     #[test]
+    fn sextortion_photo_blackmail_sequence_detected() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "dm_sextort";
+
+        let texts = [
+            "у мене є твої голі фотки",
+            "якщо не скинеш ще — покажу всім",
+            "скинь нові фото або розповім батькам",
+        ];
+
+        let mut last_result = None;
+        for (idx, text) in texts.iter().enumerate() {
+            let input = MessageInput {
+                content_type: ContentType::Text,
+                text: Some((*text).to_string()),
+                image_data: None,
+                sender_id: "sextort".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            };
+            last_result = Some(analyzer.analyze_with_context(&input, (idx as u64 + 1) * 1_000));
+        }
+
+        let result = last_result.expect("sextortion result");
+        assert_eq!(result.threat_type, ThreatType::Manipulation, "{result:?}");
+        assert!(result.score >= 0.70, "{result:?}");
+    }
+
+    #[test]
+    fn substance_offer_and_pressure_detected_as_manipulation() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "dm_drugs";
+
+        let first = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("хочеш спробувати тр@вку? перший раз на халяву".to_string()),
+                image_data: None,
+                sender_id: "dealer".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1_000,
+        );
+        assert_eq!(first.threat_type, ThreatType::Manipulation, "{first:?}");
+
+        let second = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("не сси, всі так роблять в нашому віці".to_string()),
+                image_data: None,
+                sender_id: "dealer".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            2_000,
+        );
+        assert_eq!(second.threat_type, ThreatType::Manipulation, "{second:?}");
+        assert!(second.score >= 0.50, "{second:?}");
+    }
+
+    #[test]
     fn integration_grooming_sequence_produces_recommendation() {
         let db = test_db();
         let mut analyzer = Analyzer::new(child_config(), &db);
@@ -2565,6 +3548,33 @@ mod tests {
     }
 
     #[test]
+    fn suspicious_url_heuristic_sets_link_risk_and_reason_codes() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let r = analyzer.analyze(&default_input(
+            "grab this now http://fr33-r0bux.xyz/claim before it expires",
+        ));
+
+        assert!(
+            r.risk_breakdown.link > 0.0,
+            "suspicious url heuristic should raise link risk"
+        );
+        assert!(
+            r.reason_codes
+                .iter()
+                .any(|code| code == "link.suspicious_url_heuristic"),
+            "heuristic suspicious url should include link reason code"
+        );
+        assert!(
+            r.signals.iter().any(|signal| {
+                signal.family == SignalFamily::Link
+                    && signal.reason_code == "link.suspicious_url_heuristic"
+            }),
+            "heuristic suspicious url should be classified as link family"
+        );
+    }
+
+    #[test]
     fn recommendation_carries_ui_actions_and_reason_codes() {
         let db = test_db();
         let mut analyzer = Analyzer::new(child_config(), &db);
@@ -2975,6 +3985,99 @@ mod tests {
     }
 
     #[test]
+    fn gaslighting_cycle_stays_manipulation_primary() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        let texts = [
+            "Ти собі це вигадала, я нічого такого не казав",
+            "Ти завжди все перекручуєш, може ти ненормальна",
+            "Ти божевільна якщо так це бачиш, я це для твого ж блага",
+            "Без мене ти нічого не варта, тобі ніхто крім мене не допоможе",
+        ];
+        let base_ts = 12 * 60 * 60 * 1000_u64;
+
+        let mut last_result = None;
+        for (idx, text) in texts.iter().enumerate() {
+            let input = MessageInput {
+                content_type: ContentType::Text,
+                text: Some((*text).to_string()),
+                image_data: None,
+                sender_id: "gaslighter".to_string(),
+                conversation_id: "gaslight_cycle".to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            };
+            last_result =
+                Some(analyzer.analyze_with_context(&input, base_ts + (idx as u64 + 1) * 60_000));
+        }
+
+        let result = last_result.expect("final gaslighting result");
+        assert_eq!(
+            result.threat_type,
+            ThreatType::Manipulation,
+            "gaslighting cycle should stay manipulation-primary: {result:?}"
+        );
+        assert!(
+            crate::predicted_score_for_threat(&result, ThreatType::Manipulation) >= 0.5,
+            "gaslighting cycle should accumulate meaningful manipulation risk: {result:?}"
+        );
+        assert!(
+            crate::predicted_score_for_threat(&result, ThreatType::Grooming) <= 0.4,
+            "gaslighting cycle should not accumulate elevated grooming risk: {result:?}"
+        );
+    }
+
+    #[test]
+    fn control_pattern_without_grooming_anchor_does_not_primary_label_as_grooming() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        let texts = [
+            "Після всього що я для тебе зробив ти мені винна",
+            "Твої друзі такі дитячі, тільки я тебе реально розумію",
+            "Вони з тебе сміються за спиною, ти можеш довіряти тільки мені",
+        ];
+        let base_ts = 12 * 60 * 60 * 1000_u64;
+
+        let mut last_result = None;
+        for (idx, text) in texts.iter().enumerate() {
+            let input = MessageInput {
+                content_type: ContentType::Text,
+                text: Some((*text).to_string()),
+                image_data: None,
+                sender_id: "controller".to_string(),
+                conversation_id: "control_cycle".to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            };
+            last_result =
+                Some(analyzer.analyze_with_context(&input, base_ts + (idx as u64 + 1) * 60_000));
+        }
+
+        let result = last_result.expect("final manipulation result");
+        assert_ne!(
+            result.threat_type,
+            ThreatType::Grooming,
+            "manipulation-only control pattern should not primary-label as grooming: {result:?}"
+        );
+    }
+
+    #[test]
     fn integration_suicide_coercion_pattern() {
         let db = test_db();
         let config = AuraConfig {
@@ -3190,6 +4293,543 @@ mod tests {
             !result.detected_threats.is_empty(),
             "Should detect multiple threat types, got: {:?}",
             result.detected_threats
+        );
+    }
+
+    #[test]
+    fn mild_ukrainian_euphemism_does_not_trigger_explicit() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("блін тре вчити".to_string()),
+                image_data: None,
+                sender_id: "maria".to_string(),
+                conversation_id: "class_chat".to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::GroupChat,
+                member_count: Some(25),
+            },
+            1_000,
+        );
+
+        assert_eq!(
+            result.threat_type,
+            ThreatType::None,
+            "mild euphemism should not escalate into explicit risk: {result:?}"
+        );
+        assert_eq!(result.action, Action::Allow);
+    }
+
+    #[test]
+    fn friendly_joke_sequence_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "dm_jokes";
+
+        let first = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("ти така дурна хахаха 😂😂 жартую".to_string()),
+                image_data: None,
+                sender_id: "bestie".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1_000,
+        );
+        assert_eq!(first.threat_type, ThreatType::None, "{first:?}");
+
+        let second = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("сама така бро! 😜".to_string()),
+                image_data: None,
+                sender_id: "olena".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            2_000,
+        );
+        assert_eq!(second.threat_type, ThreatType::None, "{second:?}");
+
+        let third = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("я тебе вб'ю за бутерброд шо ти зїла!! 😂😂".to_string()),
+                image_data: None,
+                sender_id: "bestie".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            3_000,
+        );
+        assert_eq!(third.threat_type, ThreatType::None, "{third:?}");
+        assert_eq!(third.action, Action::Allow);
+    }
+
+    #[test]
+    fn reciprocal_peer_compliments_do_not_trigger_grooming() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "dm_compliment";
+
+        let first = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("олен ти така гарна сьогодні!".to_string()),
+                image_data: None,
+                sender_id: "classmate_f".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1_000,
+        );
+        assert_eq!(first.threat_type, ThreatType::None, "{first:?}");
+
+        let second = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("спс! ти тож красіва!".to_string()),
+                image_data: None,
+                sender_id: "olena".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            2_000,
+        );
+        assert_eq!(second.threat_type, ThreatType::None, "{second:?}");
+    }
+
+    #[test]
+    fn meme_media_share_sequence_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "dm_memes_test";
+
+        let first = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("олен ти бачіла цей тікток я ЗДОХЛА 😂💀".to_string()),
+                image_data: None,
+                sender_id: "maria".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1_000,
+        );
+        assert_eq!(first.threat_type, ThreatType::None, "{first:?}");
+
+        let second = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("який скинь!!".to_string()),
+                image_data: None,
+                sender_id: "olena".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            2_000,
+        );
+        assert_eq!(second.threat_type, ThreatType::None, "{second:?}");
+
+        let third = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("тільки не показуй нікому це кринж 😂".to_string()),
+                image_data: None,
+                sender_id: "maria".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            3_000,
+        );
+        assert_eq!(third.threat_type, ThreatType::None, "{third:?}");
+    }
+
+    #[test]
+    fn toxic_friend_suicide_coercion_stays_manipulation_primary() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "dm_toxic_friend";
+        let mut last = None;
+        for (idx, text) in [
+            "якщо ти мене кинеш я нікому не потрібна буду",
+            "мені через тебе так погано шо я себе пораню",
+            "якщо ти нормальна подруга то перестанеш з нею спілкуватись",
+            "якщо виберешь її я зроблю з собою щось бл",
+        ]
+        .iter()
+        .enumerate()
+        {
+            last = Some(analyzer.analyze_with_context(
+                &MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some((*text).to_string()),
+                    image_data: None,
+                    sender_id: "toxic_bff".to_string(),
+                    conversation_id: conv.to_string(),
+                    language: Some("uk".to_string()),
+                    conversation_type: ConversationType::Direct,
+                    member_count: None,
+                },
+                (idx as u64 + 1) * 1_000,
+            ));
+        }
+
+        let result = last.expect("result");
+        assert_eq!(result.threat_type, ThreatType::Manipulation, "{result:?}");
+        assert!(
+            result
+                .detected_threats
+                .iter()
+                .any(|(tt, _)| *tt == ThreatType::Manipulation),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn peer_pressure_roof_challenge_detected_as_manipulation() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "peer_pressure_test";
+        let mut last = None;
+        for (idx, (sender, text)) in [
+            ("peer1", "го зробимо челендж з даху!!"),
+            ("peer2", "гооо хто перший той легенда"),
+            ("peer3", "не бійся там не високо тіпа"),
+            ("peer2", "всі нормальні люди робили, ти шо не нормальна?"),
+            ("peer1", "якщо зассиш ми тебе більше не кличемо нікуди"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            last = Some(analyzer.analyze_with_context(
+                &MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some((*text).to_string()),
+                    image_data: None,
+                    sender_id: (*sender).to_string(),
+                    conversation_id: conv.to_string(),
+                    language: Some("uk".to_string()),
+                    conversation_type: ConversationType::GroupChat,
+                    member_count: Some(6),
+                },
+                (idx as u64 + 1) * 1_000,
+            ));
+        }
+
+        let result = last.expect("result");
+        assert_eq!(result.threat_type, ThreatType::Manipulation, "{result:?}");
+        assert!(result.score >= 0.45, "{result:?}");
+    }
+
+    #[test]
+    fn cyberbullying_social_humiliation_sequence_is_detected() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "cyber_chat_test";
+        let mut last = None;
+        for (idx, (sender, text)) in [
+            ("cyberbully1", "ви бачіли шо олена запостила в інсту?? 😂😂"),
+            ("cyberbully2", "АААХАХАХ яка вона потворна на тій фотці 🤮"),
+            ("cyberbully1", "го всі репортнем її акаунт 😂"),
+            ("cyberbully3", "я вже написала їй в коменти 'кринж' 💀"),
+            ("cyberbully2", "треба зробити мем з її фоткою 😂😂"),
+            ("cyberbully1", "вже зробив дивіться 💀💀💀"),
+            ("cyberbully3", "АХАХАХ скинь всім в клас"),
+            ("cyberbully2", "олена побачить і буде ревіти 😂"),
+            ("cyberbully1", "їй тре видалити інсту і тікток вона там жах"),
+            ("cyberbully3", "нехай здохне від соромь 💀"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            last = Some(analyzer.analyze_with_context(
+                &MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some((*text).to_string()),
+                    image_data: None,
+                    sender_id: (*sender).to_string(),
+                    conversation_id: conv.to_string(),
+                    language: Some("uk".to_string()),
+                    conversation_type: ConversationType::GroupChat,
+                    member_count: Some(10),
+                },
+                (idx as u64 + 1) * 1_000,
+            ));
+        }
+
+        let result = last.expect("result");
+        assert_eq!(result.threat_type, ThreatType::Bullying, "{result:?}");
+        assert!(result.score >= 0.60, "{result:?}");
+        assert!(
+            result
+                .detected_threats
+                .iter()
+                .any(|(tt, score)| *tt == ThreatType::Bullying && *score >= 0.60),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn gaming_rage_sequence_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "game_rage_test";
+        let mut last = None;
+        for (idx, (sender, text)) in [
+            ("artem", "ГО КАТКУ ХТОО?? 🎮"),
+            ("petro", "гооо я вже в лобі"),
+            ("olena", "я тож зайду зараз"),
+            ("artem", "ПЕТРО ТИ ШО РОБИШ ТАМ ТИ ТУПИЙ 😤"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            last = Some(analyzer.analyze_with_context(
+                &MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some((*text).to_string()),
+                    image_data: None,
+                    sender_id: (*sender).to_string(),
+                    conversation_id: conv.to_string(),
+                    language: Some("uk".to_string()),
+                    conversation_type: ConversationType::GroupChat,
+                    member_count: Some(6),
+                },
+                (idx as u64 + 1) * 1_000,
+            ));
+        }
+
+        let result = last.expect("result");
+        assert_eq!(result.threat_type, ThreatType::None, "{result:?}");
+    }
+
+    #[test]
+    fn short_media_curiosity_sequence_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "dm_memes_short_test";
+
+        let first = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("зараз шукаю... а ти бачіла шо арт запостив?".to_string()),
+                image_data: None,
+                sender_id: "maria".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1_000,
+        );
+        assert_eq!(first.threat_type, ThreatType::None, "{first:?}");
+
+        let second = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("ні шо там?".to_string()),
+                image_data: None,
+                sender_id: "olena".to_string(),
+                conversation_id: conv.to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            2_000,
+        );
+        assert_eq!(second.threat_type, ThreatType::None, "{second:?}");
+    }
+
+    #[test]
+    fn group_selfie_sequence_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "group_selfie_test";
+        let mut last = None;
+        for (idx, (sender, text)) in [
+            ("nastya", "зробіть мені фотку для інсти пж 📸😂"),
+            ("artem", "настя і її інста 😂😂"),
+            ("dasha", "го ще селфі разом!!"),
+            ("olena", "гоооо!! групове селфі 🤳💕"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            last = Some(analyzer.analyze_with_context(
+                &MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some((*text).to_string()),
+                    image_data: None,
+                    sender_id: (*sender).to_string(),
+                    conversation_id: conv.to_string(),
+                    language: Some("uk".to_string()),
+                    conversation_type: ConversationType::GroupChat,
+                    member_count: Some(10),
+                },
+                (idx as u64 + 1) * 1_000,
+            ));
+        }
+
+        let result = last.expect("result");
+        assert_eq!(result.threat_type, ThreatType::None, "{result:?}");
+    }
+
+    #[test]
+    fn obfuscated_hate_speech_is_detected() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("всі ціган1 — злодії бл".to_string()),
+                image_data: None,
+                sender_id: "hater1".to_string(),
+                conversation_id: "hate_chat".to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::GroupChat,
+                member_count: Some(20),
+            },
+            1_000,
+        );
+
+        assert!(
+            result
+                .detected_threats
+                .iter()
+                .any(|(tt, _)| *tt == ThreatType::HateSpeech),
+            "obfuscated hate speech should surface hate_speech detection: {result:?}"
+        );
+    }
+
+    #[test]
+    fn direct_location_threat_stays_threat_primary() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+
+        let result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("я знаю де ти живеш".to_string()),
+                image_data: None,
+                sender_id: "threat2".to_string(),
+                conversation_id: "dm_threat2".to_string(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+            },
+            1_000,
+        );
+
+        assert_eq!(result.threat_type, ThreatType::Threat, "{result:?}");
+        assert!(
+            result.score >= 0.8,
+            "direct location threat should keep high threat score: {result:?}"
         );
     }
 
