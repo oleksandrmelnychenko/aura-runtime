@@ -3,6 +3,7 @@ use crate::types::{
     ProtectionLevel, RiskHorizon, ThreatType, UiAction,
 };
 
+/// Determines the appropriate action based on a threat score and protection level.
 pub fn decide_action(score: f32, protection_level: ProtectionLevel) -> Action {
     let thresholds = ActionThresholds::for_level(protection_level);
 
@@ -19,6 +20,7 @@ pub fn decide_action(score: f32, protection_level: ProtectionLevel) -> Action {
     }
 }
 
+/// Determines the action and recommendation for a specific threat type, score, and protection level.
 pub fn decide_action_v2(
     threat_type: ThreatType,
     score: f32,
@@ -249,7 +251,7 @@ pub fn decide_action_v2(
             )
         }
 
-        _ => {
+        ThreatType::None | ThreatType::Nsfw | ThreatType::HateSpeech => {
             let action = decide_action(score, protection_level);
             let parent_alert = if score >= 0.7 {
                 AlertPriority::Medium
@@ -269,37 +271,47 @@ pub fn decide_action_v2(
     }
 }
 
+/// Adjusts a recommendation's UI actions based on specific reason codes.
 pub fn augment_recommendation_for_reason_codes(
     recommendation: &mut ActionRecommendation,
     threat_type: ThreatType,
     reason_codes: &[String],
 ) {
-    if threat_type == ThreatType::Manipulation
-        && reason_codes
-            .iter()
-            .any(|code| is_coercive_control_reason_code(code))
-    {
+    let mut has_coercive = false;
+    for code in reason_codes.iter() {
+        if is_coercive_control_reason_code(code) {
+            has_coercive = true;
+            break;
+        }
+    }
+    if threat_type == ThreatType::Manipulation && has_coercive {
         recommendation
             .ui_actions
             .retain(|action| *action != UiAction::RestrictUnknownContact);
     }
 
-    if threat_type != ThreatType::SelfHarm
-        && reason_codes
-            .iter()
-            .any(|code| is_reportable_reason_code(code))
-    {
+    let mut has_reportable = false;
+    for code in reason_codes.iter() {
+        if is_reportable_reason_code(code) {
+            has_reportable = true;
+            break;
+        }
+    }
+    if threat_type != ThreatType::SelfHarm && has_reportable {
         recommendation
             .ui_actions
             .push(UiAction::SuggestBlockContact);
         recommendation.ui_actions.push(UiAction::SuggestReport);
     }
 
-    if threat_type == ThreatType::Bullying
-        && reason_codes
-            .iter()
-            .any(|code| is_group_abuse_reason_code(code))
-    {
+    let mut has_group_abuse = false;
+    for code in reason_codes.iter() {
+        if is_group_abuse_reason_code(code) {
+            has_group_abuse = true;
+            break;
+        }
+    }
+    if threat_type == ThreatType::Bullying && has_group_abuse {
         recommendation.ui_actions.push(UiAction::SuggestReport);
         recommendation
             .ui_actions
@@ -310,6 +322,7 @@ pub fn augment_recommendation_for_reason_codes(
     recommendation.ui_actions.dedup();
 }
 
+/// Adjusts a recommendation based on ML inference signals such as coercive control or crisis vulnerability.
 pub fn augment_recommendation_for_inference(
     recommendation: &mut ActionRecommendation,
     threat_type: ThreatType,
@@ -330,10 +343,23 @@ pub fn augment_recommendation_for_inference(
         recommendation.ui_actions.push(UiAction::EscalateToGuardian);
     }
 
-    if matches!(threat_type, ThreatType::Grooming | ThreatType::Manipulation)
-        && (coercive_control >= 0.55
-            || inference.risk_horizon == RiskHorizon::ShortTerm
-                && inference.escalation_likelihood_24h >= 0.65)
+    if match threat_type {
+        ThreatType::Grooming | ThreatType::Manipulation => true,
+        ThreatType::None
+        | ThreatType::Bullying
+        | ThreatType::Explicit
+        | ThreatType::Threat
+        | ThreatType::SelfHarm
+        | ThreatType::Spam
+        | ThreatType::Scam
+        | ThreatType::Phishing
+        | ThreatType::Nsfw
+        | ThreatType::HateSpeech
+        | ThreatType::Doxxing
+        | ThreatType::PiiLeakage => false,
+    } && (coercive_control >= 0.55
+        || inference.risk_horizon == RiskHorizon::ShortTerm
+            && inference.escalation_likelihood_24h >= 0.65)
     {
         recommendation
             .ui_actions
@@ -384,7 +410,7 @@ fn ui_actions_for(
     let mut actions = match action {
         Action::Blur => vec![UiAction::BlurUntilTap],
         Action::Warn | Action::Block => vec![UiAction::WarnBeforeDisplay],
-        _ => Vec::new(),
+        Action::Allow | Action::Mark => Vec::new(),
     };
 
     match threat_type {
@@ -396,7 +422,11 @@ fn ui_actions_for(
             actions.push(UiAction::RestrictUnknownContact);
         }
         ThreatType::Bullying => {
-            if matches!(action, Action::Warn | Action::Block) || score >= 0.6 {
+            if match action {
+                Action::Warn | Action::Block => true,
+                Action::Allow | Action::Mark | Action::Blur => false,
+            } || score >= 0.6
+            {
                 actions.push(UiAction::SuggestReport);
                 actions.push(UiAction::SlowDownConversation);
             }
@@ -428,7 +458,7 @@ fn ui_actions_for(
             actions.push(UiAction::SuggestReport);
             actions.push(UiAction::SlowDownConversation);
         }
-        _ => {}
+        ThreatType::None | ThreatType::Nsfw | ThreatType::HateSpeech => {}
     }
 
     if parent_alert >= AlertPriority::High {
@@ -458,12 +488,14 @@ fn is_group_abuse_reason_code(reason_code: &str) -> bool {
 }
 
 fn latent_state_score(inference: &InferenceSummary, kind: LatentStateKind) -> f32 {
-    inference
-        .latent_states
-        .iter()
-        .find(|state| state.kind == kind)
-        .map(|state| state.score)
-        .unwrap_or(0.0)
+    let mut result = 0.0f32;
+    for state in &inference.latent_states {
+        if state.kind == kind {
+            result = state.score;
+            break;
+        }
+    }
+    result
 }
 
 struct ActionThresholds {

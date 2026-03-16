@@ -597,8 +597,11 @@ fn build_realistic_chat_scenario(spec: &RealisticChatCaseSpec) -> RealisticChatS
                         .unwrap_or_else(|| spec.default_language.clone()),
                 ),
                 conversation_type: spec.conversation_type,
-                member_count: matches!(spec.conversation_type, ConversationType::GroupChat)
-                    .then_some(6),
+                member_count: match spec.conversation_type {
+                    ConversationType::GroupChat => true,
+                    ConversationType::Direct | ConversationType::Group => false,
+                }
+                .then_some(6),
             },
             observed_threats: message.observed_threats.clone(),
         })

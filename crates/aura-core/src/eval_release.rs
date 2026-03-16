@@ -1347,11 +1347,9 @@ fn suite_status(
             .chain(
                 slices
                     .iter()
-                    .filter(|slice| {
-                        matches!(
-                            slice.support_enforcement,
-                            SupportEnforcement::ReleaseBlocking
-                        )
+                    .filter(|slice| match slice.support_enforcement {
+                        SupportEnforcement::ReleaseBlocking => true,
+                        SupportEnforcement::ReportOnly => false,
                     })
                     .map(|slice| slice.status),
             ),
@@ -1367,7 +1365,7 @@ fn combine_statuses(statuses: impl IntoIterator<Item = ReleaseStatus>) -> Releas
             (_, ReleaseStatus::InsufficientSupport) | (ReleaseStatus::InsufficientSupport, _) => {
                 ReleaseStatus::InsufficientSupport
             }
-            _ => ReleaseStatus::Pass,
+            (ReleaseStatus::Pass, ReleaseStatus::Pass) => ReleaseStatus::Pass,
         };
     }
     combined

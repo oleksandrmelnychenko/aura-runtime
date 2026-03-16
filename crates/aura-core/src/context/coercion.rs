@@ -3,6 +3,7 @@ use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 use super::events::EventKind;
 use super::tracker::ConversationTimeline;
 
+/// Detects coercive control patterns such as suicide threats, reputation blackmail, and debt leverage.
 pub struct CoercionDetector;
 
 impl Default for CoercionDetector {
@@ -12,17 +13,19 @@ impl Default for CoercionDetector {
 }
 
 impl CoercionDetector {
+    /// Creates a new coercion detector.
     pub fn new() -> Self {
         Self
     }
 
+    /// Analyzes a conversation timeline for coercive control signals from a specific sender.
     pub fn analyze(
         &self,
         timeline: &ConversationTimeline,
         sender_id: &str,
         window_start: u64,
     ) -> Vec<DetectionSignal> {
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(4);
 
         if let Some(signal) = self.check_suicide_coercion(timeline, sender_id, window_start) {
             signals.push(signal);
@@ -164,7 +167,48 @@ impl CoercionDetector {
                     coercion_types.insert("screenshot");
                     total += 1;
                 }
-                _ => {}
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::FalseConsensus
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => {}
             }
         }
 
@@ -309,7 +353,6 @@ mod tests {
 
     #[test]
     fn single_suicide_coercion_alone_detected() {
-        // Even a single SuicideCoercion should produce a signal due to severity
         let tl = make_timeline(vec![("aggressor", EventKind::SuicideCoercion, 1000)]);
         let detector = CoercionDetector::new();
         let signals = detector.analyze(&tl, "aggressor", 0);
@@ -359,8 +402,6 @@ mod tests {
         let tl = make_timeline(vec![("manipulator", EventKind::DebtCreation, 1000)]);
         let detector = CoercionDetector::new();
         let signals = detector.analyze(&tl, "manipulator", 0);
-        // Single debt creation may or may not trigger depending on impl
-        // but certainly should not be high severity
         for s in &signals {
             if s.explanation.contains("debt") {
                 assert!(
@@ -395,18 +436,14 @@ mod tests {
 
     #[test]
     fn coercion_window_boundary() {
-        // Events outside window should not count
         let tl = make_timeline(vec![
             ("aggressor", EventKind::SuicideCoercion, 100),
             ("aggressor", EventKind::SuicideCoercion, 200),
             ("aggressor", EventKind::ReputationThreat, 5000),
         ]);
         let detector = CoercionDetector::new();
-        // Window starts at 1000 — first two events are outside
         let signals = detector.analyze(&tl, "aggressor", 1000);
-        // Should only see events from 5000 onwards
         let total_score: f32 = signals.iter().map(|s| s.score).sum();
-        // With only 1 event in window, should be less severe
         assert!(
             total_score < 2.0,
             "Out-of-window events should not inflate score: {total_score}"
@@ -421,9 +458,7 @@ mod tests {
             ("alice", EventKind::DebtCreation, 3000),
         ]);
         let detector = CoercionDetector::new();
-        // Analyze only alice's events
         let signals = detector.analyze(&tl, "alice", 0);
-        // Bob's ReputationThreat should not combine with alice's events
         for s in &signals {
             assert!(
                 !s.explanation.contains("bob"),

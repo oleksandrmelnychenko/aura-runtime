@@ -9,13 +9,10 @@ use crate::types::{
 
 use super::events::ContextEvent;
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const WEEK_MS: u64 = 7 * 24 * 60 * 60 * 1000; // 604_800_000
-const DAY_MS: u64 = 24 * 60 * 60 * 1000; // 86_400_000
-const MAX_SNAPSHOTS: usize = 26; // 6 months of weekly snapshots
+const WEEK_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS: u64 = 24 * 60 * 60 * 1000;
+const MAX_SNAPSHOTS: usize = 26;
+/// Default upper bound for the number of contact profiles stored.
 pub const DEFAULT_MAX_CONTACT_PROFILES: usize = 1_000;
 
 fn default_rating() -> f32 {
@@ -26,10 +23,7 @@ fn default_trust() -> f32 {
     0.5
 }
 
-// ---------------------------------------------------------------------------
-// BehavioralSnapshot
-// ---------------------------------------------------------------------------
-
+/// Captures aggregated behavioral statistics for a single weekly period.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehavioralSnapshot {
     pub period_start_ms: u64,
@@ -43,6 +37,7 @@ pub struct BehavioralSnapshot {
     pub avg_severity: f32,
 }
 
+/// Represents the exportable state of a behavioral snapshot.
 #[derive(Debug, Clone)]
 pub struct BehavioralSnapshotState {
     pub period_start_ms: u64,
@@ -103,6 +98,7 @@ impl BehavioralSnapshot {
         }
     }
 
+    /// Returns the ratio of hostile messages to total messages in this period.
     pub fn hostile_ratio(&self) -> f32 {
         if self.total_messages == 0 {
             0.0
@@ -111,6 +107,7 @@ impl BehavioralSnapshot {
         }
     }
 
+    /// Returns the ratio of supportive messages to total messages in this period.
     pub fn supportive_ratio(&self) -> f32 {
         if self.total_messages == 0 {
             0.0
@@ -120,61 +117,40 @@ impl BehavioralSnapshot {
     }
 }
 
-// ---------------------------------------------------------------------------
-// ContactProfile
-// ---------------------------------------------------------------------------
-
+/// Tracks behavioral history and risk metrics for a single contact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContactProfile {
     pub sender_id: String,
-
-    pub first_seen_ms: u64,
-
-    pub last_seen_ms: u64,
-
-    pub total_messages: u64,
-
-    pub conversation_count: usize,
-
     pub(crate) conversations: Vec<String>,
-
-    pub grooming_event_count: u64,
-
-    pub bullying_event_count: u64,
-
-    pub manipulation_event_count: u64,
-
-    pub is_trusted: bool,
-
-    severity_sum: f32,
-    severity_count: u64,
-
-    #[serde(default)]
-    pub inferred_age: Option<u16>,
-
-    // --- Phase 7: Rating & Behavioral Profiling ---
-    #[serde(default = "default_rating")]
-    pub rating: f32,
-
-    #[serde(default = "default_trust")]
-    pub trust_level: f32,
-
-    #[serde(default)]
-    pub circle_tier: CircleTier,
-
-    #[serde(default)]
-    pub trend: BehavioralTrend,
-
     #[serde(default)]
     weekly_snapshots: VecDeque<BehavioralSnapshot>,
-
     #[serde(default)]
     current_snapshot: Option<BehavioralSnapshot>,
-
     #[serde(default)]
     active_days: HashSet<u32>,
+    pub first_seen_ms: u64,
+    pub last_seen_ms: u64,
+    pub total_messages: u64,
+    pub conversation_count: usize,
+    pub grooming_event_count: u64,
+    pub bullying_event_count: u64,
+    pub manipulation_event_count: u64,
+    severity_count: u64,
+    severity_sum: f32,
+    #[serde(default = "default_rating")]
+    pub rating: f32,
+    #[serde(default = "default_trust")]
+    pub trust_level: f32,
+    #[serde(default)]
+    pub inferred_age: Option<u16>,
+    #[serde(default)]
+    pub circle_tier: CircleTier,
+    #[serde(default)]
+    pub trend: BehavioralTrend,
+    pub is_trusted: bool,
 }
 
+/// Represents the exportable state of a contact profile.
 #[derive(Debug, Clone)]
 pub struct ContactProfileState {
     pub sender_id: String,
@@ -201,7 +177,10 @@ pub struct ContactProfileState {
 
 impl From<&ContactProfile> for ContactProfileState {
     fn from(profile: &ContactProfile) -> Self {
-        let mut active_days: Vec<u32> = profile.active_days.iter().copied().collect();
+        let mut active_days: Vec<u32> = Vec::with_capacity(profile.active_days.len());
+        for &d in &profile.active_days {
+            active_days.push(d);
+        }
         active_days.sort_unstable();
 
         Self {
@@ -222,11 +201,13 @@ impl From<&ContactProfile> for ContactProfileState {
             trust_level: profile.trust_level,
             circle_tier: profile.circle_tier,
             trend: profile.trend,
-            weekly_snapshots: profile
-                .weekly_snapshots
-                .iter()
-                .map(BehavioralSnapshotState::from)
-                .collect(),
+            weekly_snapshots: {
+                let mut snaps = Vec::with_capacity(profile.weekly_snapshots.len());
+                for s in &profile.weekly_snapshots {
+                    snaps.push(BehavioralSnapshotState::from(s));
+                }
+                snaps
+            },
             current_snapshot: profile
                 .current_snapshot
                 .as_ref()
@@ -256,11 +237,13 @@ impl From<ContactProfileState> for ContactProfile {
             trust_level: profile.trust_level,
             circle_tier: profile.circle_tier,
             trend: profile.trend,
-            weekly_snapshots: profile
-                .weekly_snapshots
-                .into_iter()
-                .map(BehavioralSnapshot::from)
-                .collect(),
+            weekly_snapshots: {
+                let mut snaps = VecDeque::with_capacity(profile.weekly_snapshots.len());
+                for s in profile.weekly_snapshots {
+                    snaps.push_back(BehavioralSnapshot::from(s));
+                }
+                snaps
+            },
             current_snapshot: profile.current_snapshot.map(BehavioralSnapshot::from),
             active_days: profile.active_days.into_iter().collect(),
         }
@@ -293,6 +276,7 @@ impl ContactProfile {
         }
     }
 
+    /// Returns the mean severity across all recorded threat events for this contact.
     pub fn average_severity(&self) -> f32 {
         if self.severity_count == 0 {
             0.0
@@ -301,6 +285,7 @@ impl ContactProfile {
         }
     }
 
+    /// Creates a lightweight snapshot of this profile for external consumption.
     pub fn snapshot(&self, is_new_contact: bool) -> ContactSnapshot {
         ContactSnapshot {
             sender_id: self.sender_id.clone(),
@@ -316,10 +301,12 @@ impl ContactProfile {
         }
     }
 
+    /// Returns the duration in milliseconds between first and last seen timestamps.
     pub fn relationship_age_ms(&self) -> u64 {
         self.last_seen_ms - self.first_seen_ms
     }
 
+    /// Computes a composite risk score in the range 0.0 to 1.0 based on threat event counts and trust.
     pub fn risk_score(&self) -> f32 {
         let mut score: f32 = 0.0;
 
@@ -346,7 +333,6 @@ impl ContactProfile {
             score += 0.1;
         }
 
-        // Graduated trust discount (replaces binary is_trusted check)
         let trust_discount = 1.0 - (self.trust_level * 0.5);
         score *= trust_discount;
 
@@ -371,8 +357,7 @@ impl ContactProfile {
         dominant
     }
 
-    // --- Rating & Behavioral methods ---
-
+    /// Updates the contact's rating, snapshot, active days, and trust based on the given event.
     pub fn update_rating(&mut self, event: &ContextEvent) {
         let delta = event.kind.rating_delta();
         self.rating = (self.rating + delta).clamp(0.0, 100.0);
@@ -400,7 +385,6 @@ impl ContactProfile {
             self.current_snapshot = Some(BehavioralSnapshot::new(event.timestamp_ms));
         }
 
-        // Check if week boundary crossed — finalize before mutating
         let needs_finalize = self
             .current_snapshot
             .as_ref()
@@ -420,7 +404,6 @@ impl ContactProfile {
             self.recalculate_trend();
         }
 
-        // Now update the current snapshot
         let snapshot = self.current_snapshot.as_mut().unwrap();
         snapshot.total_messages += 1;
         if event.kind.is_hostile() {
@@ -437,7 +420,6 @@ impl ContactProfile {
             snapshot.manipulation_count += 1;
         }
 
-        // Running average severity
         let n = snapshot.total_messages as f32;
         snapshot.avg_severity = snapshot.avg_severity * ((n - 1.0) / n) + event.kind.severity() / n;
     }
@@ -450,18 +432,15 @@ impl ContactProfile {
             return;
         }
 
-        // Baseline: first half (2-4 snapshots)
         let baseline_count = (snapshots.len() / 2).clamp(2, 4);
         let baseline_hostile = avg_hostile_ratio(snapshots.iter().take(baseline_count));
         let baseline_supportive = avg_supportive_ratio(snapshots.iter().take(baseline_count));
 
-        // Recent: last 2 snapshots
         let recent_hostile = avg_hostile_ratio(snapshots.iter().rev().take(2));
         let _recent_supportive = avg_supportive_ratio(snapshots.iter().rev().take(2));
 
         let hostile_delta = recent_hostile - baseline_hostile;
 
-        // Role reversal: was supportive (>30%), now hostile (>30%)
         if baseline_supportive > 0.3 && recent_hostile > 0.3 {
             self.trend = BehavioralTrend::RoleReversal;
             return;
@@ -481,7 +460,6 @@ impl ContactProfile {
     fn recalculate_circle_tier(&mut self) {
         let age_ms = self.relationship_age_ms();
 
-        // New: < 14 days
         if age_ms < 14 * DAY_MS {
             self.circle_tier = CircleTier::New;
             return;
@@ -490,14 +468,12 @@ impl ContactProfile {
         let age_days = (age_ms / DAY_MS).max(1) as f32;
         let msgs_per_day = self.total_messages as f32 / age_days;
 
-        // Inner: 5+ msg/day avg OR 20+ active days in last 30
         let recent_active = self.count_recent_active_days(30);
         if msgs_per_day >= 5.0 || recent_active >= 20 {
             self.circle_tier = CircleTier::Inner;
             return;
         }
 
-        // Regular: 3+ msg/week = 0.43+ msg/day
         if msgs_per_day >= 0.43 {
             self.circle_tier = CircleTier::Regular;
             return;
@@ -509,19 +485,22 @@ impl ContactProfile {
     fn count_recent_active_days(&self, days: u32) -> usize {
         let now_day = (self.last_seen_ms / DAY_MS) as u32;
         let cutoff_day = now_day.saturating_sub(days);
-        self.active_days
-            .iter()
-            .filter(|&&d| d >= cutoff_day)
-            .count()
+        let mut count = 0usize;
+        for &d in &self.active_days {
+            if d >= cutoff_day {
+                count += 1;
+            }
+        }
+        count
     }
 
+    /// Returns a reference to the stored weekly behavioral snapshots.
     pub fn weekly_snapshots(&self) -> &VecDeque<BehavioralSnapshot> {
         &self.weekly_snapshots
     }
 
     /// Fix up fields that may be missing from older serialized state.
     fn post_deserialize_fixup(&mut self) {
-        // Old state: is_trusted=true but trust_level=0.5 (default)
         if self.is_trusted && self.trust_level < 0.7 {
             self.trust_level = 1.0;
         }
@@ -570,15 +549,13 @@ fn trend_severity(trend: &BehavioralTrend) -> u8 {
     }
 }
 
-// ---------------------------------------------------------------------------
-// ContactProfiler
-// ---------------------------------------------------------------------------
-
+/// Manages a bounded collection of contact profiles and provides anomaly detection.
 pub struct ContactProfiler {
     profiles: HashMap<String, ContactProfile>,
     max_profiles: usize,
 }
 
+/// Represents the serializable wire state of the contact profiler.
 #[derive(Debug, Clone)]
 pub struct ContactProfilerWireState {
     pub profiles: Vec<ContactProfileState>,
@@ -591,10 +568,12 @@ impl Default for ContactProfiler {
 }
 
 impl ContactProfiler {
+    /// Creates a new profiler with the default maximum profile limit.
     pub fn new() -> Self {
         Self::with_max_profiles(DEFAULT_MAX_CONTACT_PROFILES)
     }
 
+    /// Creates a new profiler with an explicit maximum profile count.
     pub fn with_max_profiles(max_profiles: usize) -> Self {
         Self {
             profiles: HashMap::new(),
@@ -602,6 +581,7 @@ impl ContactProfiler {
         }
     }
 
+    /// Records a context event, updating or creating the corresponding contact profile.
     pub fn record_event(&mut self, event: &ContextEvent) {
         self.ensure_capacity_for_sender(&event.sender_id);
         let profile = self
@@ -633,15 +613,16 @@ impl ContactProfiler {
             profile.severity_count += 1;
         }
 
-        // Phase 7: update rating & behavioral tracking
         profile.update_rating(event);
     }
 
+    /// Updates the maximum profile limit and evicts excess profiles if needed.
     pub fn update_max_profiles(&mut self, max_profiles: usize) {
         self.max_profiles = max_profiles.max(1);
         self.enforce_profile_limit();
     }
 
+    /// Returns true if the sender is unknown or was first seen within the last 48 hours.
     pub fn is_new_contact(&self, sender_id: &str) -> bool {
         match self.profiles.get(sender_id) {
             None => true,
@@ -649,6 +630,7 @@ impl ContactProfiler {
         }
     }
 
+    /// Returns true if the sender appears in many conversations with grooming indicators.
     pub fn contacts_many_minors(&self, sender_id: &str) -> bool {
         match self.profiles.get(sender_id) {
             None => false,
@@ -656,17 +638,23 @@ impl ContactProfiler {
         }
     }
 
+    /// Returns the profile for the given sender, if one exists.
     pub fn profile(&self, sender_id: &str) -> Option<&ContactProfile> {
         self.profiles.get(sender_id)
     }
 
+    /// Returns a lightweight snapshot for the given sender, if a profile exists.
     pub fn snapshot(&self, sender_id: &str) -> Option<ContactSnapshot> {
         self.profile(sender_id)
             .map(|profile| profile.snapshot(self.is_new_contact(sender_id)))
     }
 
+    /// Returns all contact profiles sorted by risk score in descending order.
     pub fn contacts_by_risk(&self) -> Vec<&ContactProfile> {
-        let mut profiles: Vec<_> = self.profiles.values().collect();
+        let mut profiles = Vec::with_capacity(self.profiles.len());
+        for p in self.profiles.values() {
+            profiles.push(p);
+        }
         profiles.sort_by(|a, b| {
             b.risk_score()
                 .partial_cmp(&a.risk_score())
@@ -675,6 +663,7 @@ impl ContactProfiler {
         profiles
     }
 
+    /// Marks the given sender as fully trusted.
     pub fn mark_trusted(&mut self, sender_id: &str) {
         if let Some(profile) = self.profiles.get_mut(sender_id) {
             profile.trust_level = 1.0;
@@ -682,6 +671,7 @@ impl ContactProfiler {
         }
     }
 
+    /// Sets the inferred age for a sender if not already set and the value is valid (5-99).
     pub fn set_inferred_age(&mut self, sender_id: &str, age: u16) {
         if let Some(profile) = self.profiles.get_mut(sender_id) {
             if profile.inferred_age.is_none() && (5..=99).contains(&age) {
@@ -690,6 +680,7 @@ impl ContactProfiler {
         }
     }
 
+    /// Generates detection signals if a significant age gap exists between sender and account holder.
     pub fn check_age_gap(
         &self,
         sender_id: &str,
@@ -750,6 +741,7 @@ impl ContactProfiler {
         signals
     }
 
+    /// Checks a contact for anomalous patterns such as new risky contacts or multi-conversation predators.
     pub fn check_anomalies(&self, sender_id: &str, is_child_account: bool) -> Vec<DetectionSignal> {
         let mut signals = Vec::new();
 
@@ -799,6 +791,7 @@ impl ContactProfiler {
         signals
     }
 
+    /// Generates signals for behavioral trend changes such as rapid worsening or role reversal.
     pub fn check_behavioral_shift(&self, sender_id: &str) -> Vec<DetectionSignal> {
         let mut signals = Vec::new();
         let profile = match self.profiles.get(sender_id) {
@@ -833,7 +826,6 @@ impl ContactProfiler {
                 if profile.circle_tier == CircleTier::Inner {
                     score += 0.1;
                 }
-                // Trust broken = extra dangerous
                 if profile.trust_level < 0.4 {
                     if let Some(first) = profile.weekly_snapshots.front() {
                         if first.supportive_ratio() > 0.3 {
@@ -870,10 +862,9 @@ impl ContactProfiler {
                     ),
                 ));
             }
-            _ => {}
+            BehavioralTrend::Stable | BehavioralTrend::Improving => {}
         }
 
-        // Low rating alert for inner circle
         if profile.rating < 20.0 && profile.circle_tier == CircleTier::Inner {
             signals.push(DetectionSignal::context(
                 ThreatType::Bullying,
@@ -891,22 +882,25 @@ impl ContactProfiler {
         signals
     }
 
+    /// Exports all profiles as a cloneable state snapshot.
     pub fn export(&self) -> ContactProfilerState {
-        ContactProfilerState {
-            profiles: self.profiles.values().cloned().collect(),
+        let mut profiles = Vec::with_capacity(self.profiles.len());
+        for p in self.profiles.values() {
+            profiles.push(p.clone());
         }
+        ContactProfilerState { profiles }
     }
 
+    /// Exports all profiles as a wire-format state for serialization.
     pub fn export_wire_state(&self) -> ContactProfilerWireState {
-        ContactProfilerWireState {
-            profiles: self
-                .profiles
-                .values()
-                .map(ContactProfileState::from)
-                .collect(),
+        let mut profiles = Vec::with_capacity(self.profiles.len());
+        for p in self.profiles.values() {
+            profiles.push(ContactProfileState::from(p));
         }
+        ContactProfilerWireState { profiles }
     }
 
+    /// Imports profiles from a state snapshot, replacing existing profiles with the same sender ID.
     pub fn import(&mut self, state: ContactProfilerState) {
         for mut profile in state.profiles {
             profile.post_deserialize_fixup();
@@ -921,7 +915,6 @@ impl ContactProfiler {
             incoming.post_deserialize_fixup();
             match self.profiles.get_mut(&incoming.sender_id) {
                 Some(local) => {
-                    // Take the most cautious / comprehensive values
                     local.first_seen_ms = local.first_seen_ms.min(incoming.first_seen_ms);
                     local.last_seen_ms = local.last_seen_ms.max(incoming.last_seen_ms);
                     local.total_messages = local.total_messages.max(incoming.total_messages);
@@ -935,7 +928,6 @@ impl ContactProfiler {
                         .manipulation_event_count
                         .max(incoming.manipulation_event_count);
 
-                    // Union conversations
                     for conv in incoming.conversations {
                         if !local.conversations.contains(&conv) {
                             local.conversations.push(conv);
@@ -943,22 +935,18 @@ impl ContactProfiler {
                     }
                     local.conversation_count = local.conversations.len();
 
-                    // Most cautious trust/rating
                     local.trust_level = local.trust_level.min(incoming.trust_level);
                     local.rating = local.rating.min(incoming.rating);
                     local.is_trusted = local.is_trusted && incoming.is_trusted;
 
-                    // Take more severe trend
                     if trend_severity(&incoming.trend) > trend_severity(&local.trend) {
                         local.trend = incoming.trend;
                     }
 
-                    // Prefer existing inferred_age, fall back to incoming
                     if local.inferred_age.is_none() {
                         local.inferred_age = incoming.inferred_age;
                     }
 
-                    // Merge severity stats
                     local.severity_sum = local.severity_sum.max(incoming.severity_sum);
                     local.severity_count = local.severity_count.max(incoming.severity_count);
                 }
@@ -970,33 +958,31 @@ impl ContactProfiler {
         self.enforce_profile_limit();
     }
 
+    /// Imports profiles from wire-format state, replacing existing profiles with the same sender ID.
     pub fn import_wire_state(&mut self, state: ContactProfilerWireState) {
-        self.import(ContactProfilerState {
-            profiles: state
-                .profiles
-                .into_iter()
-                .map(ContactProfile::from)
-                .collect(),
-        });
+        let mut profiles = Vec::with_capacity(state.profiles.len());
+        for p in state.profiles {
+            profiles.push(ContactProfile::from(p));
+        }
+        self.import(ContactProfilerState { profiles });
     }
 
+    /// Merges profiles from wire-format state, taking the most cautious values for conflicts.
     pub fn merge_import_wire_state(&mut self, state: ContactProfilerWireState) {
-        self.merge_import(ContactProfilerState {
-            profiles: state
-                .profiles
-                .into_iter()
-                .map(ContactProfile::from)
-                .collect(),
-        });
+        let mut profiles = Vec::with_capacity(state.profiles.len());
+        for p in state.profiles {
+            profiles.push(ContactProfile::from(p));
+        }
+        self.merge_import(ContactProfilerState { profiles });
     }
 
+    /// Removes profiles not seen since the cutoff and prunes stale active-day entries.
     pub fn cleanup(&mut self, cutoff_ms: u64) {
         let cutoff_day = (cutoff_ms / DAY_MS) as u32;
         self.profiles.retain(|_, p| {
             if p.last_seen_ms < cutoff_ms {
                 return false;
             }
-            // Clean old active_days (keep 90 days for circle tier)
             p.active_days
                 .retain(|&d| d >= cutoff_day.saturating_sub(90));
             true
@@ -1034,22 +1020,33 @@ impl ContactProfiler {
         &mut self,
         protected_sender_id: Option<&str>,
     ) -> Option<ContactProfile> {
-        let oldest_sender = self
-            .profiles
-            .iter()
-            .filter(|(sender_id, _)| Some(sender_id.as_str()) != protected_sender_id)
-            .min_by(|(left_id, left), (right_id, right)| {
-                left.last_seen_ms
-                    .cmp(&right.last_seen_ms)
-                    .then_with(|| left.first_seen_ms.cmp(&right.first_seen_ms))
-                    .then_with(|| left_id.cmp(right_id))
-            })
-            .map(|(sender_id, _)| sender_id.clone())?;
+        let mut oldest_sender: Option<String> = None;
+        let mut best_last_seen = u64::MAX;
+        let mut best_first_seen = u64::MAX;
+        let mut best_id: Option<&str> = None;
+        for (sender_id, profile) in &self.profiles {
+            if Some(sender_id.as_str()) == protected_sender_id {
+                continue;
+            }
+            let cmp = profile
+                .last_seen_ms
+                .cmp(&best_last_seen)
+                .then_with(|| profile.first_seen_ms.cmp(&best_first_seen))
+                .then_with(|| sender_id.as_str().cmp(best_id.unwrap_or("")));
+            if cmp == std::cmp::Ordering::Less || oldest_sender.is_none() {
+                best_last_seen = profile.last_seen_ms;
+                best_first_seen = profile.first_seen_ms;
+                best_id = Some(sender_id.as_str());
+                oldest_sender = Some(sender_id.clone());
+            }
+        }
 
-        self.profiles.remove(&oldest_sender)
+        let key = oldest_sender?;
+        self.profiles.remove(&key)
     }
 }
 
+/// Holds a snapshot of all contact profiles for export or import.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContactProfilerState {
     pub profiles: Vec<ContactProfile>,
@@ -1121,8 +1118,6 @@ mod tests {
             EventKind::DefenseOfVictim,
         ]
     }
-
-    // ---- Existing tests (preserved) ----
 
     #[test]
     fn new_contact_detected() {
@@ -1474,8 +1469,6 @@ mod tests {
         );
     }
 
-    // ---- Phase 7: New tests ----
-
     #[test]
     fn new_contact_starts_at_50_rating() {
         let mut profiler = ContactProfiler::new();
@@ -1486,7 +1479,6 @@ mod tests {
             1000,
         ));
         let profile = profiler.profile("alice").unwrap();
-        // Rating starts at 50 + small positive delta from NormalConversation
         assert!(
             (profile.rating - 50.3).abs() < 0.01,
             "New contact rating should be ~50.3, got {}",
@@ -1528,7 +1520,6 @@ mod tests {
     #[test]
     fn rating_clamped_0_100() {
         let mut profiler = ContactProfiler::new();
-        // 20 high-severity hostile events should clamp at 0
         for i in 0..20 {
             profiler.record_event(&make_event(
                 "attacker",
@@ -1562,7 +1553,6 @@ mod tests {
         profiler.mark_trusted("friend");
         assert_eq!(profiler.profile("friend").unwrap().trust_level, 1.0);
 
-        // Send hostile events
         for i in 0..5 {
             profiler.record_event(&make_event(
                 "friend",
@@ -1591,7 +1581,6 @@ mod tests {
         profiler.mark_trusted("friend");
         assert!(profiler.profile("friend").unwrap().is_trusted);
 
-        // 10 hostile events with high severity
         for i in 0..10 {
             profiler.record_event(&make_event(
                 "friend",
@@ -1646,7 +1635,6 @@ mod tests {
     fn circle_tier_inner_frequent() {
         let mut profiler = ContactProfiler::new();
         let start = 0u64;
-        // 15 days, 10 messages/day = 150 messages
         for day in 0..15 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -1666,8 +1654,6 @@ mod tests {
     #[test]
     fn circle_tier_regular_weekly() {
         let mut profiler = ContactProfiler::new();
-        // 30 days, message every other day = 15 messages, 15 active days (<20)
-        // msgs_per_day = 15/30 = 0.5 → Regular
         for day in (0..30).step_by(2) {
             profiler.record_event(&make_event(
                 "classmate",
@@ -1685,7 +1671,6 @@ mod tests {
     #[test]
     fn circle_tier_occasional_rare() {
         let mut profiler = ContactProfiler::new();
-        // 60 days, only 3 messages total = 0.05 msg/day
         profiler.record_event(&make_event(
             "distant",
             "conv_1",
@@ -1727,7 +1712,6 @@ mod tests {
     #[test]
     fn snapshot_finalized_after_week() {
         let mut profiler = ContactProfiler::new();
-        // Week 1: some messages
         for i in 0..5 {
             profiler.record_event(&make_event(
                 "alice",
@@ -1738,7 +1722,6 @@ mod tests {
         }
         assert_eq!(profiler.profile("alice").unwrap().weekly_snapshots.len(), 0);
 
-        // Week 2: first message after week boundary → finalizes week 1
         profiler.record_event(&make_event(
             "alice",
             "conv_1",
@@ -1755,7 +1738,6 @@ mod tests {
     #[test]
     fn max_26_weekly_snapshots() {
         let mut profiler = ContactProfiler::new();
-        // Generate 30 weeks of data
         for week in 0..30 {
             profiler.record_event(&make_event(
                 "alice",
@@ -1776,7 +1758,6 @@ mod tests {
     #[test]
     fn trend_stable_with_consistent_behavior() {
         let mut profiler = ContactProfiler::new();
-        // 5 weeks of mostly normal conversation
         for week in 0..5 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -1787,7 +1768,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger trend recalculation with message in week 6
         profiler.record_event(&make_event(
             "stable",
             "conv_1",
@@ -1803,7 +1783,6 @@ mod tests {
     #[test]
     fn trend_gradual_worsening_detected() {
         let mut profiler = ContactProfiler::new();
-        // Weeks 1-3: mostly normal
         for week in 0..3 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -1814,7 +1793,6 @@ mod tests {
                 ));
             }
         }
-        // Weeks 4-5: 20% hostile (2/10 = 0.2 hostile ratio, vs 0.0 baseline = 0.2 delta)
         for week in 3..5 {
             for msg in 0..8 {
                 profiler.record_event(&make_event(
@@ -1833,7 +1811,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger recalculation
         profiler.record_event(&make_event(
             "masha",
             "conv_1",
@@ -1851,7 +1828,6 @@ mod tests {
     #[test]
     fn trend_rapid_worsening_detected() {
         let mut profiler = ContactProfiler::new();
-        // Weeks 1-3: clean
         for week in 0..3 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -1862,7 +1838,6 @@ mod tests {
                 ));
             }
         }
-        // Weeks 4-5: 40% hostile (4/10 hostile each week)
         for week in 3..5 {
             for msg in 0..6 {
                 profiler.record_event(&make_event(
@@ -1881,7 +1856,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger
         profiler.record_event(&make_event(
             "rapid",
             "conv_1",
@@ -1897,7 +1871,6 @@ mod tests {
     #[test]
     fn trend_role_reversal_detected() {
         let mut profiler = ContactProfiler::new();
-        // Weeks 1-3: supportive (>30% DefenseOfVictim)
         for week in 0..3 {
             for msg in 0..6 {
                 profiler.record_event(&make_event(
@@ -1916,7 +1889,6 @@ mod tests {
                 ));
             }
         }
-        // Weeks 4-5: hostile (>30% insults)
         for week in 3..5 {
             for msg in 0..6 {
                 profiler.record_event(&make_event(
@@ -1935,7 +1907,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger
         profiler.record_event(&make_event(
             "reversal",
             "conv_1",
@@ -1951,7 +1922,6 @@ mod tests {
     #[test]
     fn shift_signal_generated_for_role_reversal() {
         let mut profiler = ContactProfiler::new();
-        // Build role reversal scenario
         for week in 0..3 {
             for msg in 0..6 {
                 profiler.record_event(&make_event(
@@ -1988,7 +1958,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger recalculation
         profiler.record_event(&make_event(
             "turner",
             "conv_1",
@@ -2008,8 +1977,6 @@ mod tests {
     #[test]
     fn shift_signal_boosted_for_inner_circle() {
         let mut profiler = ContactProfiler::new();
-        // Build inner circle + role reversal
-        // 15+ days with lots of messages to establish Inner circle
         for day in 0..15 {
             for msg in 0..10 {
                 let week = day / 7;
@@ -2026,7 +1993,6 @@ mod tests {
                 profiler.record_event(&make_event("inner_friend", "conv_1", kind, ts));
             }
         }
-        // Now weeks 3-4: hostile
         for day in 21..35 {
             for msg in 0..10 {
                 let ts = day as u64 * DAY_MS + msg * 1000;
@@ -2038,7 +2004,6 @@ mod tests {
                 profiler.record_event(&make_event("inner_friend", "conv_1", kind, ts));
             }
         }
-        // Trigger
         profiler.record_event(&make_event(
             "inner_friend",
             "conv_1",
@@ -2051,7 +2016,6 @@ mod tests {
 
         let signals = profiler.check_behavioral_shift("inner_friend");
         if !signals.is_empty() {
-            // Inner circle boost: score should be higher
             assert!(
                 signals[0].score >= 0.45,
                 "Inner circle should boost signal score, got {}",
@@ -2063,7 +2027,6 @@ mod tests {
     #[test]
     fn backward_compat_old_state_import() {
         let mut profiler = ContactProfiler::new();
-        // Simulate old state (no rating/trust_level/snapshots)
         let old_json = r#"{"profiles":[{
             "sender_id":"alice",
             "first_seen_ms":1000,
@@ -2082,25 +2045,17 @@ mod tests {
         profiler.import(state);
 
         let profile = profiler.profile("alice").unwrap();
-        // Old trusted contact should get trust_level = 1.0
         assert_eq!(profile.trust_level, 1.0);
-        // Rating should default to 50
         assert_eq!(profile.rating, 50.0);
         assert_eq!(profile.circle_tier, CircleTier::New);
         assert_eq!(profile.trend, BehavioralTrend::Stable);
     }
 
-    // ---- Real-world scenario tests ----
-
     #[test]
     fn scenario_friend_to_bully_over_3_months() {
-        // September: 3 friends chatting normally
-        // October: one starts occasional insults
-        // November-December: escalating hostility
         let mut profiler = ContactProfiler::new();
         let week = WEEK_MS;
 
-        // September (weeks 0-3): all normal
         for w in 0..4 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -2117,7 +2072,6 @@ mod tests {
             "September: rating should be above 50, got {sept_rating}"
         );
 
-        // October (weeks 4-7): occasional insults (2/10 messages)
         for w in 4..8 {
             for msg in 0..8 {
                 profiler.record_event(&make_event(
@@ -2142,7 +2096,6 @@ mod tests {
             "October: rating should decrease: sept={sept_rating} oct={oct_rating}"
         );
 
-        // November-December (weeks 8-15): heavy hostility (6/10 messages)
         for w in 8..16 {
             for msg in 0..4 {
                 profiler.record_event(&make_event(
@@ -2161,7 +2114,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger recalculation
         profiler.record_event(&make_event(
             "masha",
             "conv_1",
@@ -2182,7 +2134,6 @@ mod tests {
             profile.trend
         );
 
-        // Should generate behavioral shift signal
         let signals = profiler.check_behavioral_shift("masha");
         assert!(
             !signals.is_empty(),
@@ -2192,11 +2143,7 @@ mod tests {
 
     #[test]
     fn scenario_trusted_adult_starts_grooming() {
-        // Parent marks contact as trusted (coach/teacher)
-        // Initially normal, then starts grooming behaviors
         let mut profiler = ContactProfiler::new();
-
-        // Establish as trusted contact
         for w in 0..4 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -2212,7 +2159,6 @@ mod tests {
 
         let baseline_rating = profiler.profile("coach").unwrap().rating;
 
-        // Weeks 5-8: starts grooming (flattery, gifts, personal questions)
         for w in 4..8 {
             for msg in 0..5 {
                 profiler.record_event(&make_event(
@@ -2243,13 +2189,11 @@ mod tests {
         }
 
         let profile = profiler.profile("coach").unwrap();
-        // Grooming events give small negative deltas; rating should decrease from baseline
         assert!(
             profile.rating < baseline_rating,
             "Rating should decrease from grooming: baseline={baseline_rating} now={}",
             profile.rating
         );
-        // Trust should NOT decay (grooming is not hostile)
         assert!(
             profile.trust_level >= 0.9,
             "Trust should remain high during grooming-only: {}",
@@ -2261,7 +2205,6 @@ mod tests {
     fn scenario_trusted_adult_escalates_to_hostile() {
         let mut profiler = ContactProfiler::new();
 
-        // Normal phase
         for w in 0..3 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -2274,7 +2217,6 @@ mod tests {
         }
         profiler.mark_trusted("teacher");
 
-        // Hostile phase — gaslighting, emotional blackmail
         for w in 3..6 {
             for msg in 0..5 {
                 profiler.record_event(&make_event(
@@ -2316,10 +2258,8 @@ mod tests {
 
     #[test]
     fn scenario_recovery_after_hostility() {
-        // Contact was hostile but improved
         let mut profiler = ContactProfiler::new();
 
-        // Weeks 0-2: hostile
         for w in 0..3 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -2332,7 +2272,6 @@ mod tests {
         }
         let hostile_rating = profiler.profile("recovering").unwrap().rating;
 
-        // Weeks 3-7: all normal (recovery)
         for w in 3..8 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -2343,7 +2282,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger
         profiler.record_event(&make_event(
             "recovering",
             "conv_1",
@@ -2366,7 +2304,6 @@ mod tests {
 
     #[test]
     fn scenario_mixed_signals_alternating_weeks() {
-        // On-off hostility: hostile one week, nice the next
         let mut profiler = ContactProfiler::new();
 
         for w in 0..8u64 {
@@ -2380,7 +2317,6 @@ mod tests {
                     ));
                 }
             } else {
-                // Hostile weeks: mix of insults and normal to avoid floor
                 for msg in 0..4 {
                     profiler.record_event(&make_event(
                         "mixed",
@@ -2407,7 +2343,6 @@ mod tests {
         ));
 
         let profile = profiler.profile("mixed").unwrap();
-        // Should not be dramatically high — mix of hostile and normal
         assert!(
             profile.rating < 60.0,
             "Mixed signals should give moderate-to-low rating, got {}",
@@ -2417,14 +2352,11 @@ mod tests {
 
     #[test]
     fn scenario_new_contact_rapid_grooming() {
-        // Stranger who escalates very quickly within first 2 weeks
         let mut profiler = ContactProfiler::new();
 
-        // Day 1: flattery
         profiler.record_event(&make_event("stranger", "conv_1", EventKind::Flattery, 0));
         profiler.record_event(&make_event("stranger", "conv_1", EventKind::Flattery, 1000));
 
-        // Day 2: gifts + personal questions
         profiler.record_event(&make_event(
             "stranger",
             "conv_1",
@@ -2438,7 +2370,6 @@ mod tests {
             DAY_MS + 1000,
         ));
 
-        // Day 3: secrecy + platform switch
         profiler.record_event(&make_event(
             "stranger",
             "conv_1",
@@ -2452,7 +2383,6 @@ mod tests {
             2 * DAY_MS + 1000,
         ));
 
-        // Day 5: photo request + meeting
         profiler.record_event(&make_event(
             "stranger",
             "conv_1",
@@ -2482,10 +2412,8 @@ mod tests {
 
     #[test]
     fn scenario_normal_teen_drama_no_false_positive() {
-        // Teens have occasional arguments but it is not sustained bullying
         let mut profiler = ContactProfiler::new();
 
-        // Week 1: mostly normal, 1 insult (heated argument)
         for msg in 0..9 {
             profiler.record_event(&make_event(
                 "classmate",
@@ -2501,7 +2429,6 @@ mod tests {
             9 * 1000,
         ));
 
-        // Weeks 2-5: all normal (made up after argument)
         for w in 1..5 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -2538,12 +2465,9 @@ mod tests {
         );
     }
 
-    // ---- Edge case tests ----
-
     #[test]
     fn rating_floor_after_sustained_attack() {
         let mut profiler = ContactProfiler::new();
-        // 50 physical threats should floor at 0
         for i in 0..50 {
             profiler.record_event(&make_event(
                 "attacker",
@@ -2559,7 +2483,6 @@ mod tests {
     #[test]
     fn rating_ceiling_from_supportive() {
         let mut profiler = ContactProfiler::new();
-        // Many supportive events should cap at 100
         for i in 0..100 {
             profiler.record_event(&make_event(
                 "hero",
@@ -2583,7 +2506,6 @@ mod tests {
         ));
         profiler.mark_trusted("person");
 
-        // Massive hostility
         for i in 0..50 {
             profiler.record_event(&make_event(
                 "person",
@@ -2605,14 +2527,12 @@ mod tests {
             EventKind::NormalConversation,
             0,
         ));
-        // Event exactly at week boundary
         profiler.record_event(&make_event(
             "alice",
             "conv_1",
             EventKind::NormalConversation,
             WEEK_MS,
         ));
-        // Should have finalized week 1
         assert_eq!(profiler.profile("alice").unwrap().weekly_snapshots.len(), 1);
     }
 
@@ -2631,7 +2551,6 @@ mod tests {
             EventKind::NormalConversation,
             14 * DAY_MS,
         ));
-        // At exactly 14 days, should no longer be New
         assert_ne!(
             profiler.profile("exact").unwrap().circle_tier,
             CircleTier::New,
@@ -2660,7 +2579,6 @@ mod tests {
     fn cleanup_preserves_recent_active_days() {
         let mut profiler = ContactProfiler::new();
 
-        // Messages over 200 days
         for day in 0..200u64 {
             profiler.record_event(&make_event(
                 "longterm",
@@ -2672,12 +2590,9 @@ mod tests {
 
         let before = profiler.profile("longterm").unwrap().active_days.len();
 
-        // Cleanup with cutoff at day 150 — retains profile (last_seen=199*DAY)
-        // but prunes active_days older than cutoff_day - 90 = day 60
         profiler.cleanup(150 * DAY_MS);
 
         let profile = profiler.profile("longterm").unwrap();
-        // Should still have recent active_days (days 60-199)
         assert!(
             profile.active_days.len() < before,
             "Cleanup should prune old active_days: before={before} after={}",
@@ -2693,7 +2608,6 @@ mod tests {
     fn export_import_preserves_rating_and_snapshots() {
         let mut profiler = ContactProfiler::new();
 
-        // Build some history
         for w in 0..4 {
             for msg in 0..5 {
                 profiler.record_event(&make_event(
@@ -2716,7 +2630,6 @@ mod tests {
         let orig_rating = orig_profile.rating;
         let orig_snapshots = orig_profile.weekly_snapshots.len();
 
-        // Import into new profiler
         let mut profiler2 = ContactProfiler::new();
         profiler2.import(state);
 
@@ -2759,13 +2672,12 @@ mod tests {
     fn low_rating_inner_circle_alert() {
         let mut profiler = ContactProfiler::new();
 
-        // Establish as inner circle (15+ days, 10 msgs/day)
         for day in 0..30u64 {
             for msg in 0..10 {
                 let kind = if day < 5 {
                     EventKind::NormalConversation
                 } else {
-                    EventKind::PhysicalThreat // tanks rating
+                    EventKind::PhysicalThreat
                 };
                 profiler.record_event(&make_event(
                     "inner_bully",
@@ -2776,7 +2688,6 @@ mod tests {
             }
         }
 
-        // Trigger to finalize last weekly snapshot
         profiler.record_event(&make_event(
             "inner_bully",
             "conv_1",
@@ -2786,12 +2697,10 @@ mod tests {
         let profile = profiler.profile("inner_bully").unwrap();
         assert_eq!(profile.circle_tier, CircleTier::Inner);
 
-        // The shift signals should include low rating alert
         let signals = profiler.check_behavioral_shift("inner_bully");
         let has_low_rating = signals
             .iter()
             .any(|s| s.explanation.contains("critically low rating"));
-        // Only if rating is actually < 20
         if profile.rating < 20.0 {
             assert!(
                 has_low_rating,
@@ -2804,7 +2713,6 @@ mod tests {
     fn graduated_trust_discount_in_risk_score() {
         let mut profiler = ContactProfiler::new();
 
-        // Two contacts with same grooming events, different trust levels
         for i in 0..5 {
             profiler.record_event(&make_event(
                 "untrusted",
@@ -2830,11 +2738,8 @@ mod tests {
         );
     }
 
-    // ---- Property-based invariant tests ----
-
     #[test]
     fn property_rating_always_in_0_100() {
-        // Feed every possible EventKind into a profile and verify rating stays [0, 100]
         let mut profiler = ContactProfiler::new();
         let all_kinds = all_event_kinds();
         for (i, kind) in all_kinds.iter().enumerate() {
@@ -2849,7 +2754,6 @@ mod tests {
 
     #[test]
     fn property_trust_always_in_0_1() {
-        // Same but for trust_level
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event("t", "c", EventKind::NormalConversation, 0));
         profiler.mark_trusted("t");
@@ -2880,7 +2784,6 @@ mod tests {
 
     #[test]
     fn property_snapshot_counters_consistent() {
-        // Total messages in snapshot == hostile + supportive + neutral
         let mut profiler = ContactProfiler::new();
         let all_kinds = all_event_kinds();
         for (i, kind) in all_kinds.iter().enumerate() {
@@ -2899,7 +2802,6 @@ mod tests {
 
     #[test]
     fn property_rating_monotonic_under_pure_hostile() {
-        // If we only send hostile events, rating should never increase
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event("m", "c", EventKind::NormalConversation, 0));
         let mut prev_rating = profiler.profile("m").unwrap().rating;
@@ -2927,7 +2829,6 @@ mod tests {
 
     #[test]
     fn property_trust_monotonic_under_hostile() {
-        // Trust should never increase from hostile events (no event restores trust)
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event("t", "c", EventKind::NormalConversation, 0));
         profiler.mark_trusted("t");
@@ -2945,7 +2846,6 @@ mod tests {
 
     #[test]
     fn property_all_event_kinds_have_valid_severity() {
-        // Already in events.rs, but verifying from contact perspective
         let all_kinds = all_event_kinds();
         for kind in &all_kinds {
             let s = kind.severity();
@@ -2984,11 +2884,8 @@ mod tests {
         }
     }
 
-    // ---- Fuzz / edge-case tests ----
-
     #[test]
     fn fuzz_max_timestamp() {
-        // u64::MAX should not panic
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event(
             "x",
@@ -3049,18 +2946,15 @@ mod tests {
 
     #[test]
     fn fuzz_timestamp_backwards() {
-        // Events arriving out of order (newer then older)
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event("x", "c", EventKind::NormalConversation, 10000));
         profiler.record_event(&make_event("x", "c", EventKind::Insult, 5000));
-        // Should not panic; last_seen should be max
         let p = profiler.profile("x").unwrap();
         assert_eq!(p.last_seen_ms, 10000);
     }
 
     #[test]
     fn fuzz_same_timestamp_many_events() {
-        // All events at exact same timestamp
         let mut profiler = ContactProfiler::new();
         for _ in 0..100 {
             profiler.record_event(&make_event("x", "c", EventKind::NormalConversation, 42));
@@ -3072,7 +2966,6 @@ mod tests {
 
     #[test]
     fn fuzz_rapid_trust_swing() {
-        // Mark trusted, decay fully, mark trusted again, decay again
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event("sw", "c", EventKind::NormalConversation, 0));
 
@@ -3100,7 +2993,6 @@ mod tests {
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event("x", "c", EventKind::NormalConversation, 1000));
         profiler.cleanup(0);
-        // Everything has last_seen >= 0, so nothing should be removed
         assert!(profiler.profile("x").is_some());
     }
 
@@ -3109,7 +3001,6 @@ mod tests {
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event("x", "c", EventKind::NormalConversation, 1000));
         profiler.cleanup(u64::MAX);
-        // Everything should be removed (last_seen < MAX)
         assert!(profiler.profile("x").is_none());
     }
 
@@ -3120,7 +3011,6 @@ mod tests {
         assert!(state.profiles.is_empty());
         let mut profiler2 = ContactProfiler::new();
         profiler2.import(state);
-        // Should not panic
     }
 
     #[test]
@@ -3168,7 +3058,6 @@ mod tests {
 
     #[test]
     fn fuzz_deserialize_corrupt_rating() {
-        // Rating outside [0, 100] in imported state -- should still work
         let json = r#"{"profiles":[{
             "sender_id":"x","first_seen_ms":0,"last_seen_ms":1000,"total_messages":1,
             "conversation_count":1,"conversations":["c"],"grooming_event_count":0,
@@ -3178,25 +3067,20 @@ mod tests {
         let state: ContactProfilerState = serde_json::from_str(json).unwrap();
         let mut profiler = ContactProfiler::new();
         profiler.import(state);
-        // Values imported as-is (not clamped on import) but next event should clamp
         let p = profiler.profile("x").unwrap();
-        assert_eq!(p.rating, 999.0); // raw import
+        assert_eq!(p.rating, 999.0);
     }
-
-    // ---- Stress tests ----
 
     #[test]
     fn stress_1000_contacts_52_weeks() {
         let mut profiler = ContactProfiler::new();
         let week = WEEK_MS;
 
-        // Create 1000 contacts, each with 52 weeks of 5 msgs/week
         for contact in 0..1000u64 {
             let sender = format!("contact_{contact}");
             for w in 0..52 {
                 for msg in 0..5 {
                     let kind = if contact % 10 == 0 && w > 40 {
-                        // 10% of contacts turn hostile in last weeks
                         EventKind::Insult
                     } else {
                         EventKind::NormalConversation
@@ -3205,13 +3089,12 @@ mod tests {
                         &sender,
                         "conv_1",
                         kind,
-                        w * week + msg * 1000 + contact, // slight offset per contact
+                        w * week + msg * 1000 + contact,
                     ));
                 }
             }
         }
 
-        // Verify all contacts exist
         for i in 0..1000u64 {
             let sender = format!("contact_{i}");
             let p = profiler.profile(&sender).unwrap();
@@ -3223,7 +3106,6 @@ mod tests {
             assert!((0.0..=1.0).contains(&p.trust_level));
         }
 
-        // Hostile contacts should have lower ratings
         let hostile_contact = profiler.profile("contact_0").unwrap();
         let normal_contact = profiler.profile("contact_1").unwrap();
         assert!(
@@ -3233,7 +3115,6 @@ mod tests {
             normal_contact.rating
         );
 
-        // Snapshots should be capped at MAX_SNAPSHOTS
         for i in 0..1000u64 {
             let sender = format!("contact_{i}");
             let p = profiler.profile(&sender).unwrap();
@@ -3251,7 +3132,6 @@ mod tests {
 
         for i in 0..1000u64 {
             let sender = format!("user_{i}");
-            // Varying risk: more grooming events for higher-numbered contacts
             for j in 0..(i % 10) {
                 profiler.record_event(&make_event(
                     &sender,
@@ -3271,7 +3151,6 @@ mod tests {
         let sorted = profiler.contacts_by_risk();
         assert_eq!(sorted.len(), 1000);
 
-        // Verify sorted in descending risk order
         for window in sorted.windows(2) {
             assert!(
                 window[0].risk_score() >= window[1].risk_score(),
@@ -3303,20 +3182,13 @@ mod tests {
         assert_eq!(p.total_messages, 10_000);
         assert!((0.0..=100.0).contains(&p.rating));
         assert!((0.0..=1.0).contains(&p.trust_level));
-        // 10000 events * 1000ms = 10_000_000ms; each week is 604_800_000ms
-        // All fit in first week, so no finalized snapshots
-        // 10_000 * 1000 = 10_000_000ms = ~2.7 hours, within one week
         assert_eq!(p.weekly_snapshots().len(), 0, "All events within one week");
     }
 
-    // ---- Skipped weeks tests ----
-
     #[test]
     fn skipped_weeks_3_week_gap_then_return() {
-        // Child didn't write for 3 weeks, then returned
         let mut profiler = ContactProfiler::new();
 
-        // Week 0: normal conversation
         for msg in 0..10 {
             profiler.record_event(&make_event(
                 "gap",
@@ -3326,9 +3198,6 @@ mod tests {
             ));
         }
 
-        // Skip weeks 1-3 (no messages)
-
-        // Week 4: resume normal
         for msg in 0..10 {
             profiler.record_event(&make_event(
                 "gap",
@@ -3339,14 +3208,12 @@ mod tests {
         }
 
         let p = profiler.profile("gap").unwrap();
-        // Week 0 snapshot should be finalized when week 4 event arrives
         assert_eq!(
             p.weekly_snapshots().len(),
             1,
             "Should have 1 finalized snapshot from week 0"
         );
         assert_eq!(p.weekly_snapshots()[0].total_messages, 10);
-        // Rating should be healthy (all normal)
         assert!(
             p.rating > 50.0,
             "Normal conversations should keep rating above 50: {}",
@@ -3356,10 +3223,8 @@ mod tests {
 
     #[test]
     fn skipped_weeks_gap_with_hostility_before_and_after() {
-        // Week 0-1: hostile, then 4-week gap, then hostile again
         let mut profiler = ContactProfiler::new();
 
-        // Weeks 0-1: hostile
         for w in 0..2 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -3372,9 +3237,6 @@ mod tests {
         }
         let rating_before_gap = profiler.profile("gap_hostile").unwrap().rating;
 
-        // Skip weeks 2-5
-
-        // Week 6: hostile again
         for msg in 0..10 {
             profiler.record_event(&make_event(
                 "gap_hostile",
@@ -3394,10 +3256,8 @@ mod tests {
 
     #[test]
     fn skipped_weeks_long_absence_8_weeks() {
-        // Contact disappears for 8 weeks then returns with hostile behavior
         let mut profiler = ContactProfiler::new();
 
-        // Week 0: friendly
         for msg in 0..10 {
             profiler.record_event(&make_event(
                 "absent",
@@ -3408,9 +3268,6 @@ mod tests {
         }
         let friendly_rating = profiler.profile("absent").unwrap().rating;
 
-        // Skip 8 weeks
-
-        // Week 9: returns hostile
         for msg in 0..10 {
             profiler.record_event(&make_event(
                 "absent",
@@ -3425,16 +3282,13 @@ mod tests {
             p.rating < friendly_rating,
             "Rating should drop after hostile return"
         );
-        // Snapshot from week 0 should still be there
         assert!(!p.weekly_snapshots().is_empty());
     }
 
     #[test]
     fn skipped_weeks_holiday_recovery_pattern() {
-        // Typical pattern: school year hostility -> summer break -> school returns
         let mut profiler = ContactProfiler::new();
 
-        // Weeks 0-4: school, some bullying (3/10 hostile)
         for w in 0..5 {
             for msg in 0..7 {
                 profiler.record_event(&make_event(
@@ -3455,7 +3309,6 @@ mod tests {
         }
         let pre_holiday_rating = profiler.profile("school").unwrap().rating;
 
-        // Weeks 5-12: summer holiday -- occasional normal messages only
         for w in 5..13 {
             profiler.record_event(&make_event(
                 "school",
@@ -3470,7 +3323,6 @@ mod tests {
             "Rating should improve during holiday: pre={pre_holiday_rating} post={post_holiday_rating}"
         );
 
-        // Weeks 13-16: school returns, hostility resumes
         for w in 13..17 {
             for msg in 0..5 {
                 profiler.record_event(&make_event(
@@ -3489,7 +3341,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger
         profiler.record_event(&make_event(
             "school",
             "conv_1",
@@ -3506,12 +3357,9 @@ mod tests {
 
     #[test]
     fn skipped_weeks_no_snapshots_during_gap() {
-        // Verify that gaps don't create empty snapshots
         let mut profiler = ContactProfiler::new();
 
-        // Week 0
         profiler.record_event(&make_event("g", "c", EventKind::NormalConversation, 0));
-        // Jump to week 10
         profiler.record_event(&make_event(
             "g",
             "c",
@@ -3520,7 +3368,6 @@ mod tests {
         ));
 
         let p = profiler.profile("g").unwrap();
-        // Only week 0 should be finalized (not weeks 1-9 as empty snapshots)
         assert_eq!(
             p.weekly_snapshots().len(),
             1,
@@ -3529,21 +3376,12 @@ mod tests {
         );
     }
 
-    // ---- Concurrent access pattern tests ----
-    // Simulate patterns that would occur with server sync:
-    // interleaved events, export/import during use, merge scenarios
-
     #[test]
     fn concurrent_interleaved_events_two_devices() {
-        // Simulate child chatting on phone and tablet simultaneously
-        // Events arrive interleaved (not strictly ordered by time)
         let mut profiler = ContactProfiler::new();
 
-        // Device A sends events at even timestamps
-        // Device B sends events at odd timestamps
         for i in 0..20u64 {
             if i % 2 == 0 {
-                // Device A: normal conversation
                 profiler.record_event(&make_event(
                     "friend",
                     "conv_1",
@@ -3551,7 +3389,6 @@ mod tests {
                     i * 500,
                 ));
             } else {
-                // Device B: same contact, different conversation
                 profiler.record_event(&make_event(
                     "friend",
                     "conv_2",
@@ -3569,10 +3406,8 @@ mod tests {
 
     #[test]
     fn concurrent_export_import_mid_conversation() {
-        // Export state mid-conversation, continue on device A, then import back
         let mut profiler = ContactProfiler::new();
 
-        // Phase 1: build some history
         for i in 0..5 {
             profiler.record_event(&make_event(
                 "alice",
@@ -3583,17 +3418,14 @@ mod tests {
         }
         let mid_rating = profiler.profile("alice").unwrap().rating;
 
-        // Export (simulates server sync checkpoint)
         let checkpoint = profiler.export();
 
-        // Phase 2: more events on original device
         for i in 5..10 {
             profiler.record_event(&make_event("alice", "conv_1", EventKind::Insult, i * 1000));
         }
         let post_hostile_rating = profiler.profile("alice").unwrap().rating;
         assert!(post_hostile_rating < mid_rating);
 
-        // Import checkpoint into fresh profiler (simulates second device)
         let mut device2 = ContactProfiler::new();
         device2.import(checkpoint);
         let device2_rating = device2.profile("alice").unwrap().rating;
@@ -3602,7 +3434,6 @@ mod tests {
             "Device 2 should have checkpoint rating"
         );
 
-        // Device 2 gets new events
         for i in 10..15 {
             device2.record_event(&make_event(
                 "alice",
@@ -3620,7 +3451,6 @@ mod tests {
 
     #[test]
     fn concurrent_import_overwrites_stale_profile() {
-        // Device A has stale data, imports fresh state from server
         let mut device_a = ContactProfiler::new();
         device_a.record_event(&make_event(
             "bob",
@@ -3629,7 +3459,6 @@ mod tests {
             0,
         ));
 
-        // Server has more complete profile
         let mut server = ContactProfiler::new();
         for i in 0..20 {
             server.record_event(&make_event(
@@ -3641,7 +3470,6 @@ mod tests {
         }
         let server_state = server.export();
 
-        // Import overwrites device A's profile for "bob"
         device_a.import(server_state);
         let profile = device_a.profile("bob").unwrap();
         assert_eq!(
@@ -3652,15 +3480,12 @@ mod tests {
 
     #[test]
     fn concurrent_multiple_contacts_independent() {
-        // Verify that events for different contacts don't interfere
         let mut profiler = ContactProfiler::new();
 
-        // Alice gets hostile events
         for i in 0..10 {
             profiler.record_event(&make_event("alice", "conv_1", EventKind::Insult, i * 1000));
         }
 
-        // Bob gets supportive events (interleaved in "real time")
         for i in 0..10 {
             profiler.record_event(&make_event(
                 "bob",
@@ -3670,7 +3495,6 @@ mod tests {
             ));
         }
 
-        // Charlie gets grooming events
         for i in 0..10 {
             profiler.record_event(&make_event(
                 "charlie",
@@ -3684,7 +3508,6 @@ mod tests {
         let bob = profiler.profile("bob").unwrap();
         let charlie = profiler.profile("charlie").unwrap();
 
-        // Each contact should be independent
         assert!(
             alice.rating < 50.0,
             "Alice should have low rating: {}",
@@ -3695,7 +3518,6 @@ mod tests {
             "Bob should have high rating: {}",
             bob.rating
         );
-        // Charlie gets small negative from grooming-only
         assert!(
             charlie.rating < 50.0,
             "Charlie (grooming) should have slightly low rating: {}",
@@ -3709,7 +3531,6 @@ mod tests {
 
     #[test]
     fn concurrent_export_import_preserves_all_contacts() {
-        // Multiple contacts, export, import into fresh instance
         let mut profiler = ContactProfiler::new();
 
         for i in 0..50u64 {
@@ -3740,10 +3561,8 @@ mod tests {
 
     #[test]
     fn concurrent_cleanup_during_active_use() {
-        // Simulate cleanup happening while new events arrive
         let mut profiler = ContactProfiler::new();
 
-        // Old contact (will be cleaned up)
         profiler.record_event(&make_event(
             "old_user",
             "conv_1",
@@ -3751,7 +3570,6 @@ mod tests {
             1000,
         ));
 
-        // Active contact
         let active_ts = 100 * DAY_MS;
         for i in 0..10 {
             profiler.record_event(&make_event(
@@ -3762,7 +3580,6 @@ mod tests {
             ));
         }
 
-        // Cleanup removes old contacts
         profiler.cleanup(50 * DAY_MS);
         assert!(
             profiler.profile("old_user").is_none(),
@@ -3773,7 +3590,6 @@ mod tests {
             "Active user should survive"
         );
 
-        // Continue adding events after cleanup
         profiler.record_event(&make_event(
             "active_user",
             "conv_1",
@@ -3796,7 +3612,6 @@ mod tests {
 
     #[test]
     fn concurrent_import_then_mark_trusted() {
-        // Import state then immediately mark a contact trusted
         let mut profiler1 = ContactProfiler::new();
         for i in 0..5 {
             profiler1.record_event(&make_event(
@@ -3816,7 +3631,6 @@ mod tests {
         assert_eq!(profile.trust_level, 1.0);
         assert!(profile.is_trusted);
 
-        // Subsequent hostile events should decay trust normally
         for i in 0..5 {
             profiler2.record_event(&make_event(
                 "uncle",
@@ -3834,10 +3648,8 @@ mod tests {
 
     #[test]
     fn concurrent_double_import_last_wins() {
-        // Import twice — second import should overwrite first
         let mut profiler = ContactProfiler::new();
 
-        // State 1: alice with rating after normal msgs
         let mut p1 = ContactProfiler::new();
         for i in 0..5 {
             p1.record_event(&make_event(
@@ -3849,7 +3661,6 @@ mod tests {
         }
         let state1 = p1.export();
 
-        // State 2: alice with rating after hostile msgs
         let mut p2 = ContactProfiler::new();
         for i in 0..5 {
             p2.record_event(&make_event("alice", "conv_1", EventKind::Insult, i * 1000));
@@ -3863,7 +3674,6 @@ mod tests {
             "State1 should have higher rating than state2"
         );
 
-        // Import state1 first, then state2 — state2 should win
         profiler.import(state1);
         assert_eq!(profiler.profile("alice").unwrap().rating, rating1);
         profiler.import(state2);
@@ -3876,10 +3686,8 @@ mod tests {
 
     #[test]
     fn concurrent_export_import_with_behavioral_snapshots() {
-        // Full behavioral history survives export/import cycle
         let mut profiler = ContactProfiler::new();
 
-        // Build 6 weeks of history with trend
         for w in 0..3 {
             for msg in 0..10 {
                 profiler.record_event(&make_event(
@@ -3908,7 +3716,6 @@ mod tests {
                 ));
             }
         }
-        // Trigger snapshot
         profiler.record_event(&make_event(
             "contact",
             "conv_1",
@@ -3921,7 +3728,6 @@ mod tests {
         let orig_trend = orig.trend;
         let orig_rating = orig.rating;
 
-        // Export → import
         let state = profiler.export();
         let mut profiler2 = ContactProfiler::new();
         profiler2.import(state);
@@ -3931,7 +3737,6 @@ mod tests {
         assert_eq!(imported.trend, orig_trend);
         assert_eq!(imported.rating, orig_rating);
 
-        // Continue on imported profiler — behavioral shift should still work
         let signals = profiler2.check_behavioral_shift("contact");
         let orig_signals = profiler.check_behavioral_shift("contact");
         assert_eq!(
@@ -3940,10 +3745,6 @@ mod tests {
             "Behavioral shift signals should match after import"
         );
     }
-
-    // -----------------------------------------------------------------------
-    // Phase 1: merge_import tests
-    // -----------------------------------------------------------------------
 
     #[test]
     fn merge_import_preserves_local_profile() {
@@ -3963,12 +3764,10 @@ mod tests {
         profiler_a.merge_import(state_b);
 
         let profile = profiler_a.profile("alice").unwrap();
-        // Should have max of counters, not sum
         assert!(
             profile.bullying_event_count >= 2,
             "Should preserve higher bullying count from A"
         );
-        // Should have union of conversations
         assert!(
             profile.conversation_count >= 2,
             "Should have conversations from both A and B"
@@ -3988,13 +3787,10 @@ mod tests {
 
         let mut profiler_b = ContactProfiler::new();
         profiler_b.record_event(&make_event("alice", "conv_1", EventKind::Insult, 2000));
-        // B has untrusted alice (default)
-
         let state_b = profiler_b.export();
         profiler_a.merge_import(state_b);
 
         let profile = profiler_a.profile("alice").unwrap();
-        // Most cautious: if either side has is_trusted=false, result should be false
         assert!(
             !profile.is_trusted,
             "Should take most cautious trust: false"

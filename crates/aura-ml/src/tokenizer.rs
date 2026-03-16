@@ -30,7 +30,7 @@ impl WordPieceTokenizer {
     }
 
     pub fn from_vocab_text(content: &str, max_seq_length: usize) -> Result<Self, TokenizerError> {
-        let mut vocab = HashMap::new();
+        let mut vocab = HashMap::with_capacity(content.lines().count());
         for (idx, line) in content.lines().enumerate() {
             let token = line.trim();
             if !token.is_empty() {

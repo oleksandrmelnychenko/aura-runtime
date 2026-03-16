@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::AuraError;
 use crate::types::{ConversationType, DetectionSignal};
 
+/// Current schema version for serialized tracker state.
 pub const TRACKER_STATE_VERSION: u32 = 2;
 
 use super::bullying::BullyingDetector;
@@ -16,6 +17,7 @@ use super::manipulation::ManipulationDetector;
 use super::raid::RaidDetector;
 use super::selfharm::SelfHarmDetector;
 
+/// Holds configuration parameters for the conversation tracker.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackerConfig {
     pub max_events_per_conversation: usize,
@@ -64,6 +66,7 @@ fn default_max_contact_profiles() -> usize {
     DEFAULT_MAX_CONTACT_PROFILES
 }
 
+/// Stores a bounded sequence of context events for a single conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationTimeline {
     pub conversation_id: String,
@@ -73,6 +76,7 @@ pub struct ConversationTimeline {
     max_events: usize,
 }
 
+/// Represents the exportable state of a conversation timeline.
 #[derive(Debug, Clone)]
 pub struct ConversationTimelineState {
     pub conversation_id: String,
@@ -81,6 +85,7 @@ pub struct ConversationTimelineState {
 }
 
 impl ConversationTimeline {
+    /// Creates a new timeline for the given conversation with a default Direct type.
     pub fn new(conversation_id: String, max_events: usize) -> Self {
         Self {
             conversation_id,
@@ -90,6 +95,7 @@ impl ConversationTimeline {
         }
     }
 
+    /// Creates a new timeline with an explicit conversation type.
     pub fn new_with_type(
         conversation_id: String,
         max_events: usize,
@@ -103,6 +109,7 @@ impl ConversationTimeline {
         }
     }
 
+    /// Appends an event to the timeline, evicting the oldest if at capacity.
     pub fn push(&mut self, event: ContextEvent) {
         if self.events.len() >= self.max_events {
             self.events.remove(0);
@@ -110,64 +117,85 @@ impl ConversationTimeline {
         self.events.push(event);
     }
 
+    /// Returns all events with a timestamp at or after the given time.
     pub fn events_since(&self, since_ms: u64) -> Vec<&ContextEvent> {
-        self.events
-            .iter()
-            .filter(|e| e.timestamp_ms >= since_ms)
-            .collect()
+        let mut result = Vec::with_capacity(self.events.len());
+        for e in &self.events {
+            if e.timestamp_ms >= since_ms {
+                result.push(e);
+            }
+        }
+        result
     }
 
+    /// Returns events from a specific sender at or after the given time.
     pub fn events_from_sender(&self, sender_id: &str, since_ms: u64) -> Vec<&ContextEvent> {
-        self.events
-            .iter()
-            .filter(|e| e.sender_id == sender_id && e.timestamp_ms >= since_ms)
-            .collect()
+        let mut result = Vec::with_capacity(self.events.len());
+        for e in &self.events {
+            if e.sender_id == sender_id && e.timestamp_ms >= since_ms {
+                result.push(e);
+            }
+        }
+        result
     }
 
+    /// Counts events matching a specific sender and event kind since the given time.
     pub fn count_events(&self, sender_id: &str, kind: &EventKind, since_ms: u64) -> usize {
-        self.events
-            .iter()
-            .filter(|e| e.sender_id == sender_id && &e.kind == kind && e.timestamp_ms >= since_ms)
-            .count()
+        let mut count = 0usize;
+        for e in &self.events {
+            if e.sender_id == sender_id && &e.kind == kind && e.timestamp_ms >= since_ms {
+                count += 1;
+            }
+        }
+        count
     }
 
+    /// Counts events matching a predicate since the given time.
     pub fn count_matching<F>(&self, since_ms: u64, predicate: F) -> usize
     where
         F: Fn(&ContextEvent) -> bool,
     {
-        self.events
-            .iter()
-            .filter(|e| e.timestamp_ms >= since_ms && predicate(e))
-            .count()
+        let mut count = 0usize;
+        for e in &self.events {
+            if e.timestamp_ms >= since_ms && predicate(e) {
+                count += 1;
+            }
+        }
+        count
     }
 
+    /// Returns deduplicated sender IDs for events matching a predicate since the given time.
     pub fn unique_senders_matching<F>(&self, since_ms: u64, predicate: F) -> Vec<String>
     where
         F: Fn(&ContextEvent) -> bool,
     {
-        let mut senders: Vec<String> = self
-            .events
-            .iter()
-            .filter(|e| e.timestamp_ms >= since_ms && predicate(e))
-            .map(|e| e.sender_id.clone())
-            .collect();
+        let mut senders: Vec<String> = Vec::with_capacity(self.events.len());
+        for e in &self.events {
+            if e.timestamp_ms >= since_ms && predicate(e) {
+                senders.push(e.sender_id.clone());
+            }
+        }
         senders.sort();
         senders.dedup();
         senders
     }
 
+    /// Returns a slice of all events in this timeline.
     pub fn all_events(&self) -> &[ContextEvent] {
         &self.events
     }
 
+    /// Returns the number of events in this timeline.
     pub fn len(&self) -> usize {
         self.events.len()
     }
 
+    /// Returns true if this timeline contains no events.
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
     }
 
+    /// Exports the timeline's state for serialization or transfer.
     pub fn export_state(&self) -> ConversationTimelineState {
         ConversationTimelineState {
             conversation_id: self.conversation_id.clone(),
@@ -181,11 +209,11 @@ impl ConversationTimeline {
     /// - Same-tracker re-import (same event_ids)
     /// - Cross-tracker merge (different trackers may assign overlapping event_ids)
     pub fn merge_from(&mut self, other: ConversationTimeline) {
-        let existing: HashSet<(u64, String, EventKind)> = self
-            .events
-            .iter()
-            .map(|e| (e.timestamp_ms, e.sender_id.clone(), e.kind.clone()))
-            .collect();
+        let mut existing: HashSet<(u64, String, EventKind)> =
+            HashSet::with_capacity(self.events.len());
+        for e in &self.events {
+            existing.insert((e.timestamp_ms, e.sender_id.clone(), e.kind.clone()));
+        }
 
         for event in other.events {
             let key = (
@@ -220,6 +248,7 @@ impl ConversationTimelineState {
     }
 }
 
+/// Manages per-conversation timelines and runs all threat detectors on incoming events.
 pub struct ConversationTracker {
     config: TrackerConfig,
     timelines: HashMap<String, ConversationTimeline>,
@@ -234,6 +263,7 @@ pub struct ConversationTracker {
     next_event_id: u64,
 }
 
+/// Represents the serializable wire state of the entire conversation tracker.
 #[derive(Debug, Clone)]
 pub struct TrackerWireState {
     pub schema_version: u32,
@@ -242,6 +272,7 @@ pub struct TrackerWireState {
 }
 
 impl ConversationTracker {
+    /// Creates a new tracker with the given configuration and initializes all sub-detectors.
     pub fn new(config: TrackerConfig) -> Self {
         let grooming_detector =
             GroomingDetector::new(config.is_child_account || config.is_teen_account);
@@ -267,10 +298,12 @@ impl ConversationTracker {
         }
     }
 
+    /// Returns a reference to the current tracker configuration.
     pub fn config(&self) -> &TrackerConfig {
         &self.config
     }
 
+    /// Replaces the tracker configuration and adjusts timelines and limits accordingly.
     pub fn update_config(&mut self, config: TrackerConfig) {
         self.config = config;
         self.grooming_detector =
@@ -291,6 +324,7 @@ impl ConversationTracker {
             .update_max_profiles(self.config.max_contact_profiles);
     }
 
+    /// Sets the conversation type for an existing timeline.
     pub fn set_conversation_type(
         &mut self,
         conversation_id: &str,
@@ -301,6 +335,7 @@ impl ConversationTracker {
         }
     }
 
+    /// Records a single event, runs all detectors, and returns any generated signals.
     pub fn record_event(&mut self, event: ContextEvent) -> Vec<DetectionSignal> {
         let conversation_id = event.conversation_id.clone();
         let sender_id = event.sender_id.clone();
@@ -393,48 +428,59 @@ impl ConversationTracker {
         signals
     }
 
+    /// Records a batch of events sequentially and returns all accumulated signals.
     pub fn record_events(&mut self, events: Vec<ContextEvent>) -> Vec<DetectionSignal> {
         let mut all_signals = Vec::new();
         for event in events {
             let signals = self.record_event(event);
             all_signals.extend(signals);
         }
-        // auto_cleanup is handled inside each record_event() call
         all_signals
     }
 
+    /// Returns the timeline for the given conversation, if it exists.
     pub fn timeline(&self, conversation_id: &str) -> Option<&ConversationTimeline> {
         self.timelines.get(conversation_id)
     }
 
+    /// Returns all tracked conversation IDs.
     pub fn conversation_ids(&self) -> Vec<&str> {
-        self.timelines.keys().map(|s| s.as_str()).collect()
+        let mut result = Vec::with_capacity(self.timelines.len());
+        for s in self.timelines.keys() {
+            result.push(s.as_str());
+        }
+        result
     }
 
+    /// Returns a reference to the contact profiler.
     pub fn contact_profiler(&self) -> &ContactProfiler {
         &self.contact_profiler
     }
 
+    /// Returns a mutable reference to the contact profiler.
     pub fn contact_profiler_mut(&mut self) -> &mut ContactProfiler {
         &mut self.contact_profiler
     }
 
+    /// Marks a contact as trusted by sender ID.
     pub fn mark_contact_trusted(&mut self, sender_id: &str) {
         self.contact_profiler.mark_trusted(sender_id);
     }
 
+    /// Exports the full tracker state for serialization.
     pub fn export_wire_state(&self) -> TrackerWireState {
+        let mut timelines = Vec::with_capacity(self.timelines.len());
+        for t in self.timelines.values() {
+            timelines.push(t.export_state());
+        }
         TrackerWireState {
             schema_version: TRACKER_STATE_VERSION,
-            timelines: self
-                .timelines
-                .values()
-                .map(ConversationTimeline::export_state)
-                .collect(),
+            timelines,
             contact_profiler: self.contact_profiler.export_wire_state(),
         }
     }
 
+    /// Imports a previously exported wire state, merging timelines and contact profiles.
     pub fn import_wire_state(&mut self, state: TrackerWireState) -> Result<(), AuraError> {
         if state.schema_version > TRACKER_STATE_VERSION {
             return Err(AuraError::IncompatibleStateVersion {
@@ -468,6 +514,7 @@ impl ConversationTracker {
         Ok(())
     }
 
+    /// Removes events and profiles older than the analysis window.
     pub fn cleanup(&mut self, now_ms: u64) {
         let cutoff = now_ms.saturating_sub(self.config.analysis_window_ms);
         self.timelines.retain(|_, timeline| {
@@ -478,13 +525,17 @@ impl ConversationTracker {
     }
 
     fn evict_oldest_conversation(&mut self) {
-        if let Some(oldest_id) = self
-            .timelines
-            .iter()
-            .min_by_key(|(_, t)| t.all_events().last().map(|e| e.timestamp_ms).unwrap_or(0))
-            .map(|(id, _)| id.clone())
-        {
-            self.timelines.remove(&oldest_id);
+        let mut oldest_id: Option<String> = None;
+        let mut oldest_ts: u64 = u64::MAX;
+        for (id, t) in &self.timelines {
+            let ts = t.all_events().last().map(|e| e.timestamp_ms).unwrap_or(0);
+            if ts < oldest_ts {
+                oldest_ts = ts;
+                oldest_id = Some(id.clone());
+            }
+        }
+        if let Some(id) = oldest_id {
+            self.timelines.remove(&id);
         }
     }
 }
@@ -635,18 +686,15 @@ mod tests {
 
     #[test]
     fn auto_cleanup_triggers_after_interval() {
-        // auto_cleanup_interval=3 means cleanup triggers every 3rd record_event() call
         let mut tracker = ConversationTracker::new(TrackerConfig {
             analysis_window_ms: 10_000,
             auto_cleanup_interval: 3,
             ..Default::default()
         });
 
-        // Call 1: old event (will be cleaned up later)
         tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
         assert_eq!(tracker.timeline("conv_1").unwrap().len(), 1);
 
-        // Call 2: recent event
         tracker.record_event(make_event(
             "conv_1",
             "alice",
@@ -655,8 +703,6 @@ mod tests {
         ));
         assert_eq!(tracker.timeline("conv_1").unwrap().len(), 2);
 
-        // Call 3: triggers cleanup (call_count reaches 3).
-        // Cleanup removes event at ts=1000 (cutoff = 20001 - 10000 = 10001)
         tracker.record_event(make_event(
             "conv_1",
             "alice",
@@ -669,7 +715,6 @@ mod tests {
             "After auto-cleanup, old event at ts=1000 should be removed"
         );
 
-        // Call 4: new event after cleanup
         tracker.record_event(make_event(
             "conv_1",
             "alice",
@@ -692,7 +737,6 @@ mod tests {
             ..Default::default()
         });
 
-        // Normal message first
         tracker.record_event(make_event(
             "conv_1",
             "bully",
@@ -701,7 +745,6 @@ mod tests {
         ));
         let rating_before = tracker.contact_profiler().profile("bully").unwrap().rating;
 
-        // Hostile message should decrease rating
         tracker.record_event(make_event("conv_1", "bully", EventKind::Insult, 2000));
         let rating_after = tracker.contact_profiler().profile("bully").unwrap().rating;
 
@@ -719,7 +762,6 @@ mod tests {
             ..Default::default()
         });
 
-        // Weeks 1-3: supportive
         for week in 0..3 {
             for msg in 0..10 {
                 let kind = if msg < 6 {
@@ -736,7 +778,6 @@ mod tests {
             }
         }
 
-        // Weeks 4-5: hostile
         for week in 3..5 {
             for msg in 0..10 {
                 let kind = if msg < 6 {
@@ -753,7 +794,6 @@ mod tests {
             }
         }
 
-        // Week 6: trigger — should get behavioral shift signal
         let _signals = tracker.record_event(make_event(
             "conv_shift",
             "masha",
@@ -795,7 +835,6 @@ mod tests {
             EventKind::NormalConversation,
             3000,
         ));
-        // This should evict conv_1 (oldest)
         tracker.record_event(make_event(
             "conv_4",
             "dave",
@@ -838,7 +877,6 @@ mod tests {
             ..Default::default()
         });
 
-        // Grooming sequence
         tracker.record_event(make_event("conv_1", "predator", EventKind::Flattery, 1000));
         tracker.record_event(make_event("conv_1", "predator", EventKind::GiftOffer, 2000));
         tracker.record_event(make_event(
@@ -854,7 +892,6 @@ mod tests {
             4000,
         ));
 
-        // Then coercion
         tracker.record_event(make_event(
             "conv_1",
             "predator",
@@ -875,7 +912,6 @@ mod tests {
             7000,
         ));
 
-        // Should detect both grooming and manipulation/coercion signals
         let has_grooming = signals
             .iter()
             .any(|s| s.threat_type == crate::types::ThreatType::Grooming);
@@ -893,7 +929,6 @@ mod tests {
         let week_ms = 7 * 24 * 60 * 60 * 1000u64;
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
 
-        // Build behavioral history
         for w in 0..4 {
             for msg in 0..5 {
                 tracker.record_event(make_event(
@@ -932,7 +967,6 @@ mod tests {
             ..Default::default()
         });
 
-        // Bullying + self-harm pathway
         for i in 0..5 {
             tracker.record_event(make_event("conv_1", "bully", EventKind::Insult, i * 1000));
         }
@@ -955,7 +989,6 @@ mod tests {
             8000,
         ));
 
-        // Should have signals from bullying detector AND self-harm detector
         let threat_types: Vec<_> = signals.iter().map(|s| s.threat_type).collect();
         assert!(
             !threat_types.is_empty(),
@@ -1010,10 +1043,6 @@ mod tests {
         assert!(tracker.contact_profiler().profile("bob").is_none());
     }
 
-    // -----------------------------------------------------------------------
-    // Phase 1: merge-based import tests
-    // -----------------------------------------------------------------------
-
     #[test]
     fn import_merge_preserves_local_events() {
         let mut tracker_a = ConversationTracker::new(TrackerConfig::default());
@@ -1023,7 +1052,6 @@ mod tests {
         let mut tracker_b = ConversationTracker::new(TrackerConfig::default());
         tracker_b.record_event(make_event("conv_1", "bob", EventKind::Flattery, 1500));
 
-        // Import B into A — should merge, not overwrite
         let state_b = tracker_b.export_wire_state();
         tracker_a.import_wire_state(state_b).unwrap();
 
@@ -1033,7 +1061,6 @@ mod tests {
             3,
             "Should have all 3 events after merge (2 from A + 1 from B)"
         );
-        // Events should be sorted by timestamp
         let events = timeline.all_events();
         assert_eq!(events[0].timestamp_ms, 1000);
         assert_eq!(events[1].timestamp_ms, 1500);
@@ -1046,7 +1073,6 @@ mod tests {
         tracker_a.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
         tracker_a.record_event(make_event("conv_1", "alice", EventKind::Mockery, 2000));
 
-        // Export A, then import it back — should NOT duplicate events
         let state = tracker_a.export_wire_state();
         tracker_a.import_wire_state(state).unwrap();
 
@@ -1081,7 +1107,6 @@ mod tests {
         tracker_a.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
 
         let mut tracker_b = ConversationTracker::new(TrackerConfig::default());
-        // Generate many events on B to push its event_id counter high
         for i in 0..10 {
             tracker_b.record_event(make_event(
                 "conv_2",
@@ -1094,7 +1119,6 @@ mod tests {
         let state_b = tracker_b.export_wire_state();
         tracker_a.import_wire_state(state_b).unwrap();
 
-        // Now record a new event on A — its event_id should be higher than all imported ones
         tracker_a.record_event(make_event("conv_1", "alice", EventKind::Mockery, 20000));
         let events = tracker_a.timeline("conv_1").unwrap().all_events();
         let last_event = events.last().unwrap();
@@ -1129,7 +1153,6 @@ mod tests {
         tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, 1000));
         assert_eq!(tracker.timeline("conv_1").unwrap().len(), 1);
 
-        // Call 2: triggers cleanup (20000 - 10000 = 10000 cutoff, event at 1000 removed)
         tracker.record_event(make_event(
             "conv_1",
             "alice",
@@ -1145,7 +1168,6 @@ mod tests {
 
     #[test]
     fn guilt_tripping_backward_compat_deserialization() {
-        // Ensure old state with "guild_tripping" deserializes as GuiltTripping
         let json = r#"{"event_id":0,"timestamp_ms":1000,"sender_id":"x","conversation_id":"c","kind":"guild_tripping","confidence":0.8}"#;
         let event: ContextEvent = serde_json::from_str(json).unwrap();
         assert_eq!(event.kind, EventKind::GuiltTripping);
@@ -1153,7 +1175,6 @@ mod tests {
 
     #[test]
     fn event_id_defaults_to_zero_on_deserialization() {
-        // Old state without event_id field should deserialize with event_id=0
         let json = r#"{"timestamp_ms":1000,"sender_id":"x","conversation_id":"c","kind":"insult","confidence":0.8}"#;
         let event: ContextEvent = serde_json::from_str(json).unwrap();
         assert_eq!(event.event_id, 0);

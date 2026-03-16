@@ -105,8 +105,7 @@ impl UrlChecker {
         let keyword_count = keyword_hits.len();
         let looks_suspicious = keyword_count >= 2
             || (suspicious_tld && keyword_count >= 1)
-            || (digit_count >= 2 && keyword_count >= 1)
-            || (hyphen_count >= 2 && keyword_count >= 2);
+            || (digit_count >= 2 && keyword_count >= 1);
         if !looks_suspicious {
             return None;
         }

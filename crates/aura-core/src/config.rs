@@ -1,7 +1,10 @@
+//! Configuration types for the AURA analysis engine.
+
 use serde::{Deserialize, Serialize};
 
 use crate::types::{AccountType, ProtectionLevel};
 
+/// Holds the runtime configuration for the AURA protection system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuraConfig {
     pub protection_level: ProtectionLevel,
@@ -33,17 +36,23 @@ fn default_ttl_days() -> u32 {
     30
 }
 
+/// Represents the cultural and linguistic context for content analysis.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CulturalContext {
+    /// Ukrainian language and cultural norms.
     #[default]
     Ukrainian,
+    /// Russian language and cultural norms.
     Russian,
+    /// English language and cultural norms.
     English,
+    /// Custom cultural context identified by a string tag.
     Custom(String),
 }
 
 impl AuraConfig {
+    /// Returns the effective protection level after applying account-type policy overrides.
     pub fn effective_protection_level(&self) -> ProtectionLevel {
         match self.account_type {
             AccountType::Child => ProtectionLevel::High,
@@ -61,22 +70,30 @@ impl AuraConfig {
         }
     }
 
+    /// Returns `true` if the account holder is allowed to disable protection.
     pub fn can_disable(&self) -> bool {
-        matches!(self.account_type, AccountType::Adult)
+        match self.account_type {
+            AccountType::Adult => true,
+            AccountType::Teen | AccountType::Child => false,
+        }
     }
 
+    /// Returns `true` if grooming detection is active under the current configuration.
     pub fn grooming_detection_enabled(&self) -> bool {
         self.enabled && self.effective_protection_level() != ProtectionLevel::Off
     }
 
+    /// Returns `true` if self-harm detection is active under the current configuration.
     pub fn self_harm_detection_enabled(&self) -> bool {
         self.enabled && self.effective_protection_level() != ProtectionLevel::Off
     }
 
+    /// Returns `true` if bullying detection is active under the current configuration.
     pub fn bullying_detection_enabled(&self) -> bool {
         self.enabled && self.effective_protection_level() != ProtectionLevel::Off
     }
 
+    /// Validates the configuration and returns an error if any field is out of range.
     pub fn validate(&self) -> Result<(), crate::error::AuraError> {
         if self.ttl_days == 0 || self.ttl_days > 365 {
             return Err(crate::error::AuraError::InvalidConfig(format!(

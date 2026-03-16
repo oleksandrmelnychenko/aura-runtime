@@ -1,3 +1,8 @@
+//! Machine learning inference pipeline for AURA.
+//!
+//! Provides sentiment analysis, toxicity detection, and tokenization
+//! with ONNX backend support and lexicon-based fallback.
+
 pub mod backend;
 pub mod boundary;
 pub mod pipeline;

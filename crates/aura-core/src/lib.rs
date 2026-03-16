@@ -1,3 +1,8 @@
+//! Core analysis engine for the AURA intelligent protection system.
+//!
+//! Provides message analysis, conversation context tracking, threat detection,
+//! and evaluation infrastructure for child safety in messaging applications.
+
 pub mod action;
 pub mod analyzer;
 pub mod audit;

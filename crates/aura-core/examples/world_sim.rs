@@ -151,7 +151,7 @@ struct WorldOwner {
     age: Option<u16>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 struct WorldConfigOverrides {
     #[serde(default)]
     account_type: Option<AccountType>,
@@ -167,20 +167,6 @@ struct WorldConfigOverrides {
     ttl_days: Option<u32>,
     #[serde(default)]
     timezone_offset_minutes: Option<i32>,
-}
-
-impl Default for WorldConfigOverrides {
-    fn default() -> Self {
-        Self {
-            account_type: None,
-            protection_level: None,
-            language: None,
-            enabled: None,
-            account_holder_age: None,
-            ttl_days: None,
-            timezone_offset_minutes: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

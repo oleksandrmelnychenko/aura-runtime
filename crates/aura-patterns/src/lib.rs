@@ -1,3 +1,8 @@
+//! Pattern matching library for AURA threat detection.
+//!
+//! Provides Aho-Corasick and regex-based pattern matching, text normalization,
+//! emoji analysis, and suspicious URL detection.
+
 pub mod database;
 pub mod emoji;
 pub mod matcher;

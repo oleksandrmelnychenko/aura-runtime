@@ -3,6 +3,7 @@ use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 use super::events::EventKind;
 use super::tracker::ConversationTimeline;
 
+/// Detects bullying patterns including repeated harassment, pile-on attacks, and escalation.
 pub struct BullyingDetector;
 
 struct BullyingThresholds {
@@ -34,17 +35,19 @@ impl Default for BullyingDetector {
 }
 
 impl BullyingDetector {
+    /// Creates a new bullying detector.
     pub fn new() -> Self {
         Self
     }
 
+    /// Analyzes a conversation timeline for bullying patterns from a specific sender.
     pub fn analyze(
         &self,
         timeline: &ConversationTimeline,
         latest_sender_id: &str,
         window_start: u64,
     ) -> Vec<DetectionSignal> {
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(4);
         let thresholds = BullyingThresholds::default();
 
         if let Some(signal) =
@@ -163,21 +166,29 @@ impl BullyingDetector {
         sender_id: &str,
         window_start: u64,
     ) -> Option<DetectionSignal> {
-        let events: Vec<_> = timeline
-            .events_from_sender(sender_id, window_start)
-            .into_iter()
-            .filter(|e| e.kind.is_bullying_indicator())
-            .collect();
+        let all_sender_events = timeline.events_from_sender(sender_id, window_start);
+        let mut events = Vec::with_capacity(all_sender_events.len());
+        for e in all_sender_events {
+            if e.kind.is_bullying_indicator() {
+                events.push(e);
+            }
+        }
 
         if events.len() < 3 {
             return None;
         }
 
         let mid = events.len() / 2;
-        let early_severity: f32 =
-            events[..mid].iter().map(|e| e.kind.severity()).sum::<f32>() / mid as f32;
-        let late_severity: f32 = events[mid..].iter().map(|e| e.kind.severity()).sum::<f32>()
-            / (events.len() - mid) as f32;
+        let mut early_sum: f32 = 0.0;
+        for e in &events[..mid] {
+            early_sum += e.kind.severity();
+        }
+        let early_severity: f32 = early_sum / mid as f32;
+        let mut late_sum: f32 = 0.0;
+        for e in &events[mid..] {
+            late_sum += e.kind.severity();
+        }
+        let late_severity: f32 = late_sum / (events.len() - mid) as f32;
 
         if late_severity > early_severity + 0.15 {
             let score = 0.6 + (late_severity - early_severity).min(0.3);
@@ -202,18 +213,23 @@ impl BullyingDetector {
         sender_id: &str,
         window_start: u64,
     ) -> Option<DetectionSignal> {
-        let events: Vec<_> = timeline
-            .events_from_sender(sender_id, window_start)
-            .into_iter()
-            .filter(|e| e.kind.is_bullying_indicator())
-            .collect();
+        let all_sender_events = timeline.events_from_sender(sender_id, window_start);
+        let mut events = Vec::with_capacity(all_sender_events.len());
+        for e in all_sender_events {
+            if e.kind.is_bullying_indicator() {
+                events.push(e);
+            }
+        }
 
         if events.is_empty() {
             return None;
         }
 
         let day_ms: u64 = 24 * 60 * 60 * 1000;
-        let mut days: Vec<u64> = events.iter().map(|e| e.timestamp_ms / day_ms).collect();
+        let mut days: Vec<u64> = Vec::with_capacity(events.len());
+        for e in &events {
+            days.push(e.timestamp_ms / day_ms);
+        }
         days.sort();
         days.dedup();
 

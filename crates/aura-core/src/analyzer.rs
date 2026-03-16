@@ -23,7 +23,7 @@ struct EscalationTracker {
 impl EscalationTracker {
     fn new() -> Self {
         Self {
-            recent_events: HashMap::new(),
+            recent_events: HashMap::with_capacity(16),
         }
     }
 
@@ -40,9 +40,17 @@ impl EscalationTracker {
         let cutoff = now_ms.saturating_sub(one_hour);
 
         if let Some(entries) = self.recent_events.get(conversation_id) {
-            let recent: Vec<_> = entries.iter().filter(|(ts, _)| *ts >= cutoff).collect();
+            let mut recent = Vec::with_capacity(entries.len());
+            for entry in entries.iter() {
+                if entry.0 >= cutoff {
+                    recent.push(entry);
+                }
+            }
             if recent.len() >= 5 {
-                let mut senders: Vec<&str> = recent.iter().map(|(_, s)| s.as_str()).collect();
+                let mut senders = Vec::with_capacity(recent.len());
+                for (_, s) in &recent {
+                    senders.push(s.as_str());
+                }
                 senders.sort();
                 senders.dedup();
                 if senders.len() >= 2 {
@@ -76,6 +84,7 @@ fn truncate_text(text: &str) -> &str {
     &text[..end]
 }
 
+/// Performs message analysis combining pattern matching, ML inference, and context tracking.
 pub struct Analyzer {
     config: AuraConfig,
     pattern_db: PatternDatabase,
@@ -89,6 +98,7 @@ pub struct Analyzer {
 }
 
 impl Analyzer {
+    /// Creates a new analyzer with the given configuration and pattern database.
     pub fn new(config: AuraConfig, pattern_db: &PatternDatabase) -> Self {
         let default_pattern_language = config.language.clone();
         let pattern_matcher = PatternMatcher::from_database(pattern_db, &default_pattern_language);
@@ -134,7 +144,10 @@ impl Analyzer {
 
     fn signal_enricher(config: &AuraConfig) -> SignalEnricher {
         SignalEnricher::new(EnricherConfig {
-            strict_mode: matches!(config.account_type, AccountType::Child | AccountType::Teen),
+            strict_mode: match config.account_type {
+                AccountType::Child | AccountType::Teen => true,
+                AccountType::Adult => false,
+            },
             ..Default::default()
         })
     }
@@ -168,6 +181,7 @@ impl Analyzer {
         }
     }
 
+    /// Analyzes a single message for threats without updating conversation context.
     pub fn analyze(&mut self, input: &MessageInput) -> AnalysisResult {
         let start = Instant::now();
         let protection = self.config.effective_protection_level();
@@ -176,7 +190,7 @@ impl Analyzer {
             return AnalysisResult::clean(0);
         }
 
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(8);
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
@@ -238,6 +252,7 @@ impl Analyzer {
         )
     }
 
+    /// Analyzes a message and updates conversation context with detected events at the given timestamp.
     pub fn analyze_with_context(
         &mut self,
         input: &MessageInput,
@@ -250,9 +265,9 @@ impl Analyzer {
             return AnalysisResult::clean(0);
         }
 
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(8);
 
-        let mut context_events = Vec::new();
+        let mut context_events = Vec::with_capacity(4);
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
@@ -381,15 +396,19 @@ impl Analyzer {
 
         let context_signals = self.context_tracker.record_events(context_events);
 
-        let sender_is_defender = self
-            .context_tracker
-            .timeline(&input.conversation_id)
-            .map(|t| {
-                t.all_events()
-                    .iter()
-                    .any(|e| e.sender_id == input.sender_id && e.kind == EventKind::DefenseOfVictim)
-            })
-            .unwrap_or(false);
+        let sender_is_defender =
+            if let Some(t) = self.context_tracker.timeline(&input.conversation_id) {
+                let mut found = false;
+                for e in t.all_events().iter() {
+                    if e.sender_id == input.sender_id && e.kind == EventKind::DefenseOfVictim {
+                        found = true;
+                        break;
+                    }
+                }
+                found
+            } else {
+                false
+            };
 
         for signal in context_signals {
             let is_pile_on_signal = signal.layer == DetectionLayer::ContextAnalysis
@@ -435,10 +454,20 @@ impl Analyzer {
         }
 
         for s in &signals {
-            if matches!(
-                s.threat_type,
-                ThreatType::Bullying | ThreatType::Threat | ThreatType::Explicit
-            ) {
+            if match s.threat_type {
+                ThreatType::Bullying | ThreatType::Threat | ThreatType::Explicit => true,
+                ThreatType::None
+                | ThreatType::Grooming
+                | ThreatType::SelfHarm
+                | ThreatType::Spam
+                | ThreatType::Scam
+                | ThreatType::Phishing
+                | ThreatType::Manipulation
+                | ThreatType::Nsfw
+                | ThreatType::HateSpeech
+                | ThreatType::Doxxing
+                | ThreatType::PiiLeakage => false,
+            } {
                 self.escalation_tracker.record(
                     &input.conversation_id,
                     &input.sender_id,
@@ -453,10 +482,20 @@ impl Analyzer {
             .check_bonus(&input.conversation_id, timestamp_ms);
         if bonus > 0.0 {
             for s in &mut signals {
-                if matches!(
-                    s.threat_type,
-                    ThreatType::Bullying | ThreatType::Threat | ThreatType::Explicit
-                ) {
+                if match s.threat_type {
+                    ThreatType::Bullying | ThreatType::Threat | ThreatType::Explicit => true,
+                    ThreatType::None
+                    | ThreatType::Grooming
+                    | ThreatType::SelfHarm
+                    | ThreatType::Spam
+                    | ThreatType::Scam
+                    | ThreatType::Phishing
+                    | ThreatType::Manipulation
+                    | ThreatType::Nsfw
+                    | ThreatType::HateSpeech
+                    | ThreatType::Doxxing
+                    | ThreatType::PiiLeakage => false,
+                } {
                     s.score = (s.score + bonus).min(1.0);
                 }
             }
@@ -521,23 +560,39 @@ impl Analyzer {
             return AnalysisResult::clean(analysis_time_us);
         }
 
-        let max_signal = signals
-            .iter()
-            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal))
-            .expect("signals non-empty");
+        let mut max_signal = &signals[0];
+        for s in &signals {
+            if s.score
+                .partial_cmp(&max_signal.score)
+                .unwrap_or(Ordering::Equal)
+                == Ordering::Greater
+            {
+                max_signal = s;
+            }
+        }
         let max_score = max_signal.score;
 
-        let priority_signal = signals
-            .iter()
-            .filter(|s| s.score >= max_score - 0.3 && s.threat_type != ThreatType::None)
-            .min_by_key(|s| threat_priority(s.threat_type))
-            .unwrap_or(max_signal);
+        let mut priority_signal = None;
+        for s in &signals {
+            if s.score >= max_score - 0.3 && s.threat_type != ThreatType::None {
+                match priority_signal {
+                    None => priority_signal = Some(s),
+                    Some(current) => {
+                        if threat_priority(s.threat_type) < threat_priority(current.threat_type) {
+                            priority_signal = Some(s);
+                        }
+                    }
+                }
+            }
+        }
+        let priority_signal = priority_signal.unwrap_or(max_signal);
 
-        let score = signals
-            .iter()
-            .filter(|signal| signal.threat_type == priority_signal.threat_type)
-            .map(|signal| signal.score)
-            .fold(priority_signal.score, f32::max);
+        let mut score = priority_signal.score;
+        for signal in &signals {
+            if signal.threat_type == priority_signal.threat_type {
+                score = f32::max(score, signal.score);
+            }
+        }
         let primary = priority_signal;
 
         let (action_v2, mut recommendation) =
@@ -545,7 +600,7 @@ impl Analyzer {
         let action = action_v2;
 
         let mut threat_map: std::collections::HashMap<ThreatType, f32> =
-            std::collections::HashMap::new();
+            std::collections::HashMap::with_capacity(8);
         for s in &signals {
             if s.threat_type != ThreatType::None {
                 let entry = threat_map.entry(s.threat_type).or_insert(0.0);
@@ -554,7 +609,10 @@ impl Analyzer {
                 }
             }
         }
-        let mut detected_threats: Vec<(ThreatType, f32)> = threat_map.into_iter().collect();
+        let mut detected_threats = Vec::with_capacity(threat_map.len());
+        for entry in threat_map.into_iter() {
+            detected_threats.push(entry);
+        }
         detected_threats.sort_by_key(|(tt, _)| threat_priority(*tt));
 
         let risk_breakdown = compute_risk_breakdown(&signals);
@@ -613,14 +671,17 @@ impl Analyzer {
         }
     }
 
+    /// Returns a reference to the internal conversation tracker.
     pub fn context_tracker(&self) -> &ConversationTracker {
         &self.context_tracker
     }
 
+    /// Exports the conversation tracker state for persistence or transfer.
     pub fn export_context_state(&self) -> TrackerWireState {
         self.context_tracker.export_wire_state()
     }
 
+    /// Imports a previously exported tracker state, merging it with existing data.
     pub fn import_context_state(
         &mut self,
         state: TrackerWireState,
@@ -628,15 +689,18 @@ impl Analyzer {
         self.context_tracker.import_wire_state(state)
     }
 
+    /// Removes expired events and escalation entries older than the analysis window.
     pub fn cleanup_context(&mut self, now_ms: u64) {
         self.context_tracker.cleanup(now_ms);
         self.escalation_tracker.cleanup(now_ms);
     }
 
+    /// Marks a contact as trusted, reducing future risk scores for that sender.
     pub fn mark_contact_trusted(&mut self, sender_id: &str) {
         self.context_tracker.mark_contact_trusted(sender_id);
     }
 
+    /// Replaces the analyzer configuration and rebuilds pattern matchers and ML pipeline.
     pub fn update_config(&mut self, config: AuraConfig, pattern_db: &PatternDatabase) {
         let tracker_config = Self::tracker_config(&config);
         let signal_enricher = Self::signal_enricher(&config);
@@ -653,6 +717,7 @@ impl Analyzer {
         self.config = config;
     }
 
+    /// Reloads pattern matchers and URL checker from an updated pattern database.
     pub fn reload_patterns(&mut self, pattern_db: &PatternDatabase) {
         self.pattern_db = pattern_db.clone();
         self.pattern_matchers = HashMap::from([(
@@ -674,12 +739,19 @@ impl Analyzer {
             return self.config.language.clone();
         };
 
-        if self
-            .pattern_db
-            .rules
-            .iter()
-            .any(|rule| rule.languages.iter().any(|candidate| candidate == language))
-        {
+        let mut found = false;
+        for rule in &self.pattern_db.rules {
+            for candidate in &rule.languages {
+                if candidate == language {
+                    found = true;
+                    break;
+                }
+            }
+            if found {
+                break;
+            }
+        }
+        if found {
             language.to_string()
         } else {
             self.config.language.clone()
@@ -688,7 +760,7 @@ impl Analyzer {
 
     fn run_ml_layer(&mut self, text: &str) -> Vec<DetectionSignal> {
         let ml_result = self.ml_pipeline.analyze_text(text);
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(4);
         let threshold = self.ml_pipeline.toxicity_threshold();
 
         if let Some(ref tox) = ml_result.toxicity {
@@ -734,7 +806,17 @@ impl Analyzer {
                         ThreatType::Threat => "ml.threat",
                         ThreatType::Explicit => "ml.sexual_explicit",
                         ThreatType::Bullying => "ml.toxicity",
-                        _ => "ml.generic",
+                        ThreatType::None
+                        | ThreatType::Grooming
+                        | ThreatType::SelfHarm
+                        | ThreatType::Spam
+                        | ThreatType::Scam
+                        | ThreatType::Phishing
+                        | ThreatType::Manipulation
+                        | ThreatType::Nsfw
+                        | ThreatType::HateSpeech
+                        | ThreatType::Doxxing
+                        | ThreatType::PiiLeakage => "ml.generic",
                     };
                     signals.push(DetectionSignal::ml(
                         threat_type,
@@ -758,16 +840,20 @@ impl Analyzer {
         signals: &mut Vec<DetectionSignal>,
         context_events: &mut Vec<ContextEvent>,
     ) {
-        // Mild euphemisms like "блін" are too weak to justify an Explicit alert on their own.
         signals.retain(|signal| signal.reason_code != "pattern.profanity_uk_euphemisms");
 
-        let has_substance_pressure_context = signals.iter().any(|signal| {
-            signal.reason_code.starts_with("pattern.substance_")
+        let mut has_substance_pressure_context = false;
+        for signal in signals.iter() {
+            if signal.reason_code.starts_with("pattern.substance_")
                 || signal.reason_code == "pattern.manipulation_pressure_uk"
                 || signal.reason_code == "pattern.manipulation_pressure_en"
                 || signal.reason_code == "pattern.false_consensus_uk"
                 || signal.reason_code == "pattern.false_consensus_en"
-        });
+            {
+                has_substance_pressure_context = true;
+                break;
+            }
+        }
         if has_substance_pressure_context {
             signals.retain(|signal| {
                 !(signal.threat_type == ThreatType::Explicit
@@ -777,16 +863,67 @@ impl Analyzer {
 
         if is_self_referential_distress_profanity_message(text) {
             signals.retain(|signal| {
-                !(matches!(
-                    signal.threat_type,
-                    ThreatType::Explicit | ThreatType::Bullying
-                ) && signal.reason_code.starts_with("pattern.profanity_uk_"))
+                !(match signal.threat_type {
+                    ThreatType::Explicit | ThreatType::Bullying => true,
+                    ThreatType::None
+                    | ThreatType::Grooming
+                    | ThreatType::Threat
+                    | ThreatType::SelfHarm
+                    | ThreatType::Spam
+                    | ThreatType::Scam
+                    | ThreatType::Phishing
+                    | ThreatType::Manipulation
+                    | ThreatType::Nsfw
+                    | ThreatType::HateSpeech
+                    | ThreatType::Doxxing
+                    | ThreatType::PiiLeakage => false,
+                } && signal.reason_code.starts_with("pattern.profanity_uk_"))
             });
-            context_events.retain(|event| {
-                !matches!(
-                    event.kind,
-                    EventKind::Insult | EventKind::Denigration | EventKind::Mockery
-                )
+            context_events.retain(|event| !match event.kind {
+                EventKind::Insult | EventKind::Denigration | EventKind::Mockery => true,
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => false,
             });
         }
 
@@ -805,52 +942,221 @@ impl Analyzer {
                         || snapshot.trust_level >= 0.60
                         || snapshot.circle_tier != CircleTier::New)
             });
+        let mut has_high_risk_grooming = false;
+        for signal in signals.iter() {
+            if is_high_risk_grooming_signal(signal) {
+                has_high_risk_grooming = true;
+                break;
+            }
+        }
         let plain_peer_compliment = input.conversation_type == ConversationType::Direct
             && (has_friendly_context || is_casual_appearance_compliment_message(text))
             && is_plain_peer_compliment_message(text)
-            && !signals.iter().any(is_high_risk_grooming_signal);
+            && !has_high_risk_grooming;
         if plain_peer_compliment {
             signals.retain(|signal| {
                 !(signal.threat_type == ThreatType::Grooming && signal.score <= 0.30)
             });
-            context_events.retain(|event| {
-                !matches!(event.kind, EventKind::Flattery | EventKind::LoveBombing)
+            context_events.retain(|event| !match event.kind {
+                EventKind::Flattery | EventKind::LoveBombing => true,
+                EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => false,
             });
         }
 
+        let mut has_high_risk_grooming_2 = false;
+        for signal in signals.iter() {
+            if is_high_risk_grooming_signal(signal) {
+                has_high_risk_grooming_2 = true;
+                break;
+            }
+        }
         let non_romantic_group_praise = input.conversation_type != ConversationType::Direct
             && is_non_romantic_group_praise_message(text)
-            && !signals.iter().any(is_high_risk_grooming_signal);
+            && !has_high_risk_grooming_2;
         if non_romantic_group_praise {
             signals.retain(|signal| {
                 !(signal.threat_type == ThreatType::Grooming && signal.score <= 0.35)
             });
-            context_events.retain(|event| {
-                !matches!(event.kind, EventKind::Flattery | EventKind::LoveBombing)
+            context_events.retain(|event| !match event.kind {
+                EventKind::Flattery | EventKind::LoveBombing => true,
+                EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => false,
             });
         }
 
+        let mut has_high_threat_or_hate = false;
+        for signal in signals.iter() {
+            if (match signal.threat_type {
+                ThreatType::Threat | ThreatType::HateSpeech => true,
+                ThreatType::None
+                | ThreatType::Bullying
+                | ThreatType::Grooming
+                | ThreatType::Explicit
+                | ThreatType::SelfHarm
+                | ThreatType::Spam
+                | ThreatType::Scam
+                | ThreatType::Phishing
+                | ThreatType::Manipulation
+                | ThreatType::Nsfw
+                | ThreatType::Doxxing
+                | ThreatType::PiiLeakage => false,
+            }) && signal.score >= 0.75
+            {
+                has_high_threat_or_hate = true;
+                break;
+            }
+        }
         let gaming_banter = input.conversation_type != ConversationType::Direct
             && (is_competitive_gaming_banter_message(text)
                 || is_lightweight_competitive_banter_message(text))
-            && !signals.iter().any(|signal| {
-                matches!(
-                    signal.threat_type,
-                    ThreatType::Threat | ThreatType::HateSpeech
-                ) && signal.score >= 0.75
-            });
+            && !has_high_threat_or_hate;
         if gaming_banter {
             signals.retain(|signal| {
-                !(matches!(
-                    signal.threat_type,
-                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
-                ) && signal.score <= 0.60)
+                !(match signal.threat_type {
+                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat => true,
+                    ThreatType::None
+                    | ThreatType::Grooming
+                    | ThreatType::SelfHarm
+                    | ThreatType::Spam
+                    | ThreatType::Scam
+                    | ThreatType::Phishing
+                    | ThreatType::Manipulation
+                    | ThreatType::Nsfw
+                    | ThreatType::HateSpeech
+                    | ThreatType::Doxxing
+                    | ThreatType::PiiLeakage => false,
+                } && signal.score <= 0.60)
             });
-            context_events.retain(|event| {
-                !matches!(
-                    event.kind,
-                    EventKind::Insult | EventKind::Denigration | EventKind::Mockery
-                )
+            context_events.retain(|event| !match event.kind {
+                EventKind::Insult | EventKind::Denigration | EventKind::Mockery => true,
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => false,
             });
         }
 
@@ -861,39 +1167,120 @@ impl Analyzer {
                     && signal.score <= 0.50
                     && !is_high_risk_grooming_signal(signal))
             });
-            context_events.retain(|event| {
-                !matches!(
-                    event.kind,
-                    EventKind::PhotoRequest
-                        | EventKind::SecrecyRequest
-                        | EventKind::CasualMeetingRequest
-                        | EventKind::Flattery
-                        | EventKind::LoveBombing
-                )
+            context_events.retain(|event| !match event.kind {
+                EventKind::PhotoRequest
+                | EventKind::SecrecyRequest
+                | EventKind::CasualMeetingRequest
+                | EventKind::Flattery
+                | EventKind::LoveBombing => true,
+                EventKind::GiftOffer
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => false,
             });
         }
 
         if self.is_playful_banter_message(input, text, timestamp_ms) {
-            signals.retain(|signal| {
-                !matches!(
-                    signal.threat_type,
-                    ThreatType::Threat
-                        | ThreatType::Bullying
-                        | ThreatType::Explicit
-                        | ThreatType::SelfHarm
-                )
+            signals.retain(|signal| !match signal.threat_type {
+                ThreatType::Threat
+                | ThreatType::Bullying
+                | ThreatType::Explicit
+                | ThreatType::SelfHarm => true,
+                ThreatType::None
+                | ThreatType::Grooming
+                | ThreatType::Spam
+                | ThreatType::Scam
+                | ThreatType::Phishing
+                | ThreatType::Manipulation
+                | ThreatType::Nsfw
+                | ThreatType::HateSpeech
+                | ThreatType::Doxxing
+                | ThreatType::PiiLeakage => false,
             });
-            context_events.retain(|event| {
-                !matches!(
-                    event.kind,
-                    EventKind::Insult
-                        | EventKind::Denigration
-                        | EventKind::Mockery
-                        | EventKind::PhysicalThreat
-                        | EventKind::SexualContent
-                        | EventKind::Hopelessness
-                        | EventKind::SuicidalIdeation
-                )
+            context_events.retain(|event| !match event.kind {
+                EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::Mockery
+                | EventKind::PhysicalThreat
+                | EventKind::SexualContent
+                | EventKind::Hopelessness
+                | EventKind::SuicidalIdeation => true,
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::AgeInappropriate
+                | EventKind::HarmEncouragement
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => false,
             });
         }
     }
@@ -939,8 +1326,8 @@ impl Analyzer {
                 !(matches!(
                     signal.threat_type,
                     ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
-                ) && signal.score <= 0.75)
-                    && !(signal.threat_type == ThreatType::Grooming
+                ) && signal.score <= 0.75
+                    || signal.threat_type == ThreatType::Grooming
                         && signal.score <= 0.35
                         && signal.reason_code == "conversation.contact.new_risky_contact")
             });
@@ -948,10 +1335,20 @@ impl Analyzer {
 
         if friendly_context && self.is_playful_banter_message(input, text, timestamp_ms) {
             signals.retain(|signal| {
-                !(matches!(
-                    signal.threat_type,
-                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
-                ) && signal.score <= 0.60)
+                !(match signal.threat_type {
+                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat => true,
+                    ThreatType::None
+                    | ThreatType::Grooming
+                    | ThreatType::SelfHarm
+                    | ThreatType::Spam
+                    | ThreatType::Scam
+                    | ThreatType::Phishing
+                    | ThreatType::Manipulation
+                    | ThreatType::Nsfw
+                    | ThreatType::HateSpeech
+                    | ThreatType::Doxxing
+                    | ThreatType::PiiLeakage => false,
+                } && signal.score <= 0.60)
             });
         }
     }
@@ -1167,24 +1564,44 @@ impl Analyzer {
         let since = now_ms.saturating_sub(15 * 60 * 1000);
         let recent = timeline.events_since(since);
 
-        let sender_has_prior = recent.iter().any(|event| event.sender_id == sender_id);
-        let other_sender_replied = recent.iter().any(|event| {
-            event.sender_id != sender_id && event.kind == EventKind::NormalConversation
-        });
+        let mut sender_has_prior = false;
+        for event in &recent {
+            if event.sender_id == sender_id {
+                sender_has_prior = true;
+                break;
+            }
+        }
+        let mut other_sender_replied = false;
+        for event in &recent {
+            if event.sender_id != sender_id && event.kind == EventKind::NormalConversation {
+                other_sender_replied = true;
+                break;
+            }
+        }
 
         sender_has_prior && other_sender_replied
     }
 }
 
 fn contains_any(text: &str, needles: &[&str]) -> bool {
-    needles.iter().any(|needle| text.contains(needle))
+    let mut found = false;
+    for needle in needles {
+        if text.contains(needle) {
+            found = true;
+            break;
+        }
+    }
+    found
 }
 
 fn count_contains(text: &str, needles: &[&str]) -> usize {
-    needles
-        .iter()
-        .filter(|needle| text.contains(**needle))
-        .count()
+    let mut count = 0;
+    for needle in needles {
+        if text.contains(needle) {
+            count += 1;
+        }
+    }
+    count
 }
 
 fn is_plain_peer_compliment_message(text: &str) -> bool {
@@ -1439,11 +1856,16 @@ fn is_lightweight_competitive_banter_message(text: &str) -> bool {
 }
 
 fn downweight_secondary_timing_grooming(signals: &mut [DetectionSignal]) {
-    let has_stronger_non_grooming = signals.iter().any(|signal| {
-        signal.threat_type != ThreatType::Grooming
+    let mut has_stronger_non_grooming = false;
+    for signal in signals.iter() {
+        if signal.threat_type != ThreatType::Grooming
             && signal.threat_type != ThreatType::None
             && signal.score >= 0.55
-    });
+        {
+            has_stronger_non_grooming = true;
+            break;
+        }
+    }
     if !has_stronger_non_grooming {
         return;
     }
@@ -1536,12 +1958,30 @@ fn is_competitive_gaming_banter_message(text: &str) -> bool {
 }
 
 fn prioritize_direct_threat_signals(signals: &mut [DetectionSignal]) {
-    let has_strong_direct_threat = signals.iter().any(|signal| {
-        matches!(signal.threat_type, ThreatType::Threat | ThreatType::Doxxing)
-            && signal.score >= 0.75
+    let mut has_strong_direct_threat = false;
+    for signal in signals.iter() {
+        if (match signal.threat_type {
+            ThreatType::Threat | ThreatType::Doxxing => true,
+            ThreatType::None
+            | ThreatType::Bullying
+            | ThreatType::Grooming
+            | ThreatType::Explicit
+            | ThreatType::SelfHarm
+            | ThreatType::Spam
+            | ThreatType::Scam
+            | ThreatType::Phishing
+            | ThreatType::Manipulation
+            | ThreatType::Nsfw
+            | ThreatType::HateSpeech
+            | ThreatType::PiiLeakage => false,
+        }) && signal.score >= 0.75
             && (signal.reason_code.starts_with("pattern.threat_")
                 || signal.reason_code.starts_with("pattern.doxxing"))
-    });
+        {
+            has_strong_direct_threat = true;
+            break;
+        }
+    }
     if !has_strong_direct_threat {
         return;
     }
@@ -1569,12 +2009,17 @@ fn prioritize_direct_threat_signals(signals: &mut [DetectionSignal]) {
 }
 
 fn prioritize_suicide_coercion_as_manipulation(signals: &mut [DetectionSignal]) {
-    let has_strong_suicide_coercion = signals.iter().any(|signal| {
-        signal.threat_type == ThreatType::Manipulation
+    let mut has_strong_suicide_coercion = false;
+    for signal in signals.iter() {
+        if signal.threat_type == ThreatType::Manipulation
             && signal.score >= 0.75
             && (signal.reason_code.contains("coercion_suicide")
                 || signal.reason_code.contains("suicide_coercion"))
-    });
+        {
+            has_strong_suicide_coercion = true;
+            break;
+        }
+    }
     if !has_strong_suicide_coercion {
         return;
     }
@@ -1629,11 +2074,13 @@ fn build_inference_summary(
     contact_snapshot: Option<&ContactSnapshot>,
 ) -> InferenceSummary {
     let latent_states = collect_latent_states(signals, conversation_type, contact_snapshot);
-    let protective_factor_strength = latent_states
-        .iter()
-        .find(|state| state.kind == LatentStateKind::ProtectiveSupport)
-        .map(|state| state.score)
-        .unwrap_or(0.0);
+    let mut protective_factor_strength = 0.0;
+    for state in &latent_states {
+        if state.kind == LatentStateKind::ProtectiveSupport {
+            protective_factor_strength = state.score;
+            break;
+        }
+    }
 
     InferenceSummary {
         uncertainty: estimate_uncertainty(signals, primary_threat, primary_score),
@@ -1789,13 +2236,13 @@ fn collect_latent_states(
         &[ThreatType::Bullying, ThreatType::Spam, ThreatType::Scam],
     );
     if conversation_type != ConversationType::Direct {
-        group_escalation.score = group_escalation.score.max(
-            signals
-                .iter()
-                .filter(|signal| signal.family == SignalFamily::Abuse)
-                .map(|signal| signal.score)
-                .fold(0.0, f32::max),
-        );
+        let mut max_abuse_score = 0.0_f32;
+        for signal in signals {
+            if signal.family == SignalFamily::Abuse {
+                max_abuse_score = f32::max(max_abuse_score, signal.score);
+            }
+        }
+        group_escalation.score = group_escalation.score.max(max_abuse_score);
     }
     push_latent_state(
         &mut states,
@@ -1824,9 +2271,13 @@ fn match_signal_family(
     let mut seen = HashSet::new();
 
     for signal in signals {
-        let reason_match = reason_needles
-            .iter()
-            .any(|needle| signal.reason_code.contains(needle));
+        let mut reason_match = false;
+        for needle in reason_needles {
+            if signal.reason_code.contains(needle) {
+                reason_match = true;
+                break;
+            }
+        }
         let threat_match = threat_types.contains(&signal.threat_type);
         if !reason_match && !threat_match {
             continue;
@@ -1863,7 +2314,7 @@ fn estimate_uncertainty(
     primary_threat: ThreatType,
     primary_score: f32,
 ) -> UncertaintyLevel {
-    let mut threat_scores: HashMap<ThreatType, f32> = HashMap::new();
+    let mut threat_scores: HashMap<ThreatType, f32> = HashMap::with_capacity(8);
     for signal in signals {
         threat_scores
             .entry(signal.threat_type)
@@ -1871,11 +2322,12 @@ fn estimate_uncertainty(
             .or_insert(signal.score);
     }
 
-    let mut ordered_scores: Vec<f32> = threat_scores
-        .into_iter()
-        .filter(|(threat, _)| *threat != ThreatType::None)
-        .map(|(_, score)| score)
-        .collect();
+    let mut ordered_scores = Vec::with_capacity(threat_scores.len());
+    for (threat, score) in threat_scores.into_iter() {
+        if threat != ThreatType::None {
+            ordered_scores.push(score);
+        }
+    }
     ordered_scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
 
     let top_gap = match ordered_scores.as_slice() {
@@ -1883,12 +2335,12 @@ fn estimate_uncertainty(
         [_top] => 1.0,
         [] => 0.0,
     };
-    let primary_support = signals
-        .iter()
-        .filter(|signal| {
-            signal.threat_type == primary_threat && signal.score >= (primary_score - 0.15)
-        })
-        .count();
+    let mut primary_support = 0;
+    for signal in signals {
+        if signal.threat_type == primary_threat && signal.score >= (primary_score - 0.15) {
+            primary_support += 1;
+        }
+    }
 
     if primary_support >= 2 && primary_score >= 0.75 && top_gap >= 0.25 {
         UncertaintyLevel::Low
@@ -1905,38 +2357,74 @@ fn infer_risk_horizon(
     primary_score: f32,
     contact_snapshot: Option<&ContactSnapshot>,
 ) -> RiskHorizon {
-    let has_immediate_reason = signals.iter().any(|signal| {
-        signal.reason_code.contains("farewell_after_ideation")
+    let mut has_immediate_reason = false;
+    for signal in signals {
+        if signal.reason_code.contains("farewell_after_ideation")
             || signal.reason_code.contains("acute_crisis")
             || signal.reason_code.contains("blocked_domain")
-    });
+        {
+            has_immediate_reason = true;
+            break;
+        }
+    }
     if has_immediate_reason
-        || matches!(
-            primary_threat,
-            ThreatType::Threat | ThreatType::Explicit | ThreatType::Phishing
-        ) && primary_score >= 0.8
+        || (match primary_threat {
+            ThreatType::Threat | ThreatType::Explicit | ThreatType::Phishing => true,
+            ThreatType::None
+            | ThreatType::Bullying
+            | ThreatType::Grooming
+            | ThreatType::SelfHarm
+            | ThreatType::Spam
+            | ThreatType::Scam
+            | ThreatType::Manipulation
+            | ThreatType::Nsfw
+            | ThreatType::HateSpeech
+            | ThreatType::Doxxing
+            | ThreatType::PiiLeakage => false,
+        }) && primary_score >= 0.8
     {
         return RiskHorizon::Immediate;
     }
 
-    if matches!(
-        primary_threat,
-        ThreatType::Grooming | ThreatType::Manipulation | ThreatType::SelfHarm
-    ) && primary_score >= 0.55
+    if (match primary_threat {
+        ThreatType::Grooming | ThreatType::Manipulation | ThreatType::SelfHarm => true,
+        ThreatType::None
+        | ThreatType::Bullying
+        | ThreatType::Explicit
+        | ThreatType::Threat
+        | ThreatType::Spam
+        | ThreatType::Scam
+        | ThreatType::Phishing
+        | ThreatType::Nsfw
+        | ThreatType::HateSpeech
+        | ThreatType::Doxxing
+        | ThreatType::PiiLeakage => false,
+    }) && primary_score >= 0.55
     {
         return RiskHorizon::ShortTerm;
     }
 
-    if matches!(primary_threat, ThreatType::Bullying)
-        || contact_snapshot.is_some_and(|snapshot| {
-            matches!(
-                snapshot.trend,
-                BehavioralTrend::GradualWorsening
-                    | BehavioralTrend::RapidWorsening
-                    | BehavioralTrend::RoleReversal
-            )
-        })
-    {
+    if (match primary_threat {
+        ThreatType::Bullying => true,
+        ThreatType::None
+        | ThreatType::Grooming
+        | ThreatType::Explicit
+        | ThreatType::Threat
+        | ThreatType::SelfHarm
+        | ThreatType::Spam
+        | ThreatType::Scam
+        | ThreatType::Phishing
+        | ThreatType::Manipulation
+        | ThreatType::Nsfw
+        | ThreatType::HateSpeech
+        | ThreatType::Doxxing
+        | ThreatType::PiiLeakage => false,
+    }) || contact_snapshot.is_some_and(|snapshot| match snapshot.trend {
+        BehavioralTrend::GradualWorsening
+        | BehavioralTrend::RapidWorsening
+        | BehavioralTrend::RoleReversal => true,
+        BehavioralTrend::Stable | BehavioralTrend::Improving => false,
+    }) {
         return RiskHorizon::Sustained;
     }
 
@@ -1957,14 +2445,29 @@ fn estimate_escalation_likelihood(
         .max(risk_breakdown.link)
         .max(risk_breakdown.content * 0.85);
 
-    if matches!(primary_threat, ThreatType::SelfHarm) {
-        estimate = estimate.max(
-            signals
-                .iter()
-                .filter(|signal| signal.threat_type == ThreatType::SelfHarm)
-                .map(|signal| signal.score)
-                .fold(0.0, f32::max),
-        );
+    if match primary_threat {
+        ThreatType::SelfHarm => true,
+        ThreatType::None
+        | ThreatType::Bullying
+        | ThreatType::Grooming
+        | ThreatType::Explicit
+        | ThreatType::Threat
+        | ThreatType::Spam
+        | ThreatType::Scam
+        | ThreatType::Phishing
+        | ThreatType::Manipulation
+        | ThreatType::Nsfw
+        | ThreatType::HateSpeech
+        | ThreatType::Doxxing
+        | ThreatType::PiiLeakage => false,
+    } {
+        let mut max_selfharm_score = 0.0_f32;
+        for signal in signals {
+            if signal.threat_type == ThreatType::SelfHarm {
+                max_selfharm_score = f32::max(max_selfharm_score, signal.score);
+            }
+        }
+        estimate = estimate.max(max_selfharm_score);
     }
 
     let coercive_control = latent_score(latent_states, LatentStateKind::CoerciveControl);
@@ -1983,7 +2486,24 @@ fn estimate_escalation_likelihood(
     }
 
     if let Some(snapshot) = contact_snapshot {
-        if snapshot.is_new_contact && matches!(primary_threat, ThreatType::Grooming) {
+        if snapshot.is_new_contact
+            && (match primary_threat {
+                ThreatType::Grooming => true,
+                ThreatType::None
+                | ThreatType::Bullying
+                | ThreatType::Explicit
+                | ThreatType::Threat
+                | ThreatType::SelfHarm
+                | ThreatType::Spam
+                | ThreatType::Scam
+                | ThreatType::Phishing
+                | ThreatType::Manipulation
+                | ThreatType::Nsfw
+                | ThreatType::HateSpeech
+                | ThreatType::Doxxing
+                | ThreatType::PiiLeakage => false,
+            })
+        {
             estimate += 0.10;
         }
         estimate += match snapshot.trend {
@@ -1998,11 +2518,14 @@ fn estimate_escalation_likelihood(
 }
 
 fn latent_score(latent_states: &[LatentStateEvidence], kind: LatentStateKind) -> f32 {
-    latent_states
-        .iter()
-        .find(|state| state.kind == kind)
-        .map(|state| state.score)
-        .unwrap_or(0.0)
+    let mut result = 0.0;
+    for state in latent_states {
+        if state.kind == kind {
+            result = state.score;
+            break;
+        }
+    }
+    result
 }
 
 fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKind> {
@@ -3724,13 +4247,11 @@ mod tests {
 
     #[test]
     fn text_truncation_limits_processing() {
-        // Construct a message that has a threat word beyond 10_000 chars
         let filler = "a".repeat(10_001);
         let text = format!("{filler} kill you");
         let db = test_db();
         let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
         let result = analyzer.analyze(&default_input(&text));
-        // The "kill you" is past the truncation point, so it should not be detected
         assert!(
             !result.is_threat(),
             "Threat word beyond truncation should not be detected"
@@ -3739,8 +4260,7 @@ mod tests {
 
     #[test]
     fn truncate_text_char_boundary() {
-        // Multi-byte char: Ukrainian "Привіт" = 12 bytes (6 chars × 2 bytes)
-        let text = "a".repeat(9_999) + "ї"; // 9999 + 2 bytes = 10001 bytes, 10000 chars
+        let text = "a".repeat(9_999) + "ї";
         let truncated = super::truncate_text(&text);
         assert!(truncated.len() <= super::MAX_TEXT_LENGTH);
         assert!(truncated.is_char_boundary(truncated.len()));
@@ -3810,7 +4330,6 @@ mod tests {
         };
 
         let result = analyzer.analyze_with_context(&input, 1000);
-        // PII should never block
         assert_ne!(result.action, Action::Block, "PII leakage must NEVER block");
     }
 
@@ -3824,7 +4343,6 @@ mod tests {
         };
         let mut analyzer = Analyzer::new(config, &db);
 
-        // Send 4 secrecy requests from same sender
         for i in 0..4 {
             let input = MessageInput {
                 content_type: ContentType::Text,
@@ -3839,7 +4357,6 @@ mod tests {
             analyzer.analyze_with_context(&input, (i + 1) * 1000);
         }
 
-        // Last one should have elevated score
         let input = MessageInput {
             content_type: ContentType::Text,
             text: Some("just between us, ok?".into()),
@@ -3868,7 +4385,6 @@ mod tests {
         };
         let mut analyzer = Analyzer::new(config, &db);
 
-        // Build grooming context: flattery + secrecy + probing
         let msgs = vec![
             ("you're so mature for your age", 1000u64),
             ("don't tell your parents about our chats", 2000),
@@ -3888,7 +4404,6 @@ mod tests {
             analyzer.analyze_with_context(&input, ts);
         }
 
-        // Now the casual meeting request with grooming context
         let input = MessageInput {
             content_type: ContentType::Text,
             text: Some("you're so beautiful and special, can we meet?".into()),
@@ -3917,7 +4432,6 @@ mod tests {
         };
         let mut analyzer = Analyzer::new(config, &db);
 
-        // Send 2 screenshot threats to trigger blackmail pattern
         let texts = [
             "I took a screenshot of everything you said",
             "I have screenshots and everyone will see this",
@@ -3953,7 +4467,6 @@ mod tests {
         };
         let mut analyzer = Analyzer::new(config, &db);
 
-        // Build multi-tactic manipulation context: gaslighting + guilt + dare
         let msgs = vec![
             ("you're imagining things, that never happened", 1000u64),
             ("after everything i've done for you, you owe me", 2000),
@@ -4268,7 +4781,6 @@ mod tests {
             ..AuraConfig::default()
         };
         let mut analyzer = Analyzer::new(config, &db);
-        // Identity erosion + network poisoning + reputation threat = multi-signal
         let result = analyzer.analyze_with_context(
             &MessageInput {
                 content_type: ContentType::Text,
@@ -4833,8 +5345,6 @@ mod tests {
         );
     }
 
-    // ---- Phase 7: Behavioral profiling integration tests ----
-
     #[test]
     fn integration_contact_rating_drops_on_hostile_messages() {
         let db = test_db();
@@ -4850,7 +5360,6 @@ mod tests {
             .unwrap()
             .rating;
 
-        // Multiple hostile messages
         for i in 1..=5 {
             analyzer.analyze_with_context(
                 &child_input("you're so stupid and ugly, everyone hates you", bully, conv),
@@ -4878,7 +5387,6 @@ mod tests {
         let friend = "best_friend";
         let conv = "private_chat";
 
-        // Establish and mark trusted
         analyzer.analyze_with_context(&child_input("hey bestie!", friend, conv), 1000);
         analyzer.mark_contact_trusted(friend);
         let trust_before = analyzer
@@ -4889,7 +5397,6 @@ mod tests {
             .trust_level;
         assert_eq!(trust_before, 1.0);
 
-        // Friend turns hostile — use explicit threats that ML layer detects as insults/threats
         let hostile_msgs = [
             "i'll kill you stupid idiot",
             "you're a worthless piece of trash",
@@ -4910,7 +5417,6 @@ mod tests {
             .profile(friend)
             .unwrap();
 
-        // Trust should have decayed from hostile events detected by the pipeline
         assert!(
             profile.trust_level < trust_before,
             "Trust should decay after sustained hostility: {} (was {})",
@@ -4927,7 +5433,6 @@ mod tests {
         let conv = "class_chat";
         let week = 7 * 24 * 3600 * 1000u64;
 
-        // Weeks 1-3: normal messages (many to build baseline)
         for w in 0..3 {
             for msg in 0..10 {
                 analyzer.analyze_with_context(
@@ -4941,7 +5446,6 @@ mod tests {
             }
         }
 
-        // Weeks 4-5: hostile messages (explicit insults the ML pipeline will detect)
         let hostile_texts = [
             "you're stupid and ugly, everyone hates you",
             "i'll kill you, you worthless trash",
@@ -4958,7 +5462,6 @@ mod tests {
             }
         }
 
-        // Week 6: trigger trend recalculation
         let result = analyzer.analyze_with_context(
             &child_input("i'll kill you loser, nobody likes you", contact, conv),
             5 * week + 1000,
@@ -4970,14 +5473,12 @@ mod tests {
             .profile(contact)
             .unwrap();
 
-        // Rating should have dropped significantly
         assert!(
             profile.rating < 40.0,
             "Rating should drop after weeks of hostility: {}",
             profile.rating
         );
 
-        // Full pipeline should detect threats
         assert!(result.score > 0.0, "Hostile message should be detected");
     }
 
@@ -4988,7 +5489,6 @@ mod tests {
         let friend = "good_friend";
         let conv = "daily_chat";
 
-        // 20 normal messages
         for i in 0..20 {
             analyzer.analyze_with_context(
                 &child_input("hey, how's school? want to study together?", friend, conv),
@@ -5017,8 +5517,6 @@ mod tests {
         let conv = "dm_1";
         let hour = 3600 * 1000u64;
 
-        // Grooming sequence: flattery → personal questions → secrecy → photo request
-        // Use text that the enricher will definitely match
         analyzer.analyze_with_context(
             &child_input(
                 "you're so beautiful and amazing and perfect, you're the most incredible person",
@@ -5058,7 +5556,6 @@ mod tests {
             .profile(predator)
             .unwrap();
 
-        // Some grooming events should be tracked (enricher matches on the text)
         assert!(
             profile.grooming_event_count >= 1,
             "Should track at least 1 grooming event: {}",
@@ -5073,7 +5570,6 @@ mod tests {
         let bully = "mean_kid";
         let conv = "chat_1";
 
-        // Create some history
         for i in 0..5 {
             analyzer.analyze_with_context(
                 &child_input("you're stupid and nobody likes you", bully, conv),
@@ -5088,7 +5584,6 @@ mod tests {
             .unwrap()
             .rating;
 
-        // Export & import
         let state = analyzer.export_context_state();
         let mut analyzer2 = Analyzer::new(child_config(), &db);
         analyzer2.import_context_state(state).unwrap();
@@ -5111,7 +5606,6 @@ mod tests {
         let db = PatternDatabase::default_mvp();
         let mut analyzer = Analyzer::new(child_config(), &db);
 
-        // Good friend
         for i in 0..5 {
             analyzer.analyze_with_context(
                 &child_input(
@@ -5123,7 +5617,6 @@ mod tests {
             );
         }
 
-        // Bully
         for i in 0..5 {
             analyzer.analyze_with_context(
                 &child_input("you're pathetic, kill yourself loser", "bully", "conv_2"),
@@ -5159,7 +5652,6 @@ mod tests {
         let conv = "dm_private";
         let hour = 3600 * 1000u64;
 
-        // Phase 1: grooming
         analyzer.analyze_with_context(
             &child_input(
                 "you're so beautiful and amazing and perfect, truly special",
@@ -5173,7 +5665,6 @@ mod tests {
             hour,
         );
 
-        // Phase 2: escalate to coercion
         analyzer.analyze_with_context(
             &child_input(
                 "if you leave me I'll hurt myself, I'll kill myself",
@@ -5205,7 +5696,6 @@ mod tests {
         let manip = "toxic_friend";
         let conv = "chat_1";
 
-        // Use text that enricher patterns will definitely match
         analyzer.analyze_with_context(
             &child_input(
                 "you're nothing without me, nobody else wants you around",
@@ -5231,7 +5721,6 @@ mod tests {
             3000,
         );
 
-        // Should detect through enricher or toxicity layer
         assert!(
             result.score > 0.0,
             "Identity erosion + network poisoning should be detected: {}",
@@ -5244,7 +5733,6 @@ mod tests {
         let db = test_db();
         let mut analyzer = Analyzer::new(child_config(), &db);
 
-        // Genuinely friendly messages that could be misinterpreted
         let messages = [
             "omg you're literally the best person ever haha",
             "let's hang out after school tomorrow at the mall",
@@ -5262,7 +5750,6 @@ mod tests {
             max_score = max_score.max(result.score);
         }
 
-        // Friendly teen conversation should not trigger high scores
         let profile = analyzer
             .context_tracker()
             .contact_profiler()
@@ -5287,7 +5774,21 @@ mod tests {
 
         assert!(
             result.detected_threats.iter().any(|(threat, score)| {
-                matches!(threat, ThreatType::Bullying | ThreatType::Threat) && *score >= 0.7
+                (match threat {
+                    ThreatType::Bullying | ThreatType::Threat => true,
+                    ThreatType::None
+                    | ThreatType::Grooming
+                    | ThreatType::Explicit
+                    | ThreatType::SelfHarm
+                    | ThreatType::Spam
+                    | ThreatType::Scam
+                    | ThreatType::Phishing
+                    | ThreatType::Manipulation
+                    | ThreatType::Nsfw
+                    | ThreatType::HateSpeech
+                    | ThreatType::Doxxing
+                    | ThreatType::PiiLeakage => false,
+                }) && *score >= 0.7
             }),
             "English hostile message should be detected even when config language differs: {:?}",
             result.detected_threats

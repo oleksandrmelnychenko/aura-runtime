@@ -1,3 +1,8 @@
+//! C FFI boundary for the AURA analysis engine.
+//!
+//! Exposes a protobuf-based C API for creating, configuring, and invoking
+//! the AURA analyzer from non-Rust host applications.
+
 #![allow(clippy::missing_safety_doc)]
 
 use std::cell::RefCell;
@@ -51,8 +56,11 @@ struct AuraInstance {
 }
 
 #[repr(C)]
+/// Opaque byte buffer returned by FFI calls for protobuf-encoded responses.
 pub struct AuraBuffer {
+    /// Pointer to the allocated byte data.
     pub ptr: *mut u8,
+    /// Length of the byte data in bytes.
     pub len: usize,
 }
 
@@ -248,6 +256,7 @@ fn conversation_summary_to_proto(
     }
 }
 
+/// Initializes a new AURA instance from a protobuf-encoded configuration.
 #[no_mangle]
 pub unsafe extern "C" fn aura_init(config_ptr: *const u8, config_len: usize) -> *mut c_void {
     clear_last_error();
@@ -269,6 +278,7 @@ pub unsafe extern "C" fn aura_init(config_ptr: *const u8, config_len: usize) -> 
     }
 }
 
+/// Analyzes a single message and writes the protobuf-encoded result to the output buffer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_analyze(
     handle: *mut c_void,
@@ -303,6 +313,7 @@ pub unsafe extern "C" fn aura_analyze(
     }
 }
 
+/// Analyzes a message with full conversation context and writes the result to the output buffer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_analyze_context(
     handle: *mut c_void,
@@ -350,6 +361,7 @@ pub unsafe extern "C" fn aura_analyze_context(
     }
 }
 
+/// Analyzes a batch of messages and writes the protobuf-encoded results to the output buffer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_analyze_batch(
     handle: *mut c_void,
@@ -413,6 +425,7 @@ pub unsafe extern "C" fn aura_analyze_batch(
     }
 }
 
+/// Updates the analyzer configuration on a live instance.
 #[no_mangle]
 pub unsafe extern "C" fn aura_update_config(
     handle: *mut c_void,
@@ -444,6 +457,7 @@ pub unsafe extern "C" fn aura_update_config(
     }
 }
 
+/// Reloads the pattern database from a protobuf-encoded request.
 #[no_mangle]
 pub unsafe extern "C" fn aura_reload_patterns(
     handle: *mut c_void,
@@ -498,6 +512,7 @@ pub unsafe extern "C" fn aura_reload_patterns(
     }
 }
 
+/// Exports the current conversation context state as a protobuf-encoded buffer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_export_context(handle: *mut c_void, out: *mut AuraBuffer) -> bool {
     clear_last_error();
@@ -519,6 +534,7 @@ pub unsafe extern "C" fn aura_export_context(handle: *mut c_void, out: *mut Aura
     }
 }
 
+/// Imports a previously exported conversation context state.
 #[no_mangle]
 pub unsafe extern "C" fn aura_import_context(
     handle: *mut c_void,
@@ -567,6 +583,7 @@ pub unsafe extern "C" fn aura_import_context(
     }
 }
 
+/// Removes expired conversation timelines and contact profiles.
 #[no_mangle]
 pub unsafe extern "C" fn aura_cleanup_context(handle: *mut c_void, now_ms: u64) -> bool {
     clear_last_error();
@@ -583,6 +600,7 @@ pub unsafe extern "C" fn aura_cleanup_context(handle: *mut c_void, now_ms: u64) 
     }
 }
 
+/// Returns all tracked contacts sorted by risk score as a protobuf-encoded buffer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_get_contacts_by_risk(
     handle: *mut c_void,
@@ -615,6 +633,7 @@ pub unsafe extern "C" fn aura_get_contacts_by_risk(
     }
 }
 
+/// Returns the behavioral profile of a specific contact as a protobuf-encoded buffer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_get_contact_profile(
     handle: *mut c_void,
@@ -668,6 +687,7 @@ pub unsafe extern "C" fn aura_get_contact_profile(
     }
 }
 
+/// Marks a contact as trusted, suppressing future risk signals for that contact.
 #[no_mangle]
 pub unsafe extern "C" fn aura_mark_contact_trusted(
     handle: *mut c_void,
@@ -701,6 +721,7 @@ pub unsafe extern "C" fn aura_mark_contact_trusted(
     }
 }
 
+/// Returns a summary of all tracked conversations as a protobuf-encoded buffer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_get_conversation_summary(
     handle: *mut c_void,
@@ -725,6 +746,7 @@ pub unsafe extern "C" fn aura_get_conversation_summary(
     }
 }
 
+/// Frees an AURA instance and all associated resources.
 #[no_mangle]
 pub unsafe extern "C" fn aura_free(handle: *mut c_void) {
     if !handle.is_null() {
@@ -732,6 +754,7 @@ pub unsafe extern "C" fn aura_free(handle: *mut c_void) {
     }
 }
 
+/// Frees a C string previously returned by the FFI layer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
@@ -739,6 +762,7 @@ pub unsafe extern "C" fn aura_free_string(ptr: *mut c_char) {
     }
 }
 
+/// Frees an `AuraBuffer` previously returned by the FFI layer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_free_buffer(buf: AuraBuffer) {
     if !buf.ptr.is_null() && buf.len > 0 {
@@ -748,12 +772,14 @@ pub unsafe extern "C" fn aura_free_buffer(buf: AuraBuffer) {
     }
 }
 
+/// Returns a pointer to the null-terminated version string of the AURA library.
 #[no_mangle]
 pub extern "C" fn aura_version() -> *const c_char {
     static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
     VERSION.as_ptr() as *const c_char
 }
 
+/// Returns the last error message as a C string, or null if no error occurred.
 #[no_mangle]
 pub extern "C" fn aura_last_error() -> *mut c_char {
     LAST_ERROR.with(|e| {

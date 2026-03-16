@@ -3,6 +3,7 @@ use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 use super::events::EventKind;
 use super::tracker::ConversationTimeline;
 
+/// Detects psychological manipulation patterns such as gaslighting, DARVO, and love-bomb/devalue cycles.
 pub struct ManipulationDetector;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -31,17 +32,19 @@ impl Default for ManipulationDetector {
 }
 
 impl ManipulationDetector {
+    /// Creates a new manipulation detector.
     pub fn new() -> Self {
         Self
     }
 
+    /// Analyzes a conversation timeline for manipulation tactics from a specific sender.
     pub fn analyze(
         &self,
         timeline: &ConversationTimeline,
         sender_id: &str,
         window_start: u64,
     ) -> Vec<DetectionSignal> {
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(4);
 
         if let Some(signal) = self.check_repeated_gaslighting(timeline, sender_id, window_start) {
             signals.push(signal);
@@ -224,15 +227,16 @@ impl ManipulationDetector {
     ) -> Option<DetectionSignal> {
         let events = timeline.events_from_sender(sender_id, window_start);
 
-        let love_count = events
-            .iter()
-            .filter(|e| e.kind == EventKind::LoveBombing)
-            .count();
-
-        let devalue_count = events
-            .iter()
-            .filter(|e| e.kind == EventKind::Devaluation || e.kind == EventKind::Denigration)
-            .count();
+        let mut love_count = 0usize;
+        let mut devalue_count = 0usize;
+        for e in &events {
+            if e.kind == EventKind::LoveBombing {
+                love_count += 1;
+            }
+            if e.kind == EventKind::Devaluation || e.kind == EventKind::Denigration {
+                devalue_count += 1;
+            }
+        }
 
         if love_count >= 2 && devalue_count >= 2 {
             let total = love_count + devalue_count;
@@ -307,19 +311,23 @@ impl ManipulationDetector {
         sender_id: &str,
         window_start: u64,
     ) -> Option<DetectionSignal> {
-        let poisoning_events: Vec<_> = timeline
-            .events_from_sender(sender_id, window_start)
-            .into_iter()
-            .filter(|event| event.kind == EventKind::NetworkPoisoning)
-            .collect();
+        let all_events = timeline.events_from_sender(sender_id, window_start);
+        let mut poisoning_events = Vec::with_capacity(all_events.len());
+        for event in all_events {
+            if event.kind == EventKind::NetworkPoisoning {
+                poisoning_events.push(event);
+            }
+        }
         if poisoning_events.is_empty() {
             return None;
         }
 
-        let max_confidence = poisoning_events
-            .iter()
-            .map(|event| event.confidence)
-            .fold(0.0f32, f32::max);
+        let mut max_confidence = 0.0f32;
+        for event in &poisoning_events {
+            if event.confidence > max_confidence {
+                max_confidence = event.confidence;
+            }
+        }
         if poisoning_events.len() >= 2 || max_confidence >= 0.7 {
             let score = if poisoning_events.len() >= 2 {
                 0.65
@@ -363,7 +371,37 @@ impl ManipulationDetector {
             EventKind::IdentityErosion => Some(ManipulationTactic::IdentityErosion),
             EventKind::ReputationThreat => Some(ManipulationTactic::ReputationThreat),
             EventKind::DebtCreation => Some(ManipulationTactic::DebtCreation),
-            _ => None,
+            EventKind::Flattery
+            | EventKind::GiftOffer
+            | EventKind::SecrecyRequest
+            | EventKind::PlatformSwitch
+            | EventKind::PersonalInfoRequest
+            | EventKind::PhotoRequest
+            | EventKind::VideoCallRequest
+            | EventKind::FinancialGrooming
+            | EventKind::MeetingRequest
+            | EventKind::SexualContent
+            | EventKind::AgeInappropriate
+            | EventKind::Insult
+            | EventKind::Denigration
+            | EventKind::HarmEncouragement
+            | EventKind::PhysicalThreat
+            | EventKind::RumorSpreading
+            | EventKind::Mockery
+            | EventKind::LoveBombing
+            | EventKind::SuicidalIdeation
+            | EventKind::Hopelessness
+            | EventKind::FarewellMessage
+            | EventKind::DoxxingAttempt
+            | EventKind::HateSpeech
+            | EventKind::LocationRequest
+            | EventKind::MoneyOffer
+            | EventKind::PiiSelfDisclosure
+            | EventKind::CasualMeetingRequest
+            | EventKind::SuicideCoercion
+            | EventKind::NormalConversation
+            | EventKind::TrustedContact
+            | EventKind::DefenseOfVictim => None,
         }
     }
 }

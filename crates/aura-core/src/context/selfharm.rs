@@ -3,6 +3,7 @@ use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 use super::events::EventKind;
 use super::tracker::ConversationTimeline;
 
+/// Detects self-harm risk patterns including hopelessness escalation, farewell sequences, and contagion.
 pub struct SelfHarmDetector;
 
 impl Default for SelfHarmDetector {
@@ -12,17 +13,19 @@ impl Default for SelfHarmDetector {
 }
 
 impl SelfHarmDetector {
+    /// Creates a new self-harm detector.
     pub fn new() -> Self {
         Self
     }
 
+    /// Analyzes a conversation timeline for self-harm risk signals from a specific sender.
     pub fn analyze(
         &self,
         timeline: &ConversationTimeline,
         sender_id: &str,
         window_start: u64,
     ) -> Vec<DetectionSignal> {
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(4);
 
         if let Some(signal) =
             self.check_hopelessness_accumulation(timeline, sender_id, window_start)
@@ -121,7 +124,49 @@ impl SelfHarmDetector {
                         farewell_after_darkness = true;
                     }
                 }
-                _ => {}
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => {}
             }
         }
 
@@ -156,18 +201,60 @@ impl SelfHarmDetector {
         sender_id: &str,
         window_start: u64,
     ) -> Option<DetectionSignal> {
-        let events: Vec<_> = timeline
-            .events_from_sender(sender_id, window_start)
-            .into_iter()
-            .filter(|e| {
-                matches!(
-                    e.kind,
-                    EventKind::Hopelessness
-                        | EventKind::SuicidalIdeation
-                        | EventKind::FarewellMessage
-                )
-            })
-            .collect();
+        let all_sender_events = timeline.events_from_sender(sender_id, window_start);
+        let mut events = Vec::with_capacity(all_sender_events.len());
+        for e in all_sender_events {
+            match e.kind {
+                EventKind::Hopelessness
+                | EventKind::SuicidalIdeation
+                | EventKind::FarewellMessage => {
+                    events.push(e);
+                }
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => {}
+            }
+        }
 
         if events.len() < 3 {
             return None;
@@ -175,10 +262,12 @@ impl SelfHarmDetector {
 
         let day_ms: u64 = 24 * 60 * 60 * 1000;
         let last_ts = events.last().unwrap().timestamp_ms;
-        let recent_count = events
-            .iter()
-            .filter(|e| e.timestamp_ms >= last_ts.saturating_sub(day_ms))
-            .count();
+        let mut recent_count = 0usize;
+        for e in &events {
+            if e.timestamp_ms >= last_ts.saturating_sub(day_ms) {
+                recent_count += 1;
+            }
+        }
 
         if recent_count >= 3 {
             return Some(DetectionSignal::context(
@@ -194,7 +283,10 @@ impl SelfHarmDetector {
             ));
         }
 
-        let mut days: Vec<u64> = events.iter().map(|e| e.timestamp_ms / day_ms).collect();
+        let mut days: Vec<u64> = Vec::with_capacity(events.len());
+        for e in &events {
+            days.push(e.timestamp_ms / day_ms);
+        }
         days.sort();
         days.dedup();
 
@@ -236,7 +328,48 @@ impl SelfHarmDetector {
                         positive_after_hopelessness += 1;
                     }
                 }
-                _ => {}
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::TrustedContact => {}
             }
         }
 
@@ -266,15 +399,58 @@ impl SelfHarmDetector {
         let two_days_ms: u64 = 48 * 60 * 60 * 1000;
         let events = timeline.events_since(window_start);
 
-        let self_harm_events: Vec<_> = events
-            .iter()
-            .filter(|e| {
-                matches!(
-                    e.kind,
-                    EventKind::Hopelessness | EventKind::SuicidalIdeation
-                )
-            })
-            .collect();
+        let mut self_harm_events = Vec::with_capacity(events.len());
+        for e in &events {
+            match e.kind {
+                EventKind::Hopelessness | EventKind::SuicidalIdeation => {
+                    self_harm_events.push(e);
+                }
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => {}
+            }
+        }
 
         if self_harm_events.len() < 2 {
             return None;
@@ -282,16 +458,12 @@ impl SelfHarmDetector {
 
         let mut senders_in_window = std::collections::HashSet::new();
         for event in &self_harm_events {
-            let window_events: Vec<_> = self_harm_events
-                .iter()
-                .filter(|e| {
-                    e.timestamp_ms >= event.timestamp_ms.saturating_sub(two_days_ms)
-                        && e.timestamp_ms <= event.timestamp_ms + two_days_ms
-                })
-                .collect();
-
-            for e in &window_events {
-                senders_in_window.insert(e.sender_id.as_str());
+            for e in &self_harm_events {
+                if e.timestamp_ms >= event.timestamp_ms.saturating_sub(two_days_ms)
+                    && e.timestamp_ms <= event.timestamp_ms + two_days_ms
+                {
+                    senders_in_window.insert(e.sender_id.as_str());
+                }
             }
 
             if senders_in_window.len() >= 2 {
@@ -323,23 +495,65 @@ impl SelfHarmDetector {
     ) -> Option<DetectionSignal> {
         let events = timeline.events_since(window_start);
 
-        let bullying_received = events
-            .iter()
-            .filter(|e| e.sender_id != sender_id && e.kind.is_bullying_indicator())
-            .count();
-
-        let self_harm_expressed = events
-            .iter()
-            .filter(|e| {
-                e.sender_id == sender_id
-                    && matches!(
-                        e.kind,
-                        EventKind::Hopelessness
-                            | EventKind::SuicidalIdeation
-                            | EventKind::FarewellMessage
-                    )
-            })
-            .count();
+        let mut bullying_received = 0usize;
+        let mut self_harm_expressed = 0usize;
+        for e in &events {
+            if e.sender_id != sender_id && e.kind.is_bullying_indicator() {
+                bullying_received += 1;
+            }
+            if e.sender_id == sender_id {
+                match e.kind {
+                    EventKind::Hopelessness
+                    | EventKind::SuicidalIdeation
+                    | EventKind::FarewellMessage => {
+                        self_harm_expressed += 1;
+                    }
+                    EventKind::Flattery
+                    | EventKind::GiftOffer
+                    | EventKind::SecrecyRequest
+                    | EventKind::PlatformSwitch
+                    | EventKind::PersonalInfoRequest
+                    | EventKind::PhotoRequest
+                    | EventKind::VideoCallRequest
+                    | EventKind::FinancialGrooming
+                    | EventKind::MeetingRequest
+                    | EventKind::SexualContent
+                    | EventKind::AgeInappropriate
+                    | EventKind::Insult
+                    | EventKind::Denigration
+                    | EventKind::HarmEncouragement
+                    | EventKind::PhysicalThreat
+                    | EventKind::RumorSpreading
+                    | EventKind::Exclusion
+                    | EventKind::Mockery
+                    | EventKind::GuiltTripping
+                    | EventKind::Gaslighting
+                    | EventKind::EmotionalBlackmail
+                    | EventKind::PeerPressure
+                    | EventKind::LoveBombing
+                    | EventKind::Darvo
+                    | EventKind::Devaluation
+                    | EventKind::DoxxingAttempt
+                    | EventKind::ScreenshotThreat
+                    | EventKind::HateSpeech
+                    | EventKind::LocationRequest
+                    | EventKind::MoneyOffer
+                    | EventKind::PiiSelfDisclosure
+                    | EventKind::CasualMeetingRequest
+                    | EventKind::DareChallenge
+                    | EventKind::SuicideCoercion
+                    | EventKind::FalseConsensus
+                    | EventKind::DebtCreation
+                    | EventKind::ReputationThreat
+                    | EventKind::IdentityErosion
+                    | EventKind::NetworkPoisoning
+                    | EventKind::FakeVulnerability
+                    | EventKind::NormalConversation
+                    | EventKind::TrustedContact
+                    | EventKind::DefenseOfVictim => {}
+                }
+            }
+        }
 
         if bullying_received >= 2 && self_harm_expressed >= 1 {
             let score = (0.7 + (bullying_received as f32 * 0.05)).min(0.9);

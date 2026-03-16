@@ -6,17 +6,24 @@ use aura_patterns::TextNormalizer;
 
 use super::events::{ContextEvent, EventKind};
 
+/// Contains the results of signal enrichment for a single message.
 pub struct EnrichmentResult {
+    /// Context events extracted from the message text.
     pub events: Vec<ContextEvent>,
 
+    /// Age value extracted from the message, if any.
     pub extracted_age: Option<u16>,
 }
 
+/// Configuration parameters for the signal enricher.
 pub struct EnricherConfig {
+    /// Minimum ratio of personal questions to flag as probing behavior.
     pub question_probe_threshold: f32,
 
+    /// Minimum count of compliment events to flag as love bombing.
     pub love_bombing_threshold: usize,
 
+    /// Enables stricter detection thresholds when set to true.
     pub strict_mode: bool,
 }
 
@@ -64,6 +71,7 @@ struct EnricherMatcher {
     entries: Vec<EnricherEntry>,
 }
 
+/// Extracts contextual safety events from raw message text using pattern matching.
 pub struct SignalEnricher {
     config: EnricherConfig,
     matcher: EnricherMatcher,
@@ -71,6 +79,7 @@ pub struct SignalEnricher {
 }
 
 impl SignalEnricher {
+    /// Creates a new signal enricher with the given configuration.
     pub fn new(config: EnricherConfig) -> Self {
         Self {
             config,
@@ -79,6 +88,7 @@ impl SignalEnricher {
         }
     }
 
+    /// Enriches a message by extracting context events using default parameters.
     pub fn enrich(
         &self,
         text: &str,
@@ -90,6 +100,7 @@ impl SignalEnricher {
             .events
     }
 
+    /// Enriches a message with full context including conversation history and sender metadata.
     pub fn enrich_full(
         &self,
         text: &str,
@@ -97,7 +108,7 @@ impl SignalEnricher {
         conversation_id: &str,
         timestamp_ms: u64,
     ) -> EnrichmentResult {
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(4);
         let lower = text.to_lowercase();
         let normalized = self.normalizer.normalize_semantic(text);
         let mut match_counts = vec![0usize; self.matcher.entries.len()];
@@ -515,10 +526,15 @@ impl SignalEnricher {
 }
 
 fn contains_high_risk_phrase(text: &str, normalizer: &TextNormalizer, phrases: &[&str]) -> bool {
-    phrases.iter().any(|phrase| {
+    let mut found = false;
+    for phrase in phrases.iter() {
         let normalized_phrase = normalizer.normalize_semantic(phrase);
-        !normalized_phrase.is_empty() && text.contains(&normalized_phrase)
-    })
+        if !normalized_phrase.is_empty() && text.contains(&normalized_phrase) {
+            found = true;
+            break;
+        }
+    }
+    found
 }
 
 fn build_enricher_matcher() -> EnricherMatcher {
@@ -744,7 +760,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("тобі потрібні гроші", Financial),
         ("можу купити тобі", Financial),
         ("який твій пейпал", Financial),
-        // PII Self-Disclosure — child sharing own info
         ("my number is", PiiSelfDisclosure),
         ("my phone number", PiiSelfDisclosure),
         ("text me at", PiiSelfDisclosure),
@@ -776,7 +791,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("я хожу в школу", PiiSelfDisclosure),
         ("меня на самом деле зовут", PiiSelfDisclosure),
         ("вот мой номер", PiiSelfDisclosure),
-        // Dare / Challenge
         ("i dare you", DareChallenge),
         ("bet you can't", DareChallenge),
         ("bet you won't", DareChallenge),
@@ -808,7 +822,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("это безопасно обещаю", DareChallenge),
         ("ничего не будет", DareChallenge),
         ("просто попробуй", DareChallenge),
-        // Blackmail / Screenshot threats
         ("i screenshotted this", Blackmail),
         ("i took a screenshot", Blackmail),
         ("i have screenshots", Blackmail),
@@ -835,8 +848,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("все увидят", Blackmail),
         ("я покажу всей школе", Blackmail),
         ("я все сохранил", Blackmail),
-        // Suicide Coercion — manipulator threatens self-harm to control victim
-        // EN teen slang
         ("if u leave ill kms", SuicideCoercion),
         ("without u i have no reason to live", SuicideCoercion),
         ("ill do smth to myself if u dont", SuicideCoercion),
@@ -847,7 +858,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("my life is nothing without u", SuicideCoercion),
         ("ill jump if u leave", SuicideCoercion),
         ("youll be sorry when im dead", SuicideCoercion),
-        // UK teen slang
         ("якщо ти підеш мені нема сенсу жити", SuicideCoercion),
         ("без тебе я просто здохну", SuicideCoercion),
         ("я зроблю щось з собою якщо ти не відпишеш", SuicideCoercion),
@@ -868,7 +878,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ),
         ("я без тебе не зможу рілі не покидай мене", SuicideCoercion),
         ("якщо виберешь її я зроблю з собою щось", SuicideCoercion),
-        // RU teen slang
         ("если ты уйдешь мне нет смысла жить", SuicideCoercion),
         ("без тебя я просто сдохну", SuicideCoercion),
         ("тебе будет пофиг когда меня не станет", SuicideCoercion),
@@ -876,8 +885,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("если заблочишь я покончу с этим", SuicideCoercion),
         ("я не могу без тебя жить", SuicideCoercion),
         ("без тебя мне конец", SuicideCoercion),
-        // False Consensus / Normalization — "everyone does it"
-        // EN teen
         ("everyone does it", FalseConsensus),
         ("its totally normal", FalseConsensus),
         ("all kids our age do this", FalseConsensus),
@@ -888,7 +895,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("nobody cares about that", FalseConsensus),
         ("its normal between friends", FalseConsensus),
         ("all my friends do this", FalseConsensus),
-        // UK teen
         ("всі так роблять", FalseConsensus),
         ("в нашому віці всі так", FalseConsensus),
         ("твої подруги теж просто не кажуть", FalseConsensus),
@@ -899,14 +905,11 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("всі нормальні люди робили", FalseConsensus),
         ("це всі робили", FalseConsensus),
         ("хто з нами той красавчик", FalseConsensus),
-        // RU teen
         ("все так делают", FalseConsensus),
         ("в нашем возрасте все так", FalseConsensus),
         ("твои подруги тоже просто не говорят", FalseConsensus),
         ("ничего такого", FalseConsensus),
         ("это нормально между друзьями", FalseConsensus),
-        // Debt Creation / Obligation — "you owe me"
-        // EN teen
         ("after everything i did for u", DebtCreation),
         ("u owe me", DebtCreation),
         ("i spent so much on u", DebtCreation),
@@ -916,7 +919,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("remember what i got u", DebtCreation),
         ("i wasted my time on u", DebtCreation),
         ("ungrateful", DebtCreation),
-        // UK teen
         ("після всього що я для тебе зробив", DebtCreation),
         ("ти мені винна", DebtCreation),
         ("я стільки на тебе витратив", DebtCreation),
@@ -926,13 +928,11 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("невдячна", DebtCreation),
         ("згадай що я тобі робив", DebtCreation),
         ("я на тебе стільки часу витратив", DebtCreation),
-        // RU teen
         ("после всего что я для тебя сделал", DebtCreation),
         ("ты мне должна", DebtCreation),
         ("я столько на тебя потратил", DebtCreation),
         ("неблагодарная", DebtCreation),
         ("и это твоя благодарность", DebtCreation),
-        // Gaslighting / reality denial
         ("youre twisting everything", Gaslighting),
         ("you are twisting everything", Gaslighting),
         ("maybe youre crazy", Gaslighting),
@@ -953,8 +953,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("ты сумасшедшая", Gaslighting),
         ("ты сумасшедший", Gaslighting),
         ("я это для твоего же блага", Gaslighting),
-        // Social Reputation Threats — "ill tell everyone at school"
-        // EN teen
         ("ill tell everyone at school", ReputationThreat),
         ("everyone will know", ReputationThreat),
         ("ill make sure no one talks to u", ReputationThreat),
@@ -964,7 +962,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("ill tell ur friends", ReputationThreat),
         ("wait till everyone finds out", ReputationThreat),
         ("no one will talk to u after this", ReputationThreat),
-        // UK teen
         ("я розкажу всій школі", ReputationThreat),
         ("всі дізнаються", ReputationThreat),
         ("ніхто з тобою не буде дружити", ReputationThreat),
@@ -979,15 +976,12 @@ fn build_enricher_matcher() -> EnricherMatcher {
             "ніхто з тобою не буде спілкуватись після цього",
             ReputationThreat,
         ),
-        // RU teen
         ("я расскажу всей школе", ReputationThreat),
         ("все узнают", ReputationThreat),
         ("никто с тобой не будет дружить", ReputationThreat),
         ("представь что скажут", ReputationThreat),
         ("вся школа узнает", ReputationThreat),
         ("я покажу это всем в школе", ReputationThreat),
-        // Identity Erosion — "ur so mature for ur age"
-        // EN teen
         ("ur not like other kids", IdentityErosion),
         ("ur so mature for ur age", IdentityErosion),
         ("u dont need those friends", IdentityErosion),
@@ -997,7 +991,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("ur friends are so childish", IdentityErosion),
         ("u deserve better than them", IdentityErosion),
         ("only i really understand u", IdentityErosion),
-        // UK teen
         ("ти не як інші діти", IdentityErosion),
         ("ти така доросла для свого віку", IdentityErosion),
         ("тобі не потрібні ці друзі", IdentityErosion),
@@ -1007,14 +1000,11 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("твої друзі такі дитячі", IdentityErosion),
         ("ти заслуговуєш на краще", IdentityErosion),
         ("тільки я тебе реально розумію", IdentityErosion),
-        // RU teen
         ("ты не как другие дети", IdentityErosion),
         ("ты такая взрослая для своего возраста", IdentityErosion),
         ("тебе не нужны эти друзья", IdentityErosion),
         ("твои родители тебя не понимают", IdentityErosion),
         ("только я тебя реально понимаю", IdentityErosion),
-        // Support Network Poisoning — "ur friend was talking shit about u"
-        // EN teen
         ("was talking shit about u", NetworkPoisoning),
         ("they dont really like u", NetworkPoisoning),
         ("no one at school actually cares", NetworkPoisoning),
@@ -1025,7 +1015,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("was talking behind ur back", NetworkPoisoning),
         ("everyone talks about u", NetworkPoisoning),
         ("they only pretend to like u", NetworkPoisoning),
-        // UK teen
         ("про тебе таке казала", NetworkPoisoning),
         ("тебе за очі всі обсирають", NetworkPoisoning),
         ("знаєш шо про тебе в тому чаті пишуть", NetworkPoisoning),
@@ -1035,15 +1024,12 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("за спиною таке про тебе каже", NetworkPoisoning),
         ("вони тільки прикидаються що дружать", NetworkPoisoning),
         ("я бачив шо вони про тебе писали", NetworkPoisoning),
-        // RU teen
         ("про тебя такое говорила", NetworkPoisoning),
         ("тебя за глаза все обсирают", NetworkPoisoning),
         ("никто в школе тебя реально не любит", NetworkPoisoning),
         ("они с тебя смеются за спиной", NetworkPoisoning),
         ("они только притворяются что дружат", NetworkPoisoning),
         ("знаешь что про тебя пишут", NetworkPoisoning),
-        // Fake Vulnerability / Sympathy Manipulation
-        // EN teen
         ("im so sick u have no idea", FakeVulnerability),
         ("my family is so messed up", FakeVulnerability),
         ("ur the only one who gets me", FakeVulnerability),
@@ -1054,7 +1040,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("i might not be around much longer", FakeVulnerability),
         ("im going through so much rn", FakeVulnerability),
         ("u have no idea what im dealing with", FakeVulnerability),
-        // UK teen
         ("мені так погано ти навіть не уявляєш", FakeVulnerability),
         ("в мене вдома такий жах", FakeVulnerability),
         ("ти єдина хто мене розуміє", FakeVulnerability),
@@ -1064,15 +1049,12 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("більше нікому на мене не пофіг", FakeVulnerability),
         ("я може скоро зникну", FakeVulnerability),
         ("в мене зараз таке діється", FakeVulnerability),
-        // RU teen
         ("мне так плохо ты даже не представляешь", FakeVulnerability),
         ("у меня дома такой ужас", FakeVulnerability),
         ("ты единственная кто меня понимает", FakeVulnerability),
         ("у меня никого кроме тебя нет", FakeVulnerability),
         ("обещай что будешь рядом", FakeVulnerability),
         ("ты мой единственный друг", FakeVulnerability),
-        // Platform Migration — teen slang for moving to other apps
-        // EN teen
         ("add me on snap", PlatformMigration),
         ("dm me on insta", PlatformMigration),
         ("msg me on insta", PlatformMigration),
@@ -1083,7 +1065,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("lets talk on telegram", PlatformMigration),
         ("delete this chat", PlatformMigration),
         ("this app is trash lets go", PlatformMigration),
-        // UK teen
         ("го в тг", PlatformMigration),
         ("пиши в снеп", PlatformMigration),
         ("пиши в інст", PlatformMigration),
@@ -1094,7 +1075,6 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("тут палево", PlatformMigration),
         ("видали чат", PlatformMigration),
         ("го в дс", PlatformMigration),
-        // RU teen
         ("го в тг", PlatformMigration),
         ("пиши в снап", PlatformMigration),
         ("пиши в инст", PlatformMigration),
@@ -1103,24 +1083,19 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("давай в телегу", PlatformMigration),
         ("тут палево", PlatformMigration),
         ("удали чат", PlatformMigration),
-        // Emotional Withdrawal / Punishment
-        // EN teen
         ("fine whatever", EmotionalWithdrawal),
         ("i guess u dont care", EmotionalWithdrawal),
         ("ill find someone who actually cares", EmotionalWithdrawal),
         ("dont text me anymore", EmotionalWithdrawal),
         ("ur just like everyone else", EmotionalWithdrawal),
-        // UK teen
         ("ну ясно тобі пофіг", EmotionalWithdrawal),
         ("добре знайду когось хто мене цінує", EmotionalWithdrawal),
         ("не пиши мені більше", EmotionalWithdrawal),
         ("ти як всі інші", EmotionalWithdrawal),
         ("ок забий", EmotionalWithdrawal),
-        // RU teen
         ("ну ясно тебе пофиг", EmotionalWithdrawal),
         ("найду кого-то кто меня ценит", EmotionalWithdrawal),
         ("не пиши мне больше", EmotionalWithdrawal),
-        // Gaming / Digital Currency Bribery (added to Financial)
         ("ill get u vbucks", Financial),
         ("free robux", Financial),
         ("want free skins", Financial),
@@ -1967,11 +1942,8 @@ mod tests {
         );
     }
 
-    // ---- Mixed-language tests ----
-
     #[test]
     fn mixed_lang_uk_en_compliments() {
-        // Ukrainian + English teen mix: "ти такa cute, ваще gorgeous"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ти така cute і gorgeous, ваще amazing",
@@ -1979,7 +1951,6 @@ mod tests {
             "conv_1",
             1000,
         );
-        // Should detect at least Flattery from "cute" + "gorgeous" + "amazing"
         assert!(
             events
                 .iter()
@@ -1990,7 +1961,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_uk_en_personal_questions() {
-        // "Хей, where do you live? В якій школі навчаєшся?"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "Хей, where do you live? В якій школі навчаєшся?",
@@ -2008,7 +1978,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_ru_en_blackmail() {
-        // "I have screenshots, я покажу всей школе"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "i have screenshots и я покажу всей школе lol",
@@ -2027,7 +1996,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_uk_en_suicide_coercion() {
-        // "If u leave i cant live, без тебе мені кінець"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "если ты уйдешь мне нет смысла жить, i cant live without u",
@@ -2043,7 +2011,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_uk_en_platform_switch() {
-        // "Го в тг, this app is trash lets go"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "го в тг, this app is trash lets go",
@@ -2059,7 +2026,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_three_languages_grooming() {
-        // All 3 languages in one message: flattery + isolation + urgency
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ти така beautiful, тільки я тебе розумію, hurry прямо зараз, быстрее",
@@ -2067,7 +2033,6 @@ mod tests {
             "conv_1",
             1000,
         );
-        // Should detect multiple signals from three-language input
         let has_flattery = events
             .iter()
             .any(|e| e.kind == EventKind::Flattery || e.kind == EventKind::LoveBombing);
@@ -2075,7 +2040,6 @@ mod tests {
             has_flattery,
             "Three-language mix should detect flattery: {events:?}"
         );
-        // Verify that the multilingual input produces events at all
         assert!(
             !events.is_empty(),
             "Three-language input should produce at least one event"
@@ -2084,7 +2048,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_dare_en_uk() {
-        // "I dare you, тобі слабо зробити це"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "i dare you бро, тобі слабо, bet you wont",
@@ -2100,7 +2063,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_pii_disclosure_en_uk() {
-        // Child mixing languages when sharing info
         let enricher = default_enricher();
         let events = enricher.enrich(
             "my number is 0501234567, я ходжу в школу номер 42",
@@ -2118,7 +2080,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_debt_creation_ru_en() {
-        // "After everything i did for u, неблагодарная"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "after everything i did for u, неблагодарная, u owe me",
@@ -2134,7 +2095,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_identity_erosion_uk_en() {
-        // "Ur not like other kids, ти занадто розумна для своїх ровесників"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "ur not like other kids, ти занадто розумна для своїх ровесників",
@@ -2150,7 +2110,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_network_poisoning_ru_en() {
-        // "They dont really like u, они с тебя смеются за спиной"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "they dont really like u, они с тебя смеются за спиной",
@@ -2166,7 +2125,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_fake_vulnerability_uk_en() {
-        // "Im going through so much rn, в мене нікого крім тебе немає"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "im going through so much rn, в мене нікого крім тебе немає",
@@ -2184,7 +2142,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_false_consensus_ru_en() {
-        // "Everyone does it, все так делают, its normal"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "everyone does it, все так делают, its totally normal",
@@ -2200,7 +2157,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_hopelessness_uk_en() {
-        // "Nobody cares, я тягар, what's the point"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "nobody cares, я тягар, what's the point",
@@ -2216,7 +2172,6 @@ mod tests {
 
     #[test]
     fn mixed_lang_emotional_withdrawal_en_uk() {
-        // "Fine whatever, ну ясно тобі пофіг"
         let enricher = default_enricher();
         let events = enricher.enrich(
             "fine whatever ну ясно тобі пофіг ill find someone who actually cares",

@@ -3,6 +3,7 @@ use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 use super::contact::ContactProfiler;
 use super::tracker::ConversationTimeline;
 
+/// Detects coordinated raid attacks by counting hostile new contacts within time windows.
 pub struct RaidDetector {
     critical_senders_10min: usize,
 
@@ -16,6 +17,7 @@ impl Default for RaidDetector {
 }
 
 impl RaidDetector {
+    /// Creates a new raid detector with default thresholds.
     pub fn new() -> Self {
         Self {
             critical_senders_10min: 5,
@@ -23,13 +25,14 @@ impl RaidDetector {
         }
     }
 
+    /// Analyzes a conversation timeline for coordinated raid patterns from new contacts.
     pub fn analyze(
         &self,
         timeline: &ConversationTimeline,
         now_ms: u64,
         contact_profiler: &ContactProfiler,
     ) -> Vec<DetectionSignal> {
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(4);
 
         let window_10min = now_ms.saturating_sub(10 * 60 * 1000);
         let hostile_10min = self.count_hostile_senders(timeline, window_10min, contact_profiler);
@@ -78,10 +81,13 @@ impl RaidDetector {
         let hostile_senders =
             timeline.unique_senders_matching(since_ms, |event| event.kind.is_bullying_indicator());
 
-        hostile_senders
-            .iter()
-            .filter(|sender_id| contact_profiler.is_new_contact(sender_id))
-            .count()
+        let mut count = 0usize;
+        for sender_id in &hostile_senders {
+            if contact_profiler.is_new_contact(sender_id) {
+                count += 1;
+            }
+        }
+        count
     }
 }
 

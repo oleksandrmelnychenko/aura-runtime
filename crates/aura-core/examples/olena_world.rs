@@ -490,7 +490,7 @@ fn main() {
 
     step(
         &mut analyzer,
-        thu + 4 * hour + 1 * 60_000,
+        thu + 4 * hour + 60_000,
         "12:01",
         "diana_fake",
         "diana_fake",

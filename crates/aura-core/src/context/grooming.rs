@@ -6,6 +6,7 @@ use super::contact::ContactProfiler;
 use super::events::EventKind;
 use super::tracker::ConversationTimeline;
 
+/// Detects grooming behavior patterns across a conversation timeline.
 pub struct GroomingDetector {
     strict_mode: bool,
 }
@@ -26,10 +27,12 @@ enum GroomingStage {
 }
 
 impl GroomingDetector {
+    /// Creates a new grooming detector with the given strictness setting.
     pub fn new(strict_mode: bool) -> Self {
         Self { strict_mode }
     }
 
+    /// Analyzes a conversation timeline for grooming stage progression from a specific sender.
     pub fn analyze(
         &self,
         timeline: &ConversationTimeline,
@@ -42,7 +45,7 @@ impl GroomingDetector {
             return Vec::new();
         }
 
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(4);
 
         let mut stage_counts: [usize; 6] = [0; 6];
         let mut stage_timestamps: [Option<u64>; 6] = [None; 6];
@@ -58,15 +61,24 @@ impl GroomingDetector {
             }
         }
 
-        let stages_present: usize = stage_counts.iter().filter(|&&c| c > 0).count();
+        let mut stages_present: usize = 0;
+        for &c in stage_counts.iter() {
+            if c > 0 {
+                stages_present += 1;
+            }
+        }
 
         if stages_present == 0 {
             return signals;
         }
 
-        let has_core_anchor = events
-            .iter()
-            .any(|event| Self::is_core_grooming_anchor(&event.kind));
+        let mut has_core_anchor = false;
+        for event in &events {
+            if Self::is_core_grooming_anchor(&event.kind) {
+                has_core_anchor = true;
+                break;
+            }
+        }
         if !has_core_anchor {
             return signals;
         }
@@ -169,14 +181,21 @@ impl GroomingDetector {
             ));
         }
 
-        // Secret Keeping Escalation: repeated secrecy requests from same sender
-        let secrecy_count = events
-            .iter()
-            .filter(|e| e.kind == EventKind::SecrecyRequest)
-            .count();
+        let mut secrecy_count = 0usize;
+        for e in &events {
+            if e.kind == EventKind::SecrecyRequest {
+                secrecy_count += 1;
+            }
+        }
         if secrecy_count >= 3 {
             let secrecy_score = (0.6 + (secrecy_count as f32 - 3.0) * 0.1).min(0.9);
-            let already_has_higher = signals.iter().any(|s| s.score >= secrecy_score);
+            let mut already_has_higher = false;
+            for s in &signals {
+                if s.score >= secrecy_score {
+                    already_has_higher = true;
+                    break;
+                }
+            }
             if !already_has_higher {
                 signals.push(DetectionSignal::context(
                     ThreatType::Grooming,
@@ -238,15 +257,62 @@ impl GroomingDetector {
             return 0.0;
         }
 
-        if sender_events.iter().any(|event| {
-            !matches!(
-                event.kind,
+        let mut has_non_benign = false;
+        for event in &sender_events {
+            let is_benign = match event.kind {
                 EventKind::Flattery
-                    | EventKind::LoveBombing
-                    | EventKind::CasualMeetingRequest
-                    | EventKind::MeetingRequest
-            )
-        }) {
+                | EventKind::LoveBombing
+                | EventKind::CasualMeetingRequest
+                | EventKind::MeetingRequest => true,
+                EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => false,
+            };
+            if !is_benign {
+                has_non_benign = true;
+                break;
+            }
+        }
+        if has_non_benign {
             return 0.0;
         }
 
@@ -264,30 +330,153 @@ impl GroomingDetector {
             return 0.0;
         }
 
-        let first_sender_ts = sender_events.iter().map(|event| event.timestamp_ms).min();
-        let last_sender_ts = sender_events.iter().map(|event| event.timestamp_ms).max();
+        let mut first_sender_ts: Option<u64> = None;
+        let mut last_sender_ts: Option<u64> = None;
+        for event in &sender_events {
+            let ts = event.timestamp_ms;
+            first_sender_ts = Some(match first_sender_ts {
+                None => ts,
+                Some(prev) => {
+                    if ts < prev {
+                        ts
+                    } else {
+                        prev
+                    }
+                }
+            });
+            last_sender_ts = Some(match last_sender_ts {
+                None => ts,
+                Some(prev) => {
+                    if ts > prev {
+                        ts
+                    } else {
+                        prev
+                    }
+                }
+            });
+        }
         let has_interleaved_reply = match (first_sender_ts, last_sender_ts) {
-            (Some(first_ts), Some(last_ts)) => other_events
-                .iter()
-                .any(|event| event.timestamp_ms > first_ts && event.timestamp_ms < last_ts),
+            (Some(first_ts), Some(last_ts)) => {
+                let mut found = false;
+                for event in &other_events {
+                    if event.timestamp_ms > first_ts && event.timestamp_ms < last_ts {
+                        found = true;
+                        break;
+                    }
+                }
+                found
+            }
             _ => false,
         };
         if !has_interleaved_reply {
             return 0.0;
         }
 
-        let reciprocal_meeting = other_events.iter().any(|event| {
-            matches!(
-                event.kind,
-                EventKind::CasualMeetingRequest | EventKind::MeetingRequest
-            )
-        });
-        let reciprocal_social_reply = other_events.iter().any(|event| {
-            matches!(
-                event.kind,
-                EventKind::NormalConversation | EventKind::Flattery | EventKind::LoveBombing
-            )
-        });
+        let mut reciprocal_meeting = false;
+        for event in &other_events {
+            match event.kind {
+                EventKind::CasualMeetingRequest | EventKind::MeetingRequest => {
+                    reciprocal_meeting = true;
+                    break;
+                }
+                EventKind::Flattery
+                | EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::LoveBombing
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::NormalConversation
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => {}
+            }
+        }
+        let mut reciprocal_social_reply = false;
+        for event in &other_events {
+            match event.kind {
+                EventKind::NormalConversation | EventKind::Flattery | EventKind::LoveBombing => {
+                    reciprocal_social_reply = true;
+                    break;
+                }
+                EventKind::GiftOffer
+                | EventKind::SecrecyRequest
+                | EventKind::PlatformSwitch
+                | EventKind::PersonalInfoRequest
+                | EventKind::PhotoRequest
+                | EventKind::VideoCallRequest
+                | EventKind::FinancialGrooming
+                | EventKind::MeetingRequest
+                | EventKind::SexualContent
+                | EventKind::AgeInappropriate
+                | EventKind::Insult
+                | EventKind::Denigration
+                | EventKind::HarmEncouragement
+                | EventKind::PhysicalThreat
+                | EventKind::RumorSpreading
+                | EventKind::Exclusion
+                | EventKind::Mockery
+                | EventKind::GuiltTripping
+                | EventKind::Gaslighting
+                | EventKind::EmotionalBlackmail
+                | EventKind::PeerPressure
+                | EventKind::Darvo
+                | EventKind::Devaluation
+                | EventKind::SuicidalIdeation
+                | EventKind::Hopelessness
+                | EventKind::FarewellMessage
+                | EventKind::DoxxingAttempt
+                | EventKind::ScreenshotThreat
+                | EventKind::HateSpeech
+                | EventKind::LocationRequest
+                | EventKind::MoneyOffer
+                | EventKind::PiiSelfDisclosure
+                | EventKind::CasualMeetingRequest
+                | EventKind::DareChallenge
+                | EventKind::SuicideCoercion
+                | EventKind::FalseConsensus
+                | EventKind::DebtCreation
+                | EventKind::ReputationThreat
+                | EventKind::IdentityErosion
+                | EventKind::NetworkPoisoning
+                | EventKind::FakeVulnerability
+                | EventKind::TrustedContact
+                | EventKind::DefenseOfVictim => {}
+            }
+        }
         if !reciprocal_meeting && !reciprocal_social_reply {
             return 0.0;
         }
@@ -322,29 +511,83 @@ impl GroomingDetector {
             EventKind::EmotionalBlackmail | EventKind::GuiltTripping | EventKind::DebtCreation => {
                 Some(GroomingStage::Control)
             }
-            _ => None,
+            EventKind::MeetingRequest
+            | EventKind::Insult
+            | EventKind::Denigration
+            | EventKind::HarmEncouragement
+            | EventKind::PhysicalThreat
+            | EventKind::RumorSpreading
+            | EventKind::Exclusion
+            | EventKind::Mockery
+            | EventKind::Gaslighting
+            | EventKind::PeerPressure
+            | EventKind::Darvo
+            | EventKind::Devaluation
+            | EventKind::SuicidalIdeation
+            | EventKind::Hopelessness
+            | EventKind::FarewellMessage
+            | EventKind::DoxxingAttempt
+            | EventKind::ScreenshotThreat
+            | EventKind::HateSpeech
+            | EventKind::LocationRequest
+            | EventKind::DareChallenge
+            | EventKind::SuicideCoercion
+            | EventKind::ReputationThreat
+            | EventKind::NormalConversation
+            | EventKind::TrustedContact
+            | EventKind::DefenseOfVictim => None,
         }
     }
 
     fn is_core_grooming_anchor(kind: &EventKind) -> bool {
-        matches!(
-            kind,
+        match kind {
             EventKind::Flattery
-                | EventKind::LoveBombing
-                | EventKind::GiftOffer
-                | EventKind::MoneyOffer
-                | EventKind::FinancialGrooming
-                | EventKind::SecrecyRequest
-                | EventKind::PlatformSwitch
-                | EventKind::PersonalInfoRequest
-                | EventKind::PhotoRequest
-                | EventKind::VideoCallRequest
-                | EventKind::CasualMeetingRequest
-                | EventKind::MeetingRequest
-                | EventKind::SexualContent
-                | EventKind::AgeInappropriate
-                | EventKind::LocationRequest
-        )
+            | EventKind::LoveBombing
+            | EventKind::GiftOffer
+            | EventKind::MoneyOffer
+            | EventKind::FinancialGrooming
+            | EventKind::SecrecyRequest
+            | EventKind::PlatformSwitch
+            | EventKind::PersonalInfoRequest
+            | EventKind::PhotoRequest
+            | EventKind::VideoCallRequest
+            | EventKind::CasualMeetingRequest
+            | EventKind::MeetingRequest
+            | EventKind::SexualContent
+            | EventKind::AgeInappropriate
+            | EventKind::LocationRequest => true,
+            EventKind::Insult
+            | EventKind::Denigration
+            | EventKind::HarmEncouragement
+            | EventKind::PhysicalThreat
+            | EventKind::RumorSpreading
+            | EventKind::Exclusion
+            | EventKind::Mockery
+            | EventKind::GuiltTripping
+            | EventKind::Gaslighting
+            | EventKind::EmotionalBlackmail
+            | EventKind::PeerPressure
+            | EventKind::Darvo
+            | EventKind::Devaluation
+            | EventKind::SuicidalIdeation
+            | EventKind::Hopelessness
+            | EventKind::FarewellMessage
+            | EventKind::DoxxingAttempt
+            | EventKind::ScreenshotThreat
+            | EventKind::HateSpeech
+            | EventKind::PiiSelfDisclosure
+            | EventKind::DareChallenge
+            | EventKind::SuicideCoercion
+            | EventKind::FalseConsensus
+            | EventKind::DebtCreation
+            | EventKind::ReputationThreat
+            | EventKind::IdentityErosion
+            | EventKind::NetworkPoisoning
+            | EventKind::FakeVulnerability
+            | EventKind::NormalConversation
+            | EventKind::TrustedContact
+            | EventKind::DefenseOfVictim => false,
+        }
     }
 
     fn stages_escalate(&self, timestamps: &[Option<u64>; 6]) -> bool {
@@ -357,16 +600,26 @@ impl GroomingDetector {
             }
             last_ts = *ts;
         }
-        ordered && timestamps.iter().filter(|t| t.is_some()).count() >= 2
+        let mut present_count = 0usize;
+        for t in timestamps.iter() {
+            if t.is_some() {
+                present_count += 1;
+            }
+        }
+        ordered && present_count >= 2
     }
 
     fn escalation_speed_bonus(&self, timestamps: &[Option<u64>; 6]) -> Option<f32> {
-        let mut present: Vec<u64> = timestamps.iter().filter_map(|t| *t).collect();
+        let mut present: Vec<u64> = Vec::with_capacity(timestamps.len());
+        for t in timestamps.iter() {
+            if let Some(ts) = *t {
+                present.push(ts);
+            }
+        }
         if present.len() < 2 {
             return None;
         }
 
-        // Stage slots are semantic order, not chronological order. Sort before measuring span.
         present.sort_unstable();
         let first = present[0];
         let last = present[present.len() - 1];

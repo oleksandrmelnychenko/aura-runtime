@@ -2,15 +2,21 @@ use crate::types::{Confidence, DetectionSignal, SignalFamily, ThreatType};
 
 use super::tracker::ConversationTimeline;
 
+/// Analyzes message timing patterns to detect message bombing, late-night contact, and response asymmetry.
 pub struct TimingAnalyzer;
 
+/// Aggregated timing metrics for a sender within a conversation.
 pub struct TimingSignals {
+    /// Average messages per minute from the sender.
     pub messages_per_minute: f32,
 
+    /// Indicates whether messaging occurs during late-night hours.
     pub late_night: bool,
 
+    /// Indicates whether the sender shows rapid attachment behavior.
     pub rapid_attachment: bool,
 
+    /// Total number of messages from the sender in the window.
     pub total_from_sender: usize,
 }
 
@@ -21,10 +27,12 @@ impl Default for TimingAnalyzer {
 }
 
 impl TimingAnalyzer {
+    /// Creates a new timing analyzer.
     pub fn new() -> Self {
         Self
     }
 
+    /// Analyzes timing patterns for a sender, assuming UTC timezone.
     pub fn analyze(
         &self,
         timeline: &ConversationTimeline,
@@ -41,6 +49,7 @@ impl TimingAnalyzer {
         )
     }
 
+    /// Analyzes timing patterns for a sender using the specified timezone offset.
     pub fn analyze_with_tz(
         &self,
         timeline: &ConversationTimeline,
@@ -49,7 +58,7 @@ impl TimingAnalyzer {
         is_child_account: bool,
         timezone_offset_minutes: i32,
     ) -> Vec<DetectionSignal> {
-        let mut signals = Vec::new();
+        let mut signals = Vec::with_capacity(4);
 
         if let Some(signal) = self.check_message_bombing(timeline, sender_id, current_timestamp_ms)
         {
@@ -196,10 +205,16 @@ impl TimingAnalyzer {
             return None;
         }
 
-        let sender_avg_ms =
-            sender_response_times.iter().sum::<u64>() / sender_response_times.len() as u64;
-        let other_avg_ms =
-            other_response_times.iter().sum::<u64>() / other_response_times.len() as u64;
+        let mut sender_sum: u64 = 0;
+        for &t in &sender_response_times {
+            sender_sum += t;
+        }
+        let sender_avg_ms = sender_sum / sender_response_times.len() as u64;
+        let mut other_sum: u64 = 0;
+        for &t in &other_response_times {
+            other_sum += t;
+        }
+        let other_avg_ms = other_sum / other_response_times.len() as u64;
 
         let thirty_seconds = 30 * 1000;
         let five_minutes = 5 * 60 * 1000;
@@ -516,12 +531,10 @@ mod tests {
     fn late_night_uses_local_time_not_utc() {
         let analyzer = TimingAnalyzer::new();
 
-        // 21:00 UTC = 00:00 UTC+3 (Ukraine midnight)
         let base_time = 21 * 3600 * 1000u64;
         let timeline = make_timeline_msgs("adult", 5, base_time, 60000);
         let now = base_time + 5 * 60000;
 
-        // Without timezone offset (UTC): 21:00 is NOT late night (23-05)
         let signals_utc = analyzer.analyze_with_tz(&timeline, "adult", now, true, 0);
         assert!(
             !signals_utc
@@ -530,7 +543,6 @@ mod tests {
             "21:00 UTC should NOT be flagged as late night"
         );
 
-        // With UTC+3 offset: 21:00 UTC → 00:00 local = late night!
         let signals_local = analyzer.analyze_with_tz(&timeline, "adult", now, true, 180);
         assert!(
             signals_local
@@ -544,12 +556,10 @@ mod tests {
     fn late_night_negative_timezone_offset() {
         let analyzer = TimingAnalyzer::new();
 
-        // 03:00 UTC = 22:00 UTC-5 (New York, not late by the 23-05 window)
         let base_time = 3 * 3600 * 1000u64;
         let timeline = make_timeline_msgs("adult", 5, base_time, 60000);
         let now = base_time + 5 * 60000;
 
-        // At UTC: 03:00 IS late night
         let signals_utc = analyzer.analyze_with_tz(&timeline, "adult", now, true, 0);
         assert!(
             signals_utc
@@ -558,7 +568,6 @@ mod tests {
             "03:00 UTC should be flagged as late night"
         );
 
-        // With UTC-5: 03:00 UTC = 22:00 local → NOT late night
         let signals_local = analyzer.analyze_with_tz(&timeline, "adult", now, true, -300);
         assert!(
             !signals_local

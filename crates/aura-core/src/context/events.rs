@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+/// Represents a single detected event within a conversation context.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextEvent {
     #[serde(default)]
@@ -16,160 +17,350 @@ pub struct ContextEvent {
     pub confidence: f32,
 }
 
+/// Enumerates all recognized behavioral event categories.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventKind {
+    /// Excessive praise or compliments.
     Flattery,
 
+    /// Unsolicited gift or reward offer.
     GiftOffer,
 
+    /// Request to keep secrets.
     SecrecyRequest,
 
+    /// Attempt to move to another platform.
     PlatformSwitch,
 
+    /// Request for personal information.
     PersonalInfoRequest,
 
+    /// Request for photos.
     PhotoRequest,
 
+    /// Request for video call.
     VideoCallRequest,
 
+    /// Financial exploitation attempt.
     FinancialGrooming,
 
+    /// Request for in-person meeting.
     MeetingRequest,
 
+    /// Sexually explicit content.
     SexualContent,
 
+    /// Age-inappropriate material or behavior.
     AgeInappropriate,
 
+    /// Direct insult or name-calling.
     Insult,
 
+    /// Systematic belittling or demeaning.
     Denigration,
 
+    /// Encouraging self-harm or violence.
     HarmEncouragement,
 
+    /// Threat of physical violence.
     PhysicalThreat,
 
+    /// Spreading rumors about someone.
     RumorSpreading,
 
+    /// Social exclusion or ostracism.
     Exclusion,
 
+    /// Mocking or ridiculing behavior.
     Mockery,
 
+    /// Guilt-based emotional manipulation.
     #[serde(alias = "guild_tripping")]
     GuiltTripping,
 
+    /// Reality-denying psychological manipulation.
     Gaslighting,
 
+    /// Emotional coercion or threats.
     EmotionalBlackmail,
 
+    /// Coercive group pressure tactic.
     PeerPressure,
 
+    /// Excessive affection to gain trust.
     LoveBombing,
 
+    /// Deny, attack, reverse victim/offender.
     Darvo,
 
+    /// Systematic undermining of self-worth.
     Devaluation,
 
+    /// Expression of suicidal thoughts.
     SuicidalIdeation,
 
+    /// Expressions of hopelessness or despair.
     Hopelessness,
 
+    /// Final goodbye or farewell message.
     FarewellMessage,
 
+    /// Attempt to expose private information.
     DoxxingAttempt,
 
+    /// Threat involving screenshots or recordings.
     ScreenshotThreat,
 
+    /// Hateful speech targeting identity groups.
     HateSpeech,
 
+    /// Request for physical location.
     LocationRequest,
 
+    /// Unsolicited offer of money.
     MoneyOffer,
 
+    /// Child self-disclosing personal information.
     PiiSelfDisclosure,
+    /// Low-pressure meeting suggestion.
     CasualMeetingRequest,
+    /// Dare or challenge as pressure.
     DareChallenge,
 
+    /// Coercing someone toward suicide.
     SuicideCoercion,
+    /// Fabricating group agreement.
     FalseConsensus,
+    /// Creating obligation through gifts.
     DebtCreation,
+    /// Threatening someone's reputation.
     ReputationThreat,
+    /// Eroding someone's sense of identity.
     IdentityErosion,
+    /// Poisoning victim's social network.
     NetworkPoisoning,
+    /// Feigning vulnerability for manipulation.
     FakeVulnerability,
 
+    /// Benign normal conversation event.
     NormalConversation,
+    /// Interaction from a trusted contact.
     TrustedContact,
+    /// Standing up for a victim.
     DefenseOfVictim,
 }
 
 impl EventKind {
+    /// Returns true if this event is a core grooming indicator used for primary detection.
     pub fn is_core_grooming_indicator(&self) -> bool {
-        matches!(
-            self,
+        match self {
             Self::Flattery
-                | Self::GiftOffer
-                | Self::SecrecyRequest
-                | Self::PlatformSwitch
-                | Self::PersonalInfoRequest
-                | Self::PhotoRequest
-                | Self::VideoCallRequest
-                | Self::FinancialGrooming
-                | Self::MeetingRequest
-                | Self::SexualContent
-                | Self::AgeInappropriate
-                | Self::LoveBombing
-                | Self::PiiSelfDisclosure
-                | Self::CasualMeetingRequest
-        )
-    }
-
-    pub fn is_grooming_indicator(&self) -> bool {
-        self.is_core_grooming_indicator()
-            || matches!(
-                self,
-                Self::IdentityErosion
-                    | Self::FakeVulnerability
-                    | Self::FalseConsensus
-                    | Self::NetworkPoisoning
-                    | Self::DebtCreation
-            )
-    }
-
-    pub fn is_bullying_indicator(&self) -> bool {
-        matches!(
-            self,
+            | Self::GiftOffer
+            | Self::SecrecyRequest
+            | Self::PlatformSwitch
+            | Self::PersonalInfoRequest
+            | Self::PhotoRequest
+            | Self::VideoCallRequest
+            | Self::FinancialGrooming
+            | Self::MeetingRequest
+            | Self::SexualContent
+            | Self::AgeInappropriate
+            | Self::LoveBombing
+            | Self::PiiSelfDisclosure
+            | Self::CasualMeetingRequest => true,
             Self::Insult
-                | Self::Denigration
-                | Self::HarmEncouragement
-                | Self::PhysicalThreat
-                | Self::RumorSpreading
-                | Self::Exclusion
-                | Self::Mockery
-        )
+            | Self::Denigration
+            | Self::HarmEncouragement
+            | Self::PhysicalThreat
+            | Self::RumorSpreading
+            | Self::Exclusion
+            | Self::Mockery
+            | Self::GuiltTripping
+            | Self::Gaslighting
+            | Self::EmotionalBlackmail
+            | Self::PeerPressure
+            | Self::Darvo
+            | Self::Devaluation
+            | Self::SuicidalIdeation
+            | Self::Hopelessness
+            | Self::FarewellMessage
+            | Self::DoxxingAttempt
+            | Self::ScreenshotThreat
+            | Self::HateSpeech
+            | Self::LocationRequest
+            | Self::MoneyOffer
+            | Self::DareChallenge
+            | Self::SuicideCoercion
+            | Self::FalseConsensus
+            | Self::DebtCreation
+            | Self::ReputationThreat
+            | Self::IdentityErosion
+            | Self::NetworkPoisoning
+            | Self::FakeVulnerability
+            | Self::NormalConversation
+            | Self::TrustedContact
+            | Self::DefenseOfVictim => false,
+        }
     }
 
+    /// Returns true if this event indicates grooming behavior, including extended indicators.
+    pub fn is_grooming_indicator(&self) -> bool {
+        match self {
+            Self::Flattery
+            | Self::GiftOffer
+            | Self::SecrecyRequest
+            | Self::PlatformSwitch
+            | Self::PersonalInfoRequest
+            | Self::PhotoRequest
+            | Self::VideoCallRequest
+            | Self::FinancialGrooming
+            | Self::MeetingRequest
+            | Self::SexualContent
+            | Self::AgeInappropriate
+            | Self::LoveBombing
+            | Self::PiiSelfDisclosure
+            | Self::CasualMeetingRequest
+            | Self::IdentityErosion
+            | Self::FakeVulnerability
+            | Self::FalseConsensus
+            | Self::NetworkPoisoning
+            | Self::DebtCreation => true,
+            Self::Insult
+            | Self::Denigration
+            | Self::HarmEncouragement
+            | Self::PhysicalThreat
+            | Self::RumorSpreading
+            | Self::Exclusion
+            | Self::Mockery
+            | Self::GuiltTripping
+            | Self::Gaslighting
+            | Self::EmotionalBlackmail
+            | Self::PeerPressure
+            | Self::Darvo
+            | Self::Devaluation
+            | Self::SuicidalIdeation
+            | Self::Hopelessness
+            | Self::FarewellMessage
+            | Self::DoxxingAttempt
+            | Self::ScreenshotThreat
+            | Self::HateSpeech
+            | Self::LocationRequest
+            | Self::MoneyOffer
+            | Self::DareChallenge
+            | Self::SuicideCoercion
+            | Self::ReputationThreat
+            | Self::NormalConversation
+            | Self::TrustedContact
+            | Self::DefenseOfVictim => false,
+        }
+    }
+
+    /// Returns true if this event indicates bullying behavior.
+    pub fn is_bullying_indicator(&self) -> bool {
+        match self {
+            Self::Insult
+            | Self::Denigration
+            | Self::HarmEncouragement
+            | Self::PhysicalThreat
+            | Self::RumorSpreading
+            | Self::Exclusion
+            | Self::Mockery => true,
+            Self::Flattery
+            | Self::GiftOffer
+            | Self::SecrecyRequest
+            | Self::PlatformSwitch
+            | Self::PersonalInfoRequest
+            | Self::PhotoRequest
+            | Self::VideoCallRequest
+            | Self::FinancialGrooming
+            | Self::MeetingRequest
+            | Self::SexualContent
+            | Self::AgeInappropriate
+            | Self::GuiltTripping
+            | Self::Gaslighting
+            | Self::EmotionalBlackmail
+            | Self::PeerPressure
+            | Self::LoveBombing
+            | Self::Darvo
+            | Self::Devaluation
+            | Self::SuicidalIdeation
+            | Self::Hopelessness
+            | Self::FarewellMessage
+            | Self::DoxxingAttempt
+            | Self::ScreenshotThreat
+            | Self::HateSpeech
+            | Self::LocationRequest
+            | Self::MoneyOffer
+            | Self::PiiSelfDisclosure
+            | Self::CasualMeetingRequest
+            | Self::DareChallenge
+            | Self::SuicideCoercion
+            | Self::FalseConsensus
+            | Self::DebtCreation
+            | Self::ReputationThreat
+            | Self::IdentityErosion
+            | Self::NetworkPoisoning
+            | Self::FakeVulnerability
+            | Self::NormalConversation
+            | Self::TrustedContact
+            | Self::DefenseOfVictim => false,
+        }
+    }
+
+    /// Returns true if this event indicates psychological manipulation.
     pub fn is_manipulation_indicator(&self) -> bool {
-        matches!(
-            self,
+        match self {
             Self::GuiltTripping
-                | Self::Gaslighting
-                | Self::EmotionalBlackmail
-                | Self::PeerPressure
-                | Self::Darvo
-                | Self::Devaluation
-                | Self::ScreenshotThreat
-                | Self::DareChallenge
-                | Self::SuicideCoercion
-                | Self::FalseConsensus
-                | Self::DebtCreation
-                | Self::ReputationThreat
-                | Self::IdentityErosion
-                | Self::NetworkPoisoning
-                | Self::FakeVulnerability
-        )
+            | Self::Gaslighting
+            | Self::EmotionalBlackmail
+            | Self::PeerPressure
+            | Self::Darvo
+            | Self::Devaluation
+            | Self::ScreenshotThreat
+            | Self::DareChallenge
+            | Self::SuicideCoercion
+            | Self::FalseConsensus
+            | Self::DebtCreation
+            | Self::ReputationThreat
+            | Self::IdentityErosion
+            | Self::NetworkPoisoning
+            | Self::FakeVulnerability => true,
+            Self::Flattery
+            | Self::GiftOffer
+            | Self::SecrecyRequest
+            | Self::PlatformSwitch
+            | Self::PersonalInfoRequest
+            | Self::PhotoRequest
+            | Self::VideoCallRequest
+            | Self::FinancialGrooming
+            | Self::MeetingRequest
+            | Self::SexualContent
+            | Self::AgeInappropriate
+            | Self::Insult
+            | Self::Denigration
+            | Self::HarmEncouragement
+            | Self::PhysicalThreat
+            | Self::RumorSpreading
+            | Self::Exclusion
+            | Self::Mockery
+            | Self::LoveBombing
+            | Self::SuicidalIdeation
+            | Self::Hopelessness
+            | Self::FarewellMessage
+            | Self::DoxxingAttempt
+            | Self::HateSpeech
+            | Self::LocationRequest
+            | Self::MoneyOffer
+            | Self::PiiSelfDisclosure
+            | Self::CasualMeetingRequest
+            | Self::NormalConversation
+            | Self::TrustedContact
+            | Self::DefenseOfVictim => false,
+        }
     }
 
+    /// Returns the severity score for this event kind in the range 0.0 to 1.0.
     pub fn severity(&self) -> f32 {
         match self {
             Self::MeetingRequest => 0.9,
@@ -231,25 +422,118 @@ impl EventKind {
         }
     }
 
+    /// Returns true if this event represents hostile or aggressive behavior.
     pub fn is_hostile(&self) -> bool {
-        self.is_bullying_indicator()
-            || self.is_manipulation_indicator()
-            || matches!(
-                self,
-                Self::DoxxingAttempt | Self::HateSpeech | Self::LocationRequest
-            )
+        match self {
+            Self::Insult
+            | Self::Denigration
+            | Self::HarmEncouragement
+            | Self::PhysicalThreat
+            | Self::RumorSpreading
+            | Self::Exclusion
+            | Self::Mockery
+            | Self::GuiltTripping
+            | Self::Gaslighting
+            | Self::EmotionalBlackmail
+            | Self::PeerPressure
+            | Self::Darvo
+            | Self::Devaluation
+            | Self::ScreenshotThreat
+            | Self::DareChallenge
+            | Self::SuicideCoercion
+            | Self::FalseConsensus
+            | Self::DebtCreation
+            | Self::ReputationThreat
+            | Self::IdentityErosion
+            | Self::NetworkPoisoning
+            | Self::FakeVulnerability
+            | Self::DoxxingAttempt
+            | Self::HateSpeech
+            | Self::LocationRequest => true,
+            Self::Flattery
+            | Self::GiftOffer
+            | Self::SecrecyRequest
+            | Self::PlatformSwitch
+            | Self::PersonalInfoRequest
+            | Self::PhotoRequest
+            | Self::VideoCallRequest
+            | Self::FinancialGrooming
+            | Self::MeetingRequest
+            | Self::SexualContent
+            | Self::AgeInappropriate
+            | Self::LoveBombing
+            | Self::SuicidalIdeation
+            | Self::Hopelessness
+            | Self::FarewellMessage
+            | Self::MoneyOffer
+            | Self::PiiSelfDisclosure
+            | Self::CasualMeetingRequest
+            | Self::NormalConversation
+            | Self::TrustedContact
+            | Self::DefenseOfVictim => false,
+        }
     }
 
+    /// Returns true if this event represents supportive or protective behavior.
     pub fn is_supportive(&self) -> bool {
-        matches!(self, Self::DefenseOfVictim)
+        match self {
+            Self::DefenseOfVictim => true,
+            Self::Flattery
+            | Self::GiftOffer
+            | Self::SecrecyRequest
+            | Self::PlatformSwitch
+            | Self::PersonalInfoRequest
+            | Self::PhotoRequest
+            | Self::VideoCallRequest
+            | Self::FinancialGrooming
+            | Self::MeetingRequest
+            | Self::SexualContent
+            | Self::AgeInappropriate
+            | Self::Insult
+            | Self::Denigration
+            | Self::HarmEncouragement
+            | Self::PhysicalThreat
+            | Self::RumorSpreading
+            | Self::Exclusion
+            | Self::Mockery
+            | Self::GuiltTripping
+            | Self::Gaslighting
+            | Self::EmotionalBlackmail
+            | Self::PeerPressure
+            | Self::LoveBombing
+            | Self::Darvo
+            | Self::Devaluation
+            | Self::SuicidalIdeation
+            | Self::Hopelessness
+            | Self::FarewellMessage
+            | Self::DoxxingAttempt
+            | Self::ScreenshotThreat
+            | Self::HateSpeech
+            | Self::LocationRequest
+            | Self::MoneyOffer
+            | Self::PiiSelfDisclosure
+            | Self::CasualMeetingRequest
+            | Self::DareChallenge
+            | Self::SuicideCoercion
+            | Self::FalseConsensus
+            | Self::DebtCreation
+            | Self::ReputationThreat
+            | Self::IdentityErosion
+            | Self::NetworkPoisoning
+            | Self::FakeVulnerability
+            | Self::NormalConversation
+            | Self::TrustedContact => false,
+        }
     }
 
+    /// Returns true if this event is a grooming indicator but not manipulation or bullying.
     pub fn is_grooming_only(&self) -> bool {
         self.is_grooming_indicator()
             && !self.is_manipulation_indicator()
             && !self.is_bullying_indicator()
     }
 
+    /// Returns the contact rating adjustment for this event kind.
     pub fn rating_delta(&self) -> f32 {
         if self.is_hostile() {
             let sev = self.severity();
@@ -478,7 +762,6 @@ mod tests {
 
     #[test]
     fn grooming_only_excludes_manipulation_overlap() {
-        // Events that are BOTH grooming and manipulation should NOT be grooming_only
         let overlap = vec![
             EventKind::IdentityErosion,
             EventKind::FakeVulnerability,
@@ -519,10 +802,9 @@ mod tests {
 
     #[test]
     fn hostile_rating_deltas_scale_with_severity() {
-        // High severity hostile events should have larger negative deltas
-        let high = EventKind::PhysicalThreat.rating_delta(); // sev 0.9 -> -7
-        let med = EventKind::Denigration.rating_delta(); // sev 0.6 -> -4
-        let low = EventKind::Mockery.rating_delta(); // sev 0.4 -> -2
+        let high = EventKind::PhysicalThreat.rating_delta();
+        let med = EventKind::Denigration.rating_delta();
+        let low = EventKind::Mockery.rating_delta();
         assert!(
             high < med,
             "High severity {high} should be more negative than medium {med}"
@@ -545,7 +827,6 @@ mod tests {
 
     #[test]
     fn high_severity_hostile_events() {
-        // All events with severity >= 0.8 should get -7 rating delta
         let high_sev = vec![
             EventKind::SuicideCoercion,
             EventKind::EmotionalBlackmail,
