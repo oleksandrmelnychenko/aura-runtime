@@ -17,7 +17,9 @@ sha2.workspace = true
 getrandom = "0.2"
 
 [dev-dependencies]
+aura-proto = { path = "../aura-proto" }
 criterion = "0.5"
+prost = "0.13"
 
 [[bench]]
 name = "analyze"

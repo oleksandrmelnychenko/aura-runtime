@@ -1,6 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use aura_patterns::PatternDatabase;
+use serde::Serialize;
 
 use crate::analyzer::Analyzer;
 use crate::config::AuraConfig;
@@ -15,7 +16,7 @@ pub struct RiskExample {
     pub target_probability: f32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CalibrationBin {
     pub lower_bound: f32,
     pub upper_bound: f32,
@@ -25,7 +26,7 @@ pub struct CalibrationBin {
     pub gap: f32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ThreatCalibrationReport {
     pub threat_type: ThreatType,
     pub count: usize,
@@ -34,7 +35,7 @@ pub struct ThreatCalibrationReport {
     pub bins: Vec<CalibrationBin>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CalibrationReport {
     pub count: usize,
     pub brier_score: f32,
@@ -43,7 +44,7 @@ pub struct CalibrationReport {
     pub by_threat: Vec<ThreatCalibrationReport>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LeadTimePoint {
     pub timestamp_ms: u64,
     pub score: f32,
@@ -57,7 +58,7 @@ pub struct LeadTimeCase {
     pub timeline: Vec<LeadTimePoint>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LeadTimeResult {
     pub threat_type: ThreatType,
     pub onset_ms: u64,
@@ -68,7 +69,7 @@ pub struct LeadTimeResult {
     pub delay_after_onset_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LeadTimeSummary {
     pub total_cases: usize,
     pub detected_cases: usize,
@@ -96,7 +97,7 @@ pub struct ScenarioCase {
     pub steps: Vec<ScenarioStep>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioLeadTimeRecord {
     pub name: String,
     pub result: LeadTimeResult,
@@ -115,7 +116,7 @@ pub struct ScenarioRunResult {
     pub lead_time: Option<LeadTimeResult>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioClassificationRecord {
     pub name: String,
     pub primary_threat: Option<ThreatType>,
@@ -127,7 +128,7 @@ pub struct ScenarioClassificationRecord {
     pub false_positive: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioClassificationSummary {
     pub total_positive_scenarios: usize,
     pub detected_positive_scenarios: usize,
@@ -140,7 +141,7 @@ pub struct ScenarioClassificationSummary {
     pub scenarios: Vec<ScenarioClassificationRecord>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioEvaluationSummary {
     pub calibration: CalibrationReport,
     pub lead_time: LeadTimeSummary,
@@ -149,7 +150,7 @@ pub struct ScenarioEvaluationSummary {
     pub scenarios: Vec<ScenarioLeadTimeRecord>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LanguageSliceSummary {
     pub language: String,
     pub scenario_count: usize,
@@ -158,7 +159,7 @@ pub struct LanguageSliceSummary {
     pub classification: ScenarioClassificationSummary,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioQualityGates {
     pub max_brier_score: Option<f32>,
     pub max_expected_calibration_error: Option<f32>,
@@ -168,7 +169,7 @@ pub struct ScenarioQualityGates {
     pub per_threat: Vec<ThreatCalibrationGate>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ThreatCalibrationGate {
     pub threat_type: ThreatType,
     pub min_example_count: Option<usize>,
@@ -176,13 +177,13 @@ pub struct ThreatCalibrationGate {
     pub max_expected_calibration_error: Option<f32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum GateComparison {
     AtMost,
     AtLeast,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioGateCheck {
     pub name: String,
     pub comparison: GateComparison,
@@ -191,7 +192,7 @@ pub struct ScenarioGateCheck {
     pub passed: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioGateReport {
     pub passed: bool,
     pub checks: Vec<ScenarioGateCheck>,

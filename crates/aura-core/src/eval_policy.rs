@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
 use serde::Deserialize;
+use serde::Serialize;
 
 use crate::{
     canonical_messenger_scenarios, canonical_multilingual_scenarios, suicide_coercion_case,
@@ -9,7 +10,7 @@ use crate::{
     UiAction,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioPolicyExpectation {
     pub scenario_name: String,
     pub required_any: Vec<UiAction>,
@@ -18,7 +19,7 @@ pub struct ScenarioPolicyExpectation {
     pub forbid_any_action: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ScenarioPolicyRecord {
     pub scenario_name: String,
     pub expectation_name: String,
@@ -30,7 +31,7 @@ pub struct ScenarioPolicyRecord {
     pub passed: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PolicyActionSummary {
     pub total_scenarios: usize,
     pub passed_scenarios: usize,
@@ -42,7 +43,7 @@ pub struct PolicyActionSummary {
     pub scenarios: Vec<ScenarioPolicyRecord>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PolicyActionQualityGates {
     pub min_scenario_pass_rate: Option<f32>,
     pub min_required_any_coverage: Option<f32>,

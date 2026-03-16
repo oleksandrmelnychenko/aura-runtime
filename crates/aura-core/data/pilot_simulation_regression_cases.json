@@ -1,0 +1,385 @@
+{
+  "schema_version": 1,
+  "suite_id": "aura_pilot_simulation_regression_v1",
+  "suite_label": "AURA Pilot Simulation Regression Corpus",
+  "maintainer": "aura_core_team",
+  "created_at_ms": 1773532800000,
+  "updated_at_ms": 1773705600000,
+  "cases": [
+    {
+      "id": "pilot_olena_grooming_private_escalation",
+      "source_family": "olena_world",
+      "source_case": "maks_private_escalation",
+      "default_language": "uk",
+      "conversation_type": "direct",
+      "detection_threshold": 0.55,
+      "primary_threat": "grooming",
+      "onset_step": 2,
+      "tracked_threats": ["grooming", "manipulation"],
+      "step_interval_ms": 3600000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "required_any": ["suggest_block_contact", "restrict_unknown_contact"],
+        "required_by_onset": ["suggest_block_contact"],
+        "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+      },
+      "messages": [
+        {
+          "text": "Привіт! Бачив твій малюнок у групі, ти дуже талановита! Я теж малюю 😊",
+          "sender_id": "maks_28",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "Олена, я купив нову графічну планшетку, хочу тобі подарувати стару — вона ще класна!",
+          "sender_id": "maks_28",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "Тільки не кажи мамі про планшетку, вона може не зрозуміти. Це наш секрет, ок?",
+          "sender_id": "maks_28",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "Олена, скинь свою фоточку, хочу подивитись яка ти стала красива 😍",
+          "sender_id": "maks_28",
+          "observed_threats": ["grooming"]
+        }
+      ]
+    },
+    {
+      "id": "pilot_world_promo_spam_phishing",
+      "source_family": "world_sim",
+      "source_case": "promo_spam_link",
+      "default_language": "uk",
+      "conversation_type": "direct",
+      "detection_threshold": 0.75,
+      "primary_threat": "phishing",
+      "onset_step": 0,
+      "tracked_threats": ["phishing"],
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "required_any": ["confirm_before_open_link", "suggest_report"],
+        "required_by_onset": ["confirm_before_open_link"],
+        "forbidden_any": ["show_crisis_support"]
+      },
+      "messages": [
+        {
+          "text": "grab this now http://fr33-r0bux.xyz/claim before it expires",
+          "sender_id": "promo_bot",
+          "observed_threats": ["phishing"]
+        }
+      ]
+    },
+    {
+      "id": "pilot_world_class_group_pile_on",
+      "source_family": "world_sim",
+      "source_case": "class_group_pile_on",
+      "default_language": "en",
+      "conversation_type": "group_chat",
+      "member_count": 6,
+      "detection_threshold": 0.5,
+      "primary_threat": "bullying",
+      "onset_step": 2,
+      "tracked_threats": ["bullying"],
+      "step_interval_ms": 60000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "required_any": ["slow_down_conversation", "suggest_report"],
+        "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+      },
+      "messages": [
+        {
+          "text": "Nobody likes you, just leave",
+          "sender_id": "b1",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're worthless and pathetic",
+          "sender_id": "b2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "Everyone hates you, go away",
+          "sender_id": "b3",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "You're disgusting, nobody wants you",
+          "sender_id": "b4",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "pilot_olena_private_selfharm_crisis",
+      "source_family": "olena_world",
+      "source_case": "private_crisis_messages",
+      "default_language": "uk",
+      "conversation_type": "direct",
+      "detection_threshold": 0.70,
+      "primary_threat": "self_harm",
+      "onset_step": 1,
+      "tracked_threats": ["self_harm"],
+      "step_interval_ms": 300000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "required_any": ["show_crisis_support", "escalate_to_guardian"],
+        "required_by_onset": ["show_crisis_support"],
+        "forbidden_any": ["suggest_report", "suggest_block_contact", "restrict_unknown_contact", "confirm_before_open_link"]
+      },
+      "messages": [
+        {
+          "text": "Мені так погано... я не хочу більше жити так, всі мене ненавидять",
+          "sender_id": "olena",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "Навіщо я взагалі народилась, нікому не потрібна",
+          "sender_id": "olena",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "pilot_mega_screenshot_blackmail",
+      "source_family": "mega_simulation",
+      "source_case": "screenshot_blackmail",
+      "default_language": "uk",
+      "conversation_type": "direct",
+      "detection_threshold": 0.60,
+      "primary_threat": "manipulation",
+      "onset_step": 1,
+      "tracked_threats": ["manipulation"],
+      "step_interval_ms": 60000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "required_any": ["suggest_block_contact", "suggest_report"],
+        "required_by_onset": ["suggest_block_contact"],
+        "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+      },
+      "messages": [
+        {
+          "text": "I took a screenshot of everything you said.",
+          "sender_id": "blackmailer",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "I have screenshots and everyone will see this unless you listen.",
+          "sender_id": "blackmailer",
+          "observed_threats": ["manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "pilot_mega_peer_pressure_roof_challenge",
+      "source_family": "mega_simulation",
+      "source_case": "peer_pressure_roof_challenge",
+      "default_language": "uk",
+      "conversation_type": "group_chat",
+      "member_count": 6,
+      "detection_threshold": 0.45,
+      "primary_threat": "manipulation",
+      "onset_step": 3,
+      "tracked_threats": ["manipulation"],
+      "step_interval_ms": 1000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "required_any": ["suggest_block_contact"],
+        "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+      },
+      "messages": [
+        {
+          "text": "го зробимо челендж з даху!!",
+          "sender_id": "peer1"
+        },
+        {
+          "text": "гооо хто перший той легенда",
+          "sender_id": "peer2"
+        },
+        {
+          "text": "не бійся там не високо тіпа",
+          "sender_id": "peer3"
+        },
+        {
+          "text": "всі нормальні люди робили, ти шо не нормальна?",
+          "sender_id": "peer2",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "якщо зассиш ми тебе більше не кличемо нікуди",
+          "sender_id": "peer1",
+          "observed_threats": ["manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "pilot_mega_substance_offer_pressure",
+      "source_family": "mega_simulation",
+      "source_case": "substance_offer_pressure",
+      "default_language": "uk",
+      "conversation_type": "direct",
+      "detection_threshold": 0.50,
+      "primary_threat": "manipulation",
+      "onset_step": 0,
+      "tracked_threats": ["manipulation"],
+      "step_interval_ms": 1000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "required_any": ["suggest_block_contact"],
+        "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+      },
+      "messages": [
+        {
+          "text": "хочеш спробувати тр@вку? перший раз на халяву",
+          "sender_id": "dealer",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "не сси, всі так роблять в нашому віці",
+          "sender_id": "dealer",
+          "observed_threats": ["manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "pilot_mega_cyberbullying_social_humiliation",
+      "source_family": "mega_simulation",
+      "source_case": "cyberbullying_social_humiliation",
+      "default_language": "uk",
+      "conversation_type": "group_chat",
+      "member_count": 10,
+      "detection_threshold": 0.60,
+      "primary_threat": "bullying",
+      "onset_step": 4,
+      "tracked_threats": ["bullying"],
+      "step_interval_ms": 1000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "required_any": ["slow_down_conversation", "suggest_report"],
+        "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+      },
+      "messages": [
+        {
+          "text": "ви бачіли шо олена запостила в інсту?? 😂😂",
+          "sender_id": "cyberbully1"
+        },
+        {
+          "text": "АААХАХАХ яка вона потворна на тій фотці 🤮",
+          "sender_id": "cyberbully2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "го всі репортнем її акаунт 😂",
+          "sender_id": "cyberbully1",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "я вже написала їй в коменти 'кринж' 💀",
+          "sender_id": "cyberbully3",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "треба зробити мем з її фоткою 😂😂",
+          "sender_id": "cyberbully2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "вже зробив дивіться 💀💀💀",
+          "sender_id": "cyberbully1",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "АХАХАХ скинь всім в клас",
+          "sender_id": "cyberbully3",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "олена побачить і буде ревіти 😂",
+          "sender_id": "cyberbully2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "їй тре видалити інсту і тікток вона там жах",
+          "sender_id": "cyberbully1",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "нехай здохне від соромь 💀",
+          "sender_id": "cyberbully3",
+          "observed_threats": ["bullying"]
+        }
+      ]
+    },
+    {
+      "id": "pilot_mega_friendly_joke_negative_control",
+      "source_family": "mega_simulation",
+      "source_case": "friendly_joke_sequence",
+      "default_language": "uk",
+      "conversation_type": "direct",
+      "detection_threshold": 0.70,
+      "tracked_threats": ["bullying", "threat", "manipulation"],
+      "step_interval_ms": 1000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "forbid_any_action": true
+      },
+      "messages": [
+        {
+          "text": "ти така дурна хахаха 😂😂 жартую",
+          "sender_id": "bestie"
+        },
+        {
+          "text": "сама така бро! 😜",
+          "sender_id": "olena"
+        },
+        {
+          "text": "я тебе вб'ю за бутерброд шо ти зїла!! 😂😂",
+          "sender_id": "bestie"
+        }
+      ]
+    },
+    {
+      "id": "pilot_mega_group_selfie_negative_control",
+      "source_family": "mega_simulation",
+      "source_case": "group_selfie_sequence",
+      "default_language": "uk",
+      "conversation_type": "group_chat",
+      "member_count": 10,
+      "detection_threshold": 0.70,
+      "tracked_threats": ["grooming", "manipulation", "bullying"],
+      "step_interval_ms": 1000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "forbid_any_action": true
+      },
+      "messages": [
+        {
+          "text": "зробіть мені фотку для інсти пж 📸😂",
+          "sender_id": "nastya"
+        },
+        {
+          "text": "настя і її інста 😂😂",
+          "sender_id": "artem"
+        },
+        {
+          "text": "го ще селфі разом!!",
+          "sender_id": "dasha"
+        },
+        {
+          "text": "гоооо!! групове селфі 🤳💕",
+          "sender_id": "olena"
+        }
+      ]
+    }
+  ]
+}

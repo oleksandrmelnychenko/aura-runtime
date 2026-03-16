@@ -677,6 +677,11 @@ impl Analyzer {
         &self.context_tracker
     }
 
+    /// Returns the effective protection level currently applied by the analyzer.
+    pub fn protection_level(&self) -> ProtectionLevel {
+        self.config.effective_protection_level()
+    }
+
     /// Exports the conversation tracker state for persistence or transfer.
     pub fn export_context_state(&self) -> TrackerWireState {
         self.context_tracker.export_wire_state()

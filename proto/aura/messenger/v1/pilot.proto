@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package aura.messenger.v1;
+
+import "aura/messenger/v1/messenger.proto";
+
+message ProtectedIdentifier {
+  string token = 1;
+  string scheme = 2;
+}
+
+message AuditThreatScore {
+  ThreatType threat_type = 1;
+  float score = 2;
+}
+
+message AuditRecord {
+  string schema_version = 1;
+  uint64 event_timestamp_ms = 2;
+  string runtime_version = 3;
+  string wire_package = 4;
+  uint32 state_schema_version = 5;
+  ProtectionLevel protection_level = 6;
+  ThreatType threat_type = 7;
+  float primary_score = 8;
+  repeated AuditThreatScore top_threat_scores = 9;
+  repeated string reason_codes = 10;
+  repeated UiAction ui_actions = 11;
+  AlertPriority parent_alert = 12;
+  repeated FollowUpAction follow_ups = 13;
+  bool crisis_resources = 14;
+  BehavioralTrend contact_trend = 15;
+  CircleTier contact_circle_tier = 16;
+  string request_id = 17;
+  ProtectedIdentifier sender_token = 18;
+  ProtectedIdentifier conversation_token = 19;
+}
+
+message ShadowModePrivacy {
+  string identifier_scheme = 1;
+  bool raw_text_present = 2;
+  bool raw_identifier_fields_present = 3;
+}
+
+message ShadowModeSummary {
+  uint64 total_events = 1;
+  uint64 threat_events = 2;
+  uint64 blocked_events = 3;
+  map<string, uint64> action_counts = 4;
+  map<string, uint64> threat_counts = 5;
+  map<string, uint64> alert_counts = 6;
+  uint64 finding_count = 7;
+}
+
+message ShadowModeExpectation {
+  ThreatType expect_threat = 1;
+  Action expect_min_action = 2;
+  AlertPriority expect_min_alert = 3;
+}
+
+message ShadowModeMirror {
+  bool would_surface_to_child = 1;
+  bool would_alert_guardian = 2;
+  bool would_open_review = 3;
+  bool would_block_message = 4;
+}
+
+message ShadowModeContactSummary {
+  ProtectedIdentifier sender_token = 1;
+  float rating = 2;
+  float trust_level = 3;
+  CircleTier circle_tier = 4;
+  BehavioralTrend trend = 5;
+  bool is_trusted = 6;
+  bool is_new_contact = 7;
+  uint64 conversation_count = 8;
+}
+
+message ShadowModeDecision {
+  ThreatType threat_type = 1;
+  Confidence confidence = 2;
+  Action action = 3;
+  float score = 4;
+  repeated string reason_codes = 5;
+  repeated AuditThreatScore top_threat_scores = 6;
+  RiskBreakdown risk_breakdown = 7;
+  InferenceSummary inference = 8;
+  AlertPriority parent_alert = 9;
+  repeated FollowUpAction follow_ups = 10;
+  bool crisis_resources = 11;
+  repeated UiAction ui_actions = 12;
+  ShadowModeContactSummary contact = 13;
+  ShadowModeMirror mirror = 14;
+}
+
+message ShadowModeFinding {
+  string severity = 1;
+  uint64 event_sequence = 2;
+  string request_id = 3;
+  uint64 timestamp_ms = 4;
+  string message = 5;
+}
+
+message ShadowModeEvent {
+  string request_id = 1;
+  uint64 sequence = 2;
+  uint64 timestamp_ms = 3;
+  ProtectedIdentifier sender_token = 4;
+  ProtectedIdentifier conversation_token = 5;
+  string language = 6;
+  ConversationType conversation_type = 7;
+  optional uint32 member_count = 8;
+  ShadowModeExpectation expectation = 9;
+  AuditRecord audit_record = 10;
+  ShadowModeDecision decision = 11;
+}
+
+message ShadowModeAnalyzeItem {
+  string request_id = 1;
+  AnalyzeContextRequest request = 2;
+  ShadowModeExpectation expectation = 3;
+}
+
+message BuildShadowModeBundleRequest {
+  string source_kind = 1;
+  string source_label = 2;
+  string source_input = 3;
+  string owner_id = 4;
+  repeated ShadowModeAnalyzeItem items = 5;
+}
+
+message ShadowModeBundle {
+  string schema_version = 1;
+  string generated_at_utc = 2;
+  string source_kind = 3;
+  string source_label = 4;
+  string source_input = 5;
+  ProtectedIdentifier owner_token = 6;
+  string runtime_version = 7;
+  string wire_package = 8;
+  uint32 state_schema_version = 9;
+  ProtectionLevel protection_level = 10;
+  ShadowModePrivacy privacy = 11;
+  ShadowModeSummary summary = 12;
+  repeated ShadowModeFinding findings = 13;
+  repeated ShadowModeEvent events = 14;
+}

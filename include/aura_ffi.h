@@ -22,6 +22,9 @@ bool aura_analyze_context(void *handle, const uint8_t *request_ptr, size_t reque
 /// Analyze protobuf BatchAnalyzeRequest. Writes protobuf BatchAnalyzeResponse into out.
 bool aura_analyze_batch(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 
+/// Build protobuf ShadowModeBundle from protobuf BuildShadowModeBundleRequest. Writes protobuf ShadowModeBundle into out.
+bool aura_build_shadow_bundle(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
+
 /// Update runtime config from protobuf AuraConfig bytes.
 bool aura_update_config(void *handle, const uint8_t *config_ptr, size_t config_len);
 

@@ -20,7 +20,10 @@ use aura_core::context::tracker::{
     ConversationTimelineState as CoreConversationTimelineState,
     TrackerWireState as CoreTrackerWireState,
 };
-use aura_core::{config::CulturalContext, Analyzer, AuraConfig, MessageInput};
+use aura_core::{
+    build_shadow_mode_event, config::CulturalContext, Action, AlertPriority, Analyzer, AuraConfig,
+    MessageInput, ShadowModeBundle, ShadowModeEventInput, ShadowModeExpectation, ShadowModeFinding,
+};
 use aura_patterns::PatternDatabase;
 use aura_proto::messenger::v1 as proto;
 use prost::Message as ProstMessage;
@@ -31,6 +34,7 @@ const MAX_CONFIG_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_MESSAGE_REQUEST_BYTES: usize = 1024 * 1024;
 const MAX_ANALYZE_CONTEXT_REQUEST_BYTES: usize = 1024 * 1024;
 const MAX_BATCH_REQUEST_BYTES: usize = 4 * 1024 * 1024;
+const MAX_SHADOW_BUNDLE_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_IMPORT_CONTEXT_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SMALL_CONTROL_REQUEST_BYTES: usize = 16 * 1024;
 
@@ -184,6 +188,41 @@ fn validate_batch_items(
             return Err("missing message in batch item".to_string());
         };
         validated.push((message_input_from_proto(message), item.timestamp_ms));
+    }
+    Ok(validated)
+}
+
+struct ValidatedShadowModeItem {
+    request_id: String,
+    input: MessageInput,
+    timestamp_ms: u64,
+    expectation: Option<ShadowModeExpectation>,
+}
+
+fn validate_shadow_mode_items(
+    items: Vec<proto::ShadowModeAnalyzeItem>,
+) -> Result<Vec<ValidatedShadowModeItem>, String> {
+    let mut validated = Vec::with_capacity(items.len());
+    for (index, item) in items.into_iter().enumerate() {
+        let request = item.request.ok_or_else(|| {
+            format!(
+                "missing analyze_context request in shadow item {}",
+                index + 1
+            )
+        })?;
+        let message = request
+            .message
+            .ok_or_else(|| format!("missing message in shadow item {}", index + 1))?;
+        validated.push(ValidatedShadowModeItem {
+            request_id: if item.request_id.is_empty() {
+                format!("shadow_req_{}", index + 1)
+            } else {
+                item.request_id
+            },
+            input: message_input_from_proto(message),
+            timestamp_ms: request.timestamp_ms,
+            expectation: shadow_mode_expectation_from_proto(item.expectation),
+        });
     }
     Ok(validated)
 }
@@ -416,6 +455,102 @@ pub unsafe extern "C" fn aura_analyze_batch(
         }
 
         write_proto_message(out, &proto::BatchAnalyzeResponse { results })
+    }) {
+        Ok(()) => true,
+        Err(e) => {
+            set_last_error(e);
+            false
+        }
+    }
+}
+
+/// Builds a protobuf ShadowModeBundle from a sequence of AnalyzeContextRequest items.
+#[no_mangle]
+pub unsafe extern "C" fn aura_build_shadow_bundle(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    clear_last_error();
+
+    if let Err(e) = prepare_output(out) {
+        set_last_error(e);
+        return false;
+    }
+
+    let request: proto::BuildShadowModeBundleRequest = match decode_proto_bounded(
+        request_ptr,
+        request_len,
+        "build_shadow_bundle request",
+        MAX_SHADOW_BUNDLE_REQUEST_BYTES,
+    ) {
+        Ok(request) => request,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
+
+    if request.owner_id.is_empty() {
+        set_last_error("missing owner_id in build_shadow_bundle request");
+        return false;
+    }
+    if request.items.is_empty() {
+        set_last_error("build_shadow_bundle request must include at least one item");
+        return false;
+    }
+
+    let items = match validate_shadow_mode_items(request.items) {
+        Ok(items) => items,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
+
+    match with_instance(handle, |instance| {
+        let protection_level = instance.analyzer.protection_level();
+        let mut events = Vec::with_capacity(items.len());
+        let mut findings = Vec::new();
+
+        for (index, item) in items.into_iter().enumerate() {
+            let result = instance
+                .analyzer
+                .analyze_with_context(&item.input, item.timestamp_ms);
+            let event = build_shadow_mode_event(ShadowModeEventInput {
+                request_id: &item.request_id,
+                sequence: index + 1,
+                timestamp_ms: item.timestamp_ms,
+                sender_id: item.input.sender_id.as_ref(),
+                conversation_id: item.input.conversation_id.as_ref(),
+                language: item.input.language.as_deref().unwrap_or("und"),
+                conversation_type: item.input.conversation_type,
+                member_count: item.input.member_count,
+                expectation: item.expectation.clone(),
+                protection_level,
+                result: &result,
+            });
+            findings.extend(shadow_mode_findings_for_event(
+                index + 1,
+                &item.request_id,
+                item.timestamp_ms,
+                item.expectation.as_ref(),
+                &result,
+            ));
+            events.push(event);
+        }
+
+        let bundle = ShadowModeBundle::from_events(
+            non_empty_or(request.source_kind, "ffi_shadow"),
+            non_empty_or(request.source_label, "ffi_shadow_bundle"),
+            non_empty_or(request.source_input, "ffi"),
+            &request.owner_id,
+            protection_level,
+            findings,
+            events,
+        );
+        write_proto_message(out, &shadow_mode_bundle_to_proto(&bundle))
     }) {
         Ok(()) => true,
         Err(e) => {
@@ -887,11 +1022,179 @@ fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
     }
 }
 
+fn shadow_mode_expectation_from_proto(
+    expectation: Option<proto::ShadowModeExpectation>,
+) -> Option<ShadowModeExpectation> {
+    expectation.and_then(|expectation| {
+        let expect_threat = match proto::ThreatType::try_from(expectation.expect_threat)
+            .unwrap_or(proto::ThreatType::Unspecified)
+        {
+            proto::ThreatType::Unspecified => None,
+            proto::ThreatType::None => Some(aura_core::ThreatType::None),
+            proto::ThreatType::Bullying => Some(aura_core::ThreatType::Bullying),
+            proto::ThreatType::Grooming => Some(aura_core::ThreatType::Grooming),
+            proto::ThreatType::Explicit => Some(aura_core::ThreatType::Explicit),
+            proto::ThreatType::Threat => Some(aura_core::ThreatType::Threat),
+            proto::ThreatType::SelfHarm => Some(aura_core::ThreatType::SelfHarm),
+            proto::ThreatType::Spam => Some(aura_core::ThreatType::Spam),
+            proto::ThreatType::Scam => Some(aura_core::ThreatType::Scam),
+            proto::ThreatType::Phishing => Some(aura_core::ThreatType::Phishing),
+            proto::ThreatType::Manipulation => Some(aura_core::ThreatType::Manipulation),
+            proto::ThreatType::Nsfw => Some(aura_core::ThreatType::Nsfw),
+            proto::ThreatType::HateSpeech => Some(aura_core::ThreatType::HateSpeech),
+            proto::ThreatType::Doxxing => Some(aura_core::ThreatType::Doxxing),
+            proto::ThreatType::PiiLeakage => Some(aura_core::ThreatType::PiiLeakage),
+        };
+        let expect_min_action = match proto::Action::try_from(expectation.expect_min_action)
+            .unwrap_or(proto::Action::Unspecified)
+        {
+            proto::Action::Unspecified => None,
+            proto::Action::Allow => Some(Action::Allow),
+            proto::Action::Mark => Some(Action::Mark),
+            proto::Action::Blur => Some(Action::Blur),
+            proto::Action::Warn => Some(Action::Warn),
+            proto::Action::Block => Some(Action::Block),
+        };
+        let expect_min_alert = match proto::AlertPriority::try_from(expectation.expect_min_alert)
+            .unwrap_or(proto::AlertPriority::Unspecified)
+        {
+            proto::AlertPriority::Unspecified => None,
+            proto::AlertPriority::None => Some(AlertPriority::None),
+            proto::AlertPriority::Low => Some(AlertPriority::Low),
+            proto::AlertPriority::Medium => Some(AlertPriority::Medium),
+            proto::AlertPriority::High => Some(AlertPriority::High),
+            proto::AlertPriority::Urgent => Some(AlertPriority::Urgent),
+        };
+
+        if expect_threat.is_none() && expect_min_action.is_none() && expect_min_alert.is_none() {
+            None
+        } else {
+            Some(ShadowModeExpectation {
+                expect_threat,
+                expect_min_action,
+                expect_min_alert,
+            })
+        }
+    })
+}
+
 fn non_empty_or(value: String, default: &str) -> String {
     if value.is_empty() {
         default.to_string()
     } else {
         value
+    }
+}
+
+fn shadow_mode_findings_for_event(
+    sequence: usize,
+    request_id: &str,
+    timestamp_ms: u64,
+    expectation: Option<&ShadowModeExpectation>,
+    result: &aura_core::AnalysisResult,
+) -> Vec<ShadowModeFinding> {
+    let mut findings = Vec::new();
+    let Some(expectation) = expectation else {
+        return findings;
+    };
+
+    if let Some(expected_threat) = expectation.expect_threat {
+        let threat_present = result.threat_type == expected_threat
+            || result
+                .detected_threats
+                .iter()
+                .any(|(threat, _)| *threat == expected_threat);
+        if !threat_present {
+            findings.push(ShadowModeFinding {
+                severity: "warning".to_string(),
+                event_sequence: sequence,
+                request_id: request_id.to_string(),
+                timestamp_ms,
+                message: format!(
+                    "expected threat '{}' but runtime returned '{}'",
+                    threat_label(expected_threat),
+                    threat_label(result.threat_type)
+                ),
+            });
+        }
+    }
+
+    if let Some(expected_action) = expectation.expect_min_action {
+        if result.action < expected_action {
+            findings.push(ShadowModeFinding {
+                severity: "warning".to_string(),
+                event_sequence: sequence,
+                request_id: request_id.to_string(),
+                timestamp_ms,
+                message: format!(
+                    "expected action >= '{}' but runtime returned '{}'",
+                    action_label(expected_action),
+                    action_label(result.action)
+                ),
+            });
+        }
+    }
+
+    if let Some(expected_alert) = expectation.expect_min_alert {
+        let actual_alert = result
+            .recommended_action
+            .as_ref()
+            .map(|recommendation| recommendation.parent_alert)
+            .unwrap_or(AlertPriority::None);
+        if actual_alert < expected_alert {
+            findings.push(ShadowModeFinding {
+                severity: "warning".to_string(),
+                event_sequence: sequence,
+                request_id: request_id.to_string(),
+                timestamp_ms,
+                message: format!(
+                    "expected alert >= '{}' but runtime returned '{}'",
+                    alert_label(expected_alert),
+                    alert_label(actual_alert)
+                ),
+            });
+        }
+    }
+
+    findings
+}
+
+fn threat_label(value: aura_core::ThreatType) -> &'static str {
+    match value {
+        aura_core::ThreatType::None => "none",
+        aura_core::ThreatType::Bullying => "bullying",
+        aura_core::ThreatType::Grooming => "grooming",
+        aura_core::ThreatType::Explicit => "explicit",
+        aura_core::ThreatType::Threat => "threat",
+        aura_core::ThreatType::SelfHarm => "self_harm",
+        aura_core::ThreatType::Spam => "spam",
+        aura_core::ThreatType::Scam => "scam",
+        aura_core::ThreatType::Phishing => "phishing",
+        aura_core::ThreatType::Manipulation => "manipulation",
+        aura_core::ThreatType::Nsfw => "nsfw",
+        aura_core::ThreatType::HateSpeech => "hate_speech",
+        aura_core::ThreatType::Doxxing => "doxxing",
+        aura_core::ThreatType::PiiLeakage => "pii_leakage",
+    }
+}
+
+fn action_label(value: aura_core::Action) -> &'static str {
+    match value {
+        aura_core::Action::Allow => "allow",
+        aura_core::Action::Mark => "mark",
+        aura_core::Action::Blur => "blur",
+        aura_core::Action::Warn => "warn",
+        aura_core::Action::Block => "block",
+    }
+}
+
+fn alert_label(value: aura_core::AlertPriority) -> &'static str {
+    match value {
+        aura_core::AlertPriority::None => "none",
+        aura_core::AlertPriority::Low => "low",
+        aura_core::AlertPriority::Medium => "medium",
+        aura_core::AlertPriority::High => "high",
+        aura_core::AlertPriority::Urgent => "urgent",
     }
 }
 
@@ -919,18 +1222,14 @@ fn analysis_result_to_proto(result: &aura_core::AnalysisResult) -> proto::Analys
             .recommended_action
             .as_ref()
             .map(action_recommendation_to_proto),
-        risk_breakdown: Some(proto::RiskBreakdown {
-            content: result.risk_breakdown.content,
-            conversation: result.risk_breakdown.conversation,
-            link: result.risk_breakdown.link,
-            abuse: result.risk_breakdown.abuse,
-        }),
+        risk_breakdown: Some(risk_breakdown_to_proto(&result.risk_breakdown)),
         contact_snapshot: result
             .contact_snapshot
             .as_ref()
             .map(contact_snapshot_to_proto),
         reason_codes: result.reason_codes.clone(),
         analysis_time_us: result.analysis_time_us,
+        inference: Some(inference_summary_to_proto(&result.inference)),
     }
 }
 
@@ -978,6 +1277,276 @@ fn contact_snapshot_to_proto(snapshot: &aura_core::ContactSnapshot) -> proto::Co
         first_seen_ms: snapshot.first_seen_ms,
         last_seen_ms: snapshot.last_seen_ms,
         conversation_count: snapshot.conversation_count as u64,
+    }
+}
+
+fn risk_breakdown_to_proto(breakdown: &aura_core::RiskBreakdown) -> proto::RiskBreakdown {
+    proto::RiskBreakdown {
+        content: breakdown.content,
+        conversation: breakdown.conversation,
+        link: breakdown.link,
+        abuse: breakdown.abuse,
+    }
+}
+
+fn inference_summary_to_proto(summary: &aura_core::InferenceSummary) -> proto::InferenceSummary {
+    proto::InferenceSummary {
+        uncertainty: proto_uncertainty_level(summary.uncertainty) as i32,
+        risk_horizon: proto_risk_horizon(summary.risk_horizon) as i32,
+        escalation_likelihood_24h: summary.escalation_likelihood_24h,
+        protective_factor_strength: summary.protective_factor_strength,
+        latent_states: summary
+            .latent_states
+            .iter()
+            .map(latent_state_evidence_to_proto)
+            .collect(),
+    }
+}
+
+fn latent_state_evidence_to_proto(
+    evidence: &aura_core::LatentStateEvidence,
+) -> proto::LatentStateEvidence {
+    proto::LatentStateEvidence {
+        kind: proto_latent_state_kind(evidence.kind) as i32,
+        score: evidence.score,
+        reason_codes: evidence.reason_codes.clone(),
+    }
+}
+
+fn protected_identifier_to_proto(
+    identifier: &aura_core::ProtectedIdentifier,
+) -> proto::ProtectedIdentifier {
+    proto::ProtectedIdentifier {
+        token: identifier.token.clone(),
+        scheme: identifier.scheme.clone(),
+    }
+}
+
+fn audit_threat_score_to_proto(score: &aura_core::AuditThreatScore) -> proto::AuditThreatScore {
+    proto::AuditThreatScore {
+        threat_type: proto_threat_type(score.threat_type) as i32,
+        score: score.score,
+    }
+}
+
+fn audit_record_to_proto(record: &aura_core::AuditRecord) -> proto::AuditRecord {
+    proto::AuditRecord {
+        schema_version: record.schema_version.clone(),
+        event_timestamp_ms: record.event_timestamp_ms,
+        runtime_version: record.runtime_version.clone(),
+        wire_package: record.wire_package.clone(),
+        state_schema_version: record.state_schema_version,
+        protection_level: proto_protection_level(record.protection_level) as i32,
+        threat_type: proto_threat_type(record.threat_type) as i32,
+        primary_score: record.primary_score,
+        top_threat_scores: record
+            .top_threat_scores
+            .iter()
+            .map(audit_threat_score_to_proto)
+            .collect(),
+        reason_codes: record.reason_codes.clone(),
+        ui_actions: record
+            .ui_actions
+            .iter()
+            .map(|action| proto_ui_action(*action) as i32)
+            .collect(),
+        parent_alert: proto_alert_priority(record.parent_alert) as i32,
+        follow_ups: record
+            .follow_ups
+            .iter()
+            .map(|action| proto_follow_up_action(*action) as i32)
+            .collect(),
+        crisis_resources: record.crisis_resources,
+        contact_trend: record
+            .contact_trend
+            .map(|trend| proto_behavioral_trend(trend) as i32)
+            .unwrap_or(proto::BehavioralTrend::Unspecified as i32),
+        contact_circle_tier: record
+            .contact_circle_tier
+            .map(|tier| proto_circle_tier(tier) as i32)
+            .unwrap_or(proto::CircleTier::Unspecified as i32),
+        request_id: record.request_id.clone(),
+        sender_token: record
+            .sender_token
+            .as_ref()
+            .map(protected_identifier_to_proto),
+        conversation_token: record
+            .conversation_token
+            .as_ref()
+            .map(protected_identifier_to_proto),
+    }
+}
+
+fn shadow_mode_privacy_to_proto(
+    privacy: &aura_core::ShadowModePrivacy,
+) -> proto::ShadowModePrivacy {
+    proto::ShadowModePrivacy {
+        identifier_scheme: privacy.identifier_scheme.clone(),
+        raw_text_present: privacy.raw_text_present,
+        raw_identifier_fields_present: privacy.raw_identifier_fields_present,
+    }
+}
+
+fn shadow_mode_summary_to_proto(
+    summary: &aura_core::ShadowModeSummary,
+) -> proto::ShadowModeSummary {
+    proto::ShadowModeSummary {
+        total_events: summary.total_events as u64,
+        threat_events: summary.threat_events as u64,
+        blocked_events: summary.blocked_events as u64,
+        action_counts: summary
+            .action_counts
+            .iter()
+            .map(|(key, value)| (key.clone(), *value as u64))
+            .collect(),
+        threat_counts: summary
+            .threat_counts
+            .iter()
+            .map(|(key, value)| (key.clone(), *value as u64))
+            .collect(),
+        alert_counts: summary
+            .alert_counts
+            .iter()
+            .map(|(key, value)| (key.clone(), *value as u64))
+            .collect(),
+        finding_count: summary.finding_count as u64,
+    }
+}
+
+fn shadow_mode_expectation_to_proto(
+    expectation: &aura_core::ShadowModeExpectation,
+) -> proto::ShadowModeExpectation {
+    proto::ShadowModeExpectation {
+        expect_threat: expectation
+            .expect_threat
+            .map(|threat| proto_threat_type(threat) as i32)
+            .unwrap_or(proto::ThreatType::Unspecified as i32),
+        expect_min_action: expectation
+            .expect_min_action
+            .map(|action| proto_action(action) as i32)
+            .unwrap_or(proto::Action::Unspecified as i32),
+        expect_min_alert: expectation
+            .expect_min_alert
+            .map(|alert| proto_alert_priority(alert) as i32)
+            .unwrap_or(proto::AlertPriority::Unspecified as i32),
+    }
+}
+
+fn shadow_mode_mirror_to_proto(mirror: &aura_core::ShadowModeMirror) -> proto::ShadowModeMirror {
+    proto::ShadowModeMirror {
+        would_surface_to_child: mirror.would_surface_to_child,
+        would_alert_guardian: mirror.would_alert_guardian,
+        would_open_review: mirror.would_open_review,
+        would_block_message: mirror.would_block_message,
+    }
+}
+
+fn shadow_mode_contact_summary_to_proto(
+    contact: &aura_core::ShadowModeContactSummary,
+) -> proto::ShadowModeContactSummary {
+    proto::ShadowModeContactSummary {
+        sender_token: Some(protected_identifier_to_proto(&contact.sender_token)),
+        rating: contact.rating,
+        trust_level: contact.trust_level,
+        circle_tier: proto_circle_tier(contact.circle_tier) as i32,
+        trend: proto_behavioral_trend(contact.trend) as i32,
+        is_trusted: contact.is_trusted,
+        is_new_contact: contact.is_new_contact,
+        conversation_count: contact.conversation_count as u64,
+    }
+}
+
+fn shadow_mode_decision_to_proto(
+    decision: &aura_core::ShadowModeDecision,
+) -> proto::ShadowModeDecision {
+    proto::ShadowModeDecision {
+        threat_type: proto_threat_type(decision.threat_type) as i32,
+        confidence: proto_confidence(decision.confidence) as i32,
+        action: proto_action(decision.action) as i32,
+        score: decision.score,
+        reason_codes: decision.reason_codes.clone(),
+        top_threat_scores: decision
+            .top_threat_scores
+            .iter()
+            .map(audit_threat_score_to_proto)
+            .collect(),
+        risk_breakdown: Some(risk_breakdown_to_proto(&decision.risk_breakdown)),
+        inference: Some(inference_summary_to_proto(&decision.inference)),
+        parent_alert: proto_alert_priority(decision.parent_alert) as i32,
+        follow_ups: decision
+            .follow_ups
+            .iter()
+            .map(|action| proto_follow_up_action(*action) as i32)
+            .collect(),
+        crisis_resources: decision.crisis_resources,
+        ui_actions: decision
+            .ui_actions
+            .iter()
+            .map(|action| proto_ui_action(*action) as i32)
+            .collect(),
+        contact: decision
+            .contact
+            .as_ref()
+            .map(shadow_mode_contact_summary_to_proto),
+        mirror: Some(shadow_mode_mirror_to_proto(&decision.mirror)),
+    }
+}
+
+fn shadow_mode_finding_to_proto(
+    finding: &aura_core::ShadowModeFinding,
+) -> proto::ShadowModeFinding {
+    proto::ShadowModeFinding {
+        severity: finding.severity.clone(),
+        event_sequence: finding.event_sequence as u64,
+        request_id: finding.request_id.clone(),
+        timestamp_ms: finding.timestamp_ms,
+        message: finding.message.clone(),
+    }
+}
+
+fn shadow_mode_event_to_proto(event: &aura_core::ShadowModeEvent) -> proto::ShadowModeEvent {
+    proto::ShadowModeEvent {
+        request_id: event.request_id.clone(),
+        sequence: event.sequence as u64,
+        timestamp_ms: event.timestamp_ms,
+        sender_token: Some(protected_identifier_to_proto(&event.sender_token)),
+        conversation_token: Some(protected_identifier_to_proto(&event.conversation_token)),
+        language: event.language.clone(),
+        conversation_type: proto_conversation_type(event.conversation_type) as i32,
+        member_count: event.member_count,
+        expectation: event
+            .expectation
+            .as_ref()
+            .map(shadow_mode_expectation_to_proto),
+        audit_record: Some(audit_record_to_proto(&event.audit_record)),
+        decision: Some(shadow_mode_decision_to_proto(&event.decision)),
+    }
+}
+
+fn shadow_mode_bundle_to_proto(bundle: &aura_core::ShadowModeBundle) -> proto::ShadowModeBundle {
+    proto::ShadowModeBundle {
+        schema_version: bundle.schema_version.clone(),
+        generated_at_utc: bundle.generated_at_utc.clone(),
+        source_kind: bundle.source_kind.clone(),
+        source_label: bundle.source_label.clone(),
+        source_input: bundle.source_input.clone(),
+        owner_token: Some(protected_identifier_to_proto(&bundle.owner_token)),
+        runtime_version: bundle.runtime_version.clone(),
+        wire_package: bundle.wire_package.clone(),
+        state_schema_version: bundle.state_schema_version,
+        protection_level: proto_protection_level(bundle.protection_level) as i32,
+        privacy: Some(shadow_mode_privacy_to_proto(&bundle.privacy)),
+        summary: Some(shadow_mode_summary_to_proto(&bundle.summary)),
+        findings: bundle
+            .findings
+            .iter()
+            .map(shadow_mode_finding_to_proto)
+            .collect(),
+        events: bundle
+            .events
+            .iter()
+            .map(shadow_mode_event_to_proto)
+            .collect(),
     }
 }
 
@@ -1349,6 +1918,15 @@ fn proto_ui_action(value: aura_core::UiAction) -> proto::UiAction {
     }
 }
 
+fn proto_protection_level(value: aura_core::ProtectionLevel) -> proto::ProtectionLevel {
+    match value {
+        aura_core::ProtectionLevel::Off => proto::ProtectionLevel::Off,
+        aura_core::ProtectionLevel::Low => proto::ProtectionLevel::Low,
+        aura_core::ProtectionLevel::Medium => proto::ProtectionLevel::Medium,
+        aura_core::ProtectionLevel::High => proto::ProtectionLevel::High,
+    }
+}
+
 fn circle_tier_from_proto(value: i32) -> aura_core::CircleTier {
     match proto::CircleTier::try_from(value).unwrap_or(proto::CircleTier::New) {
         proto::CircleTier::Inner => aura_core::CircleTier::Inner,
@@ -1384,6 +1962,39 @@ fn proto_behavioral_trend(value: aura_core::BehavioralTrend) -> proto::Behaviora
         aura_core::BehavioralTrend::GradualWorsening => proto::BehavioralTrend::GradualWorsening,
         aura_core::BehavioralTrend::RapidWorsening => proto::BehavioralTrend::RapidWorsening,
         aura_core::BehavioralTrend::RoleReversal => proto::BehavioralTrend::RoleReversal,
+    }
+}
+
+fn proto_uncertainty_level(value: aura_core::UncertaintyLevel) -> proto::UncertaintyLevel {
+    match value {
+        aura_core::UncertaintyLevel::Low => proto::UncertaintyLevel::Low,
+        aura_core::UncertaintyLevel::Medium => proto::UncertaintyLevel::Medium,
+        aura_core::UncertaintyLevel::High => proto::UncertaintyLevel::High,
+    }
+}
+
+fn proto_risk_horizon(value: aura_core::RiskHorizon) -> proto::RiskHorizon {
+    match value {
+        aura_core::RiskHorizon::Unknown => proto::RiskHorizon::Unknown,
+        aura_core::RiskHorizon::Immediate => proto::RiskHorizon::Immediate,
+        aura_core::RiskHorizon::ShortTerm => proto::RiskHorizon::ShortTerm,
+        aura_core::RiskHorizon::Sustained => proto::RiskHorizon::Sustained,
+    }
+}
+
+fn proto_latent_state_kind(value: aura_core::LatentStateKind) -> proto::LatentStateKind {
+    match value {
+        aura_core::LatentStateKind::DependencyBuilding => {
+            proto::LatentStateKind::DependencyBuilding
+        }
+        aura_core::LatentStateKind::IsolationPressure => proto::LatentStateKind::IsolationPressure,
+        aura_core::LatentStateKind::CoerciveControl => proto::LatentStateKind::CoerciveControl,
+        aura_core::LatentStateKind::Humiliation => proto::LatentStateKind::Humiliation,
+        aura_core::LatentStateKind::CrisisVulnerability => {
+            proto::LatentStateKind::CrisisVulnerability
+        }
+        aura_core::LatentStateKind::ProtectiveSupport => proto::LatentStateKind::ProtectiveSupport,
+        aura_core::LatentStateKind::GroupEscalation => proto::LatentStateKind::GroupEscalation,
     }
 }
 
@@ -1596,6 +2207,21 @@ mod tests {
         decode_buffer(out)
     }
 
+    unsafe fn build_shadow_bundle(
+        handle: *mut c_void,
+        request: proto::BuildShadowModeBundleRequest,
+    ) -> proto::ShadowModeBundle {
+        let bytes = encode_proto(&request);
+        let mut out = AuraBuffer::empty();
+        assert!(aura_build_shadow_bundle(
+            handle,
+            bytes.as_ptr(),
+            bytes.len(),
+            &mut out,
+        ));
+        decode_buffer(out)
+    }
+
     unsafe fn export_context(handle: *mut c_void) -> proto::ExportContextResponse {
         let mut out = AuraBuffer::empty();
         assert!(aura_export_context(handle, &mut out));
@@ -1790,6 +2416,119 @@ mod tests {
                 proto::ThreatType::try_from(result.threat_type).unwrap(),
                 proto::ThreatType::Grooming
             );
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn analysis_result_includes_inference_summary_over_ffi() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            assert!(!handle.is_null());
+
+            let _ = analyze_context_result(
+                handle,
+                proto_message(
+                    "I don't want to live anymore. I want to end it all.",
+                    "user_1",
+                    "conv_sh_1",
+                ),
+                1000,
+            );
+            let result = analyze_context_result(
+                handle,
+                proto_message("Goodbye everyone. This is the end.", "user_1", "conv_sh_1"),
+                2000,
+            );
+
+            let inference = result.inference.expect("missing inference summary");
+            assert_eq!(
+                proto::RiskHorizon::try_from(inference.risk_horizon).unwrap(),
+                proto::RiskHorizon::Immediate
+            );
+            assert!(
+                inference
+                    .latent_states
+                    .iter()
+                    .any(|state| state.kind == proto::LatentStateKind::CrisisVulnerability as i32),
+                "expected crisis vulnerability latent state over FFI"
+            );
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn build_shadow_bundle_over_ffi_returns_proto_bundle() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            assert!(!handle.is_null());
+
+            let request = proto::BuildShadowModeBundleRequest {
+                source_kind: "ios_shadow".to_string(),
+                source_label: "pilot-smoke".to_string(),
+                source_input: "swift-replay".to_string(),
+                owner_id: "owner_olena".to_string(),
+                items: vec![
+                    proto::ShadowModeAnalyzeItem {
+                        request_id: "shadow_req_1".to_string(),
+                        request: Some(proto::AnalyzeContextRequest {
+                            message: Some(proto_message(
+                                "You're so special and beautiful. I can buy you anything.",
+                                "stranger_1",
+                                "conv_shadow_1",
+                            )),
+                            timestamp_ms: 1_000,
+                        }),
+                        expectation: None,
+                    },
+                    proto::ShadowModeAnalyzeItem {
+                        request_id: "shadow_req_2".to_string(),
+                        request: Some(proto::AnalyzeContextRequest {
+                            message: Some(proto_message(
+                                "Don't tell your parents about us. Let's move to Telegram.",
+                                "stranger_1",
+                                "conv_shadow_1",
+                            )),
+                            timestamp_ms: 2_000,
+                        }),
+                        expectation: Some(proto::ShadowModeExpectation {
+                            expect_threat: proto::ThreatType::Grooming as i32,
+                            expect_min_action: proto::Action::Warn as i32,
+                            expect_min_alert: proto::AlertPriority::High as i32,
+                        }),
+                    },
+                ],
+            };
+
+            let bundle = build_shadow_bundle(handle, request);
+            assert_eq!(bundle.summary.as_ref().expect("summary").total_events, 2);
+            assert_eq!(bundle.summary.as_ref().expect("summary").finding_count, 0);
+            assert_eq!(bundle.events.len(), 2);
+            assert_ne!(
+                bundle.owner_token.as_ref().expect("owner token").token,
+                "owner_olena"
+            );
+            assert_eq!(
+                proto::ThreatType::try_from(
+                    bundle.events[1]
+                        .decision
+                        .as_ref()
+                        .expect("decision")
+                        .threat_type
+                )
+                .unwrap(),
+                proto::ThreatType::Grooming
+            );
+            assert!(
+                bundle.events[1]
+                    .audit_record
+                    .as_ref()
+                    .and_then(|record| record.sender_token.as_ref())
+                    .is_some(),
+                "expected tokenized sender in audit record"
+            );
+
             aura_free(handle);
         }
     }

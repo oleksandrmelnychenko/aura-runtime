@@ -127,6 +127,32 @@ enum BehavioralTrend {
   BEHAVIORAL_TREND_ROLE_REVERSAL = 5;
 }
 
+enum UncertaintyLevel {
+  UNCERTAINTY_LEVEL_UNSPECIFIED = 0;
+  UNCERTAINTY_LEVEL_LOW = 1;
+  UNCERTAINTY_LEVEL_MEDIUM = 2;
+  UNCERTAINTY_LEVEL_HIGH = 3;
+}
+
+enum RiskHorizon {
+  RISK_HORIZON_UNSPECIFIED = 0;
+  RISK_HORIZON_UNKNOWN = 1;
+  RISK_HORIZON_IMMEDIATE = 2;
+  RISK_HORIZON_SHORT_TERM = 3;
+  RISK_HORIZON_SUSTAINED = 4;
+}
+
+enum LatentStateKind {
+  LATENT_STATE_KIND_UNSPECIFIED = 0;
+  LATENT_STATE_KIND_DEPENDENCY_BUILDING = 1;
+  LATENT_STATE_KIND_ISOLATION_PRESSURE = 2;
+  LATENT_STATE_KIND_COERCIVE_CONTROL = 3;
+  LATENT_STATE_KIND_HUMILIATION = 4;
+  LATENT_STATE_KIND_CRISIS_VULNERABILITY = 5;
+  LATENT_STATE_KIND_PROTECTIVE_SUPPORT = 6;
+  LATENT_STATE_KIND_GROUP_ESCALATION = 7;
+}
+
 enum ConversationType {
   CONVERSATION_TYPE_UNSPECIFIED = 0;
   CONVERSATION_TYPE_DIRECT = 1;
@@ -265,6 +291,20 @@ message ActionRecommendation {
   repeated string reason_codes = 5;
 }
 
+message LatentStateEvidence {
+  LatentStateKind kind = 1;
+  float score = 2;
+  repeated string reason_codes = 3;
+}
+
+message InferenceSummary {
+  UncertaintyLevel uncertainty = 1;
+  RiskHorizon risk_horizon = 2;
+  float escalation_likelihood_24h = 3;
+  float protective_factor_strength = 4;
+  repeated LatentStateEvidence latent_states = 5;
+}
+
 message AnalysisResult {
   ThreatType threat_type = 1;
   Confidence confidence = 2;
@@ -278,6 +318,7 @@ message AnalysisResult {
   ContactSnapshot contact_snapshot = 10;
   repeated string reason_codes = 11;
   uint64 analysis_time_us = 12;
+  InferenceSummary inference = 13;
 }
 
 message ContactProfileRequest {

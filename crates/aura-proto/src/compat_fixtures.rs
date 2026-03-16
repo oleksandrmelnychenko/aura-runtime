@@ -66,6 +66,30 @@ pub fn analysis_result_fixture() -> proto::AnalysisResult {
             "conversation.escalation".to_string(),
         ],
         analysis_time_us: 1_842,
+        inference: Some(proto::InferenceSummary {
+            uncertainty: proto::UncertaintyLevel::Low as i32,
+            risk_horizon: proto::RiskHorizon::ShortTerm as i32,
+            escalation_likelihood_24h: 0.86,
+            protective_factor_strength: 0.05,
+            latent_states: vec![
+                proto::LatentStateEvidence {
+                    kind: proto::LatentStateKind::DependencyBuilding as i32,
+                    score: 0.88,
+                    reason_codes: vec![
+                        "conversation.grooming.stage_sequence".to_string(),
+                        "contact.trust_low".to_string(),
+                    ],
+                },
+                proto::LatentStateEvidence {
+                    kind: proto::LatentStateKind::IsolationPressure as i32,
+                    score: 0.81,
+                    reason_codes: vec![
+                        "grooming.secrecy_request".to_string(),
+                        "conversation.escalation".to_string(),
+                    ],
+                },
+            ],
+        }),
     }
 }
 
@@ -171,6 +195,13 @@ pub fn batch_analyze_response_fixture() -> proto::BatchAnalyzeResponse {
                 contact_snapshot: None,
                 reason_codes: vec!["policy.allow".to_string()],
                 analysis_time_us: 512,
+                inference: Some(proto::InferenceSummary {
+                    uncertainty: proto::UncertaintyLevel::Medium as i32,
+                    risk_horizon: proto::RiskHorizon::Unknown as i32,
+                    escalation_likelihood_24h: 0.0,
+                    protective_factor_strength: 0.0,
+                    latent_states: Vec::new(),
+                }),
             },
             analysis_result_fixture(),
         ],
