@@ -41,6 +41,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip cargo test during the rehearsal.",
     )
+    parser.add_argument(
+        "--pilot-review-signoffs",
+        default=None,
+        help="Optional path to pilot review signoffs JSON. If provided, a pilot gate report will be generated.",
+    )
     return parser.parse_args()
 
 
@@ -177,6 +182,7 @@ def main() -> int:
         "audit_evidence": output_dir / "audit-evidence.json",
         "pilot_shadow_bundle": output_dir / "pilot-shadow-bundle.json",
         "pilot_regression_report": output_dir / "pilot-regression-report.json",
+        "pilot_gate_report": output_dir / "pilot-gate-report.json",
         "ffi_soak": output_dir / "ffi-state-sync-soak.json",
         "ffi_smoke": output_dir / "ffi-header-smoke.json",
         "ffi_smoke_object": output_dir / "ffi-header-smoke.o",
@@ -197,6 +203,7 @@ def main() -> int:
         "ffi_smoke_mode": None,
         "pilot_shadow_status": None,
         "pilot_regression_status": None,
+        "pilot_gate_status": None,
         "manifest_path": paths["manifest"].as_posix(),
         "manifest_evidence_status": None,
     }
@@ -312,6 +319,32 @@ def main() -> int:
                 "--require-pass",
             ]
         )
+        if args.pilot_review_signoffs:
+            record_and_require(
+                [
+                    "cargo",
+                    "run",
+                    "--quiet",
+                    "--example",
+                    "pilot_gate",
+                    "-p",
+                    "aura-core",
+                    "--",
+                    "--release-report",
+                    paths["release_report"].as_posix(),
+                    "--pilot-regression-report",
+                    paths["pilot_regression_report"].as_posix(),
+                    "--shadow-bundle",
+                    paths["pilot_shadow_bundle"].as_posix(),
+                    "--shadow-bundle",
+                    paths["pilot_shadow_bundle"].as_posix(),
+                    "--review-signoffs",
+                    args.pilot_review_signoffs,
+                    "--output",
+                    paths["pilot_gate_report"].as_posix(),
+                    "--require-pass",
+                ]
+            )
 
         smoke_command, smoke_evidence = compile_ffi_smoke(
             workspace_root=workspace_root,
@@ -354,6 +387,11 @@ def main() -> int:
                 paths["pilot_shadow_bundle"].as_posix(),
                 "--pilot-regression-report",
                 paths["pilot_regression_report"].as_posix(),
+                *(
+                    ["--pilot-gate-report", paths["pilot_gate_report"].as_posix()]
+                    if args.pilot_review_signoffs
+                    else []
+                ),
                 "--ffi-smoke",
                 paths["ffi_smoke"].as_posix(),
             ]
@@ -363,6 +401,9 @@ def main() -> int:
         summary["pilot_shadow_status"] = manifest.get("summary", {}).get("pilot_shadow_status")
         summary["pilot_regression_status"] = manifest.get("summary", {}).get(
             "pilot_regression_status"
+        )
+        summary["pilot_gate_status"] = manifest.get("summary", {}).get(
+            "pilot_gate_status"
         )
     except RuntimeError as error:
         summary["failure"] = str(error)
@@ -379,6 +420,9 @@ def main() -> int:
                 )
                 summary["pilot_regression_status"] = manifest.get("summary", {}).get(
                     "pilot_regression_status"
+                )
+                summary["pilot_gate_status"] = manifest.get("summary", {}).get(
+                    "pilot_gate_status"
                 )
             except json.JSONDecodeError:
                 summary["manifest_evidence_status"] = "invalid_json"

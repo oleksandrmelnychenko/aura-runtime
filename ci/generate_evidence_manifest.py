@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to pilot simulation regression report JSON.",
     )
+    parser.add_argument(
+        "--pilot-gate-report",
+        default=None,
+        help="Optional path to pilot gate report JSON.",
+    )
     return parser.parse_args()
 
 
@@ -136,6 +141,12 @@ def pilot_regression_status(payload: dict | None) -> str | None:
     return payload.get("overall_status")
 
 
+def pilot_gate_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    return payload.get("overall_status")
+
+
 def evidence_status(artifacts: dict, summary: dict) -> str:
     if any(meta["required"] and not meta["exists"] for meta in artifacts.values()):
         return "blocked"
@@ -157,6 +168,8 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["pilot_regression_status"] not in (None, "pass"):
         return "fail"
+    if summary["pilot_gate_status"] not in (None, "pass"):
+        return "fail"
     return "pass"
 
 
@@ -170,6 +183,7 @@ def attach_payload_details(
     audit_payload: dict | None,
     pilot_shadow_payload: dict | None,
     pilot_regression_payload: dict | None,
+    pilot_gate_payload: dict | None,
 ) -> None:
     if release_payload is not None:
         artifacts["release_report"]["observed_status"] = release_payload.get("overall_status")
@@ -238,6 +252,19 @@ def attach_payload_details(
         artifacts["pilot_regression_report"]["scenario_count"] = len(
             pilot_regression_payload.get("scenarios", [])
         )
+    if pilot_gate_payload is not None:
+        artifacts["pilot_gate_report"]["observed_status"] = pilot_gate_status(
+            pilot_gate_payload
+        )
+        artifacts["pilot_gate_report"]["schema_version"] = pilot_gate_payload.get(
+            "schema_version"
+        )
+        artifacts["pilot_gate_report"]["shadow_run_count"] = len(
+            pilot_gate_payload.get("shadow_runs", [])
+        )
+        artifacts["pilot_gate_report"]["check_count"] = len(
+            pilot_gate_payload.get("checks", [])
+        )
 
 
 def main() -> int:
@@ -254,6 +281,9 @@ def main() -> int:
     pilot_regression_payload, pilot_regression_artifact = load_json_artifact(
         args.pilot_regression_report, required=args.pilot_regression_report is not None
     ) if args.pilot_regression_report else (None, None)
+    pilot_gate_payload, pilot_gate_artifact = load_json_artifact(
+        args.pilot_gate_report, required=args.pilot_gate_report is not None
+    ) if args.pilot_gate_report else (None, None)
     smoke_payload, smoke_artifact = load_json_artifact(
         args.ffi_smoke, required=args.ffi_smoke is not None
     ) if args.ffi_smoke else (None, None)
@@ -269,6 +299,8 @@ def main() -> int:
         artifacts["pilot_shadow_bundle"] = pilot_shadow_artifact
     if pilot_regression_artifact is not None:
         artifacts["pilot_regression_report"] = pilot_regression_artifact
+    if pilot_gate_artifact is not None:
+        artifacts["pilot_gate_report"] = pilot_gate_artifact
     if smoke_artifact is not None:
         artifacts["ffi_smoke"] = smoke_artifact
 
@@ -282,6 +314,7 @@ def main() -> int:
         audit_payload=audit_payload,
         pilot_shadow_payload=pilot_shadow_payload,
         pilot_regression_payload=pilot_regression_payload,
+        pilot_gate_payload=pilot_gate_payload,
     )
 
     request_limits = (
@@ -375,6 +408,20 @@ def main() -> int:
         "pilot_regression_scenario_count": (
             len(pilot_regression_payload.get("scenarios", []))
             if pilot_regression_payload
+            else None
+        ),
+        "pilot_gate_status": pilot_gate_status(pilot_gate_payload),
+        "pilot_gate_schema_version": (
+            pilot_gate_payload.get("schema_version") if pilot_gate_payload else None
+        ),
+        "pilot_gate_shadow_run_count": (
+            len(pilot_gate_payload.get("shadow_runs", []))
+            if pilot_gate_payload
+            else None
+        ),
+        "pilot_gate_check_count": (
+            len(pilot_gate_payload.get("checks", []))
+            if pilot_gate_payload
             else None
         ),
         "ffi_export_count": (

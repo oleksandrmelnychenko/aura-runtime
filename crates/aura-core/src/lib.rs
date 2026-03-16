@@ -21,6 +21,7 @@ pub mod eval_simulation_regression;
 pub mod eval_social_context;
 pub mod ids;
 pub mod pilot;
+pub mod pilot_gate;
 pub mod product;
 pub mod types;
 
@@ -41,5 +42,6 @@ pub use eval_simulation_regression::*;
 pub use eval_social_context::*;
 pub use ids::*;
 pub use pilot::*;
+pub use pilot_gate::*;
 pub use product::*;
 pub use types::*;

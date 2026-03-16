@@ -1,0 +1,211 @@
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use std::process;
+
+use aura_core::{
+    parse_pilot_regression_snapshot, parse_pilot_release_snapshot, parse_pilot_review_signoffs,
+    parse_pilot_shadow_snapshot, run_pilot_gate, PilotGateConfig, PilotGateStatus,
+};
+
+struct CliArgs {
+    release_report: PathBuf,
+    pilot_regression_report: PathBuf,
+    shadow_bundles: Vec<PathBuf>,
+    review_signoffs: PathBuf,
+    output: Option<PathBuf>,
+    require_pass: bool,
+    min_shadow_runs: Option<usize>,
+    min_shadow_total_events: Option<usize>,
+}
+
+enum ParseArgsResult {
+    Run(CliArgs),
+    Help,
+}
+
+fn usage() -> &'static str {
+    "usage: cargo run --example pilot_gate -p aura-core -- --release-report PATH --pilot-regression-report PATH --shadow-bundle PATH [--shadow-bundle PATH ...] --review-signoffs PATH [--output PATH] [--require-pass] [--min-shadow-runs N] [--min-shadow-total-events N]"
+}
+
+fn parse_args() -> Result<ParseArgsResult, String> {
+    let mut args = env::args().skip(1);
+
+    let mut release_report = None;
+    let mut pilot_regression_report = None;
+    let mut shadow_bundles = Vec::new();
+    let mut review_signoffs = None;
+    let mut output = None;
+    let mut require_pass = false;
+    let mut min_shadow_runs = None;
+    let mut min_shadow_total_events = None;
+
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--release-report" => {
+                release_report =
+                    Some(PathBuf::from(args.next().ok_or_else(|| {
+                        "missing path after --release-report".to_string()
+                    })?));
+            }
+            "--pilot-regression-report" => {
+                pilot_regression_report =
+                    Some(PathBuf::from(args.next().ok_or_else(|| {
+                        "missing path after --pilot-regression-report".to_string()
+                    })?));
+            }
+            "--shadow-bundle" => {
+                shadow_bundles
+                    .push(PathBuf::from(args.next().ok_or_else(|| {
+                        "missing path after --shadow-bundle".to_string()
+                    })?));
+            }
+            "--review-signoffs" => {
+                review_signoffs =
+                    Some(PathBuf::from(args.next().ok_or_else(|| {
+                        "missing path after --review-signoffs".to_string()
+                    })?));
+            }
+            "--output" => {
+                output = Some(PathBuf::from(
+                    args.next()
+                        .ok_or_else(|| "missing path after --output".to_string())?,
+                ));
+            }
+            "--require-pass" => require_pass = true,
+            "--min-shadow-runs" => {
+                min_shadow_runs = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value after --min-shadow-runs".to_string())?
+                        .parse()
+                        .map_err(|_| "invalid --min-shadow-runs value".to_string())?,
+                );
+            }
+            "--min-shadow-total-events" => {
+                min_shadow_total_events = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value after --min-shadow-total-events".to_string())?
+                        .parse()
+                        .map_err(|_| "invalid --min-shadow-total-events value".to_string())?,
+                );
+            }
+            "--help" | "-h" => return Ok(ParseArgsResult::Help),
+            other => return Err(format!("unknown argument: {other}")),
+        }
+    }
+
+    let args = CliArgs {
+        release_report: release_report
+            .ok_or_else(|| "missing required --release-report".to_string())?,
+        pilot_regression_report: pilot_regression_report
+            .ok_or_else(|| "missing required --pilot-regression-report".to_string())?,
+        shadow_bundles,
+        review_signoffs: review_signoffs
+            .ok_or_else(|| "missing required --review-signoffs".to_string())?,
+        output,
+        require_pass,
+        min_shadow_runs,
+        min_shadow_total_events,
+    };
+
+    if args.shadow_bundles.is_empty() {
+        return Err("at least one --shadow-bundle is required".to_string());
+    }
+
+    Ok(ParseArgsResult::Run(args))
+}
+
+fn status_label(status: PilotGateStatus) -> &'static str {
+    match status {
+        PilotGateStatus::Pass => "pass",
+        PilotGateStatus::Fail => "fail",
+        PilotGateStatus::Blocked => "blocked",
+    }
+}
+
+fn main() {
+    let args = match parse_args() {
+        Ok(ParseArgsResult::Run(args)) => args,
+        Ok(ParseArgsResult::Help) => {
+            println!("{}", usage());
+            process::exit(0);
+        }
+        Err(message) => {
+            eprintln!("{message}\n{}", usage());
+            process::exit(2);
+        }
+    };
+
+    let release = parse_pilot_release_snapshot(
+        &fs::read_to_string(&args.release_report).unwrap_or_else(|err| {
+            panic!(
+                "failed to read release report {}: {err}",
+                args.release_report.display()
+            )
+        }),
+    )
+    .unwrap_or_else(|err| panic!("invalid release report: {err}"));
+    let pilot_regression = parse_pilot_regression_snapshot(
+        &fs::read_to_string(&args.pilot_regression_report).unwrap_or_else(|err| {
+            panic!(
+                "failed to read pilot regression report {}: {err}",
+                args.pilot_regression_report.display()
+            )
+        }),
+    )
+    .unwrap_or_else(|err| panic!("invalid pilot regression report: {err}"));
+    let shadow_runs = args
+        .shadow_bundles
+        .iter()
+        .map(|path| {
+            parse_pilot_shadow_snapshot(&fs::read_to_string(path).unwrap_or_else(|err| {
+                panic!("failed to read shadow bundle {}: {err}", path.display())
+            }))
+            .unwrap_or_else(|err| panic!("invalid shadow bundle {}: {err}", path.display()))
+        })
+        .collect::<Vec<_>>();
+    let signoffs = parse_pilot_review_signoffs(
+        &fs::read_to_string(&args.review_signoffs).unwrap_or_else(|err| {
+            panic!(
+                "failed to read review signoffs {}: {err}",
+                args.review_signoffs.display()
+            )
+        }),
+    )
+    .unwrap_or_else(|err| panic!("invalid review signoffs: {err}"));
+
+    let mut config = PilotGateConfig::default();
+    if let Some(value) = args.min_shadow_runs {
+        config.min_shadow_runs = value;
+    }
+    if let Some(value) = args.min_shadow_total_events {
+        config.min_shadow_total_events = value;
+    }
+
+    let report = run_pilot_gate(config, release, pilot_regression, shadow_runs, signoffs);
+    let json = serde_json::to_string_pretty(&report).expect("serialize pilot gate report");
+
+    if let Some(path) = args.output {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent).expect("create pilot gate output directory");
+            }
+        }
+        fs::write(&path, &json).expect("write pilot gate report");
+        eprintln!(
+            "pilot gate report written to {} (overall_status={})",
+            path.display(),
+            status_label(report.overall_status)
+        );
+    } else {
+        println!("{json}");
+    }
+
+    if args.require_pass && report.overall_status != PilotGateStatus::Pass {
+        eprintln!(
+            "pilot gate status was {}; --require-pass expects pass",
+            status_label(report.overall_status)
+        );
+        process::exit(1);
+    }
+}
