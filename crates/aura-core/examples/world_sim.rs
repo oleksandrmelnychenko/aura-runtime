@@ -4,8 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use aura_core::{
-    AccountType, Action, AlertPriority, AnalysisResult, Analyzer, AuraConfig, ContactSnapshot,
-    ConversationType, ProtectionLevel,
+    build_shadow_mode_event, AccountType, Action, AlertPriority, AnalysisResult, Analyzer,
+    AuraConfig, ContactSnapshot, ConversationType, ProtectionLevel, ShadowModeBundle,
+    ShadowModeEventInput, ShadowModeExpectation, ShadowModeFinding,
 };
 use aura_patterns::PatternDatabase;
 use chrono::{DateTime, Duration, Utc};
@@ -49,12 +50,26 @@ fn main() {
 
     if let Some(path) = args.output {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("create output directory");
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent).expect("create output directory");
+            }
         }
         let json = serde_json::to_string_pretty(&report).expect("serializable world sim report");
         fs::write(&path, json).expect("write world sim report");
         println!();
         println!("Wrote JSON report to {}", path.display());
+    }
+
+    if let Some(path) = args.shadow_output {
+        write_shadow_bundle(&report, &input_path, &path);
+    }
+
+    if args.require_clean && !report.findings.is_empty() {
+        eprintln!(
+            "simulation produced {} finding(s); --require-clean expects zero",
+            report.findings.len()
+        );
+        std::process::exit(1);
     }
 }
 
@@ -62,9 +77,11 @@ fn main() {
 struct Args {
     input: Option<PathBuf>,
     output: Option<PathBuf>,
+    shadow_output: Option<PathBuf>,
     summary_only: bool,
     top_contacts: usize,
     repeat_multiplier: usize,
+    require_clean: bool,
     help: bool,
 }
 
@@ -80,7 +97,12 @@ impl Args {
             match arg.as_str() {
                 "--input" => self.input = Some(PathBuf::from(next_arg(&mut args, "--input")?)),
                 "--output" => self.output = Some(PathBuf::from(next_arg(&mut args, "--output")?)),
+                "--shadow-output" => {
+                    self.shadow_output =
+                        Some(PathBuf::from(next_arg(&mut args, "--shadow-output")?))
+                }
                 "--summary-only" => self.summary_only = true,
+                "--require-clean" => self.require_clean = true,
                 "--repeat-multiplier" => {
                     let raw = next_arg(&mut args, "--repeat-multiplier")?;
                     self.repeat_multiplier = raw
@@ -119,9 +141,11 @@ fn print_help() {
     println!("Options:");
     println!("  --input <path>         simulation world JSON (default: {DEFAULT_WORLD_PATH})");
     println!("  --output <path>        write machine-readable JSON report");
+    println!("  --shadow-output <path> write plaintext-free shadow replay bundle");
     println!("  --summary-only         skip per-event log, print only summary");
     println!("  --top-contacts <n>     number of risky contacts to print (default: 8)");
     println!("  --repeat-multiplier <n> scale generated_batches day_repeats by n (default: 1)");
+    println!("  --require-clean        exit non-zero if simulation produced findings");
     println!("  --help                 show this message");
 }
 
@@ -287,6 +311,7 @@ struct EventOutcome {
     sender_name: String,
     conversation_id: String,
     conversation_name: String,
+    language: String,
     conversation_type: ConversationType,
     member_count: Option<u32>,
     note: Option<String>,
@@ -493,6 +518,7 @@ fn run_world_simulation(
             sender_name: event.sender_name.clone(),
             conversation_id: event.conversation_id.clone(),
             conversation_name: event.conversation_name.clone(),
+            language: event.language.clone(),
             conversation_type: event.conversation_type,
             member_count: event.member_count,
             note: event.note.clone(),
@@ -979,6 +1005,72 @@ fn print_summary(report: &WorldSimReport, top_contacts: usize) {
             );
         }
     }
+}
+
+fn write_shadow_bundle(report: &WorldSimReport, input_path: &Path, output_path: &Path) {
+    let events = report
+        .event_log
+        .iter()
+        .map(|event| {
+            let request_id = format!("world_sim:{}:{}", report.label, event.sequence);
+            build_shadow_mode_event(ShadowModeEventInput {
+                request_id: &request_id,
+                sequence: event.sequence,
+                timestamp_ms: event.timestamp_ms,
+                sender_id: &event.sender_id,
+                conversation_id: &event.conversation_id,
+                language: &event.language,
+                conversation_type: event.conversation_type,
+                member_count: event.member_count,
+                expectation: event
+                    .expectation
+                    .as_ref()
+                    .map(|expectation| ShadowModeExpectation {
+                        expect_threat: expectation.expect_threat,
+                        expect_min_action: expectation.expect_min_action,
+                        expect_min_alert: expectation.expect_min_alert,
+                    }),
+                protection_level: report.config.protection_level,
+                result: &event.result,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let findings = report
+        .findings
+        .iter()
+        .map(|finding| ShadowModeFinding {
+            severity: enum_key(&finding.severity),
+            event_sequence: finding.event_sequence,
+            request_id: format!("world_sim:{}:{}", report.label, finding.event_sequence),
+            timestamp_ms: report
+                .event_log
+                .get(finding.event_sequence.saturating_sub(1))
+                .map(|event| event.timestamp_ms)
+                .unwrap_or_default(),
+            message: finding.message.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    let bundle = ShadowModeBundle::from_events(
+        "world_sim",
+        report.label.clone(),
+        input_path.display().to_string(),
+        &report.owner.id,
+        report.config.protection_level,
+        findings,
+        events,
+    );
+
+    if let Some(parent) = output_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).expect("create shadow bundle directory");
+        }
+    }
+    let json = serde_json::to_string_pretty(&bundle).expect("serializable shadow mode bundle");
+    fs::write(output_path, json).expect("write shadow mode bundle");
+    println!();
+    println!("Wrote shadow bundle to {}", output_path.display());
 }
 
 fn bump_count(map: &mut BTreeMap<String, usize>, key: String) {

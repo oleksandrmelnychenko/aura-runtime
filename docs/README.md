@@ -6,6 +6,7 @@ an evaluation-heavy prototype into a production-grade safety runtime.
 ## Active Operating Set
 
 - [Phase 2 Production Roadmap](./phase-2-production-roadmap.md)
+- [Phase 3 Pilot Readiness Roadmap](./phase-3-pilot-readiness-roadmap.md)
 - [Release Criteria](./release-criteria.md)
 - [Proto and ABI Stability](./proto-abi-stability.md)
 - [Privacy and Audit Policy](./privacy-audit-policy.md)
@@ -25,6 +26,8 @@ an evaluation-heavy prototype into a production-grade safety runtime.
 
 - Start with the roadmap to understand what was delivered in the Phase 2
   release-hardening track and what remains for the next phase.
+- Use the Phase 3 roadmap when planning pilot-readiness work, shadow mode,
+  product integration, or simulation-to-regression promotion.
 - Use the release criteria as the source of truth for gating and CI status.
 - Use the proto and ABI document before changing protobuf schemas, FFI exports,
   or persisted context state.

@@ -19,6 +19,7 @@ pub mod eval_robustness;
 pub mod eval_scenarios;
 pub mod eval_social_context;
 pub mod ids;
+pub mod pilot;
 pub mod types;
 
 pub use analyzer::Analyzer;
@@ -36,4 +37,5 @@ pub use eval_robustness::*;
 pub use eval_scenarios::*;
 pub use eval_social_context::*;
 pub use ids::*;
+pub use pilot::*;
 pub use types::*;

@@ -267,6 +267,9 @@ views still exist, but they are no longer misrepresented as hard release proof.
 - Add new evaluation slices only together with support targets and governance
 - Keep privacy, ABI, and dataset evidence green while expanding behavior
 
+The concrete execution plan for this handoff now lives in
+[`docs/phase-3-pilot-readiness-roadmap.md`](./phase-3-pilot-readiness-roadmap.md).
+
 ### Then
 
 - Consider stricter thresholds only after several consecutive stable promotion

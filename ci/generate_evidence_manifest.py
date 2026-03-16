@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 SCHEMA_VERSION = "aura.evidence_manifest.v1"
+PILOT_SHADOW_SCHEMA_VERSION = "aura.shadow_mode_bundle.v1"
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,6 +34,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--audit-evidence", required=True, help="Path to audit evidence JSON."
+    )
+    parser.add_argument(
+        "--pilot-shadow-bundle",
+        default=None,
+        help="Optional path to pilot/shadow replay bundle JSON.",
     )
     return parser.parse_args()
 
@@ -103,6 +109,22 @@ def audit_status(payload: dict | None) -> str | None:
     return payload.get("status")
 
 
+def pilot_shadow_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    privacy = payload.get("privacy", {})
+    summary = payload.get("summary", {})
+    if payload.get("schema_version") != PILOT_SHADOW_SCHEMA_VERSION:
+        return "invalid_schema"
+    if privacy.get("raw_text_present") is not False:
+        return "privacy_fail"
+    if privacy.get("raw_identifier_fields_present") is not False:
+        return "privacy_fail"
+    if summary.get("finding_count") not in (0, None):
+        return "findings_present"
+    return "pass"
+
+
 def evidence_status(artifacts: dict, summary: dict) -> str:
     if any(meta["required"] and not meta["exists"] for meta in artifacts.values()):
         return "blocked"
@@ -120,6 +142,8 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["audit_forbidden_fields_absent"] is not True:
         return "fail"
+    if summary["pilot_shadow_status"] not in (None, "pass"):
+        return "fail"
     return "pass"
 
 
@@ -131,6 +155,7 @@ def attach_payload_details(
     smoke_payload: dict | None,
     dataset_payload: dict | None,
     audit_payload: dict | None,
+    pilot_shadow_payload: dict | None,
 ) -> None:
     if release_payload is not None:
         artifacts["release_report"]["observed_status"] = release_payload.get("overall_status")
@@ -164,6 +189,28 @@ def attach_payload_details(
         artifacts["audit_evidence"]["forbidden_fields_absent"] = audit_payload.get(
             "forbidden_fields_absent"
         )
+    if pilot_shadow_payload is not None:
+        artifacts["pilot_shadow_bundle"]["observed_status"] = pilot_shadow_status(
+            pilot_shadow_payload
+        )
+        artifacts["pilot_shadow_bundle"]["schema_version"] = pilot_shadow_payload.get(
+            "schema_version"
+        )
+        artifacts["pilot_shadow_bundle"]["source_kind"] = pilot_shadow_payload.get(
+            "source_kind"
+        )
+        artifacts["pilot_shadow_bundle"]["finding_count"] = pilot_shadow_payload.get(
+            "summary", {}
+        ).get("finding_count")
+        artifacts["pilot_shadow_bundle"]["total_events"] = pilot_shadow_payload.get(
+            "summary", {}
+        ).get("total_events")
+        artifacts["pilot_shadow_bundle"]["raw_text_present"] = pilot_shadow_payload.get(
+            "privacy", {}
+        ).get("raw_text_present")
+        artifacts["pilot_shadow_bundle"][
+            "raw_identifier_fields_present"
+        ] = pilot_shadow_payload.get("privacy", {}).get("raw_identifier_fields_present")
 
 
 def main() -> int:
@@ -174,6 +221,9 @@ def main() -> int:
     soak_payload, soak_artifact = load_json_artifact(args.ffi_soak, required=True)
     dataset_payload, dataset_artifact = load_json_artifact(args.dataset_evidence, required=True)
     audit_payload, audit_artifact = load_json_artifact(args.audit_evidence, required=True)
+    pilot_shadow_payload, pilot_shadow_artifact = load_json_artifact(
+        args.pilot_shadow_bundle, required=args.pilot_shadow_bundle is not None
+    ) if args.pilot_shadow_bundle else (None, None)
     smoke_payload, smoke_artifact = load_json_artifact(
         args.ffi_smoke, required=args.ffi_smoke is not None
     ) if args.ffi_smoke else (None, None)
@@ -185,6 +235,8 @@ def main() -> int:
         "dataset_evidence": dataset_artifact,
         "audit_evidence": audit_artifact,
     }
+    if pilot_shadow_artifact is not None:
+        artifacts["pilot_shadow_bundle"] = pilot_shadow_artifact
     if smoke_artifact is not None:
         artifacts["ffi_smoke"] = smoke_artifact
 
@@ -196,6 +248,7 @@ def main() -> int:
         smoke_payload=smoke_payload,
         dataset_payload=dataset_payload,
         audit_payload=audit_payload,
+        pilot_shadow_payload=pilot_shadow_payload,
     )
 
     request_limits = (
@@ -249,6 +302,33 @@ def main() -> int:
         ),
         "audit_forbidden_fields_absent": (
             audit_payload.get("forbidden_fields_absent") if audit_payload else None
+        ),
+        "pilot_shadow_status": pilot_shadow_status(pilot_shadow_payload),
+        "pilot_shadow_schema_version": (
+            pilot_shadow_payload.get("schema_version") if pilot_shadow_payload else None
+        ),
+        "pilot_shadow_source_kind": (
+            pilot_shadow_payload.get("source_kind") if pilot_shadow_payload else None
+        ),
+        "pilot_shadow_total_events": (
+            pilot_shadow_payload.get("summary", {}).get("total_events")
+            if pilot_shadow_payload
+            else None
+        ),
+        "pilot_shadow_finding_count": (
+            pilot_shadow_payload.get("summary", {}).get("finding_count")
+            if pilot_shadow_payload
+            else None
+        ),
+        "pilot_shadow_raw_text_present": (
+            pilot_shadow_payload.get("privacy", {}).get("raw_text_present")
+            if pilot_shadow_payload
+            else None
+        ),
+        "pilot_shadow_raw_identifier_fields_present": (
+            pilot_shadow_payload.get("privacy", {}).get("raw_identifier_fields_present")
+            if pilot_shadow_payload
+            else None
         ),
         "ffi_export_count": (
             len(contract_payload.get("abi", {}).get("exported_functions", []))

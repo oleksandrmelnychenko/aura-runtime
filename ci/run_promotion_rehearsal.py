@@ -175,6 +175,7 @@ def main() -> int:
         "contract_evidence": output_dir / "contract-evidence.json",
         "dataset_evidence": output_dir / "dataset-evidence.json",
         "audit_evidence": output_dir / "audit-evidence.json",
+        "pilot_shadow_bundle": output_dir / "pilot-shadow-bundle.json",
         "ffi_soak": output_dir / "ffi-state-sync-soak.json",
         "ffi_smoke": output_dir / "ffi-header-smoke.json",
         "ffi_smoke_object": output_dir / "ffi-header-smoke.o",
@@ -193,6 +194,7 @@ def main() -> int:
         "soak_iterations": soak_iterations,
         "commands": [],
         "ffi_smoke_mode": None,
+        "pilot_shadow_status": None,
         "manifest_path": paths["manifest"].as_posix(),
         "manifest_evidence_status": None,
     }
@@ -275,6 +277,24 @@ def main() -> int:
                 paths["audit_evidence"].as_posix(),
             ]
         )
+        record_and_require(
+            [
+                "cargo",
+                "run",
+                "--quiet",
+                "--example",
+                "world_sim",
+                "-p",
+                "aura-core",
+                "--",
+                "--input",
+                "crates/aura-core/data/world_sim_2k.json",
+                "--summary-only",
+                "--shadow-output",
+                paths["pilot_shadow_bundle"].as_posix(),
+                "--require-clean",
+            ]
+        )
 
         smoke_command, smoke_evidence = compile_ffi_smoke(
             workspace_root=workspace_root,
@@ -313,12 +333,15 @@ def main() -> int:
                 paths["dataset_evidence"].as_posix(),
                 "--audit-evidence",
                 paths["audit_evidence"].as_posix(),
+                "--pilot-shadow-bundle",
+                paths["pilot_shadow_bundle"].as_posix(),
                 "--ffi-smoke",
                 paths["ffi_smoke"].as_posix(),
             ]
         )
         manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
         summary["manifest_evidence_status"] = manifest.get("evidence_status")
+        summary["pilot_shadow_status"] = manifest.get("summary", {}).get("pilot_shadow_status")
     except RuntimeError as error:
         summary["failure"] = str(error)
         return_code = 1

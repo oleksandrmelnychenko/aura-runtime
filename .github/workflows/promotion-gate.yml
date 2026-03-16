@@ -23,6 +23,8 @@ env:
   AURA_FFI_SOAK_EVIDENCE_PATH: artifacts/ffi-state-sync-soak.json
   AURA_DATASET_EVIDENCE_PATH: artifacts/dataset-evidence.json
   AURA_AUDIT_EVIDENCE_PATH: artifacts/audit-evidence.json
+  AURA_PILOT_SHADOW_BUNDLE_PATH: artifacts/pilot-shadow-bundle.json
+  AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
   AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
 
 jobs:
@@ -59,6 +61,14 @@ jobs:
     - name: Generate Audit Evidence
       if: ${{ always() }}
       run: cargo run --quiet --example audit_evidence -p aura-core -- --output "$AURA_AUDIT_EVIDENCE_PATH"
+    - name: Generate Pilot Shadow Bundle
+      if: ${{ always() }}
+      run: |
+        cargo run --quiet --example world_sim -p aura-core -- \
+          --input "$AURA_PILOT_SHADOW_INPUT" \
+          --summary-only \
+          --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
+          --require-clean
     - name: Compile FFI Header Smoke
       if: ${{ always() }}
       run: |
@@ -95,6 +105,7 @@ jobs:
           --ffi-soak "$AURA_FFI_SOAK_EVIDENCE_PATH" \
           --dataset-evidence "$AURA_DATASET_EVIDENCE_PATH" \
           --audit-evidence "$AURA_AUDIT_EVIDENCE_PATH" \
+          --pilot-shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
     - name: Summarize Promotion Gate
       if: ${{ always() }}
@@ -109,6 +120,7 @@ jobs:
             echo "- contract evidence: $([ -f "$AURA_CONTRACT_EVIDENCE_PATH" ] && echo present || echo missing)"
             echo "- dataset evidence: $([ -f "$AURA_DATASET_EVIDENCE_PATH" ] && echo present || echo missing)"
             echo "- audit evidence: $([ -f "$AURA_AUDIT_EVIDENCE_PATH" ] && echo present || echo missing)"
+            echo "- pilot shadow bundle: $([ -f "$AURA_PILOT_SHADOW_BUNDLE_PATH" ] && echo present || echo missing)"
             echo "- ffi smoke evidence: $([ -f "$AURA_FFI_SMOKE_EVIDENCE_PATH" ] && echo present || echo missing)"
             echo "- ffi soak evidence: $([ -f "$AURA_FFI_SOAK_EVIDENCE_PATH" ] && echo present || echo missing)"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -145,6 +157,9 @@ jobs:
             summary.write(f"- dataset_evidence: `{summary_data['dataset_evidence_status']}`\n")
             summary.write(f"- audit_evidence: `{summary_data['audit_evidence_status']}`\n")
             summary.write(f"- audit_forbidden_fields_absent: `{summary_data['audit_forbidden_fields_absent']}`\n")
+            summary.write(f"- pilot_shadow_bundle: `{summary_data['pilot_shadow_status']}`\n")
+            summary.write(f"- pilot_shadow_total_events: `{summary_data['pilot_shadow_total_events']}`\n")
+            summary.write(f"- pilot_shadow_finding_count: `{summary_data['pilot_shadow_finding_count']}`\n")
             summary.write(f"- ffi_header_smoke: `{summary_data['ffi_smoke_status']}`\n")
             summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
             summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
@@ -168,6 +183,7 @@ jobs:
           ${{ env.AURA_CONTRACT_EVIDENCE_PATH }}
           ${{ env.AURA_DATASET_EVIDENCE_PATH }}
           ${{ env.AURA_AUDIT_EVIDENCE_PATH }}
+          ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH }}
           ${{ env.AURA_FFI_SMOKE_EVIDENCE_PATH }}
           ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}
           ${{ env.AURA_EVIDENCE_MANIFEST_PATH }}
