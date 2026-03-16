@@ -24,6 +24,7 @@ env:
   AURA_DATASET_EVIDENCE_PATH: artifacts/dataset-evidence.json
   AURA_AUDIT_EVIDENCE_PATH: artifacts/audit-evidence.json
   AURA_PILOT_SHADOW_BUNDLE_PATH: artifacts/pilot-shadow-bundle.json
+  AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
   AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
 
@@ -69,6 +70,12 @@ jobs:
           --summary-only \
           --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --require-clean
+    - name: Generate Pilot Regression Report
+      if: ${{ always() }}
+      run: |
+        cargo run --quiet --example pilot_regression -p aura-core -- \
+          --output "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          --require-pass
     - name: Compile FFI Header Smoke
       if: ${{ always() }}
       run: |
@@ -106,6 +113,7 @@ jobs:
           --dataset-evidence "$AURA_DATASET_EVIDENCE_PATH" \
           --audit-evidence "$AURA_AUDIT_EVIDENCE_PATH" \
           --pilot-shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
+          --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
     - name: Summarize Promotion Gate
       if: ${{ always() }}
@@ -121,6 +129,7 @@ jobs:
             echo "- dataset evidence: $([ -f "$AURA_DATASET_EVIDENCE_PATH" ] && echo present || echo missing)"
             echo "- audit evidence: $([ -f "$AURA_AUDIT_EVIDENCE_PATH" ] && echo present || echo missing)"
             echo "- pilot shadow bundle: $([ -f "$AURA_PILOT_SHADOW_BUNDLE_PATH" ] && echo present || echo missing)"
+            echo "- pilot regression report: $([ -f "$AURA_PILOT_REGRESSION_REPORT_PATH" ] && echo present || echo missing)"
             echo "- ffi smoke evidence: $([ -f "$AURA_FFI_SMOKE_EVIDENCE_PATH" ] && echo present || echo missing)"
             echo "- ffi soak evidence: $([ -f "$AURA_FFI_SOAK_EVIDENCE_PATH" ] && echo present || echo missing)"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -160,6 +169,8 @@ jobs:
             summary.write(f"- pilot_shadow_bundle: `{summary_data['pilot_shadow_status']}`\n")
             summary.write(f"- pilot_shadow_total_events: `{summary_data['pilot_shadow_total_events']}`\n")
             summary.write(f"- pilot_shadow_finding_count: `{summary_data['pilot_shadow_finding_count']}`\n")
+            summary.write(f"- pilot_regression: `{summary_data['pilot_regression_status']}`\n")
+            summary.write(f"- pilot_regression_scenarios: `{summary_data['pilot_regression_scenario_count']}`\n")
             summary.write(f"- ffi_header_smoke: `{summary_data['ffi_smoke_status']}`\n")
             summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
             summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
@@ -184,6 +195,7 @@ jobs:
           ${{ env.AURA_DATASET_EVIDENCE_PATH }}
           ${{ env.AURA_AUDIT_EVIDENCE_PATH }}
           ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH }}
+          ${{ env.AURA_PILOT_REGRESSION_REPORT_PATH }}
           ${{ env.AURA_FFI_SMOKE_EVIDENCE_PATH }}
           ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}
           ${{ env.AURA_EVIDENCE_MANIFEST_PATH }}

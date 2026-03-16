@@ -176,6 +176,7 @@ def main() -> int:
         "dataset_evidence": output_dir / "dataset-evidence.json",
         "audit_evidence": output_dir / "audit-evidence.json",
         "pilot_shadow_bundle": output_dir / "pilot-shadow-bundle.json",
+        "pilot_regression_report": output_dir / "pilot-regression-report.json",
         "ffi_soak": output_dir / "ffi-state-sync-soak.json",
         "ffi_smoke": output_dir / "ffi-header-smoke.json",
         "ffi_smoke_object": output_dir / "ffi-header-smoke.o",
@@ -195,6 +196,7 @@ def main() -> int:
         "commands": [],
         "ffi_smoke_mode": None,
         "pilot_shadow_status": None,
+        "pilot_regression_status": None,
         "manifest_path": paths["manifest"].as_posix(),
         "manifest_evidence_status": None,
     }
@@ -295,6 +297,21 @@ def main() -> int:
                 "--require-clean",
             ]
         )
+        record_and_require(
+            [
+                "cargo",
+                "run",
+                "--quiet",
+                "--example",
+                "pilot_regression",
+                "-p",
+                "aura-core",
+                "--",
+                "--output",
+                paths["pilot_regression_report"].as_posix(),
+                "--require-pass",
+            ]
+        )
 
         smoke_command, smoke_evidence = compile_ffi_smoke(
             workspace_root=workspace_root,
@@ -335,6 +352,8 @@ def main() -> int:
                 paths["audit_evidence"].as_posix(),
                 "--pilot-shadow-bundle",
                 paths["pilot_shadow_bundle"].as_posix(),
+                "--pilot-regression-report",
+                paths["pilot_regression_report"].as_posix(),
                 "--ffi-smoke",
                 paths["ffi_smoke"].as_posix(),
             ]
@@ -342,6 +361,9 @@ def main() -> int:
         manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
         summary["manifest_evidence_status"] = manifest.get("evidence_status")
         summary["pilot_shadow_status"] = manifest.get("summary", {}).get("pilot_shadow_status")
+        summary["pilot_regression_status"] = manifest.get("summary", {}).get(
+            "pilot_regression_status"
+        )
     except RuntimeError as error:
         summary["failure"] = str(error)
         return_code = 1
@@ -352,6 +374,12 @@ def main() -> int:
             try:
                 manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
                 summary["manifest_evidence_status"] = manifest.get("evidence_status")
+                summary["pilot_shadow_status"] = manifest.get("summary", {}).get(
+                    "pilot_shadow_status"
+                )
+                summary["pilot_regression_status"] = manifest.get("summary", {}).get(
+                    "pilot_regression_status"
+                )
             except json.JSONDecodeError:
                 summary["manifest_evidence_status"] = "invalid_json"
         summary["finished_at_utc"] = now_utc()

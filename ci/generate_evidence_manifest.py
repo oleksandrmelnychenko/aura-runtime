@@ -40,6 +40,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to pilot/shadow replay bundle JSON.",
     )
+    parser.add_argument(
+        "--pilot-regression-report",
+        default=None,
+        help="Optional path to pilot simulation regression report JSON.",
+    )
     return parser.parse_args()
 
 
@@ -125,6 +130,12 @@ def pilot_shadow_status(payload: dict | None) -> str | None:
     return "pass"
 
 
+def pilot_regression_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    return payload.get("overall_status")
+
+
 def evidence_status(artifacts: dict, summary: dict) -> str:
     if any(meta["required"] and not meta["exists"] for meta in artifacts.values()):
         return "blocked"
@@ -144,6 +155,8 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["pilot_shadow_status"] not in (None, "pass"):
         return "fail"
+    if summary["pilot_regression_status"] not in (None, "pass"):
+        return "fail"
     return "pass"
 
 
@@ -156,6 +169,7 @@ def attach_payload_details(
     dataset_payload: dict | None,
     audit_payload: dict | None,
     pilot_shadow_payload: dict | None,
+    pilot_regression_payload: dict | None,
 ) -> None:
     if release_payload is not None:
         artifacts["release_report"]["observed_status"] = release_payload.get("overall_status")
@@ -211,6 +225,19 @@ def attach_payload_details(
         artifacts["pilot_shadow_bundle"][
             "raw_identifier_fields_present"
         ] = pilot_shadow_payload.get("privacy", {}).get("raw_identifier_fields_present")
+    if pilot_regression_payload is not None:
+        artifacts["pilot_regression_report"]["observed_status"] = pilot_regression_status(
+            pilot_regression_payload
+        )
+        artifacts["pilot_regression_report"]["schema_version"] = pilot_regression_payload.get(
+            "schema_version"
+        )
+        artifacts["pilot_regression_report"]["suite_id"] = pilot_regression_payload.get(
+            "manifest", {}
+        ).get("suite_id")
+        artifacts["pilot_regression_report"]["scenario_count"] = len(
+            pilot_regression_payload.get("scenarios", [])
+        )
 
 
 def main() -> int:
@@ -224,6 +251,9 @@ def main() -> int:
     pilot_shadow_payload, pilot_shadow_artifact = load_json_artifact(
         args.pilot_shadow_bundle, required=args.pilot_shadow_bundle is not None
     ) if args.pilot_shadow_bundle else (None, None)
+    pilot_regression_payload, pilot_regression_artifact = load_json_artifact(
+        args.pilot_regression_report, required=args.pilot_regression_report is not None
+    ) if args.pilot_regression_report else (None, None)
     smoke_payload, smoke_artifact = load_json_artifact(
         args.ffi_smoke, required=args.ffi_smoke is not None
     ) if args.ffi_smoke else (None, None)
@@ -237,6 +267,8 @@ def main() -> int:
     }
     if pilot_shadow_artifact is not None:
         artifacts["pilot_shadow_bundle"] = pilot_shadow_artifact
+    if pilot_regression_artifact is not None:
+        artifacts["pilot_regression_report"] = pilot_regression_artifact
     if smoke_artifact is not None:
         artifacts["ffi_smoke"] = smoke_artifact
 
@@ -249,6 +281,7 @@ def main() -> int:
         dataset_payload=dataset_payload,
         audit_payload=audit_payload,
         pilot_shadow_payload=pilot_shadow_payload,
+        pilot_regression_payload=pilot_regression_payload,
     )
 
     request_limits = (
@@ -328,6 +361,20 @@ def main() -> int:
         "pilot_shadow_raw_identifier_fields_present": (
             pilot_shadow_payload.get("privacy", {}).get("raw_identifier_fields_present")
             if pilot_shadow_payload
+            else None
+        ),
+        "pilot_regression_status": pilot_regression_status(pilot_regression_payload),
+        "pilot_regression_schema_version": (
+            pilot_regression_payload.get("schema_version") if pilot_regression_payload else None
+        ),
+        "pilot_regression_suite_id": (
+            pilot_regression_payload.get("manifest", {}).get("suite_id")
+            if pilot_regression_payload
+            else None
+        ),
+        "pilot_regression_scenario_count": (
+            len(pilot_regression_payload.get("scenarios", []))
+            if pilot_regression_payload
             else None
         ),
         "ffi_export_count": (

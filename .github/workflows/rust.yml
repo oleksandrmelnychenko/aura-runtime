@@ -15,6 +15,7 @@ env:
   AURA_DATASET_EVIDENCE_PATH: artifacts/dataset-evidence.json
   AURA_AUDIT_EVIDENCE_PATH: artifacts/audit-evidence.json
   AURA_PILOT_SHADOW_BUNDLE_PATH: artifacts/pilot-shadow-bundle.json
+  AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
   AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
 
@@ -51,6 +52,12 @@ jobs:
           --summary-only \
           --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --require-clean
+    - name: Generate Pilot Regression Report
+      if: ${{ always() }}
+      run: |
+        cargo run --quiet --example pilot_regression -p aura-core -- \
+          --output "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          --require-pass
     - name: Compile FFI Header Smoke
       if: ${{ always() }}
       run: |
@@ -88,6 +95,7 @@ jobs:
           --dataset-evidence "$AURA_DATASET_EVIDENCE_PATH" \
           --audit-evidence "$AURA_AUDIT_EVIDENCE_PATH" \
           --pilot-shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
+          --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
     - name: Summarize Rust CI
       if: ${{ always() }}
@@ -117,6 +125,8 @@ jobs:
                     "pilot_shadow_status": "missing",
                     "pilot_shadow_total_events": "missing",
                     "pilot_shadow_finding_count": "missing",
+                    "pilot_regression_status": "missing",
+                    "pilot_regression_scenario_count": "missing",
                 },
             }
         )
@@ -135,6 +145,8 @@ jobs:
             summary.write(f"- pilot_shadow_bundle: `{summary_data['pilot_shadow_status']}`\n")
             summary.write(f"- pilot_shadow_total_events: `{summary_data['pilot_shadow_total_events']}`\n")
             summary.write(f"- pilot_shadow_finding_count: `{summary_data['pilot_shadow_finding_count']}`\n")
+            summary.write(f"- pilot_regression: `{summary_data['pilot_regression_status']}`\n")
+            summary.write(f"- pilot_regression_scenarios: `{summary_data['pilot_regression_scenario_count']}`\n")
             summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
             summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
             summary.write(f"- ffi_state_sync_attempts: `{summary_data['ffi_soak_attempts_run']}`\n")
@@ -181,6 +193,13 @@ jobs:
       with:
         name: aura-pilot-shadow-bundle
         path: ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH }}
+        if-no-files-found: warn
+    - name: Upload Pilot Regression Report
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-pilot-regression-report
+        path: ${{ env.AURA_PILOT_REGRESSION_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload Evidence Manifest
       if: ${{ always() }}
