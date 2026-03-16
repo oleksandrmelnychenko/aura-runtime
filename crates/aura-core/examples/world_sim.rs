@@ -472,8 +472,8 @@ fn run_world_simulation(
             content_type: aura_core::ContentType::Text,
             text: Some(event.text.clone()),
             image_data: None,
-            sender_id: event.sender_id.clone(),
-            conversation_id: event.conversation_id.clone(),
+            sender_id: event.sender_id.as_str().into(),
+            conversation_id: event.conversation_id.as_str().into(),
             language: Some(event.language.clone()),
             conversation_type: event.conversation_type,
             member_count: event.member_count,
@@ -836,15 +836,15 @@ fn build_contact_summaries(
     profiler
         .contacts_by_risk()
         .into_iter()
-        .filter(|profile| profile.sender_id != world.owner.id)
+        .filter(|profile| profile.sender_id != world.owner.id.as_str())
         .filter_map(|profile| {
             let snapshot = profiler.snapshot(&profile.sender_id)?;
             Some(ContactRiskSummary {
-                sender_id: profile.sender_id.clone(),
+                sender_id: profile.sender_id.to_string(),
                 display_name: actor_lookup
-                    .get(&profile.sender_id)
+                    .get(&*profile.sender_id)
                     .and_then(|actor| actor.display_name.clone())
-                    .unwrap_or_else(|| profile.sender_id.clone()),
+                    .unwrap_or_else(|| profile.sender_id.to_string()),
                 risk_score: profile.risk_score(),
                 rating: profile.rating,
                 trust_level: profile.trust_level,

@@ -100,8 +100,8 @@ mod tests {
         ContextEvent {
             event_id: 0,
             timestamp_ms: ts,
-            sender_id: sender.to_string(),
-            conversation_id: conv.to_string(),
+            sender_id: sender.into(),
+            conversation_id: conv.into(),
             kind,
             confidence: 0.8,
         }

@@ -313,13 +313,13 @@ mod tests {
         start_ms: u64,
         interval_ms: u64,
     ) -> ConversationTimeline {
-        let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
         for i in 0..count {
             timeline.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms: start_ms + i as u64 * interval_ms,
-                sender_id: sender.to_string(),
-                conversation_id: "conv_1".to_string(),
+                sender_id: sender.into(),
+                conversation_id: "conv_1".into(),
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
             });
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn detects_response_asymmetry() {
         let analyzer = TimingAnalyzer::new();
-        let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
 
         let min = 60 * 1000u64;
         let events = vec![
@@ -441,8 +441,8 @@ mod tests {
             timeline.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms: ts,
-                sender_id: sender.to_string(),
-                conversation_id: "conv_1".to_string(),
+                sender_id: sender.into(),
+                conversation_id: "conv_1".into(),
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
             });
@@ -461,7 +461,7 @@ mod tests {
     #[test]
     fn no_asymmetry_equal_response() {
         let analyzer = TimingAnalyzer::new();
-        let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
 
         let min = 60 * 1000u64;
         let events = vec![
@@ -478,8 +478,8 @@ mod tests {
             timeline.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms: ts,
-                sender_id: sender.to_string(),
-                conversation_id: "conv_1".to_string(),
+                sender_id: sender.into(),
+                conversation_id: "conv_1".into(),
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
             });

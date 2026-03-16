@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 use aura_patterns::PatternDatabase;
 use serde::Deserialize;
 
+use crate::ids::{ConversationId, SenderId};
 use crate::{
     canonical_policy_action_expectations, canonical_robustness_seed_scenarios,
     evaluate_policy_action_gates, evaluate_scenario_quality_gates, generate_robustness_variants,
@@ -626,11 +627,13 @@ fn build_curated_scenario_case(case: &CuratedCorpusCase) -> ScenarioCase {
                 content_type: ContentType::Text,
                 text: Some(message.text.clone()),
                 image_data: None,
-                sender_id: message
-                    .sender_id
-                    .clone()
-                    .unwrap_or_else(|| format!("sender_{idx}")),
-                conversation_id: case.id.clone(),
+                sender_id: SenderId::from(
+                    message
+                        .sender_id
+                        .clone()
+                        .unwrap_or_else(|| format!("sender_{idx}")),
+                ),
+                conversation_id: ConversationId::from(case.id.clone()),
                 language: Some(case.language.clone()),
                 conversation_type: case.conversation_type,
                 member_count: match case.conversation_type {

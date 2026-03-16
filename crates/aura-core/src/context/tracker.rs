@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::error::AuraError;
+use crate::ids::{ConversationId, SenderId};
 use crate::types::{ConversationType, DetectionSignal};
 
 /// Current schema version for serialized tracker state.
@@ -12,6 +13,8 @@ use super::bullying::BullyingDetector;
 use super::coercion::CoercionDetector;
 use super::contact::{ContactProfiler, ContactProfilerWireState, DEFAULT_MAX_CONTACT_PROFILES};
 use super::events::{ContextEvent, EventKind};
+use crate::types::AnalysisMode;
+
 use super::grooming::GroomingDetector;
 use super::manipulation::ManipulationDetector;
 use super::raid::RaidDetector;
@@ -69,7 +72,7 @@ fn default_max_contact_profiles() -> usize {
 /// Stores a bounded sequence of context events for a single conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationTimeline {
-    pub conversation_id: String,
+    pub conversation_id: ConversationId,
     #[serde(default)]
     pub conversation_type: ConversationType,
     events: Vec<ContextEvent>,
@@ -79,14 +82,14 @@ pub struct ConversationTimeline {
 /// Represents the exportable state of a conversation timeline.
 #[derive(Debug, Clone)]
 pub struct ConversationTimelineState {
-    pub conversation_id: String,
+    pub conversation_id: ConversationId,
     pub conversation_type: ConversationType,
     pub events: Vec<ContextEvent>,
 }
 
 impl ConversationTimeline {
     /// Creates a new timeline for the given conversation with a default Direct type.
-    pub fn new(conversation_id: String, max_events: usize) -> Self {
+    pub fn new(conversation_id: ConversationId, max_events: usize) -> Self {
         Self {
             conversation_id,
             conversation_type: ConversationType::Direct,
@@ -97,7 +100,7 @@ impl ConversationTimeline {
 
     /// Creates a new timeline with an explicit conversation type.
     pub fn new_with_type(
-        conversation_id: String,
+        conversation_id: ConversationId,
         max_events: usize,
         conversation_type: ConversationType,
     ) -> Self {
@@ -165,17 +168,17 @@ impl ConversationTimeline {
     }
 
     /// Returns deduplicated sender IDs for events matching a predicate since the given time.
-    pub fn unique_senders_matching<F>(&self, since_ms: u64, predicate: F) -> Vec<String>
+    pub fn unique_senders_matching<F>(&self, since_ms: u64, predicate: F) -> Vec<SenderId>
     where
         F: Fn(&ContextEvent) -> bool,
     {
-        let mut senders: Vec<String> = Vec::with_capacity(self.events.len());
+        let mut senders: Vec<SenderId> = Vec::with_capacity(self.events.len());
         for e in &self.events {
             if e.timestamp_ms >= since_ms && predicate(e) {
                 senders.push(e.sender_id.clone());
             }
         }
-        senders.sort();
+        senders.sort_by(|a, b| a.0.cmp(&b.0));
         senders.dedup();
         senders
     }
@@ -209,7 +212,7 @@ impl ConversationTimeline {
     /// - Same-tracker re-import (same event_ids)
     /// - Cross-tracker merge (different trackers may assign overlapping event_ids)
     pub fn merge_from(&mut self, other: ConversationTimeline) {
-        let mut existing: HashSet<(u64, String, EventKind)> =
+        let mut existing: HashSet<(u64, SenderId, EventKind)> =
             HashSet::with_capacity(self.events.len());
         for e in &self.events {
             existing.insert((e.timestamp_ms, e.sender_id.clone(), e.kind.clone()));
@@ -251,7 +254,7 @@ impl ConversationTimelineState {
 /// Manages per-conversation timelines and runs all threat detectors on incoming events.
 pub struct ConversationTracker {
     config: TrackerConfig,
-    timelines: HashMap<String, ConversationTimeline>,
+    timelines: HashMap<ConversationId, ConversationTimeline>,
     grooming_detector: GroomingDetector,
     bullying_detector: BullyingDetector,
     manipulation_detector: ManipulationDetector,
@@ -275,7 +278,11 @@ impl ConversationTracker {
     /// Creates a new tracker with the given configuration and initializes all sub-detectors.
     pub fn new(config: TrackerConfig) -> Self {
         let grooming_detector =
-            GroomingDetector::new(config.is_child_account || config.is_teen_account);
+            GroomingDetector::new(if config.is_child_account || config.is_teen_account {
+                AnalysisMode::Strict
+            } else {
+                AnalysisMode::Standard
+            });
         let bullying_detector = BullyingDetector::new();
         let manipulation_detector = ManipulationDetector::new();
         let selfharm_detector = SelfHarmDetector::new();
@@ -306,8 +313,13 @@ impl ConversationTracker {
     /// Replaces the tracker configuration and adjusts timelines and limits accordingly.
     pub fn update_config(&mut self, config: TrackerConfig) {
         self.config = config;
-        self.grooming_detector =
-            GroomingDetector::new(self.config.is_child_account || self.config.is_teen_account);
+        self.grooming_detector = GroomingDetector::new(
+            if self.config.is_child_account || self.config.is_teen_account {
+                AnalysisMode::Strict
+            } else {
+                AnalysisMode::Standard
+            },
+        );
 
         for timeline in self.timelines.values_mut() {
             timeline.max_events = self.config.max_events_per_conversation;
@@ -447,7 +459,7 @@ impl ConversationTracker {
     pub fn conversation_ids(&self) -> Vec<&str> {
         let mut result = Vec::with_capacity(self.timelines.len());
         for s in self.timelines.keys() {
-            result.push(s.as_str());
+            result.push(&**s);
         }
         result
     }
@@ -525,7 +537,7 @@ impl ConversationTracker {
     }
 
     fn evict_oldest_conversation(&mut self) {
-        let mut oldest_id: Option<String> = None;
+        let mut oldest_id: Option<ConversationId> = None;
         let mut oldest_ts: u64 = u64::MAX;
         for (id, t) in &self.timelines {
             let ts = t.all_events().last().map(|e| e.timestamp_ms).unwrap_or(0);
@@ -553,8 +565,8 @@ mod tests {
         ContextEvent {
             event_id: 0,
             timestamp_ms,
-            sender_id: sender_id.to_string(),
-            conversation_id: conversation_id.to_string(),
+            sender_id: sender_id.into(),
+            conversation_id: conversation_id.into(),
             kind,
             confidence: 0.8,
         }

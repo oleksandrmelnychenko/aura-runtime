@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
+use crate::ids::{ConversationId, SenderId};
 use crate::types::{
     BehavioralTrend, CircleTier, Confidence, ContactSnapshot, DetectionSignal, SignalFamily,
     ThreatType,
@@ -120,8 +121,8 @@ impl BehavioralSnapshot {
 /// Tracks behavioral history and risk metrics for a single contact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContactProfile {
-    pub sender_id: String,
-    pub(crate) conversations: Vec<String>,
+    pub sender_id: SenderId,
+    pub(crate) conversations: Vec<ConversationId>,
     #[serde(default)]
     weekly_snapshots: VecDeque<BehavioralSnapshot>,
     #[serde(default)]
@@ -153,12 +154,12 @@ pub struct ContactProfile {
 /// Represents the exportable state of a contact profile.
 #[derive(Debug, Clone)]
 pub struct ContactProfileState {
-    pub sender_id: String,
+    pub sender_id: SenderId,
     pub first_seen_ms: u64,
     pub last_seen_ms: u64,
     pub total_messages: u64,
     pub conversation_count: usize,
-    pub conversations: Vec<String>,
+    pub conversations: Vec<ConversationId>,
     pub grooming_event_count: u64,
     pub bullying_event_count: u64,
     pub manipulation_event_count: u64,
@@ -251,7 +252,7 @@ impl From<ContactProfileState> for ContactProfile {
 }
 
 impl ContactProfile {
-    fn new(sender_id: String, first_seen_ms: u64) -> Self {
+    fn new(sender_id: SenderId, first_seen_ms: u64) -> Self {
         Self {
             sender_id,
             first_seen_ms,
@@ -551,7 +552,7 @@ fn trend_severity(trend: &BehavioralTrend) -> u8 {
 
 /// Manages a bounded collection of contact profiles and provides anomaly detection.
 pub struct ContactProfiler {
-    profiles: HashMap<String, ContactProfile>,
+    profiles: HashMap<SenderId, ContactProfile>,
     max_profiles: usize,
 }
 
@@ -1020,23 +1021,23 @@ impl ContactProfiler {
         &mut self,
         protected_sender_id: Option<&str>,
     ) -> Option<ContactProfile> {
-        let mut oldest_sender: Option<String> = None;
+        let mut oldest_sender: Option<SenderId> = None;
         let mut best_last_seen = u64::MAX;
         let mut best_first_seen = u64::MAX;
         let mut best_id: Option<&str> = None;
         for (sender_id, profile) in &self.profiles {
-            if Some(sender_id.as_str()) == protected_sender_id {
+            if Some(&**sender_id) == protected_sender_id {
                 continue;
             }
             let cmp = profile
                 .last_seen_ms
                 .cmp(&best_last_seen)
                 .then_with(|| profile.first_seen_ms.cmp(&best_first_seen))
-                .then_with(|| sender_id.as_str().cmp(best_id.unwrap_or("")));
+                .then_with(|| (**sender_id).cmp(best_id.unwrap_or("")));
             if cmp == std::cmp::Ordering::Less || oldest_sender.is_none() {
                 best_last_seen = profile.last_seen_ms;
                 best_first_seen = profile.first_seen_ms;
-                best_id = Some(sender_id.as_str());
+                best_id = Some(&**sender_id);
                 oldest_sender = Some(sender_id.clone());
             }
         }
@@ -1061,8 +1062,8 @@ mod tests {
         ContextEvent {
             event_id: 0,
             timestamp_ms: ts,
-            sender_id: sender.to_string(),
-            conversation_id: conv.to_string(),
+            sender_id: sender.into(),
+            conversation_id: conv.into(),
             kind,
             confidence: 0.8,
         }
@@ -3045,9 +3046,9 @@ mod tests {
         let mut profiler = ContactProfiler::with_max_profiles(2);
         profiler.import(ContactProfilerState {
             profiles: vec![
-                ContactProfile::new("alice".to_string(), 1_000),
-                ContactProfile::new("bob".to_string(), 2_000),
-                ContactProfile::new("carol".to_string(), 3_000),
+                ContactProfile::new("alice".into(), 1_000),
+                ContactProfile::new("bob".into(), 2_000),
+                ContactProfile::new("carol".into(), 3_000),
             ],
         });
 

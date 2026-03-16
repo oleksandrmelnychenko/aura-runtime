@@ -381,13 +381,13 @@ mod tests {
     use super::*;
 
     fn make_timeline_with_senders(events: Vec<(&str, EventKind, u64)>) -> ConversationTimeline {
-        let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
         for (sender, kind, ts) in events {
             timeline.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms: ts,
-                sender_id: sender.to_string(),
-                conversation_id: "conv_1".to_string(),
+                sender_id: sender.into(),
+                conversation_id: "conv_1".into(),
                 kind,
                 confidence: 0.8,
             });

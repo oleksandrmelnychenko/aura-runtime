@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::ids::{ConversationId, SenderId};
+
 /// Represents the category of threat detected in a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -347,7 +349,7 @@ pub struct InferenceSummary {
 /// Holds a point-in-time snapshot of a contact's trust and behavioural profile.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContactSnapshot {
-    pub sender_id: String,
+    pub sender_id: SenderId,
     pub rating: f32,
     pub trust_level: f32,
     pub circle_tier: CircleTier,
@@ -467,6 +469,26 @@ pub enum ConversationType {
     Group,
 }
 
+/// Controls detection strictness for enrichment and grooming analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalysisMode {
+    /// Standard detection thresholds.
+    Standard,
+    /// Stricter detection thresholds for higher-risk accounts.
+    Strict,
+}
+
+impl AnalysisMode {
+    /// Returns true if this mode uses strict detection thresholds.
+    pub fn is_strict(self) -> bool {
+        match self {
+            AnalysisMode::Standard => false,
+            AnalysisMode::Strict => true,
+        }
+    }
+}
+
 /// Represents the media type of a message's content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentType {
@@ -488,8 +510,8 @@ pub struct MessageInput {
     pub content_type: ContentType,
     pub text: Option<String>,
     pub image_data: Option<Vec<u8>>,
-    pub sender_id: String,
-    pub conversation_id: String,
+    pub sender_id: SenderId,
+    pub conversation_id: ConversationId,
     pub language: Option<String>,
     pub conversation_type: ConversationType,
     pub member_count: Option<u32>,

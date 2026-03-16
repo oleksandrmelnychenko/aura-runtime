@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::ids::{ConversationId, SenderId};
+
 /// Represents a single detected event within a conversation context.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextEvent {
@@ -8,9 +10,9 @@ pub struct ContextEvent {
 
     pub timestamp_ms: u64,
 
-    pub sender_id: String,
+    pub sender_id: SenderId,
 
-    pub conversation_id: String,
+    pub conversation_id: ConversationId,
 
     pub kind: EventKind,
 

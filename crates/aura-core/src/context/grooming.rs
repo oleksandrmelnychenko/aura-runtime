@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::types::{Confidence, ConversationType, DetectionSignal, SignalFamily, ThreatType};
+use crate::types::{
+    AnalysisMode, Confidence, ConversationType, DetectionSignal, SignalFamily, ThreatType,
+};
 
 use super::contact::ContactProfiler;
 use super::events::EventKind;
@@ -8,7 +10,7 @@ use super::tracker::ConversationTimeline;
 
 /// Detects grooming behavior patterns across a conversation timeline.
 pub struct GroomingDetector {
-    strict_mode: bool,
+    mode: AnalysisMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -28,8 +30,8 @@ enum GroomingStage {
 
 impl GroomingDetector {
     /// Creates a new grooming detector with the given strictness setting.
-    pub fn new(strict_mode: bool) -> Self {
-        Self { strict_mode }
+    pub fn new(mode: AnalysisMode) -> Self {
+        Self { mode }
     }
 
     /// Analyzes a conversation timeline for grooming stage progression from a specific sender.
@@ -130,7 +132,7 @@ impl GroomingDetector {
             }
         }
 
-        if self.strict_mode {
+        if self.mode.is_strict() {
             score += 0.05;
         }
 
@@ -147,7 +149,7 @@ impl GroomingDetector {
 
         score = score.min(1.0);
 
-        let threshold = if self.strict_mode { 0.25 } else { 0.35 };
+        let threshold = if self.mode.is_strict() { 0.25 } else { 0.35 };
 
         if score >= threshold {
             let explanation = self.build_explanation(
@@ -168,7 +170,7 @@ impl GroomingDetector {
 
         if stages_present == 1
             && stage_counts[0] >= 3
-            && self.strict_mode
+            && self.mode.is_strict()
             && contact_profiler.is_new_contact(sender_id)
         {
             signals.push(DetectionSignal::context(
@@ -321,7 +323,7 @@ impl GroomingDetector {
         let mut other_events = Vec::new();
         for event in all_events {
             if event.sender_id != sender_id {
-                other_senders.insert(event.sender_id.as_str());
+                other_senders.insert(&*event.sender_id);
                 other_events.push(event);
             }
         }
@@ -689,13 +691,13 @@ mod tests {
     use super::*;
 
     fn make_timeline(events: Vec<(EventKind, u64)>) -> ConversationTimeline {
-        let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
         for (kind, ts) in events {
             timeline.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms: ts,
-                sender_id: "predator".to_string(),
-                conversation_id: "conv_1".to_string(),
+                sender_id: "predator".into(),
+                conversation_id: "conv_1".into(),
                 kind,
                 confidence: 0.8,
             });
@@ -704,13 +706,13 @@ mod tests {
     }
 
     fn make_multi_sender_timeline(events: Vec<(&str, EventKind, u64)>) -> ConversationTimeline {
-        let mut timeline = ConversationTimeline::new("conv_1".to_string(), 500);
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
         for (sender, kind, ts) in events {
             timeline.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms: ts,
-                sender_id: sender.to_string(),
-                conversation_id: "conv_1".to_string(),
+                sender_id: sender.into(),
+                conversation_id: "conv_1".into(),
                 kind,
                 confidence: 0.8,
             });
@@ -720,7 +722,7 @@ mod tests {
 
     #[test]
     fn no_grooming_in_normal_conversation() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::NormalConversation, 1000),
             (EventKind::NormalConversation, 2000),
@@ -734,7 +736,7 @@ mod tests {
 
     #[test]
     fn single_stage_low_concern() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![(EventKind::Flattery, 1000)]);
         let profiler = ContactProfiler::new();
 
@@ -745,7 +747,7 @@ mod tests {
 
     #[test]
     fn two_stages_moderate_concern() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::GiftOffer, 2000),
@@ -761,7 +763,7 @@ mod tests {
 
     #[test]
     fn full_grooming_sequence_high_alert() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::GiftOffer, 2000),
@@ -784,7 +786,7 @@ mod tests {
 
     #[test]
     fn rapid_escalation_increases_score() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
 
         let slow = make_timeline(vec![
             (EventKind::Flattery, 0),
@@ -816,8 +818,8 @@ mod tests {
 
     #[test]
     fn child_mode_is_stricter() {
-        let child_detector = GroomingDetector::new(true);
-        let adult_detector = GroomingDetector::new(false);
+        let child_detector = GroomingDetector::new(AnalysisMode::Strict);
+        let adult_detector = GroomingDetector::new(AnalysisMode::Standard);
 
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
@@ -835,7 +837,7 @@ mod tests {
 
     #[test]
     fn control_stage_detected() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::SecrecyRequest, 2000),
@@ -853,7 +855,7 @@ mod tests {
 
     #[test]
     fn financial_dependency_stage_classified() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::GiftOffer, 2000),
@@ -870,7 +872,7 @@ mod tests {
 
     #[test]
     fn video_call_in_boundary_crossing() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::VideoCallRequest, 2000),
@@ -884,7 +886,7 @@ mod tests {
 
     #[test]
     fn non_monotonic_stage_timestamps_do_not_overflow() {
-        let detector = GroomingDetector::new(false);
+        let detector = GroomingDetector::new(AnalysisMode::Standard);
         let timeline = make_timeline(vec![
             (EventKind::DebtCreation, 1000),
             (EventKind::LoveBombing, 2000),
@@ -900,7 +902,7 @@ mod tests {
 
     #[test]
     fn six_stage_max_score() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::GiftOffer, 2000),
@@ -924,7 +926,7 @@ mod tests {
 
     #[test]
     fn adult_sender_age_boosts_score() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::SecrecyRequest, 2000),
@@ -937,8 +939,8 @@ mod tests {
         profiler_adult.record_event(&ContextEvent {
             event_id: 0,
             timestamp_ms: 500,
-            sender_id: "predator".to_string(),
-            conversation_id: "conv_1".to_string(),
+            sender_id: "predator".into(),
+            conversation_id: "conv_1".into(),
             kind: EventKind::NormalConversation,
             confidence: 1.0,
         });
@@ -957,7 +959,7 @@ mod tests {
 
     #[test]
     fn mutual_peer_courtship_is_dampened_as_ambiguous() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_multi_sender_timeline(vec![
             ("teen_1", EventKind::Flattery, 1_000),
             ("teen_2", EventKind::NormalConversation, 2_000),
@@ -987,7 +989,7 @@ mod tests {
 
     #[test]
     fn secrecy_prevents_peer_courtship_dampening() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_multi_sender_timeline(vec![
             ("teen_1", EventKind::Flattery, 1_000),
             ("teen_2", EventKind::NormalConversation, 2_000),
@@ -1017,7 +1019,7 @@ mod tests {
 
     #[test]
     fn financial_grooming_event_classified() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::FinancialGrooming, 2000),
@@ -1031,7 +1033,7 @@ mod tests {
 
     #[test]
     fn dependency_before_isolation_ordering() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
 
         let ordered = make_timeline(vec![
             (EventKind::Flattery, 1000),
@@ -1062,7 +1064,7 @@ mod tests {
 
     #[test]
     fn repeated_secrecy_escalates() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::SecrecyRequest, 1000),
             (EventKind::SecrecyRequest, 2000),
@@ -1081,7 +1083,7 @@ mod tests {
 
     #[test]
     fn casual_meeting_alone_low_score() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![(EventKind::CasualMeetingRequest, 1000)]);
         let profiler = ContactProfiler::new();
 
@@ -1096,7 +1098,7 @@ mod tests {
 
     #[test]
     fn casual_meeting_with_grooming_context() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::SecrecyRequest, 2000),
@@ -1120,7 +1122,7 @@ mod tests {
 
     #[test]
     fn minor_sender_no_age_boost() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::SecrecyRequest, 2000),
@@ -1130,8 +1132,8 @@ mod tests {
         profiler.record_event(&ContextEvent {
             event_id: 0,
             timestamp_ms: 500,
-            sender_id: "predator".to_string(),
-            conversation_id: "conv_1".to_string(),
+            sender_id: "predator".into(),
+            conversation_id: "conv_1".into(),
             kind: EventKind::NormalConversation,
             confidence: 1.0,
         });
@@ -1154,7 +1156,7 @@ mod tests {
 
     #[test]
     fn identity_erosion_as_trust_building() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::IdentityErosion, 1000),
             (EventKind::SecrecyRequest, 2000),
@@ -1171,7 +1173,7 @@ mod tests {
 
     #[test]
     fn fake_vulnerability_as_trust_building() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::FakeVulnerability, 1000),
             (EventKind::SecrecyRequest, 2000),
@@ -1188,7 +1190,7 @@ mod tests {
 
     #[test]
     fn network_poisoning_as_isolation() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Flattery, 1000),
             (EventKind::NetworkPoisoning, 2000),
@@ -1205,7 +1207,7 @@ mod tests {
 
     #[test]
     fn full_advanced_grooming_pipeline() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::IdentityErosion, 1000),
             (EventKind::FakeVulnerability, 2000),
@@ -1228,7 +1230,7 @@ mod tests {
 
     #[test]
     fn group_chat_low_risk_stages_do_not_emit_stage_sequence() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let mut timeline = make_timeline(vec![
             (EventKind::Flattery, 1_000),
             (EventKind::CasualMeetingRequest, 2_000),
@@ -1245,7 +1247,7 @@ mod tests {
 
     #[test]
     fn group_chat_isolation_stage_still_emits_grooming_signal() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let mut timeline = make_timeline(vec![
             (EventKind::Flattery, 1_000),
             (EventKind::SecrecyRequest, 2_000),
@@ -1264,7 +1266,7 @@ mod tests {
 
     #[test]
     fn manipulation_only_tactics_do_not_emit_grooming_stage_sequence() {
-        let detector = GroomingDetector::new(true);
+        let detector = GroomingDetector::new(AnalysisMode::Strict);
         let timeline = make_timeline(vec![
             (EventKind::Gaslighting, 1_000),
             (EventKind::DebtCreation, 2_000),

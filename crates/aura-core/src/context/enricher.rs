@@ -4,6 +4,8 @@ use aho_corasick::AhoCorasick;
 use aura_ml::boundary::aho_match_at_boundary;
 use aura_patterns::TextNormalizer;
 
+use crate::types::AnalysisMode;
+
 use super::events::{ContextEvent, EventKind};
 
 /// Contains the results of signal enrichment for a single message.
@@ -23,8 +25,8 @@ pub struct EnricherConfig {
     /// Minimum count of compliment events to flag as love bombing.
     pub love_bombing_threshold: usize,
 
-    /// Enables stricter detection thresholds when set to true.
-    pub strict_mode: bool,
+    /// Controls detection strictness level.
+    pub mode: AnalysisMode,
 }
 
 impl Default for EnricherConfig {
@@ -32,7 +34,7 @@ impl Default for EnricherConfig {
         Self {
             question_probe_threshold: 0.6,
             love_bombing_threshold: 3,
-            strict_mode: false,
+            mode: AnalysisMode::Standard,
         }
     }
 }
@@ -191,14 +193,14 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::PersonalInfoRequest,
                 confidence: (probing_count as f32 * 0.3).min(1.0),
             });
         }
 
-        let threshold = if self.config.strict_mode {
+        let threshold = if self.config.mode.is_strict() {
             self.config.love_bombing_threshold.saturating_sub(1).max(2)
         } else {
             self.config.love_bombing_threshold
@@ -208,8 +210,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::LoveBombing,
                 confidence: (compliment_count as f32 * 0.2).min(1.0),
             });
@@ -217,8 +219,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::Flattery,
                 confidence: 0.3,
             });
@@ -228,8 +230,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::PeerPressure,
                 confidence: (urgency_count as f32 * 0.25).min(1.0),
             });
@@ -245,8 +247,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::DefenseOfVictim,
                 confidence: (defense_count as f32 * 0.4).min(1.0),
             });
@@ -256,8 +258,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::FarewellMessage,
                 confidence: 0.7,
             });
@@ -267,8 +269,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::Hopelessness,
                 confidence: 0.6,
             });
@@ -278,8 +280,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::Exclusion,
                 confidence: 0.7,
             });
@@ -289,8 +291,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::MoneyOffer,
                 confidence: 0.6,
             });
@@ -300,8 +302,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::PiiSelfDisclosure,
                 confidence: (pii_disclosure_count as f32 * 0.4).min(1.0),
             });
@@ -311,8 +313,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::DareChallenge,
                 confidence: (dare_count as f32 * 0.35).min(1.0),
             });
@@ -322,8 +324,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::ScreenshotThreat,
                 confidence: 0.8,
             });
@@ -333,8 +335,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::SuicideCoercion,
                 confidence: (suicide_coercion_count as f32 * 0.5).min(1.0),
             });
@@ -344,8 +346,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::FalseConsensus,
                 confidence: (false_consensus_count as f32 * 0.35).min(1.0),
             });
@@ -355,8 +357,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::DebtCreation,
                 confidence: (debt_creation_count as f32 * 0.4).min(1.0),
             });
@@ -366,8 +368,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::Gaslighting,
                 confidence: (0.55 + gaslighting_count as f32 * 0.1).min(1.0),
             });
@@ -377,8 +379,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::ReputationThreat,
                 confidence: (reputation_threat_count as f32 * 0.45).min(1.0),
             });
@@ -388,8 +390,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::IdentityErosion,
                 confidence: (identity_erosion_count as f32 * 0.4).min(1.0),
             });
@@ -399,8 +401,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::NetworkPoisoning,
                 confidence: (network_poisoning_count as f32 * 0.4).min(1.0),
             });
@@ -410,8 +412,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::FakeVulnerability,
                 confidence: (fake_vulnerability_count as f32 * 0.35).min(1.0),
             });
@@ -421,8 +423,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::PlatformSwitch,
                 confidence: 0.7,
             });
@@ -432,8 +434,8 @@ impl SignalEnricher {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::Devaluation,
                 confidence: 0.5,
             });
@@ -470,8 +472,8 @@ impl SignalEnricher {
             Some(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
-                sender_id: sender_id.to_string(),
-                conversation_id: conversation_id.to_string(),
+                sender_id: sender_id.into(),
+                conversation_id: conversation_id.into(),
                 kind: EventKind::PersonalInfoRequest,
                 confidence: ratio.min(1.0),
             })
@@ -1142,7 +1144,7 @@ mod tests {
 
     fn default_enricher() -> SignalEnricher {
         SignalEnricher::new(EnricherConfig {
-            strict_mode: true,
+            mode: AnalysisMode::Strict,
             ..Default::default()
         })
     }

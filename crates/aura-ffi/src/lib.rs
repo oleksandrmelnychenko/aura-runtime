@@ -199,7 +199,7 @@ fn contact_profile_to_proto(
     is_new_contact: bool,
 ) -> proto::ContactProfile {
     proto::ContactProfile {
-        sender_id: profile.sender_id.clone(),
+        sender_id: profile.sender_id.to_string(),
         risk_score: profile.risk_score(),
         rating: profile.rating,
         trust_level: profile.trust_level,
@@ -228,7 +228,7 @@ fn conversation_summary_to_proto(
             let events = timeline.all_events();
             let mut unique_senders: Vec<String> = events
                 .iter()
-                .map(|e| e.sender_id.clone())
+                .map(|e| e.sender_id.to_string())
                 .collect::<std::collections::HashSet<_>>()
                 .into_iter()
                 .collect();
@@ -876,8 +876,11 @@ fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
         content_type: content_type_from_proto(message.content_type),
         text: message.text,
         image_data: message.image_data,
-        sender_id: non_empty_or(message.sender_id, "unknown"),
-        conversation_id: non_empty_or(message.conversation_id, "unknown"),
+        sender_id: aura_core::SenderId::from(non_empty_or(message.sender_id, "unknown")),
+        conversation_id: aura_core::ConversationId::from(non_empty_or(
+            message.conversation_id,
+            "unknown",
+        )),
         language: message.language,
         conversation_type: conversation_type_from_proto(message.conversation_type),
         member_count: message.member_count,
@@ -965,7 +968,7 @@ fn action_recommendation_to_proto(
 
 fn contact_snapshot_to_proto(snapshot: &aura_core::ContactSnapshot) -> proto::ContactSnapshot {
     proto::ContactSnapshot {
-        sender_id: snapshot.sender_id.clone(),
+        sender_id: snapshot.sender_id.to_string(),
         rating: snapshot.rating,
         trust_level: snapshot.trust_level,
         circle_tier: proto_circle_tier(snapshot.circle_tier) as i32,
@@ -1011,7 +1014,7 @@ fn conversation_timeline_state_to_proto(
     state: &CoreConversationTimelineState,
 ) -> proto::ConversationTimelineState {
     proto::ConversationTimelineState {
-        conversation_id: state.conversation_id.clone(),
+        conversation_id: state.conversation_id.to_string(),
         conversation_type: proto_conversation_type(state.conversation_type) as i32,
         events: state.events.iter().map(context_event_to_proto).collect(),
     }
@@ -1021,7 +1024,7 @@ fn conversation_timeline_state_from_proto(
     state: proto::ConversationTimelineState,
 ) -> Result<CoreConversationTimelineState, String> {
     Ok(CoreConversationTimelineState {
-        conversation_id: state.conversation_id,
+        conversation_id: aura_core::ConversationId::from(state.conversation_id),
         conversation_type: conversation_type_from_proto(state.conversation_type),
         events: state
             .events
@@ -1035,8 +1038,8 @@ fn context_event_to_proto(event: &CoreContextEvent) -> proto::ContextEvent {
     proto::ContextEvent {
         event_id: event.event_id,
         timestamp_ms: event.timestamp_ms,
-        sender_id: event.sender_id.clone(),
-        conversation_id: event.conversation_id.clone(),
+        sender_id: event.sender_id.to_string(),
+        conversation_id: event.conversation_id.to_string(),
         kind: proto_event_kind(event.kind.clone()) as i32,
         confidence: event.confidence,
     }
@@ -1046,8 +1049,8 @@ fn context_event_from_proto(event: proto::ContextEvent) -> Result<CoreContextEve
     Ok(CoreContextEvent {
         event_id: event.event_id,
         timestamp_ms: event.timestamp_ms,
-        sender_id: event.sender_id,
-        conversation_id: event.conversation_id,
+        sender_id: aura_core::SenderId::from(event.sender_id),
+        conversation_id: aura_core::ConversationId::from(event.conversation_id),
         kind: event_kind_from_proto(event.kind)?,
         confidence: event.confidence,
     })
@@ -1079,12 +1082,12 @@ fn contact_profiler_state_from_proto(
 
 fn contact_profile_state_to_proto(state: &CoreContactProfileState) -> proto::ContactProfileState {
     proto::ContactProfileState {
-        sender_id: state.sender_id.clone(),
+        sender_id: state.sender_id.to_string(),
         first_seen_ms: state.first_seen_ms,
         last_seen_ms: state.last_seen_ms,
         total_messages: state.total_messages,
         conversation_count: state.conversation_count as u64,
-        conversations: state.conversations.clone(),
+        conversations: state.conversations.iter().map(|c| c.to_string()).collect(),
         grooming_event_count: state.grooming_event_count,
         bullying_event_count: state.bullying_event_count,
         manipulation_event_count: state.manipulation_event_count,
@@ -1121,12 +1124,16 @@ fn contact_profile_state_from_proto(
     };
 
     Ok(CoreContactProfileState {
-        sender_id: state.sender_id,
+        sender_id: aura_core::SenderId::from(state.sender_id),
         first_seen_ms: state.first_seen_ms,
         last_seen_ms: state.last_seen_ms,
         total_messages: state.total_messages,
         conversation_count: state.conversation_count as usize,
-        conversations: state.conversations,
+        conversations: state
+            .conversations
+            .into_iter()
+            .map(aura_core::ConversationId::from)
+            .collect(),
         grooming_event_count: state.grooming_event_count,
         bullying_event_count: state.bullying_event_count,
         manipulation_event_count: state.manipulation_event_count,

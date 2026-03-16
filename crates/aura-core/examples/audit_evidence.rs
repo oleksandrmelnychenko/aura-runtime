@@ -159,7 +159,7 @@ fn sample_result() -> AnalysisResult {
             abuse: 0.05,
         },
         contact_snapshot: Some(ContactSnapshot {
-            sender_id: "coach_realistic".to_string(),
+            sender_id: "coach_realistic".into(),
             rating: 14.0,
             trust_level: 0.2,
             circle_tier: CircleTier::New,

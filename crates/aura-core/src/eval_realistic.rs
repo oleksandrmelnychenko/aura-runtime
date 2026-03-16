@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 use aura_patterns::PatternDatabase;
 use serde::Deserialize;
 
+use crate::ids::{ConversationId, SenderId};
 use crate::{
     canonical_policy_action_expectations, evaluate_policy_action_gates,
     evaluate_scenario_quality_gates, pre_release_policy_action_gates, run_scenario_case,
@@ -585,11 +586,13 @@ fn build_realistic_chat_scenario(spec: &RealisticChatCaseSpec) -> RealisticChatS
                 content_type: ContentType::Text,
                 text: Some(message.text.clone()),
                 image_data: None,
-                sender_id: message
-                    .sender_id
-                    .clone()
-                    .unwrap_or_else(|| format!("{}_sender_{idx}", spec.id)),
-                conversation_id: spec.id.clone(),
+                sender_id: SenderId::from(
+                    message
+                        .sender_id
+                        .clone()
+                        .unwrap_or_else(|| format!("{}_sender_{idx}", spec.id)),
+                ),
+                conversation_id: ConversationId::from(spec.id.clone()),
                 language: Some(
                     message
                         .language

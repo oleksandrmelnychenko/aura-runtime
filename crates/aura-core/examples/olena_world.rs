@@ -813,8 +813,8 @@ fn dm(text: &str, sender: &str, _receiver: &str, conv: &str) -> MessageInput {
         content_type: ContentType::Text,
         text: Some(text.to_string()),
         image_data: None,
-        sender_id: sender.to_string(),
-        conversation_id: conv.to_string(),
+        sender_id: sender.into(),
+        conversation_id: conv.into(),
         language: Some("uk".to_string()),
         conversation_type: ConversationType::Direct,
         member_count: None,
@@ -830,8 +830,8 @@ fn group(text: &str, sender: &str, conv: &str, members: u32) -> MessageInput {
         content_type: ContentType::Text,
         text: Some(text.to_string()),
         image_data: None,
-        sender_id: sender.to_string(),
-        conversation_id: conv.to_string(),
+        sender_id: sender.into(),
+        conversation_id: conv.into(),
         language: Some("uk".to_string()),
         conversation_type: ConversationType::GroupChat,
         member_count: Some(members),
@@ -1038,7 +1038,7 @@ fn print_final_contacts(analyzer: &Analyzer) {
     for c in &contacts {
         let risk = c.risk_score();
         let bar = risk_bar(risk);
-        let label = match c.sender_id.as_str() {
+        let label = match &*c.sender_id {
             "maks_28" => "Макс (зловмисник)",
             "diana_fake" => "Діана (фейк-булі)",
             "dasha" => "Даша (токсична)",
