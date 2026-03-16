@@ -12,11 +12,13 @@ Current product direction is narrow on purpose:
 
 ## Current State
 
+- **758 tests**, clippy clean, zero warnings
 - **Messenger-native runtime**: content, conversation, link, and abuse signals are combined into one analysis result
 - **Stateful context engine**: timelines, contact profiles, trust decay, weekly snapshots, and behavioral trend detection
 - **Inference-aware messenger policy layer**: `UiAction` outputs are refined by risk horizon, escalation likelihood, and latent psychological states
 - **3 languages**: English, Ukrainian, Russian, including slang, shorthand, and noisy chat normalization
 - **Protobuf-only FFI**: stable C ABI over encoded bytes via `AuraBuffer`
+- **Type-safe domain model**: `SenderId`, `ConversationId`, `ReasonCode` newtypes prevent string ID misuse at compile time; `AnalysisMode` enum replaces boolean flags
 - **Production release discipline**: persisted release, contract, dataset, audit, FFI smoke, and FFI soak artifacts are aggregated into one machine-readable evidence manifest
 - **Boundary hardening**: size-bounded protobuf decode, atomic failure on malformed batch inputs, bounded contact-profile memory, and panic-free FFI behavior from the caller's perspective
 - **Pattern and link hardening**: strict pattern-database validation, fail-closed regex loading, and IDN-aware URL normalization
@@ -38,7 +40,7 @@ Current product direction is narrow on purpose:
 ## Architecture
 
 ```text
-aura-core       Analyzer, action engine, context engine, evaluation stack
+aura-core       Analyzer, action engine, context engine, evaluation stack, typed IDs
 aura-patterns   Pattern matching, strict rule validation, normalizer, IDN-aware URL checker, emoji signals
 aura-ml         Toxicity + sentiment (fallback + optional local ONNX runtime)
 aura-proto      Protobuf contracts for messenger runtime and FFI
@@ -237,7 +239,7 @@ python ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.jso
 ## Usage (Rust)
 
 ```rust
-use aura_core::{Analyzer, AuraConfig, ContentType, MessageInput};
+use aura_core::{Analyzer, AuraConfig, ContentType, ConversationId, MessageInput, SenderId};
 use aura_patterns::PatternDatabase;
 
 let config = AuraConfig::default();
@@ -351,6 +353,9 @@ proofs, privacy-safe audit evidence, and promotion automation.
 - Improve coercive-control and reputation/image-abuse pathways
 - Preserve protective-factor reasoning, not only threat accumulation
 - Extend inference-aware policy beyond `ui_actions` into `parent_alert` and `follow_ups`, especially for trusted-adult boundary and supportive self-harm boundary cases
+
+The concrete execution plan for this phase now lives in
+[`docs/phase-3-pilot-readiness-roadmap.md`](docs/phase-3-pilot-readiness-roadmap.md).
 
 ### Phase 4: Mathematical Upgrades
 

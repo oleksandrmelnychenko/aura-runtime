@@ -1,8 +1,60 @@
 # AURA Core — Changelog
 
-## Unreleased — Production Hardening and Release Discipline
+## Unreleased — Rust Best-Practices Pass
 
-**Current release candidate posture | Unified evidence bundle | All-features CI**
+**758 tests | Type-safe IDs | Exhaustive matching | Idiomatic Rust style | Rustdoc RFC 1574**
+
+Comprehensive code-quality pass across all five crates applying Rust best
+practices for type safety, style, memory, and documentation.
+
+### Type Safety
+
+- Added `SenderId`, `ConversationId`, `ReasonCode` newtypes in `ids.rs` with
+  `Deref<Target=str>`, serde-transparent serialization, and `Borrow<str>` for
+  HashMap key lookups. Prevents accidental mixing of string identifiers at
+  compile time.
+- Replaced `strict_mode: bool` with `AnalysisMode` enum (`Standard` / `Strict`)
+  in grooming detector and enricher config.
+
+### Pattern Matching
+
+- Converted all 49 `matches!` macro usages to full `match` expressions with
+  explicit arms for better compiler diagnostics when variants change.
+- Eliminated 12 wildcard (`_ =>`) match arms with exhaustive variant listing
+  across action engine, FFI layer, and event severity mappings.
+
+### Code Style
+
+- Replaced 72 iterator chains (`.iter().filter().map().collect()`) with
+  idiomatic `for`-loops and mutable accumulators.
+- Removed ~355 inline comments per Rust style guidelines.
+- Applied variable shadowing where applicable.
+
+### Memory and Performance
+
+- Added `Vec::with_capacity` and `HashMap::with_capacity` on hot allocation
+  paths (signal vectors, escalation tracker, enricher buffers).
+- Reordered `ContactProfile` and `DetectionSignal` struct fields to minimize
+  padding.
+- Added optimized release profile: `lto = "fat"`, `codegen-units = 1`,
+  `strip = "symbols"`.
+
+### Documentation
+
+- Added `///` rustdoc (RFC 1574) on all public items with third-person singular
+  summaries.
+- Added `//!` crate-level docs on all five crate `lib.rs` files.
+
+### Fixes
+
+- Fixed clippy `overly_complex_bool_expr` in `url_checker.rs`.
+- Fixed clippy `needless_borrow` in `contact.rs`.
+
+---
+
+## Production Hardening and Release Discipline
+
+**Release candidate posture | Unified evidence bundle | All-features CI**
 
 - Added a structured release report and unified evidence manifest for release,
   contract, dataset, audit, FFI smoke, and FFI state-sync soak evidence.
@@ -502,16 +554,17 @@
 
 | Метрика | Значення |
 |---------|----------|
-| Тести | 469 (275 core + 21 ffi + 113 ml + 60 patterns) |
+| Тести | 758 (533 core + 37 ffi + 113 ml + 75 patterns) |
 | Симуляції | 26 |
 | Pattern rules | 151+ |
 | ML fallback patterns | ~573 (296 toxicity + 277 sentiment) |
-| Enricher categories | 18 |
+| Enricher categories | 20 |
 | Мови | EN, UK, RU |
-| EventKind variants | 37 |
+| EventKind variants | 46 |
 | Grooming stages | 6 |
 | Manipulation tactics | 6+ |
 | Context detectors | 7 (Grooming, Bullying, Manipulation, SelfHarm, Coercion, Raid, Timing) |
 | Contact profiling | Rating, Trust Decay, CircleTier, BehavioralTrend, Weekly Snapshots |
 | Threat types | SelfHarm, Grooming, Bullying, Manipulation, Explicit, Doxxing, Threat |
+| Typed IDs | SenderId, ConversationId, ReasonCode |
 | Warnings | 0 |
