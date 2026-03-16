@@ -90,6 +90,54 @@ pub fn analysis_result_fixture() -> proto::AnalysisResult {
                 },
             ],
         }),
+        product_surface: Some(proto::ProductDecisionSurface {
+            schema_version: "aura.product_decision_surface.v1".to_string(),
+            rollout_mode: proto::ProductRolloutMode::GuardianEnabled as i32,
+            threat_type: proto::ThreatType::Grooming as i32,
+            action: proto::Action::Block as i32,
+            score: 0.91,
+            child: Some(proto::ProductChildSurface {
+                delivery_mode: proto::ProductDeliveryMode::Apply as i32,
+                visible: true,
+                intervention: proto::ProductChildIntervention::Block as i32,
+                ui_actions: vec![
+                    proto::UiAction::WarnBeforeDisplay as i32,
+                    proto::UiAction::SuggestBlockContact as i32,
+                    proto::UiAction::SuggestReport as i32,
+                ],
+                reason_codes: vec![
+                    "grooming.secrecy_request".to_string(),
+                    "conversation.escalation".to_string(),
+                ],
+            }),
+            guardian: Some(proto::ProductGuardianSurface {
+                delivery_mode: proto::ProductDeliveryMode::Apply as i32,
+                notify: true,
+                priority: proto::AlertPriority::High as i32,
+                follow_ups: vec![
+                    proto::FollowUpAction::BlockSuggested as i32,
+                    proto::FollowUpAction::ReviewContactProfile as i32,
+                ],
+                reason_codes: vec![
+                    "grooming.secrecy_request".to_string(),
+                    "conversation.escalation".to_string(),
+                ],
+            }),
+            review: Some(proto::ProductReviewSurface {
+                delivery_mode: proto::ProductDeliveryMode::Apply as i32,
+                open_review: true,
+                urgency: proto::ProductReviewUrgency::High as i32,
+                reason_codes: vec![
+                    "grooming.secrecy_request".to_string(),
+                    "conversation.escalation".to_string(),
+                ],
+                latent_states: vec![
+                    proto::LatentStateKind::DependencyBuilding as i32,
+                    proto::LatentStateKind::IsolationPressure as i32,
+                ],
+            }),
+            uncertainty_disposition: proto::ProductUncertaintyDisposition::Normal as i32,
+        }),
     }
 }
 
@@ -201,6 +249,35 @@ pub fn batch_analyze_response_fixture() -> proto::BatchAnalyzeResponse {
                     escalation_likelihood_24h: 0.0,
                     protective_factor_strength: 0.0,
                     latent_states: Vec::new(),
+                }),
+                product_surface: Some(proto::ProductDecisionSurface {
+                    schema_version: "aura.product_decision_surface.v1".to_string(),
+                    rollout_mode: proto::ProductRolloutMode::GuardianEnabled as i32,
+                    threat_type: proto::ThreatType::None as i32,
+                    action: proto::Action::Allow as i32,
+                    score: 0.02,
+                    child: Some(proto::ProductChildSurface {
+                        delivery_mode: proto::ProductDeliveryMode::Suppress as i32,
+                        visible: false,
+                        intervention: proto::ProductChildIntervention::None as i32,
+                        ui_actions: Vec::new(),
+                        reason_codes: vec!["policy.allow".to_string()],
+                    }),
+                    guardian: Some(proto::ProductGuardianSurface {
+                        delivery_mode: proto::ProductDeliveryMode::Suppress as i32,
+                        notify: false,
+                        priority: proto::AlertPriority::None as i32,
+                        follow_ups: Vec::new(),
+                        reason_codes: vec!["policy.allow".to_string()],
+                    }),
+                    review: Some(proto::ProductReviewSurface {
+                        delivery_mode: proto::ProductDeliveryMode::Suppress as i32,
+                        open_review: false,
+                        urgency: proto::ProductReviewUrgency::None as i32,
+                        reason_codes: vec!["policy.allow".to_string()],
+                        latent_states: Vec::new(),
+                    }),
+                    uncertainty_disposition: proto::ProductUncertaintyDisposition::Normal as i32,
                 }),
             },
             analysis_result_fixture(),

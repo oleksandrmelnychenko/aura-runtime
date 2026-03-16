@@ -110,6 +110,45 @@ enum FollowUpAction {
   FOLLOW_UP_ACTION_REPORT_TO_AUTHORITIES = 4;
 }
 
+enum ProductRolloutMode {
+  PRODUCT_ROLLOUT_MODE_UNSPECIFIED = 0;
+  PRODUCT_ROLLOUT_MODE_SHADOW = 1;
+  PRODUCT_ROLLOUT_MODE_STAGING_PILOT = 2;
+  PRODUCT_ROLLOUT_MODE_GUARDIAN_ENABLED = 3;
+}
+
+enum ProductDeliveryMode {
+  PRODUCT_DELIVERY_MODE_UNSPECIFIED = 0;
+  PRODUCT_DELIVERY_MODE_SUPPRESS = 1;
+  PRODUCT_DELIVERY_MODE_MIRROR_ONLY = 2;
+  PRODUCT_DELIVERY_MODE_APPLY = 3;
+}
+
+enum ProductChildIntervention {
+  PRODUCT_CHILD_INTERVENTION_UNSPECIFIED = 0;
+  PRODUCT_CHILD_INTERVENTION_NONE = 1;
+  PRODUCT_CHILD_INTERVENTION_MARK = 2;
+  PRODUCT_CHILD_INTERVENTION_BLUR = 3;
+  PRODUCT_CHILD_INTERVENTION_WARN = 4;
+  PRODUCT_CHILD_INTERVENTION_BLOCK = 5;
+}
+
+enum ProductReviewUrgency {
+  PRODUCT_REVIEW_URGENCY_UNSPECIFIED = 0;
+  PRODUCT_REVIEW_URGENCY_NONE = 1;
+  PRODUCT_REVIEW_URGENCY_STANDARD = 2;
+  PRODUCT_REVIEW_URGENCY_HIGH = 3;
+  PRODUCT_REVIEW_URGENCY_URGENT = 4;
+}
+
+enum ProductUncertaintyDisposition {
+  PRODUCT_UNCERTAINTY_DISPOSITION_UNSPECIFIED = 0;
+  PRODUCT_UNCERTAINTY_DISPOSITION_NORMAL = 1;
+  PRODUCT_UNCERTAINTY_DISPOSITION_MIRROR_ONLY = 2;
+  PRODUCT_UNCERTAINTY_DISPOSITION_REQUIRE_REVIEW = 3;
+  PRODUCT_UNCERTAINTY_DISPOSITION_GUARDIAN_PRIORITY = 4;
+}
+
 enum CircleTier {
   CIRCLE_TIER_UNSPECIFIED = 0;
   CIRCLE_TIER_INNER = 1;
@@ -305,6 +344,42 @@ message InferenceSummary {
   repeated LatentStateEvidence latent_states = 5;
 }
 
+message ProductChildSurface {
+  ProductDeliveryMode delivery_mode = 1;
+  bool visible = 2;
+  ProductChildIntervention intervention = 3;
+  repeated UiAction ui_actions = 4;
+  repeated string reason_codes = 5;
+}
+
+message ProductGuardianSurface {
+  ProductDeliveryMode delivery_mode = 1;
+  bool notify = 2;
+  AlertPriority priority = 3;
+  repeated FollowUpAction follow_ups = 4;
+  repeated string reason_codes = 5;
+}
+
+message ProductReviewSurface {
+  ProductDeliveryMode delivery_mode = 1;
+  bool open_review = 2;
+  ProductReviewUrgency urgency = 3;
+  repeated string reason_codes = 4;
+  repeated LatentStateKind latent_states = 5;
+}
+
+message ProductDecisionSurface {
+  string schema_version = 1;
+  ProductRolloutMode rollout_mode = 2;
+  ThreatType threat_type = 3;
+  Action action = 4;
+  float score = 5;
+  ProductChildSurface child = 6;
+  ProductGuardianSurface guardian = 7;
+  ProductReviewSurface review = 8;
+  ProductUncertaintyDisposition uncertainty_disposition = 9;
+}
+
 message AnalysisResult {
   ThreatType threat_type = 1;
   Confidence confidence = 2;
@@ -319,6 +394,7 @@ message AnalysisResult {
   repeated string reason_codes = 11;
   uint64 analysis_time_us = 12;
   InferenceSummary inference = 13;
+  ProductDecisionSurface product_surface = 14;
 }
 
 message ContactProfileRequest {

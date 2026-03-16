@@ -21,8 +21,9 @@ use aura_core::context::tracker::{
     TrackerWireState as CoreTrackerWireState,
 };
 use aura_core::{
-    build_shadow_mode_event, config::CulturalContext, Action, AlertPriority, Analyzer, AuraConfig,
-    MessageInput, ShadowModeBundle, ShadowModeEventInput, ShadowModeExpectation, ShadowModeFinding,
+    build_product_decision_surface, build_shadow_mode_event, config::CulturalContext, Action,
+    AlertPriority, Analyzer, AuraConfig, MessageInput, ProductRolloutMode, ShadowModeBundle,
+    ShadowModeEventInput, ShadowModeExpectation, ShadowModeFinding,
 };
 use aura_patterns::PatternDatabase;
 use aura_proto::messenger::v1 as proto;
@@ -1230,6 +1231,75 @@ fn analysis_result_to_proto(result: &aura_core::AnalysisResult) -> proto::Analys
         reason_codes: result.reason_codes.clone(),
         analysis_time_us: result.analysis_time_us,
         inference: Some(inference_summary_to_proto(&result.inference)),
+        product_surface: Some(product_decision_surface_to_proto(
+            &build_product_decision_surface(result, ProductRolloutMode::GuardianEnabled),
+        )),
+    }
+}
+
+fn product_decision_surface_to_proto(
+    surface: &aura_core::ProductDecisionSurface,
+) -> proto::ProductDecisionSurface {
+    proto::ProductDecisionSurface {
+        schema_version: surface.schema_version.clone(),
+        rollout_mode: proto_product_rollout_mode(surface.rollout_mode) as i32,
+        threat_type: proto_threat_type(surface.threat_type) as i32,
+        action: proto_action(surface.action) as i32,
+        score: surface.score,
+        child: Some(product_child_surface_to_proto(&surface.child)),
+        guardian: Some(product_guardian_surface_to_proto(&surface.guardian)),
+        review: Some(product_review_surface_to_proto(&surface.review)),
+        uncertainty_disposition: proto_product_uncertainty_disposition(
+            surface.uncertainty_disposition,
+        ) as i32,
+    }
+}
+
+fn product_child_surface_to_proto(
+    surface: &aura_core::ProductChildSurface,
+) -> proto::ProductChildSurface {
+    proto::ProductChildSurface {
+        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
+        visible: surface.visible,
+        intervention: proto_product_child_intervention(surface.intervention) as i32,
+        ui_actions: surface
+            .ui_actions
+            .iter()
+            .map(|action| proto_ui_action(*action) as i32)
+            .collect(),
+        reason_codes: surface.reason_codes.clone(),
+    }
+}
+
+fn product_guardian_surface_to_proto(
+    surface: &aura_core::ProductGuardianSurface,
+) -> proto::ProductGuardianSurface {
+    proto::ProductGuardianSurface {
+        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
+        notify: surface.notify,
+        priority: proto_alert_priority(surface.priority) as i32,
+        follow_ups: surface
+            .follow_ups
+            .iter()
+            .map(|action| proto_follow_up_action(*action) as i32)
+            .collect(),
+        reason_codes: surface.reason_codes.clone(),
+    }
+}
+
+fn product_review_surface_to_proto(
+    surface: &aura_core::ProductReviewSurface,
+) -> proto::ProductReviewSurface {
+    proto::ProductReviewSurface {
+        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
+        open_review: surface.open_review,
+        urgency: proto_product_review_urgency(surface.urgency) as i32,
+        reason_codes: surface.reason_codes.clone(),
+        latent_states: surface
+            .latent_states
+            .iter()
+            .map(|kind| proto_latent_state_kind(*kind) as i32)
+            .collect(),
     }
 }
 
@@ -1489,6 +1559,7 @@ fn shadow_mode_decision_to_proto(
             .as_ref()
             .map(shadow_mode_contact_summary_to_proto),
         mirror: Some(shadow_mode_mirror_to_proto(&decision.mirror)),
+        product_surface: Some(product_decision_surface_to_proto(&decision.product_surface)),
     }
 }
 
@@ -1899,6 +1970,68 @@ fn proto_follow_up_action(value: aura_core::FollowUpAction) -> proto::FollowUpAc
         }
         aura_core::FollowUpAction::ReportToAuthorities => {
             proto::FollowUpAction::ReportToAuthorities
+        }
+    }
+}
+
+fn proto_product_rollout_mode(value: aura_core::ProductRolloutMode) -> proto::ProductRolloutMode {
+    match value {
+        aura_core::ProductRolloutMode::Shadow => proto::ProductRolloutMode::Shadow,
+        aura_core::ProductRolloutMode::StagingPilot => proto::ProductRolloutMode::StagingPilot,
+        aura_core::ProductRolloutMode::GuardianEnabled => {
+            proto::ProductRolloutMode::GuardianEnabled
+        }
+    }
+}
+
+fn proto_product_delivery_mode(
+    value: aura_core::ProductDeliveryMode,
+) -> proto::ProductDeliveryMode {
+    match value {
+        aura_core::ProductDeliveryMode::Suppress => proto::ProductDeliveryMode::Suppress,
+        aura_core::ProductDeliveryMode::MirrorOnly => proto::ProductDeliveryMode::MirrorOnly,
+        aura_core::ProductDeliveryMode::Apply => proto::ProductDeliveryMode::Apply,
+    }
+}
+
+fn proto_product_child_intervention(
+    value: aura_core::ProductChildIntervention,
+) -> proto::ProductChildIntervention {
+    match value {
+        aura_core::ProductChildIntervention::None => proto::ProductChildIntervention::None,
+        aura_core::ProductChildIntervention::Mark => proto::ProductChildIntervention::Mark,
+        aura_core::ProductChildIntervention::Blur => proto::ProductChildIntervention::Blur,
+        aura_core::ProductChildIntervention::Warn => proto::ProductChildIntervention::Warn,
+        aura_core::ProductChildIntervention::Block => proto::ProductChildIntervention::Block,
+    }
+}
+
+fn proto_product_review_urgency(
+    value: aura_core::ProductReviewUrgency,
+) -> proto::ProductReviewUrgency {
+    match value {
+        aura_core::ProductReviewUrgency::None => proto::ProductReviewUrgency::None,
+        aura_core::ProductReviewUrgency::Standard => proto::ProductReviewUrgency::Standard,
+        aura_core::ProductReviewUrgency::High => proto::ProductReviewUrgency::High,
+        aura_core::ProductReviewUrgency::Urgent => proto::ProductReviewUrgency::Urgent,
+    }
+}
+
+fn proto_product_uncertainty_disposition(
+    value: aura_core::ProductUncertaintyDisposition,
+) -> proto::ProductUncertaintyDisposition {
+    match value {
+        aura_core::ProductUncertaintyDisposition::Normal => {
+            proto::ProductUncertaintyDisposition::Normal
+        }
+        aura_core::ProductUncertaintyDisposition::MirrorOnly => {
+            proto::ProductUncertaintyDisposition::MirrorOnly
+        }
+        aura_core::ProductUncertaintyDisposition::RequireReview => {
+            proto::ProductUncertaintyDisposition::RequireReview
+        }
+        aura_core::ProductUncertaintyDisposition::GuardianPriority => {
+            proto::ProductUncertaintyDisposition::GuardianPriority
         }
     }
 }
@@ -2454,6 +2587,32 @@ mod tests {
                 "expected crisis vulnerability latent state over FFI"
             );
 
+            let product_surface = result
+                .product_surface
+                .expect("missing product decision surface");
+            assert_eq!(
+                proto::ProductRolloutMode::try_from(product_surface.rollout_mode).unwrap(),
+                proto::ProductRolloutMode::GuardianEnabled
+            );
+            assert_eq!(
+                proto::ProductDeliveryMode::try_from(
+                    product_surface
+                        .child
+                        .as_ref()
+                        .expect("child surface")
+                        .delivery_mode
+                )
+                .unwrap(),
+                proto::ProductDeliveryMode::MirrorOnly
+            );
+            assert_eq!(
+                proto::ProductUncertaintyDisposition::try_from(
+                    product_surface.uncertainty_disposition
+                )
+                .unwrap(),
+                proto::ProductUncertaintyDisposition::GuardianPriority
+            );
+
             aura_free(handle);
         }
     }
@@ -2527,6 +2686,26 @@ mod tests {
                     .and_then(|record| record.sender_token.as_ref())
                     .is_some(),
                 "expected tokenized sender in audit record"
+            );
+            let product_surface = bundle.events[1]
+                .decision
+                .as_ref()
+                .and_then(|decision| decision.product_surface.as_ref())
+                .expect("missing shadow product surface");
+            assert_eq!(
+                proto::ProductRolloutMode::try_from(product_surface.rollout_mode).unwrap(),
+                proto::ProductRolloutMode::Shadow
+            );
+            assert_eq!(
+                proto::ProductDeliveryMode::try_from(
+                    product_surface
+                        .child
+                        .as_ref()
+                        .expect("child surface")
+                        .delivery_mode
+                )
+                .unwrap(),
+                proto::ProductDeliveryMode::MirrorOnly
             );
 
             aura_free(handle);

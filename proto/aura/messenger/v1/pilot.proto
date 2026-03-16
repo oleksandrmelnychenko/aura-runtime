@@ -91,6 +91,7 @@ message ShadowModeDecision {
   repeated UiAction ui_actions = 12;
   ShadowModeContactSummary contact = 13;
   ShadowModeMirror mirror = 14;
+  ProductDecisionSurface product_surface = 15;
 }
 
 message ShadowModeFinding {

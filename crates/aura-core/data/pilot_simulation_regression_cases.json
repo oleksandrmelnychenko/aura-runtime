@@ -4,13 +4,17 @@
   "suite_label": "AURA Pilot Simulation Regression Corpus",
   "maintainer": "aura_core_team",
   "created_at_ms": 1773532800000,
-  "updated_at_ms": 1773705600000,
+  "updated_at_ms": 1773792000000,
   "cases": [
     {
       "id": "pilot_olena_grooming_private_escalation",
       "source_family": "olena_world",
       "source_case": "maks_private_escalation",
       "default_language": "uk",
+      "case_class": "hard_safety_regression",
+      "label_invariant": "strict_primary",
+      "acceptable_primary_threats": ["grooming"],
+      "pilot_slice_tags": ["unknown_contact_escalation"],
       "conversation_type": "direct",
       "detection_threshold": 0.55,
       "primary_threat": "grooming",
@@ -52,6 +56,10 @@
       "source_family": "world_sim",
       "source_case": "promo_spam_link",
       "default_language": "uk",
+      "case_class": "hard_safety_regression",
+      "label_invariant": "strict_primary",
+      "acceptable_primary_threats": ["phishing"],
+      "pilot_slice_tags": ["link_safety"],
       "conversation_type": "direct",
       "detection_threshold": 0.75,
       "primary_threat": "phishing",
@@ -77,6 +85,10 @@
       "source_family": "world_sim",
       "source_case": "class_group_pile_on",
       "default_language": "en",
+      "case_class": "hard_safety_regression",
+      "label_invariant": "strict_primary",
+      "acceptable_primary_threats": ["bullying"],
+      "pilot_slice_tags": ["teen_group_chat"],
       "conversation_type": "group_chat",
       "member_count": 6,
       "detection_threshold": 0.5,
@@ -118,6 +130,10 @@
       "source_family": "olena_world",
       "source_case": "private_crisis_messages",
       "default_language": "uk",
+      "case_class": "hard_safety_regression",
+      "label_invariant": "strict_primary",
+      "acceptable_primary_threats": ["self_harm"],
+      "pilot_slice_tags": ["risky_self_harm_context"],
       "conversation_type": "direct",
       "detection_threshold": 0.70,
       "primary_threat": "self_harm",
@@ -149,6 +165,10 @@
       "source_family": "mega_simulation",
       "source_case": "screenshot_blackmail",
       "default_language": "uk",
+      "case_class": "taxonomy_cleanup",
+      "label_invariant": "action_level_behavior",
+      "acceptable_primary_threats": ["manipulation", "threat"],
+      "pilot_slice_tags": ["coercive_friendship_dynamics", "reputation_image_abuse"],
       "conversation_type": "direct",
       "detection_threshold": 0.60,
       "primary_threat": "manipulation",
@@ -180,6 +200,10 @@
       "source_family": "mega_simulation",
       "source_case": "peer_pressure_roof_challenge",
       "default_language": "uk",
+      "case_class": "taxonomy_cleanup",
+      "label_invariant": "action_level_behavior",
+      "acceptable_primary_threats": ["manipulation", "threat"],
+      "pilot_slice_tags": ["teen_group_chat", "coercive_friendship_dynamics"],
       "conversation_type": "group_chat",
       "member_count": 6,
       "detection_threshold": 0.45,
@@ -223,6 +247,10 @@
       "source_family": "mega_simulation",
       "source_case": "substance_offer_pressure",
       "default_language": "uk",
+      "case_class": "taxonomy_cleanup",
+      "label_invariant": "action_level_behavior",
+      "acceptable_primary_threats": ["manipulation"],
+      "pilot_slice_tags": ["substance_pressure", "coercive_friendship_dynamics"],
       "conversation_type": "direct",
       "detection_threshold": 0.50,
       "primary_threat": "manipulation",
@@ -253,6 +281,10 @@
       "source_family": "mega_simulation",
       "source_case": "cyberbullying_social_humiliation",
       "default_language": "uk",
+      "case_class": "taxonomy_cleanup",
+      "label_invariant": "action_level_behavior",
+      "acceptable_primary_threats": ["bullying", "manipulation"],
+      "pilot_slice_tags": ["teen_group_chat", "social_media_humiliation", "reputation_image_abuse"],
       "conversation_type": "group_chat",
       "member_count": 10,
       "detection_threshold": 0.60,
@@ -323,6 +355,9 @@
       "source_family": "mega_simulation",
       "source_case": "friendly_joke_sequence",
       "default_language": "uk",
+      "case_class": "ambiguous_acceptable",
+      "label_invariant": "action_level_behavior",
+      "pilot_slice_tags": ["teen_social_banter"],
       "conversation_type": "direct",
       "detection_threshold": 0.70,
       "tracked_threats": ["bullying", "threat", "manipulation"],
@@ -352,6 +387,9 @@
       "source_family": "mega_simulation",
       "source_case": "group_selfie_sequence",
       "default_language": "uk",
+      "case_class": "ambiguous_acceptable",
+      "label_invariant": "action_level_behavior",
+      "pilot_slice_tags": ["teen_group_chat"],
       "conversation_type": "group_chat",
       "member_count": 10,
       "detection_threshold": 0.70,
@@ -378,6 +416,59 @@
         {
           "text": "гоооо!! групове селфі 🤳💕",
           "sender_id": "olena"
+        }
+      ]
+    },
+    {
+      "id": "pilot_mega_trusted_teacher_support_negative_control",
+      "source_family": "mega_simulation",
+      "source_case": "trusted_teacher_support_negative_control",
+      "default_language": "uk",
+      "case_class": "ambiguous_acceptable",
+      "label_invariant": "action_level_behavior",
+      "pilot_slice_tags": ["trusted_adult_ambiguity"],
+      "conversation_type": "group_chat",
+      "member_count": 8,
+      "detection_threshold": 0.70,
+      "tracked_threats": ["grooming", "manipulation", "bullying"],
+      "step_interval_ms": 300000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "forbid_any_action": true
+      },
+      "messages": [
+        {
+          "text": "Молодці, всі готові?",
+          "sender_id": "teacher_art"
+        },
+        {
+          "text": "Прекрасна робота, подавай на конкурс",
+          "sender_id": "teacher_art"
+        }
+      ]
+    },
+    {
+      "id": "pilot_olena_supportive_crisis_reply_negative_control",
+      "source_family": "olena_world",
+      "source_case": "maria_supportive_crisis_reply",
+      "default_language": "uk",
+      "case_class": "ambiguous_acceptable",
+      "label_invariant": "action_level_behavior",
+      "pilot_slice_tags": ["supportive_self_harm_context"],
+      "conversation_type": "direct",
+      "detection_threshold": 0.70,
+      "tracked_threats": ["self_harm", "manipulation"],
+      "step_interval_ms": 300000,
+      "account_type": "child",
+      "protection_level": "high",
+      "policy_expectation": {
+        "forbid_any_action": true
+      },
+      "messages": [
+        {
+          "text": "Олена ні!!! Ти мені дуже потрібна! Давай поговоримо, подзвони мені зараз",
+          "sender_id": "maria"
         }
       ]
     }

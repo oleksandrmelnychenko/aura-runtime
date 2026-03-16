@@ -16,6 +16,37 @@ use crate::{
 
 const PILOT_SIMULATION_REGRESSION_SCHEMA_VERSION: u32 = 1;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PilotCaseClass {
+    HardSafetyRegression,
+    TaxonomyCleanup,
+    AmbiguousAcceptable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PilotLabelInvariant {
+    StrictPrimary,
+    ActionLevelBehavior,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PilotSliceTag {
+    TeenGroupChat,
+    TeenSocialBanter,
+    SocialMediaHumiliation,
+    CoerciveFriendshipDynamics,
+    TrustedAdultAmbiguity,
+    SupportiveSelfHarmContext,
+    RiskySelfHarmContext,
+    UnknownContactEscalation,
+    LinkSafety,
+    ReputationImageAbuse,
+    SubstancePressure,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PilotSimulationRegressionManifest {
     pub schema_version: u32,
@@ -32,6 +63,10 @@ pub struct PilotSimulationRegressionMetadata {
     pub source_family: String,
     pub source_case: String,
     pub default_language: String,
+    pub case_class: PilotCaseClass,
+    pub label_invariant: PilotLabelInvariant,
+    pub acceptable_primary_threats: Vec<ThreatType>,
+    pub pilot_slice_tags: Vec<PilotSliceTag>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +90,8 @@ pub struct PilotSimulationRegressionSuiteSummary {
     pub manifest: PilotSimulationRegressionManifest,
     pub evaluation: ScenarioEvaluationSummary,
     pub policy: PolicyActionSummary,
+    pub by_case_class: Vec<PilotSimulationRegressionSliceSummary>,
+    pub by_pilot_slice: Vec<PilotSimulationRegressionSliceSummary>,
     pub by_source_family: Vec<PilotSimulationRegressionSliceSummary>,
     pub by_language: Vec<PilotSimulationRegressionSliceSummary>,
     pub scenarios: Vec<PilotSimulationRegressionMetadata>,
@@ -71,6 +108,8 @@ pub struct PilotSimulationRegressionReport {
     pub policy_gates: ScenarioGateReport,
     pub source_family_gates: Vec<(String, ScenarioGateReport)>,
     pub language_gates: Vec<(String, ScenarioGateReport)>,
+    pub by_case_class: Vec<PilotSimulationRegressionSliceSummary>,
+    pub by_pilot_slice: Vec<PilotSimulationRegressionSliceSummary>,
     pub by_source_family: Vec<PilotSimulationRegressionSliceSummary>,
     pub by_language: Vec<PilotSimulationRegressionSliceSummary>,
     pub scenarios: Vec<PilotSimulationRegressionMetadata>,
@@ -102,6 +141,14 @@ struct PilotSimulationRegressionCaseSpec {
     source_family: String,
     source_case: String,
     default_language: String,
+    #[serde(default = "default_pilot_case_class")]
+    case_class: PilotCaseClass,
+    #[serde(default = "default_pilot_label_invariant")]
+    label_invariant: PilotLabelInvariant,
+    #[serde(default)]
+    acceptable_primary_threats: Vec<ThreatType>,
+    #[serde(default)]
+    pilot_slice_tags: Vec<PilotSliceTag>,
     #[serde(default)]
     conversation_type: ConversationType,
     #[serde(default)]
@@ -207,6 +254,36 @@ pub fn run_pilot_simulation_regression_suite(
             &expectation_names,
             &expectations,
         ),
+        by_case_class: summarize_pilot_regression_slices(
+            &scenarios,
+            &runs,
+            &expectations,
+            |metadata| {
+                serde_json::to_string(&metadata.case_class)
+                    .expect("serializable pilot case class")
+                    .trim_matches('"')
+                    .to_string()
+            },
+            bin_count,
+        ),
+        by_pilot_slice: summarize_pilot_regression_multi_slices(
+            &scenarios,
+            &runs,
+            &expectations,
+            |metadata| {
+                metadata
+                    .pilot_slice_tags
+                    .iter()
+                    .map(|tag| {
+                        serde_json::to_string(tag)
+                            .expect("serializable pilot slice tag")
+                            .trim_matches('"')
+                            .to_string()
+                    })
+                    .collect()
+            },
+            bin_count,
+        ),
         by_source_family: summarize_pilot_regression_slices(
             &scenarios,
             &runs,
@@ -287,6 +364,8 @@ pub fn run_pilot_simulation_regression_report(
         policy_gates: overall_policy,
         source_family_gates,
         language_gates,
+        by_case_class: summary.by_case_class,
+        by_pilot_slice: summary.by_pilot_slice,
         by_source_family: summary.by_source_family,
         by_language: summary.by_language,
         scenarios: summary.scenarios,
@@ -310,6 +389,63 @@ fn summarize_pilot_regression_slices(
             .entry(slice_key(&scenario.metadata))
             .or_default()
             .push(idx);
+    }
+
+    grouped
+        .into_iter()
+        .map(|(slice_id, indices)| {
+            let slice_runs = indices
+                .iter()
+                .map(|idx| runs[*idx].clone())
+                .collect::<Vec<_>>();
+            let slice_expectations = indices
+                .iter()
+                .map(|idx| {
+                    expectation_map
+                        .get(scenarios[*idx].metadata.scenario_name.as_str())
+                        .expect("validated pilot expectation")
+                        .clone()
+                })
+                .collect::<Vec<_>>();
+            let expectation_names = slice_expectations
+                .iter()
+                .map(|expectation| expectation.scenario_name.clone())
+                .collect::<Vec<_>>();
+
+            PilotSimulationRegressionSliceSummary {
+                slice_id,
+                case_count: indices.len(),
+                scenario_names: indices
+                    .iter()
+                    .map(|idx| scenarios[*idx].metadata.scenario_name.clone())
+                    .collect(),
+                evaluation: summarize_scenario_runs(&slice_runs, bin_count),
+                policy: summarize_policy_actions_with_expectation_names(
+                    &slice_runs,
+                    &expectation_names,
+                    &slice_expectations,
+                ),
+            }
+        })
+        .collect()
+}
+
+fn summarize_pilot_regression_multi_slices(
+    scenarios: &[PilotSimulationRegressionScenario],
+    runs: &[ScenarioRunResult],
+    expectations: &[ScenarioPolicyExpectation],
+    slice_keys: impl Fn(&PilotSimulationRegressionMetadata) -> Vec<String>,
+    bin_count: usize,
+) -> Vec<PilotSimulationRegressionSliceSummary> {
+    let expectation_map = expectations
+        .iter()
+        .map(|expectation| (expectation.scenario_name.as_str(), expectation.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut grouped = BTreeMap::<String, Vec<usize>>::new();
+    for (idx, scenario) in scenarios.iter().enumerate() {
+        for slice_id in slice_keys(&scenario.metadata) {
+            grouped.entry(slice_id).or_default().push(idx);
+        }
     }
 
     grouped
@@ -414,6 +550,10 @@ fn build_pilot_simulation_regression_bundle(
                     source_family: spec.source_family.clone(),
                     source_case: spec.source_case.clone(),
                     default_language: spec.default_language.clone(),
+                    case_class: spec.case_class,
+                    label_invariant: spec.label_invariant,
+                    acceptable_primary_threats: spec.acceptable_primary_threats.clone(),
+                    pilot_slice_tags: spec.pilot_slice_tags.clone(),
                 };
                 let policy_expectation = ScenarioPolicyExpectation {
                     scenario_name: spec.id.clone(),
@@ -464,6 +604,15 @@ fn validate_pilot_simulation_regression_file(
         if case.messages.is_empty() {
             return Err(format!(
                 "case {} must include at least one message",
+                case.id
+            ));
+        }
+        if case.label_invariant == PilotLabelInvariant::ActionLevelBehavior
+            && case.acceptable_primary_threats.is_empty()
+            && case.primary_threat.is_some()
+        {
+            return Err(format!(
+                "case {} uses action_level_behavior but does not declare acceptable_primary_threats",
                 case.id
             ));
         }
@@ -539,6 +688,14 @@ fn default_protection_level() -> ProtectionLevel {
     ProtectionLevel::High
 }
 
+fn default_pilot_case_class() -> PilotCaseClass {
+    PilotCaseClass::HardSafetyRegression
+}
+
+fn default_pilot_label_invariant() -> PilotLabelInvariant {
+    PilotLabelInvariant::StrictPrimary
+}
+
 #[cfg(test)]
 mod tests {
     use aura_patterns::PatternDatabase;
@@ -549,7 +706,7 @@ mod tests {
     fn pilot_simulation_regression_file_loads_expected_cases() {
         let bundle = pilot_simulation_regression_bundle();
         assert_eq!(bundle.manifest.schema_version, 1);
-        assert_eq!(bundle.scenarios.len(), 10);
+        assert_eq!(bundle.scenarios.len(), 12);
         assert!(bundle
             .scenarios
             .iter()
@@ -558,6 +715,12 @@ mod tests {
             .scenarios
             .iter()
             .any(|scenario| scenario.metadata.source_family == "mega_simulation"));
+        assert!(bundle.scenarios.iter().any(|scenario| {
+            scenario
+                .metadata
+                .pilot_slice_tags
+                .contains(&PilotSliceTag::TrustedAdultAmbiguity)
+        }));
     }
 
     #[test]
@@ -583,5 +746,6 @@ mod tests {
         let json = serde_json::to_string(&report).expect("serialize pilot regression report");
         assert!(json.contains("aura.pilot_simulation_regression_report.v1"));
         assert!(json.contains("pilot_olena_grooming_private_escalation"));
+        assert!(json.contains("trusted_adult_ambiguity"));
     }
 }

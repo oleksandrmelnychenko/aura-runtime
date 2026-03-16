@@ -8,6 +8,7 @@ use crate::audit::{
     AUDIT_IDENTIFIER_SCHEME,
 };
 use crate::context::tracker::TRACKER_STATE_VERSION;
+use crate::product::{build_product_decision_surface, ProductDecisionSurface, ProductRolloutMode};
 use crate::{
     Action, AlertPriority, AnalysisResult, BehavioralTrend, CircleTier, Confidence,
     ConversationType, FollowUpAction, InferenceSummary, ProtectionLevel, RiskBreakdown, ThreatType,
@@ -91,6 +92,7 @@ pub struct ShadowModeDecision {
     pub ui_actions: Vec<UiAction>,
     pub contact: Option<ShadowModeContactSummary>,
     pub mirror: ShadowModeMirror,
+    pub product_surface: ProductDecisionSurface,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,6 +245,10 @@ pub fn build_shadow_mode_event(input: ShadowModeEventInput<'_>) -> ShadowModeEve
                         .unwrap_or(false),
                 would_block_message: input.result.action == Action::Block,
             },
+            product_surface: build_product_decision_surface(
+                input.result,
+                ProductRolloutMode::Shadow,
+            ),
         },
     }
 }
@@ -373,6 +379,14 @@ mod tests {
         assert!(!json.contains("conv_secret"));
         assert!(!json.contains("detected grooming pattern"));
         assert!(!json.contains("stage sequence"));
+        assert_eq!(
+            event.decision.product_surface.rollout_mode,
+            ProductRolloutMode::Shadow
+        );
+        assert_eq!(
+            event.decision.product_surface.child.delivery_mode,
+            crate::ProductDeliveryMode::MirrorOnly
+        );
     }
 
     #[test]
