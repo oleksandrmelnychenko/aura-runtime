@@ -7,6 +7,8 @@ an evaluation-heavy prototype into a production-grade safety runtime.
 
 - [Phase 2 Production Roadmap](./phase-2-production-roadmap.md)
 - [Phase 3 Pilot Readiness Roadmap](./phase-3-pilot-readiness-roadmap.md)
+- [Product Integration Contract](./product-integration-contract.md)
+- [Pilot Operations](./pilot-operations.md)
 - [Release Criteria](./release-criteria.md)
 - [Proto and ABI Stability](./proto-abi-stability.md)
 - [Privacy and Audit Policy](./privacy-audit-policy.md)
@@ -28,6 +30,10 @@ an evaluation-heavy prototype into a production-grade safety runtime.
   release-hardening track and what remains for the next phase.
 - Use the Phase 3 roadmap when planning pilot-readiness work, shadow mode,
   product integration, or simulation-to-regression promotion.
+- Use the product integration contract when building Swift/iOS, Android, or
+  desktop clients on top of `AnalysisResult.product_surface`.
+- Use the pilot operations doc when preparing signoffs, running pilot gates,
+  or defining rollback actions for a staged rollout.
 - Use the release criteria as the source of truth for gating and CI status.
 - Use the proto and ABI document before changing protobuf schemas, FFI exports,
   or persisted context state.

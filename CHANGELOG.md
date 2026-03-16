@@ -52,6 +52,27 @@ practices for type safety, style, memory, and documentation.
 
 ---
 
+## Unreleased — Phase 3 Pilot Readiness Closure
+
+**Pilot shadow bundles | Product integration contract | Pilot gate**
+
+- Added a stable product-facing decision surface for messenger clients through
+  `AnalysisResult.product_surface`, covering child, guardian, and review
+  surfaces plus rollout-aware uncertainty handling.
+- Extended the protobuf wire contract so external clients, including Swift/iOS,
+  can consume the product surface and pilot/shadow bundle schemas directly.
+- Promoted stable simulation scenarios into a formal pilot regression corpus
+  with case classes, label invariants, and pilot slice metadata.
+- Added a machine-readable `pilot_gate` report that combines release status,
+  pilot regression status, repeated shadow runs, human-review signoffs, and
+  rollback triggers into one pilot-ready decision.
+- Taught local rehearsal and unified evidence manifests to understand optional
+  pilot gate artifacts.
+- Added operator docs for product integration, pilot review signoffs, and pilot
+  rollback/review procedures.
+
+---
+
 ## Production Hardening and Release Discipline
 
 **Release candidate posture | Unified evidence bundle | All-features CI**

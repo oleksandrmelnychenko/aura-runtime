@@ -1,0 +1,30 @@
+[
+  {
+    "area": "false_positive_hotspots",
+    "reviewer": "policy_owner",
+    "status": "pending",
+    "reviewed_at_utc": "2026-03-17T00:00:00Z",
+    "notes": "Replace with real reviewer and final signoff notes."
+  },
+  {
+    "area": "self_harm_boundary_cases",
+    "reviewer": "safety_owner",
+    "status": "pending",
+    "reviewed_at_utc": "2026-03-17T00:00:00Z",
+    "notes": "Replace with real reviewer and final signoff notes."
+  },
+  {
+    "area": "trusted_adult_scenarios",
+    "reviewer": "product_owner",
+    "status": "pending",
+    "reviewed_at_utc": "2026-03-17T00:00:00Z",
+    "notes": "Replace with real reviewer and final signoff notes."
+  },
+  {
+    "area": "reputation_image_abuse",
+    "reviewer": "ops_owner",
+    "status": "pending",
+    "reviewed_at_utc": "2026-03-17T00:00:00Z",
+    "notes": "Replace with real reviewer and final signoff notes."
+  }
+]

@@ -24,7 +24,10 @@ env:
   AURA_DATASET_EVIDENCE_PATH: artifacts/dataset-evidence.json
   AURA_AUDIT_EVIDENCE_PATH: artifacts/audit-evidence.json
   AURA_PILOT_SHADOW_BUNDLE_PATH: artifacts/pilot-shadow-bundle.json
+  AURA_PILOT_SHADOW_BUNDLE_PATH_2: artifacts/pilot-shadow-bundle-2.json
   AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
+  AURA_PILOT_GATE_REPORT_PATH: artifacts/pilot-gate-report.json
+  AURA_PILOT_REVIEW_SIGNOFFS_PATH: docs/pilot-review-signoffs.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
   AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
 
@@ -76,6 +79,28 @@ jobs:
         cargo run --quiet --example pilot_regression -p aura-core -- \
           --output "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           --require-pass
+    - name: Generate Pilot Gate Report
+      if: ${{ always() }}
+      run: |
+        if [ ! -f "$AURA_PILOT_REVIEW_SIGNOFFS_PATH" ]; then
+          echo "pilot review signoffs not present; skipping pilot gate report"
+          exit 0
+        fi
+
+        cargo run --quiet --example world_sim -p aura-core -- \
+          --input "$AURA_PILOT_SHADOW_INPUT" \
+          --summary-only \
+          --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
+          --require-clean
+
+        cargo run --quiet --example pilot_gate -p aura-core -- \
+          --release-report "$AURA_RELEASE_REPORT_PATH" \
+          --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
+          --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
+          --review-signoffs "$AURA_PILOT_REVIEW_SIGNOFFS_PATH" \
+          --output "$AURA_PILOT_GATE_REPORT_PATH" \
+          --require-pass
     - name: Compile FFI Header Smoke
       if: ${{ always() }}
       run: |
@@ -104,6 +129,11 @@ jobs:
     - name: Generate Evidence Manifest
       if: ${{ always() }}
       run: |
+        PILOT_GATE_ARGS=""
+        if [ -f "$AURA_PILOT_GATE_REPORT_PATH" ]; then
+          PILOT_GATE_ARGS="--pilot-gate-report $AURA_PILOT_GATE_REPORT_PATH"
+        fi
+
         python3 ci/generate_evidence_manifest.py \
           --output "$AURA_EVIDENCE_MANIFEST_PATH" \
           --label "promotion-${AURA_PROMOTION_TARGET}" \
@@ -114,6 +144,7 @@ jobs:
           --audit-evidence "$AURA_AUDIT_EVIDENCE_PATH" \
           --pilot-shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          $PILOT_GATE_ARGS \
           --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
     - name: Summarize Promotion Gate
       if: ${{ always() }}
@@ -171,6 +202,8 @@ jobs:
             summary.write(f"- pilot_shadow_finding_count: `{summary_data['pilot_shadow_finding_count']}`\n")
             summary.write(f"- pilot_regression: `{summary_data['pilot_regression_status']}`\n")
             summary.write(f"- pilot_regression_scenarios: `{summary_data['pilot_regression_scenario_count']}`\n")
+            summary.write(f"- pilot_gate: `{summary_data.get('pilot_gate_status', 'missing')}`\n")
+            summary.write(f"- pilot_gate_shadow_runs: `{summary_data.get('pilot_gate_shadow_run_count', 'missing')}`\n")
             summary.write(f"- ffi_header_smoke: `{summary_data['ffi_smoke_status']}`\n")
             summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
             summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
@@ -196,6 +229,7 @@ jobs:
           ${{ env.AURA_AUDIT_EVIDENCE_PATH }}
           ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH }}
           ${{ env.AURA_PILOT_REGRESSION_REPORT_PATH }}
+          ${{ env.AURA_PILOT_GATE_REPORT_PATH }}
           ${{ env.AURA_FFI_SMOKE_EVIDENCE_PATH }}
           ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}
           ${{ env.AURA_EVIDENCE_MANIFEST_PATH }}

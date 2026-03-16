@@ -357,6 +357,21 @@ proofs, privacy-safe audit evidence, and promotion automation.
 The concrete execution plan for this phase now lives in
 [`docs/phase-3-pilot-readiness-roadmap.md`](docs/phase-3-pilot-readiness-roadmap.md).
 
+### Phase 3: Pilot Readiness and Product Integration — Operational
+
+- Shadow-mode bundle capture is available in JSON and protobuf form
+- Promoted simulation cases are replayed through `pilot_regression`
+- `AnalysisResult.product_surface` exposes stable child/guardian/review contract
+- `pilot_gate` provides machine-readable pilot-ready decisions with repeated
+  shadow-run checks, review signoffs, and rollback triggers
+- Local rehearsal and unified evidence manifests understand optional pilot gate
+  artifacts
+
+Operator-facing documentation for this phase now lives in:
+
+- [`docs/product-integration-contract.md`](docs/product-integration-contract.md)
+- [`docs/pilot-operations.md`](docs/pilot-operations.md)
+
 ### Phase 4: Mathematical Upgrades
 
 After policy and psychological pathways are stronger:

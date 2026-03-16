@@ -181,6 +181,7 @@ def main() -> int:
         "dataset_evidence": output_dir / "dataset-evidence.json",
         "audit_evidence": output_dir / "audit-evidence.json",
         "pilot_shadow_bundle": output_dir / "pilot-shadow-bundle.json",
+        "pilot_shadow_bundle_2": output_dir / "pilot-shadow-bundle-2.json",
         "pilot_regression_report": output_dir / "pilot-regression-report.json",
         "pilot_gate_report": output_dir / "pilot-gate-report.json",
         "ffi_soak": output_dir / "ffi-state-sync-soak.json",
@@ -304,6 +305,25 @@ def main() -> int:
                 "--require-clean",
             ]
         )
+        if args.pilot_review_signoffs:
+            record_and_require(
+                [
+                    "cargo",
+                    "run",
+                    "--quiet",
+                    "--example",
+                    "world_sim",
+                    "-p",
+                    "aura-core",
+                    "--",
+                    "--input",
+                    "crates/aura-core/data/world_sim_2k.json",
+                    "--summary-only",
+                    "--shadow-output",
+                    paths["pilot_shadow_bundle_2"].as_posix(),
+                    "--require-clean",
+                ]
+            )
         record_and_require(
             [
                 "cargo",
@@ -337,7 +357,7 @@ def main() -> int:
                     "--shadow-bundle",
                     paths["pilot_shadow_bundle"].as_posix(),
                     "--shadow-bundle",
-                    paths["pilot_shadow_bundle"].as_posix(),
+                    paths["pilot_shadow_bundle_2"].as_posix(),
                     "--review-signoffs",
                     args.pilot_review_signoffs,
                     "--output",

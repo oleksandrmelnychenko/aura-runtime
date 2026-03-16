@@ -253,9 +253,16 @@ Phase 3 is done only when all of the following are true:
 - product-facing action contracts are stable enough for pilot integration
 - pilot gating is reviewable, repeatable, and rollback-aware
 
-Current status: in progress. The first shadow-mode foundation slice is now
-implemented through:
+Current status: implementation-complete at the repo level. The delivered Phase
+3 set now includes:
 
-- `aura_core::pilot` shadow bundle schema
-- `world_sim --shadow-output` plaintext-free replay artifacts
-- pilot shadow bundle wiring in unified evidence manifests and promotion paths
+- `aura_core::pilot` shadow bundle schema and `pilot.proto` wire contract
+- `world_sim --shadow-output` and `--shadow-output-proto` plaintext-free replay artifacts
+- `pilot_regression` promoted simulation corpus with pilot slice metadata
+- `AnalysisResult.product_surface` and stable product-facing rollout semantics
+- `pilot_gate` machine-readable pilot-ready decision contract with signoffs and rollback triggers
+- unified evidence-manifest support for pilot shadow, pilot regression, and optional pilot gate artifacts
+
+What remains after this document is no longer build-out work inside the repo.
+What remains is live pilot execution with real operator signoffs and real
+product integration environments.
