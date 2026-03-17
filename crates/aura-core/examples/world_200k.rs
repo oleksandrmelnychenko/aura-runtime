@@ -17,7 +17,6 @@
 /// Run:  cargo run --release --example world_200k -p aura-core
 /// Fast: cargo run --release --example world_200k -p aura-core -- --scale 0.1
 ///       (generates ~20K events instead of 200K)
-
 use aura_core::{
     AccountType, Action, Analyzer, AuraConfig, ContentType, ConversationType, MessageInput,
     ProtectionLevel, ThreatType,
@@ -74,17 +73,47 @@ struct Conv {
 
 fn build_population(rng: &mut Rng) -> Vec<ChildProfile> {
     let uk_names = [
-        "Олена", "Марія", "Софія", "Настя", "Ірина", "Катя", "Юля", "Діана",
-        "Вероніка", "Злата", "Аліна", "Олег", "Артем", "Дмитро", "Максим",
-        "Даша", "Лєра", "Віка", "Ангеліна", "Тетяна",
+        "Олена",
+        "Марія",
+        "Софія",
+        "Настя",
+        "Ірина",
+        "Катя",
+        "Юля",
+        "Діана",
+        "Вероніка",
+        "Злата",
+        "Аліна",
+        "Олег",
+        "Артем",
+        "Дмитро",
+        "Максим",
+        "Даша",
+        "Лєра",
+        "Віка",
+        "Ангеліна",
+        "Тетяна",
     ];
     let en_names = [
-        "Emma", "Olivia", "Sophia", "Mia", "Ava", "Lily", "Zoe", "Chloe",
-        "Noah", "Liam", "Mason", "Ethan", "James", "Ella", "Grace",
+        "Emma", "Olivia", "Sophia", "Mia", "Ava", "Lily", "Zoe", "Chloe", "Noah", "Liam", "Mason",
+        "Ethan", "James", "Ella", "Grace",
     ];
     let ru_names = [
-        "Аня", "Маша", "Света", "Лена", "Катя", "Даня", "Саша", "Миша",
-        "Лиза", "Полина", "Кирилл", "Никита", "Алиса", "Вика", "Ксюша",
+        "Аня",
+        "Маша",
+        "Света",
+        "Лена",
+        "Катя",
+        "Даня",
+        "Саша",
+        "Миша",
+        "Лиза",
+        "Полина",
+        "Кирилл",
+        "Никита",
+        "Алиса",
+        "Вика",
+        "Ксюша",
     ];
 
     let mut children = Vec::with_capacity(CHILDREN_COUNT);
@@ -682,9 +711,7 @@ fn pick_conv_and_sender<'a>(
     let convs = &child.conversations;
 
     let (conv_idx, sender_idx) = match cat {
-        EventCategory::Family => {
-            (0, 0)
-        }
+        EventCategory::Family => (0, 0),
         EventCategory::Safe | EventCategory::Mild => {
             let idx = rng.range(1, convs.len().min(5));
             let conv = &convs[idx];
@@ -697,28 +724,35 @@ fn pick_conv_and_sender<'a>(
         }
         EventCategory::Grooming => {
             let mut idx = convs.len() - 3;
-            if idx >= convs.len() { idx = 1; }
+            if idx >= convs.len() {
+                idx = 1;
+            }
             (idx, 0)
         }
         EventCategory::Bully => {
             if rng.chance(40) {
-                let class_idx = child.conversations.iter().position(|c| {
-                    match c.conv_type {
-                        ConversationType::GroupChat
-                        | ConversationType::Group => true,
+                let class_idx = child
+                    .conversations
+                    .iter()
+                    .position(|c| match c.conv_type {
+                        ConversationType::GroupChat | ConversationType::Group => true,
                         ConversationType::Direct => false,
-                    }
-                }).unwrap_or(1);
+                    })
+                    .unwrap_or(1);
                 (class_idx, 0)
             } else {
                 let mut idx = convs.len() - 4;
-                if idx >= convs.len() { idx = 1; }
+                if idx >= convs.len() {
+                    idx = 1;
+                }
                 (idx, 0)
             }
         }
         EventCategory::Manipulation => {
             let mut idx = convs.len() - 2;
-            if idx >= convs.len() { idx = 1; }
+            if idx >= convs.len() {
+                idx = 1;
+            }
             (idx, 0)
         }
         EventCategory::Scam => {
@@ -731,14 +765,16 @@ fn pick_conv_and_sender<'a>(
         }
         EventCategory::Explicit => {
             let mut idx = convs.len() - 3;
-            if idx >= convs.len() { idx = 1; }
+            if idx >= convs.len() {
+                idx = 1;
+            }
             (idx, 0)
         }
     };
 
     let conv = &convs[conv_idx.min(convs.len() - 1)];
 
-    let sender = if match cat {
+    let sender_is_child = match cat {
         EventCategory::SelfHarm | EventCategory::Pii => true,
         EventCategory::Safe
         | EventCategory::Family
@@ -748,9 +784,9 @@ fn pick_conv_and_sender<'a>(
         | EventCategory::Manipulation
         | EventCategory::Scam
         | EventCategory::Explicit => false,
-    } {
-        child.id.as_str()
-    } else if conv.participants.is_empty() {
+    };
+
+    let sender = if sender_is_child || conv.participants.is_empty() {
         child.id.as_str()
     } else {
         let si = sender_idx.min(conv.participants.len() - 1);
@@ -766,6 +802,8 @@ struct Stats {
     by_category: HashMap<&'static str, usize>,
     threat_counts: HashMap<String, usize>,
     action_counts: HashMap<String, usize>,
+    by_category_threat: HashMap<&'static str, HashMap<String, usize>>,
+    by_category_action: HashMap<&'static str, HashMap<String, usize>>,
     by_lang: HashMap<String, usize>,
     alerts: usize,
     blocks: usize,
@@ -790,6 +828,38 @@ fn category_label(cat: EventCategory) -> &'static str {
         EventCategory::Explicit => "explicit_threat",
         EventCategory::Pii => "pii_leakage",
     }
+}
+
+const CATEGORY_ORDER: [&str; 10] = [
+    "safe",
+    "family",
+    "mild_risk",
+    "grooming",
+    "bullying",
+    "manipulation",
+    "self_harm",
+    "scam",
+    "explicit_threat",
+    "pii_leakage",
+];
+
+fn format_top_breakdown(counts: &HashMap<String, usize>, total: usize, limit: usize) -> String {
+    if total == 0 || counts.is_empty() {
+        return "-".to_string();
+    }
+
+    let mut sorted: Vec<_> = counts.iter().collect();
+    sorted.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+
+    sorted
+        .into_iter()
+        .take(limit)
+        .map(|(label, count)| {
+            let pct = *count as f64 / total as f64 * 100.0;
+            format!("{label}={count} ({pct:.1}%)")
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn main() {
@@ -837,10 +907,14 @@ fn main() {
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║           AURA — 200K World Simulation Stress Test         ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║  Children: {:>3}   Events/child: {:>5}   Total: {:>7}     ║",
-             CHILDREN_COUNT, events_per_child, total_expected);
-    println!("║  Scale: {:.2}   Seed: {:>5}                                ║",
-             scale, seed);
+    println!(
+        "║  Children: {:>3}   Events/child: {:>5}   Total: {:>7}     ║",
+        CHILDREN_COUNT, events_per_child, total_expected
+    );
+    println!(
+        "║  Scale: {:.2}   Seed: {:>5}                                ║",
+        scale, seed
+    );
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
 
@@ -891,14 +965,36 @@ fn main() {
             let result = analyzer.analyze_with_context(&input, ts);
 
             global_stats.total += 1;
-            *global_stats.by_category.entry(category_label(cat)).or_insert(0) += 1;
-            *global_stats.by_lang.entry(child.lang.to_string()).or_insert(0) += 1;
+            let category = category_label(cat);
+            *global_stats.by_category.entry(category).or_insert(0) += 1;
+            *global_stats
+                .by_lang
+                .entry(child.lang.to_string())
+                .or_insert(0) += 1;
 
             let threat_str = format!("{:?}", result.threat_type);
-            *global_stats.threat_counts.entry(threat_str).or_insert(0) += 1;
+            *global_stats
+                .threat_counts
+                .entry(threat_str.clone())
+                .or_insert(0) += 1;
 
             let action_str = format!("{:?}", result.action);
-            *global_stats.action_counts.entry(action_str).or_insert(0) += 1;
+            *global_stats
+                .action_counts
+                .entry(action_str.clone())
+                .or_insert(0) += 1;
+            *global_stats
+                .by_category_threat
+                .entry(category)
+                .or_default()
+                .entry(threat_str)
+                .or_insert(0) += 1;
+            *global_stats
+                .by_category_action
+                .entry(category)
+                .or_default()
+                .entry(action_str)
+                .or_insert(0) += 1;
 
             if result.score > 0.0 {
                 global_stats.score_sum += result.score as f64;
@@ -952,16 +1048,28 @@ fn main() {
         }
 
         if verbose {
-            println!("  [{}] {} (age {}, {}) — {} events, {} threats, {} blocks",
-                     ci, child.name, child.age, child.lang,
-                     events_per_child, child_threats, child_blocks);
+            println!(
+                "  [{}] {} (age {}, {}) — {} events, {} threats, {} blocks",
+                ci,
+                child.name,
+                child.age,
+                child.lang,
+                events_per_child,
+                child_threats,
+                child_blocks
+            );
         } else if (ci + 1) % 10 == 0 || ci == population.len() - 1 {
             let elapsed = start.elapsed().as_secs_f64();
             let done = (ci + 1) * events_per_child;
             let eps = done as f64 / elapsed;
             let pct = (ci + 1) as f64 / population.len() as f64 * 100.0;
-            println!("  [{:>3.0}%] {}/{} children done — {:.0} events/sec",
-                     pct, ci + 1, population.len(), eps);
+            println!(
+                "  [{:>3.0}%] {}/{} children done — {:.0} events/sec",
+                pct,
+                ci + 1,
+                population.len(),
+                eps
+            );
         }
     }
 
@@ -975,7 +1083,10 @@ fn main() {
     println!();
     println!("  Total events processed:  {:>8}", global_stats.total);
     println!("  Wall-clock time:         {:>8.2}s", elapsed.as_secs_f64());
-    println!("  Throughput:              {:>8.0} events/sec", global_stats.events_per_second);
+    println!(
+        "  Throughput:              {:>8.0} events/sec",
+        global_stats.events_per_second
+    );
     println!();
 
     println!("  ┌─── Event Distribution ────────────────────────────────┐");
@@ -983,7 +1094,10 @@ fn main() {
     cat_sorted.sort_by(|a, b| b.1.cmp(a.1));
     for (cat, count) in &cat_sorted {
         let pct = **count as f64 / global_stats.total as f64 * 100.0;
-        println!("  │  {:<20} {:>8}  ({:>5.1}%)                │", cat, count, pct);
+        println!(
+            "  │  {:<20} {:>8}  ({:>5.1}%)                │",
+            cat, count, pct
+        );
     }
     println!("  └──────────────────────────────────────────────────────┘");
     println!();
@@ -993,7 +1107,10 @@ fn main() {
     threat_sorted.sort_by(|a, b| b.1.cmp(a.1));
     for (threat, count) in &threat_sorted {
         let pct = **count as f64 / global_stats.total as f64 * 100.0;
-        println!("  │  {:<20} {:>8}  ({:>5.1}%)                │", threat, count, pct);
+        println!(
+            "  │  {:<20} {:>8}  ({:>5.1}%)                │",
+            threat, count, pct
+        );
     }
     println!("  └──────────────────────────────────────────────────────┘");
     println!();
@@ -1003,9 +1120,36 @@ fn main() {
     action_sorted.sort_by(|a, b| b.1.cmp(a.1));
     for (action, count) in &action_sorted {
         let pct = **count as f64 / global_stats.total as f64 * 100.0;
-        println!("  │  {:<20} {:>8}  ({:>5.1}%)                │", action, count, pct);
+        println!(
+            "  │  {:<20} {:>8}  ({:>5.1}%)                │",
+            action, count, pct
+        );
     }
     println!("  └──────────────────────────────────────────────────────┘");
+    println!();
+
+    println!("  Input Category -> Top Detected Threats");
+    println!("  --------------------------------------");
+    for category in CATEGORY_ORDER {
+        let total = global_stats.by_category.get(category).copied().unwrap_or(0);
+        let Some(counts) = global_stats.by_category_threat.get(category) else {
+            continue;
+        };
+        let breakdown = format_top_breakdown(counts, total, 4);
+        println!("  {:<14} -> {}", category, breakdown);
+    }
+    println!();
+
+    println!("  Input Category -> Top Actions");
+    println!("  -----------------------------");
+    for category in CATEGORY_ORDER {
+        let total = global_stats.by_category.get(category).copied().unwrap_or(0);
+        let Some(counts) = global_stats.by_category_action.get(category) else {
+            continue;
+        };
+        let breakdown = format_top_breakdown(counts, total, 4);
+        println!("  {:<14} -> {}", category, breakdown);
+    }
     println!();
 
     println!("  ┌─── Language Coverage ─────────────────────────────────┐");
@@ -1013,24 +1157,48 @@ fn main() {
     lang_sorted.sort_by(|a, b| b.1.cmp(a.1));
     for (lang, count) in &lang_sorted {
         let pct = **count as f64 / global_stats.total as f64 * 100.0;
-        println!("  │  {:<20} {:>8}  ({:>5.1}%)                │", lang, count, pct);
+        println!(
+            "  │  {:<20} {:>8}  ({:>5.1}%)                │",
+            lang, count, pct
+        );
     }
     println!("  └──────────────────────────────────────────────────────┘");
     println!();
 
     println!("  ┌─── Key Metrics ───────────────────────────────────────┐");
-    println!("  │  Parent alerts:        {:>8}                        │", global_stats.alerts);
-    println!("  │  Blocks:               {:>8}                        │", global_stats.blocks);
-    println!("  │  Warnings:             {:>8}                        │", global_stats.warnings);
-    println!("  │  Allows:               {:>8}                        │", global_stats.allows);
-    println!("  │  Max score:            {:>8.4}                        │", global_stats.max_score);
+    println!(
+        "  │  Parent alerts:        {:>8}                        │",
+        global_stats.alerts
+    );
+    println!(
+        "  │  Blocks:               {:>8}                        │",
+        global_stats.blocks
+    );
+    println!(
+        "  │  Warnings:             {:>8}                        │",
+        global_stats.warnings
+    );
+    println!(
+        "  │  Allows:               {:>8}                        │",
+        global_stats.allows
+    );
+    println!(
+        "  │  Max score:            {:>8.4}                        │",
+        global_stats.max_score
+    );
     let avg = if global_stats.scored_count > 0 {
         global_stats.score_sum / global_stats.scored_count as f64
     } else {
         0.0
     };
-    println!("  │  Avg score (non-zero): {:>8.4}                        │", avg);
-    println!("  │  Scored events:        {:>8}                        │", global_stats.scored_count);
+    println!(
+        "  │  Avg score (non-zero): {:>8.4}                        │",
+        avg
+    );
+    println!(
+        "  │  Scored events:        {:>8}                        │",
+        global_stats.scored_count
+    );
     println!("  └──────────────────────────────────────────────────────┘");
     println!();
     println!("═══════════════════════════════════════════════════════════════");
