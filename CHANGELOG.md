@@ -2,7 +2,7 @@
 
 ## Unreleased — Rust Best-Practices Pass
 
-**758 tests | Type-safe IDs | Exhaustive matching | Idiomatic Rust style | Rustdoc RFC 1574**
+**771 tests | Type-safe IDs | Exhaustive matching | Idiomatic Rust style | Rustdoc RFC 1574**
 
 Comprehensive code-quality pass across all five crates applying Rust best
 practices for type safety, style, memory, and documentation.
@@ -575,7 +575,7 @@ practices for type safety, style, memory, and documentation.
 
 | Метрика | Значення |
 |---------|----------|
-| Тести | 758 (533 core + 37 ffi + 113 ml + 75 patterns) |
+| Тести | 771 (544 core + 39 ffi + 113 ml + 75 patterns) |
 | Симуляції | 26 |
 | Pattern rules | 151+ |
 | ML fallback patterns | ~573 (296 toxicity + 277 sentiment) |

@@ -12,7 +12,7 @@ Current product direction is narrow on purpose:
 
 ## Current State
 
-- **758 tests**, clippy clean, zero warnings
+- **771 tests**, clippy clean, zero warnings
 - **Messenger-native runtime**: content, conversation, link, and abuse signals are combined into one analysis result
 - **Stateful context engine**: timelines, contact profiles, trust decay, weekly snapshots, and behavioral trend detection
 - **Inference-aware messenger policy layer**: `UiAction` outputs are refined by risk horizon, escalation likelihood, and latent psychological states
