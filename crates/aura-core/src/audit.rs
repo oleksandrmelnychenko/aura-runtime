@@ -143,14 +143,13 @@ impl AuditRecord {
 }
 
 fn top_threat_scores(result: &AnalysisResult) -> Vec<AuditThreatScore> {
-    let mut scores = result
-        .detected_threats
-        .iter()
-        .map(|(threat_type, score)| AuditThreatScore {
-            threat_type: *threat_type,
-            score: *score,
-        })
-        .collect::<Vec<_>>();
+    let mut scores = Vec::with_capacity(result.detected_threats.len());
+    for &(threat_type, score) in &result.detected_threats {
+        scores.push(AuditThreatScore {
+            threat_type,
+            score,
+        });
+    }
 
     if scores.is_empty() && result.threat_type != ThreatType::None {
         scores.push(AuditThreatScore {

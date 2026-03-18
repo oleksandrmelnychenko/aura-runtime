@@ -215,7 +215,7 @@ impl SignalEnricher {
                 kind: EventKind::LoveBombing,
                 confidence: (compliment_count as f32 * 0.2).min(1.0),
             });
-        } else if compliment_count >= 1 {
+        } else if compliment_count >= 1 && is_person_directed_compliment(&lower) {
             events.push(ContextEvent {
                 event_id: 0,
                 timestamp_ms,
@@ -456,16 +456,23 @@ impl SignalEnricher {
         conversation_id: &str,
         timestamp_ms: u64,
     ) -> Option<ContextEvent> {
-        let sentences: Vec<&str> = text
-            .split(|c: char| ['.', '!', '?'].contains(&c))
-            .filter(|s| !s.trim().is_empty())
-            .collect();
+        let mut sentences = Vec::new();
+        for s in text.split(|c: char| ['.', '!', '?'].contains(&c)) {
+            if !s.trim().is_empty() {
+                sentences.push(s);
+            }
+        }
 
         if sentences.len() < 3 {
             return None;
         }
 
-        let question_count = text.matches('?').count();
+        let mut question_count = 0;
+        for c in text.chars() {
+            if c == '?' {
+                question_count += 1;
+            }
+        }
         let ratio = question_count as f32 / sentences.len() as f32;
 
         if ratio >= self.config.question_probe_threshold {
@@ -512,10 +519,14 @@ impl SignalEnricher {
                 break;
             }
 
-            let digits: String = text[after..]
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect();
+            let mut digits = String::new();
+            for c in text[after..].chars() {
+                if c.is_ascii_digit() {
+                    digits.push(c);
+                } else {
+                    break;
+                }
+            }
             if !digits.is_empty() {
                 if let Ok(num) = digits.parse::<u16>() {
                     return Some(num);
@@ -527,16 +538,30 @@ impl SignalEnricher {
     }
 }
 
-fn contains_high_risk_phrase(text: &str, normalizer: &TextNormalizer, phrases: &[&str]) -> bool {
-    let mut found = false;
-    for phrase in phrases.iter() {
-        let normalized_phrase = normalizer.normalize_semantic(phrase);
-        if !normalized_phrase.is_empty() && text.contains(&normalized_phrase) {
-            found = true;
-            break;
+fn is_person_directed_compliment(lower: &str) -> bool {
+    const PERSON_MARKERS: &[&str] = &[
+        "ти ", "ти\n", "тебе", "тобі", "тобой",
+        "you ", "you'", "your", "you\n",
+        "ты ", "ты\n", "тебя", "тебе ",
+        "така ", "такий", "такая", "такой",
+        "у тебе", "у тебя",
+    ];
+    for marker in PERSON_MARKERS {
+        if lower.contains(marker) {
+            return true;
         }
     }
-    found
+    false
+}
+
+fn contains_high_risk_phrase(text: &str, normalizer: &TextNormalizer, phrases: &[&str]) -> bool {
+    for phrase in phrases {
+        let normalized_phrase = normalizer.normalize_semantic(phrase);
+        if !normalized_phrase.is_empty() && text.contains(&normalized_phrase) {
+            return true;
+        }
+    }
+    false
 }
 
 fn build_enricher_matcher() -> EnricherMatcher {

@@ -154,31 +154,32 @@ impl Analyzer {
     }
 
     fn ml_config(config: &AuraConfig) -> MlConfig {
-        if let Some(ref base_path) = config.models_path {
-            let base = std::path::Path::new(base_path);
-            MlConfig {
-                toxicity_model_path: {
-                    let p = base.join("toxicity.onnx");
-                    p.exists().then(|| p.to_string_lossy().into_owned())
-                },
-                sentiment_model_path: {
-                    let p = base.join("sentiment.onnx");
-                    p.exists().then(|| p.to_string_lossy().into_owned())
-                },
-                vocab_path: {
-                    let p = base.join("vocab.txt");
-                    p.exists().then(|| p.to_string_lossy().into_owned())
-                },
+        match config.models_path {
+            Some(ref base_path) => {
+                let base = std::path::Path::new(base_path);
+                MlConfig {
+                    toxicity_model_path: {
+                        let p = base.join("toxicity.onnx");
+                        p.exists().then(|| p.to_string_lossy().into_owned())
+                    },
+                    sentiment_model_path: {
+                        let p = base.join("sentiment.onnx");
+                        p.exists().then(|| p.to_string_lossy().into_owned())
+                    },
+                    vocab_path: {
+                        let p = base.join("vocab.txt");
+                        p.exists().then(|| p.to_string_lossy().into_owned())
+                    },
+                    use_fallback: true,
+                    language: config.language.clone(),
+                    ..Default::default()
+                }
+            }
+            None => MlConfig {
                 use_fallback: true,
                 language: config.language.clone(),
                 ..Default::default()
-            }
-        } else {
-            MlConfig {
-                use_fallback: true,
-                language: config.language.clone(),
-                ..Default::default()
-            }
+            },
         }
     }
 
@@ -398,17 +399,20 @@ impl Analyzer {
         let context_signals = self.context_tracker.record_events(context_events);
 
         let sender_is_defender =
-            if let Some(t) = self.context_tracker.timeline(&input.conversation_id) {
-                let mut found = false;
-                for e in t.all_events().iter() {
-                    if e.sender_id == input.sender_id && e.kind == EventKind::DefenseOfVictim {
-                        found = true;
-                        break;
+            match self.context_tracker.timeline(&input.conversation_id) {
+                Some(t) => {
+                    let mut found = false;
+                    for e in t.all_events() {
+                        if e.sender_id == input.sender_id
+                            && e.kind == EventKind::DefenseOfVictim
+                        {
+                            found = true;
+                            break;
+                        }
                     }
+                    found
                 }
-                found
-            } else {
-                false
+                None => false,
             };
 
         for signal in context_signals {
@@ -543,6 +547,7 @@ impl Analyzer {
         downweight_secondary_timing_grooming(&mut signals);
         prioritize_direct_threat_signals(&mut signals);
         prioritize_suicide_coercion_as_manipulation(&mut signals);
+        anchor_context_signals_to_current_message(&mut signals);
 
         let noise_factor = match conversation_type {
             ConversationType::Direct => 1.0,
@@ -573,20 +578,39 @@ impl Analyzer {
         }
         let max_score = max_signal.score;
 
-        let mut priority_signal = None;
+        let mut anchored_priority = None;
+        let mut any_priority = None;
         for s in &signals {
             if s.score >= max_score - 0.3 && s.threat_type != ThreatType::None {
-                match priority_signal {
-                    None => priority_signal = Some(s),
+                let is_anchored = match s.layer {
+                    DetectionLayer::PatternMatching | DetectionLayer::MlClassification => true,
+                    DetectionLayer::ContextAnalysis => false,
+                };
+                if is_anchored {
+                    match anchored_priority {
+                        None => anchored_priority = Some(s),
+                        Some(current) => {
+                            if threat_priority(s.threat_type)
+                                < threat_priority(current.threat_type)
+                            {
+                                anchored_priority = Some(s);
+                            }
+                        }
+                    }
+                }
+                match any_priority {
+                    None => any_priority = Some(s),
                     Some(current) => {
                         if threat_priority(s.threat_type) < threat_priority(current.threat_type) {
-                            priority_signal = Some(s);
+                            any_priority = Some(s);
                         }
                     }
                 }
             }
         }
-        let priority_signal = priority_signal.unwrap_or(max_signal);
+        let priority_signal = anchored_priority
+            .or(any_priority)
+            .unwrap_or(max_signal);
 
         let mut score = priority_signal.score;
         for signal in &signals {
@@ -1329,13 +1353,26 @@ impl Analyzer {
             && is_lightweight_competitive_banter_message(text);
         if safe_gaming_banter {
             signals.retain(|signal| {
-                !(matches!(
-                    signal.threat_type,
-                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
-                ) && signal.score <= 0.75
-                    || signal.threat_type == ThreatType::Grooming
-                        && signal.score <= 0.35
-                        && signal.reason_code == "conversation.contact.new_risky_contact")
+                let dominated = match signal.threat_type {
+                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat => {
+                        signal.score <= 0.75
+                    }
+                    ThreatType::Grooming => {
+                        signal.score <= 0.35
+                            && signal.reason_code == "conversation.contact.new_risky_contact"
+                    }
+                    ThreatType::None
+                    | ThreatType::SelfHarm
+                    | ThreatType::Spam
+                    | ThreatType::Scam
+                    | ThreatType::Phishing
+                    | ThreatType::Manipulation
+                    | ThreatType::Nsfw
+                    | ThreatType::HateSpeech
+                    | ThreatType::Doxxing
+                    | ThreatType::PiiLeakage => false,
+                };
+                !dominated
             });
         }
 
@@ -2010,6 +2047,31 @@ fn prioritize_direct_threat_signals(signals: &mut [DetectionSignal]) {
         {
             signal.score = signal.score.min(0.20);
             signal.confidence = score_to_confidence(signal.score);
+        }
+    }
+}
+
+fn anchor_context_signals_to_current_message(signals: &mut [DetectionSignal]) {
+    let mut has_pattern_or_ml = false;
+    for signal in signals.iter() {
+        match signal.layer {
+            DetectionLayer::PatternMatching | DetectionLayer::MlClassification => {
+                has_pattern_or_ml = true;
+                break;
+            }
+            DetectionLayer::ContextAnalysis => {}
+        }
+    }
+    if has_pattern_or_ml {
+        return;
+    }
+    for signal in signals {
+        match signal.layer {
+            DetectionLayer::ContextAnalysis => {
+                signal.score *= 0.3;
+                signal.confidence = score_to_confidence(signal.score);
+            }
+            DetectionLayer::PatternMatching | DetectionLayer::MlClassification => {}
         }
     }
 }
@@ -2713,7 +2775,17 @@ fn ml_signal_to_event_kind(signal: &DetectionSignal) -> Option<EventKind> {
         ThreatType::Bullying => Some(EventKind::Insult),
         ThreatType::Threat => Some(EventKind::PhysicalThreat),
         ThreatType::Explicit => Some(EventKind::SexualContent),
-        _ => None,
+        ThreatType::None
+        | ThreatType::Grooming
+        | ThreatType::SelfHarm
+        | ThreatType::Spam
+        | ThreatType::Scam
+        | ThreatType::Phishing
+        | ThreatType::Manipulation
+        | ThreatType::Nsfw
+        | ThreatType::HateSpeech
+        | ThreatType::Doxxing
+        | ThreatType::PiiLeakage => None,
     }
 }
 

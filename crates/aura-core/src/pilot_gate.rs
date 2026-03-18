@@ -248,10 +248,10 @@ pub fn run_pilot_gate(
         )
     });
 
-    let total_shadow_events = shadow_runs
-        .iter()
-        .map(|run| run.total_events)
-        .sum::<usize>();
+    let mut total_shadow_events = 0usize;
+    for run in &shadow_runs {
+        total_shadow_events += run.total_events;
+    }
     checks.push(if total_shadow_events >= config.min_shadow_total_events {
         pass_check(
             "shadow_event_volume",
@@ -270,9 +270,13 @@ pub fn run_pilot_gate(
         )
     });
 
-    let clean_shadow = shadow_runs.iter().all(|run| {
-        !run.raw_text_present && !run.raw_identifier_fields_present && run.finding_count == 0
-    });
+    let mut clean_shadow = true;
+    for run in &shadow_runs {
+        if run.raw_text_present || run.raw_identifier_fields_present || run.finding_count != 0 {
+            clean_shadow = false;
+            break;
+        }
+    }
     checks.push(if clean_shadow {
         pass_check(
             "shadow_privacy_and_findings",
@@ -285,16 +289,21 @@ pub fn run_pilot_gate(
         )
     });
 
-    let stable_wire_contract = shadow_runs
-        .first()
-        .map(|first| {
-            shadow_runs.iter().all(|run| {
-                run.schema_version == first.schema_version
-                    && run.wire_package == first.wire_package
-                    && run.protection_level == first.protection_level
-            })
-        })
-        .unwrap_or(false);
+    let stable_wire_contract = if let Some(first) = shadow_runs.first() {
+        let mut stable = true;
+        for run in &shadow_runs {
+            if run.schema_version != first.schema_version
+                || run.wire_package != first.wire_package
+                || run.protection_level != first.protection_level
+            {
+                stable = false;
+                break;
+            }
+        }
+        stable
+    } else {
+        false
+    };
     checks.push(if stable_wire_contract {
         pass_check(
             "shadow_contract_stability",
@@ -340,19 +349,19 @@ pub fn run_pilot_gate(
         }
     }
 
-    let overall_status = if checks
-        .iter()
-        .any(|check| check.status == PilotGateStatus::Fail)
-    {
-        PilotGateStatus::Fail
-    } else if checks
-        .iter()
-        .any(|check| check.status == PilotGateStatus::Blocked)
-    {
-        PilotGateStatus::Blocked
-    } else {
-        PilotGateStatus::Pass
-    };
+    let mut overall_status = PilotGateStatus::Pass;
+    for check in &checks {
+        match check.status {
+            PilotGateStatus::Fail => {
+                overall_status = PilotGateStatus::Fail;
+                break;
+            }
+            PilotGateStatus::Blocked => {
+                overall_status = PilotGateStatus::Blocked;
+            }
+            PilotGateStatus::Pass => {}
+        }
+    }
 
     PilotGateReport {
         schema_version: PILOT_GATE_SCHEMA_VERSION.to_string(),

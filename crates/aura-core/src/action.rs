@@ -278,7 +278,7 @@ pub fn augment_recommendation_for_reason_codes(
     reason_codes: &[String],
 ) {
     let mut has_coercive = false;
-    for code in reason_codes.iter() {
+    for code in reason_codes {
         if is_coercive_control_reason_code(code) {
             has_coercive = true;
             break;
@@ -291,7 +291,7 @@ pub fn augment_recommendation_for_reason_codes(
     }
 
     let mut has_reportable = false;
-    for code in reason_codes.iter() {
+    for code in reason_codes {
         if is_reportable_reason_code(code) {
             has_reportable = true;
             break;
@@ -305,7 +305,7 @@ pub fn augment_recommendation_for_reason_codes(
     }
 
     let mut has_group_abuse = false;
-    for code in reason_codes.iter() {
+    for code in reason_codes {
         if is_group_abuse_reason_code(code) {
             has_group_abuse = true;
             break;

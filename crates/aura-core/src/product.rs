@@ -187,18 +187,18 @@ pub fn build_product_decision_surface(
 }
 
 fn is_child_facing_ui_action(action: &UiAction) -> bool {
-    matches!(
-        action,
+    match action {
         UiAction::WarnBeforeSend
-            | UiAction::WarnBeforeDisplay
-            | UiAction::BlurUntilTap
-            | UiAction::ConfirmBeforeOpenLink
-            | UiAction::SuggestBlockContact
-            | UiAction::SuggestReport
-            | UiAction::RestrictUnknownContact
-            | UiAction::SlowDownConversation
-            | UiAction::ShowCrisisSupport
-    )
+        | UiAction::WarnBeforeDisplay
+        | UiAction::BlurUntilTap
+        | UiAction::ConfirmBeforeOpenLink
+        | UiAction::SuggestBlockContact
+        | UiAction::SuggestReport
+        | UiAction::RestrictUnknownContact
+        | UiAction::SlowDownConversation
+        | UiAction::ShowCrisisSupport => true,
+        UiAction::EscalateToGuardian => false,
+    }
 }
 
 fn child_intervention(action: Action) -> ProductChildIntervention {
