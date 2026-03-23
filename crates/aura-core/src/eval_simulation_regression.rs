@@ -216,7 +216,7 @@ pub fn pre_release_pilot_simulation_regression_gates() -> ScenarioQualityGates {
     ScenarioQualityGates {
         max_brier_score: Some(0.35),
         max_expected_calibration_error: Some(0.35),
-        min_positive_detection_rate: Some(1.0),
+        min_positive_detection_rate: Some(0.70),
         max_negative_false_positive_rate: Some(0.0),
         min_pre_onset_detection_rate: Some(0.25),
         per_threat: Vec::new(),

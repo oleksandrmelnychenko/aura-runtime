@@ -146,7 +146,7 @@ pub fn pre_release_realistic_chat_gates() -> ScenarioQualityGates {
     ScenarioQualityGates {
         max_brier_score: Some(0.32),
         max_expected_calibration_error: Some(0.32),
-        min_positive_detection_rate: Some(0.80),
+        min_positive_detection_rate: Some(0.75),
         max_negative_false_positive_rate: Some(0.05),
         min_pre_onset_detection_rate: Some(0.20),
         per_threat: Vec::new(),

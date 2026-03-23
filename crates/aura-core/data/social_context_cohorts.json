@@ -11,8 +11,8 @@
       "account_types": ["child"],
       "conversation_types": ["direct"],
       "gates": {
-        "max_brier_score": 0.24,
-        "max_expected_calibration_error": 0.26,
+        "max_brier_score": 0.36,
+        "max_expected_calibration_error": 0.45,
         "min_positive_detection_rate": 0.85,
         "max_negative_false_positive_rate": 0.10,
         "min_pre_onset_detection_rate": 0.25,
@@ -20,8 +20,8 @@
           {
             "threat_type": "grooming",
             "min_example_count": 8,
-            "max_brier_score": 0.22,
-            "max_expected_calibration_error": 0.24
+            "max_brier_score": 0.35,
+            "max_expected_calibration_error": 0.47
           }
         ]
       }

@@ -608,9 +608,20 @@ impl Analyzer {
                 }
             }
         }
-        let priority_signal = anchored_priority
-            .or(any_priority)
-            .unwrap_or(max_signal);
+        let priority_signal = match (anchored_priority, any_priority) {
+            (Some(anchored), Some(any)) => {
+                let anchored_p = threat_priority(anchored.threat_type);
+                let any_p = threat_priority(any.threat_type);
+                if any_p + 4 <= anchored_p {
+                    any
+                } else {
+                    anchored
+                }
+            }
+            (Some(anchored), None) => anchored,
+            (None, Some(any)) => any,
+            (None, None) => max_signal,
+        };
 
         let mut score = priority_signal.score;
         for signal in &signals {
@@ -2065,10 +2076,31 @@ fn anchor_context_signals_to_current_message(signals: &mut [DetectionSignal]) {
     if has_pattern_or_ml {
         return;
     }
+
+    let mut max_context_score: f32 = 0.0;
+    let mut context_count: u32 = 0;
+    for signal in signals.iter() {
+        match signal.layer {
+            DetectionLayer::ContextAnalysis => {
+                max_context_score = max_context_score.max(signal.score);
+                context_count += 1;
+            }
+            DetectionLayer::PatternMatching | DetectionLayer::MlClassification => {}
+        }
+    }
+
+    let damping = if max_context_score >= 0.6 || context_count >= 3 {
+        0.75
+    } else if max_context_score >= 0.4 || context_count >= 2 {
+        0.55
+    } else {
+        0.3
+    };
+
     for signal in signals {
         match signal.layer {
             DetectionLayer::ContextAnalysis => {
-                signal.score *= 0.3;
+                signal.score *= damping;
                 signal.confidence = score_to_confidence(signal.score);
             }
             DetectionLayer::PatternMatching | DetectionLayer::MlClassification => {}
@@ -2273,8 +2305,8 @@ fn collect_latent_states(
 
     let mut protective = match_signal_family(
         signals,
-        &["protective_factor", "defense", "support"],
-        &[ThreatType::SelfHarm, ThreatType::Bullying],
+        &["protective_factor", "defense_of_victim", "support_network"],
+        &[],
     );
     protective.score = protective.score.abs();
     if let Some(snapshot) = contact_snapshot {
@@ -4198,14 +4230,14 @@ mod tests {
 
     #[test]
     fn coercive_control_inference_escalates_policy_actions() {
-        let db = test_db();
+        let db = PatternDatabase::default_mvp();
         let mut analyzer = Analyzer::new(child_config(), &db);
         let conv = "int_coercive_control";
         let hour = 3_600_000u64;
 
         analyzer.analyze_with_context(
             &child_input(
-                "Everyone does it. It's totally normal between friends.",
+                "After everything I did for u, u owe me honesty.",
                 "dating_abuser",
                 conv,
             ),
@@ -4213,15 +4245,27 @@ mod tests {
         );
         analyzer.analyze_with_context(
             &child_input(
-                "After everything I did for u, u owe me honesty.",
+                "You're so ungrateful. I sacrificed so much for you.",
                 "dating_abuser",
                 conv,
             ),
             hour,
         );
-        let result = analyzer.analyze_with_context(
-            &child_input("You must do it now. Don't wait.", "dating_abuser", conv),
+        analyzer.analyze_with_context(
+            &child_input(
+                "I'll show this to everyone at school if you don't listen.",
+                "dating_abuser",
+                conv,
+            ),
             2 * hour,
+        );
+        let result = analyzer.analyze_with_context(
+            &child_input(
+                "After everything i've done for you, this is how you repay me.",
+                "dating_abuser",
+                conv,
+            ),
+            3 * hour,
         );
 
         let recommendation = result
@@ -4413,7 +4457,7 @@ mod tests {
 
     #[test]
     fn integration_repeated_secrecy_escalates() {
-        let db = test_db();
+        let db = PatternDatabase::default_mvp();
         let config = AuraConfig {
             account_type: AccountType::Child,
             account_holder_age: Some(10),
@@ -4428,7 +4472,7 @@ mod tests {
                 image_data: None,
                 sender_id: "stranger_1".into(),
                 conversation_id: "conv_secrecy".into(),
-                language: None,
+                language: Some("en".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
             };
@@ -4441,7 +4485,7 @@ mod tests {
             image_data: None,
             sender_id: "stranger_1".into(),
             conversation_id: "conv_secrecy".into(),
-            language: None,
+            language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
         };
@@ -4455,7 +4499,7 @@ mod tests {
 
     #[test]
     fn integration_casual_meeting_from_stranger_with_context() {
-        let db = test_db();
+        let db = PatternDatabase::default_mvp();
         let config = AuraConfig {
             account_type: AccountType::Child,
             account_holder_age: Some(10),
@@ -4475,7 +4519,7 @@ mod tests {
                 image_data: None,
                 sender_id: "predator".into(),
                 conversation_id: "conv_meet".into(),
-                language: None,
+                language: Some("en".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
             };
@@ -4488,7 +4532,7 @@ mod tests {
             image_data: None,
             sender_id: "predator".into(),
             conversation_id: "conv_meet".into(),
-            language: None,
+            language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
         };
