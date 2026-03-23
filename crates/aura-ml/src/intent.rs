@@ -144,8 +144,9 @@ impl IntentClassifier {
     }
 
     fn predict_fallback(&self, text: &str) -> IntentPrediction {
-        let matcher = self.fallback_matcher.as_ref()
-            .expect("fallback matcher built");
+        let Some(matcher) = self.fallback_matcher.as_ref() else {
+            return IntentPrediction::from_scores(0.0, 0.0, 0.0, 1.0, self.threshold);
+        };
         let lower = text.to_lowercase();
 
         let mut meeting: f32 = 0.0;

@@ -97,15 +97,26 @@ impl InferenceCache {
     }
 
     fn evict_lru(&mut self) {
-        let mut oldest_key = None;
-        let mut oldest_order = u64::MAX;
+        let evict_threshold = self.next_order.saturating_sub(self.capacity as u64);
+        let mut victim = None;
         for (key, entry) in &self.entries {
-            if entry.access_order < oldest_order {
-                oldest_order = entry.access_order;
-                oldest_key = Some(*key);
+            if entry.access_order <= evict_threshold {
+                victim = Some(*key);
+                break;
             }
         }
-        if let Some(key) = oldest_key {
+        if victim.is_none() {
+            let mut oldest_key = None;
+            let mut oldest_order = u64::MAX;
+            for (key, entry) in &self.entries {
+                if entry.access_order < oldest_order {
+                    oldest_order = entry.access_order;
+                    oldest_key = Some(*key);
+                }
+            }
+            victim = oldest_key;
+        }
+        if let Some(key) = victim {
             self.entries.remove(&key);
         }
     }

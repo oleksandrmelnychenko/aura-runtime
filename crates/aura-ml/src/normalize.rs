@@ -1,10 +1,3 @@
-//! Text normalization pipeline for ML inference.
-//!
-//! Handles adversarial bypass attempts: leetspeak, unicode confusables,
-//! zero-width characters, spaced-out words, and emoji substitution.
-//! Applied before tokenization to improve model robustness.
-
-/// Applies the full normalization pipeline for ML input.
 pub fn normalize_for_ml(text: &str) -> String {
     let text = strip_zero_width(text);
     let text = normalize_confusables(&text);
@@ -13,71 +6,100 @@ pub fn normalize_for_ml(text: &str) -> String {
     unicode_normalization_nfkc(&text)
 }
 
-/// Strips zero-width and invisible Unicode characters.
 fn strip_zero_width(text: &str) -> String {
     text.chars()
         .filter(|c| {
             let cp = *c as u32;
-            cp != 0x200B // zero-width space
-            && cp != 0x200C // zero-width non-joiner
-            && cp != 0x200D // zero-width joiner
-            && cp != 0x200E // left-to-right mark
-            && cp != 0x200F // right-to-left mark
-            && cp != 0x2060 // word joiner
-            && cp != 0x2061 // function application
-            && cp != 0x2062 // invisible times
-            && cp != 0x2063 // invisible separator
-            && cp != 0x2064 // invisible plus
-            && cp != 0xFEFF // BOM
-            && cp != 0x00AD // soft hyphen
+            cp != 0x200B
+                && cp != 0x200C
+                && cp != 0x200D
+                && cp != 0x200E
+                && cp != 0x200F
+                && cp != 0x2060
+                && cp != 0x2061
+                && cp != 0x2062
+                && cp != 0x2063
+                && cp != 0x2064
+                && cp != 0xFEFF
+                && cp != 0x00AD
         })
         .collect()
 }
 
-/// Maps visually confusable Unicode characters to ASCII equivalents.
+fn is_cyrillic(c: char) -> bool {
+    let cp = c as u32;
+    (0x0400..=0x04FF).contains(&cp) || (0x0500..=0x052F).contains(&cp)
+}
+
+fn is_latin(c: char) -> bool {
+    c.is_ascii_alphabetic()
+        || (c as u32 >= 0x00C0 && c as u32 <= 0x024F)
+}
+
+fn has_latin_neighbor(chars: &[char], pos: usize) -> bool {
+    let before = pos > 0 && is_latin(chars[pos - 1]);
+    let after = pos + 1 < chars.len() && is_latin(chars[pos + 1]);
+    before || after
+}
+
+fn confusable_target(c: char) -> Option<char> {
+    match c {
+        '\u{0410}' => Some('A'),
+        '\u{0412}' => Some('B'),
+        '\u{0421}' => Some('C'),
+        '\u{0415}' => Some('E'),
+        '\u{041D}' => Some('H'),
+        '\u{041A}' => Some('K'),
+        '\u{041C}' => Some('M'),
+        '\u{041E}' => Some('O'),
+        '\u{0420}' => Some('P'),
+        '\u{0422}' => Some('T'),
+        '\u{0425}' => Some('X'),
+        '\u{0430}' => Some('a'),
+        '\u{0435}' => Some('e'),
+        '\u{043E}' => Some('o'),
+        '\u{0440}' => Some('p'),
+        '\u{0441}' => Some('c'),
+        '\u{0443}' => Some('y'),
+        '\u{0445}' => Some('x'),
+        '\u{0456}' => Some('i'),
+        _ => None,
+    }
+}
+
 fn normalize_confusables(text: &str) -> String {
-    text.chars()
-        .map(|c| match c {
-            '\u{0410}' => 'A',
-            '\u{0412}' => 'B',
-            '\u{0421}' => 'C',
-            '\u{0415}' => 'E',
-            '\u{041D}' => 'H',
-            '\u{041A}' => 'K',
-            '\u{041C}' => 'M',
-            '\u{041E}' => 'O',
-            '\u{0420}' => 'P',
-            '\u{0422}' => 'T',
-            '\u{0425}' => 'X',
-            '\u{0430}' => 'a',
-            '\u{0435}' => 'e',
-            '\u{043E}' => 'o',
-            '\u{0440}' => 'p',
-            '\u{0441}' => 'c',
-            '\u{0443}' => 'y',
-            '\u{0445}' => 'x',
-            '\u{0456}' => 'i',
-            c if ('\u{FF01}'..='\u{FF5E}').contains(&c) => {
-                char::from_u32(c as u32 - 0xFF01 + 0x21).unwrap_or(c)
+    let chars: Vec<char> = text.chars().collect();
+    let mut result = String::with_capacity(text.len());
+
+    for i in 0..chars.len() {
+        let c = chars[i];
+        if let Some(target) = confusable_target(c) {
+            if has_latin_neighbor(&chars, i) {
+                result.push(target);
+                continue;
             }
-            other => other,
-        })
-        .collect()
+        }
+        if ('\u{FF01}'..='\u{FF5E}').contains(&c) {
+            result.push(char::from_u32(c as u32 - 0xFF01 + 0x21).unwrap_or(c));
+            continue;
+        }
+        result.push(c);
+    }
+    result
 }
 
-/// Maps common leetspeak substitutions back to letters.
 fn normalize_leetspeak(text: &str) -> String {
     let mut result = String::with_capacity(text.len());
     let chars: Vec<char> = text.chars().collect();
     for i in 0..chars.len() {
         let c = chars[i];
         let mapped = match c {
-            '0' => 'o',
+            '0' if is_leet_context(&chars, i) => 'o',
             '1' if is_leet_context(&chars, i) => 'i',
-            '3' => 'e',
-            '4' => 'a',
-            '5' => 's',
-            '7' => 't',
+            '3' if is_leet_context(&chars, i) => 'e',
+            '4' if is_leet_context(&chars, i) => 'a',
+            '5' if is_leet_context(&chars, i) => 's',
+            '7' if is_leet_context(&chars, i) => 't',
             '8' if is_leet_context(&chars, i) => 'b',
             '@' if is_leet_context(&chars, i) => 'a',
             '$' if is_leet_context(&chars, i) => 's',
@@ -101,7 +123,6 @@ fn is_leet_context_strict(chars: &[char], pos: usize) -> bool {
     before && after
 }
 
-/// Collapses single characters separated by spaces: "k i l l" -> "kill".
 fn collapse_spaced_chars(text: &str) -> String {
     let words: Vec<&str> = text.split_whitespace().collect();
     if words.len() < 3 {
@@ -164,20 +185,49 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_cyrillic_latin_confusables() {
+    fn confusable_maps_cyrillic_in_latin_context() {
         assert_eq!(normalize_confusables("k\u{0456}ll"), "kill");
+        assert_eq!(normalize_confusables("h\u{0435}llo"), "hello");
     }
 
     #[test]
-    fn normalizes_leetspeak() {
+    fn confusable_preserves_pure_cyrillic() {
+        let ukr = "\u{043F}\u{0440}\u{0438}\u{0432}\u{0456}\u{0442}";
+        assert_eq!(normalize_confusables(ukr), ukr);
+    }
+
+    #[test]
+    fn confusable_preserves_cyrillic_sentence() {
+        let text = "\u{0422}\u{0438} \u{0442}\u{0443}\u{043F}\u{0438}\u{0439} \u{0434}\u{0435}\u{0431}\u{0456}\u{043B}";
+        let result = normalize_confusables(text);
+        assert_eq!(result, text);
+    }
+
+    #[test]
+    fn confusable_preserves_russian() {
+        let text = "\u{041F}\u{0440}\u{0438}\u{0432}\u{0435}\u{0442} \u{043C}\u{0438}\u{0440}";
+        let result = normalize_confusables(text);
+        assert_eq!(result, text);
+    }
+
+    #[test]
+    fn confusable_maps_mixed_script_evasion() {
+        let evasion = "k\u{0456}ll y\u{043E}u";
+        let result = normalize_confusables(evasion);
+        assert_eq!(result, "kill you");
+    }
+
+    #[test]
+    fn leetspeak_context_aware() {
         assert_eq!(normalize_leetspeak("k1ll"), "kill");
         assert_eq!(normalize_leetspeak("h4t3"), "hate");
+        assert_eq!(normalize_leetspeak("call 123"), "call 123");
     }
 
     #[test]
     fn leetspeak_preserves_standalone_digits() {
-        let result = normalize_leetspeak("call 123");
-        assert!(result.contains('1'), "standalone digits should stay");
+        assert_eq!(normalize_leetspeak("room 101"), "room 101");
+        assert_eq!(normalize_leetspeak("2 + 2 = 4"), "2 + 2 = 4");
     }
 
     #[test]
@@ -192,26 +242,47 @@ mod tests {
     }
 
     #[test]
-    fn full_pipeline_handles_combined_evasion() {
-        let input = "k\u{200B}1l\u{0456} y0u";
-        let normalized = normalize_for_ml(input);
-        assert!(
-            normalized.contains("kill") || normalized.contains("kil"),
-            "Should normalize evasion: got '{normalized}'"
-        );
+    fn full_pipeline_evasion() {
+        let input = "k\u{200B}\u{0456}ll y0u";
+        let result = normalize_for_ml(input);
+        assert!(result.contains("kill"), "got '{result}'");
     }
 
     #[test]
-    fn full_pipeline_preserves_clean_text() {
-        let clean = "Hello! How are you doing today?";
-        let normalized = normalize_for_ml(clean);
-        assert_eq!(normalized, clean);
+    fn full_pipeline_leetspeak_evasion() {
+        assert!(normalize_for_ml("k1ll y0u").contains("kill"));
+        assert!(normalize_for_ml("5tup1d").contains("stupid"));
+    }
+
+    #[test]
+    fn full_pipeline_preserves_clean() {
+        assert_eq!(normalize_for_ml("Hello! How are you?"), "Hello! How are you?");
+    }
+
+    #[test]
+    fn full_pipeline_preserves_ukrainian() {
+        let ukr = "\u{041F}\u{0440}\u{0438}\u{0432}\u{0456}\u{0442}, \u{044F}\u{043A} \u{0441}\u{043F}\u{0440}\u{0430}\u{0432}\u{0438}?";
+        let result = normalize_for_ml(ukr);
+        assert_eq!(result, ukr);
+    }
+
+    #[test]
+    fn full_pipeline_preserves_russian() {
+        let rus = "\u{041F}\u{0440}\u{0438}\u{0432}\u{0435}\u{0442}, \u{043A}\u{0430}\u{043A} \u{0434}\u{0435}\u{043B}\u{0430}?";
+        let result = normalize_for_ml(rus);
+        assert_eq!(result, rus);
     }
 
     #[test]
     fn fullwidth_to_ascii() {
         let fw = "\u{FF2B}\u{FF29}\u{FF2C}\u{FF2C}";
-        let result = normalize_confusables(fw);
-        assert_eq!(result, "KILL");
+        assert_eq!(normalize_confusables(fw), "KILL");
+    }
+
+    #[test]
+    fn mixed_cyrillic_latin_sentence_preserved() {
+        let mixed = "hey bro, \u{044F}\u{043A} \u{0441}\u{043F}\u{0440}\u{0430}\u{0432}\u{0438}?";
+        let result = normalize_for_ml(mixed);
+        assert!(result.contains("\u{044F}\u{043A}"), "Cyrillic words should survive: '{result}'");
     }
 }

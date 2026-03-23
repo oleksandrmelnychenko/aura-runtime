@@ -146,8 +146,9 @@ impl SafetyClassifier {
     }
 
     fn predict_fallback(&self, text: &str) -> SafetyPrediction {
-        let matcher = self.fallback_matcher.as_ref()
-            .expect("fallback matcher built");
+        let Some(matcher) = self.fallback_matcher.as_ref() else {
+            return SafetyPrediction::from_scores(0.0, 0.0, 0.0, 0.0, 1.0, self.threshold);
+        };
         let lower = text.to_lowercase();
 
         let mut grooming: f32 = 0.0;

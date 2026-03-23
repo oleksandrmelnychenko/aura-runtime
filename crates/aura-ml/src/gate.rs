@@ -90,6 +90,10 @@ impl GateModel for LexiconGate {
                 continue;
             }
 
+            if crate::boundary::is_negated(&lower, start, 30) {
+                continue;
+            }
+
             let entry = &self.entries[m.pattern().as_usize()];
             let weight = entry.category.weight();
             max_score = max_score.max(weight);

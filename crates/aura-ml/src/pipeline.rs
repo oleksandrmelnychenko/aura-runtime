@@ -91,8 +91,8 @@ impl MlPipeline {
 
     pub fn analyze_text(&mut self, text: &str) -> MlResult {
         let start = Instant::now();
+        let text_hash = cache::text_hash(text);
         let normalized = normalize_for_ml(text);
-        let text_hash = cache::text_hash(&normalized);
 
         if let Some(cached) = self.cache.get(text_hash) {
             let mut result = cached.clone();
@@ -135,6 +135,13 @@ impl MlPipeline {
         let safety = self.safety.predict(raw_text);
         let intent = self.intent.predict(raw_text);
 
+        if safety.is_none() {
+            tracing::warn!("safety classifier returned None");
+        }
+        if intent.is_none() {
+            tracing::warn!("intent classifier returned None");
+        }
+
         MlResult {
             toxicity,
             sentiment,
@@ -146,13 +153,10 @@ impl MlPipeline {
         }
     }
 
-    fn run_gate_only(&mut self, text: &str, decision: CascadeDecision) -> MlResult {
-        let toxicity = self.toxicity.predict(text);
-        let sentiment = self.sentiment.predict(text);
-
+    fn run_gate_only(&mut self, _text: &str, decision: CascadeDecision) -> MlResult {
         MlResult {
-            toxicity,
-            sentiment,
+            toxicity: None,
+            sentiment: None,
             safety: None,
             intent: None,
             inference_time_us: 0,

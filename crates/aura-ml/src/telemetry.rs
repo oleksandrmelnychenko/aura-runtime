@@ -34,10 +34,17 @@ impl Default for InferenceEvent {
 }
 
 /// Ring buffer for inference telemetry. Fixed 16KB, never allocates.
+const HISTOGRAM_BUCKETS: [u32; 12] = [10, 50, 100, 500, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 500_000, 1_000_000];
+
 pub struct InferenceTelemetry {
     ring: Box<[InferenceEvent; RING_SIZE]>,
     write_pos: usize,
     total_events: u64,
+    latency_histogram: [u64; 13],
+    gate_count: u64,
+    deep_count: u64,
+    cached_count: u64,
+    cache_hit_count: u64,
 }
 
 impl InferenceTelemetry {
@@ -47,6 +54,11 @@ impl InferenceTelemetry {
             ring: Box::new([InferenceEvent::default(); RING_SIZE]),
             write_pos: 0,
             total_events: 0,
+            latency_histogram: [0; 13],
+            gate_count: 0,
+            deep_count: 0,
+            cached_count: 0,
+            cache_hit_count: 0,
         }
     }
 
@@ -70,69 +82,42 @@ impl InferenceTelemetry {
         };
         self.write_pos = (self.write_pos + 1) % RING_SIZE;
         self.total_events += 1;
+
+        let bucket = histogram_bucket(latency_us);
+        self.latency_histogram[bucket] += 1;
+
+        match tier {
+            CascadeTier::Gate => self.gate_count += 1,
+            CascadeTier::Deep => self.deep_count += 1,
+            CascadeTier::Cached => self.cached_count += 1,
+        }
+        if cache_hit {
+            self.cache_hit_count += 1;
+        }
     }
 
     /// Computes a summary of the telemetry data.
     pub fn summary(&self) -> TelemetrySummary {
-        let count = self.total_events.min(RING_SIZE as u64) as usize;
-        if count == 0 {
+        if self.total_events == 0 {
             return TelemetrySummary::default();
         }
 
-        let mut latencies = Vec::with_capacity(count);
-        let mut gate_count = 0u64;
-        let mut deep_count = 0u64;
-        let mut cached_count = 0u64;
-        let mut cache_hits = 0u64;
-
-        for i in 0..count {
-            let idx = if self.total_events <= RING_SIZE as u64 {
-                i
-            } else {
-                (self.write_pos + i) % RING_SIZE
-            };
-            let event = &self.ring[idx];
-            latencies.push(event.latency_us);
-            match event.tier {
-                CascadeTier::Gate => gate_count += 1,
-                CascadeTier::Deep => deep_count += 1,
-                CascadeTier::Cached => cached_count += 1,
-            }
-            if event.cache_hit {
-                cache_hits += 1;
-            }
-        }
-
-        latencies.sort_unstable();
-
-        let p50 = latencies[count / 2];
-        let p95 = latencies[(count as f64 * 0.95) as usize];
-        let p99 = latencies[(count as f64 * 0.99).min((count - 1) as f64) as usize];
+        let p50 = percentile_from_histogram(&self.latency_histogram, self.total_events, 0.50);
+        let p95 = percentile_from_histogram(&self.latency_histogram, self.total_events, 0.95);
+        let p99 = percentile_from_histogram(&self.latency_histogram, self.total_events, 0.99);
 
         TelemetrySummary {
             total_inferences: self.total_events,
-            gate_inferences: gate_count,
-            deep_inferences: deep_count,
-            cached_inferences: cached_count,
-            cache_hits,
-            cache_hit_rate: if self.total_events > 0 {
-                cache_hits as f32 / self.total_events as f32
-            } else {
-                0.0
-            },
+            gate_inferences: self.gate_count,
+            deep_inferences: self.deep_count,
+            cached_inferences: self.cached_count,
+            cache_hits: self.cache_hit_count,
+            cache_hit_rate: self.cache_hit_count as f32 / self.total_events as f32,
             p50_latency_us: p50,
             p95_latency_us: p95,
             p99_latency_us: p99,
-            deep_model_rate: if self.total_events > 0 {
-                deep_count as f32 / self.total_events as f32
-            } else {
-                0.0
-            },
-            fallback_rate: if self.total_events > 0 {
-                gate_count as f32 / self.total_events as f32
-            } else {
-                1.0
-            },
+            deep_model_rate: self.deep_count as f32 / self.total_events as f32,
+            fallback_rate: self.gate_count as f32 / self.total_events as f32,
         }
     }
 
@@ -140,6 +125,30 @@ impl InferenceTelemetry {
     pub fn total_events(&self) -> u64 {
         self.total_events
     }
+}
+
+fn histogram_bucket(latency_us: u32) -> usize {
+    for (i, &boundary) in HISTOGRAM_BUCKETS.iter().enumerate() {
+        if latency_us <= boundary {
+            return i;
+        }
+    }
+    HISTOGRAM_BUCKETS.len()
+}
+
+fn percentile_from_histogram(histogram: &[u64; 13], total: u64, percentile: f64) -> u32 {
+    let target = (total as f64 * percentile) as u64;
+    let mut cumulative = 0u64;
+    for (i, &count) in histogram.iter().enumerate() {
+        cumulative += count;
+        if cumulative >= target {
+            if i < HISTOGRAM_BUCKETS.len() {
+                return HISTOGRAM_BUCKETS[i];
+            }
+            return HISTOGRAM_BUCKETS[HISTOGRAM_BUCKETS.len() - 1];
+        }
+    }
+    HISTOGRAM_BUCKETS[HISTOGRAM_BUCKETS.len() - 1]
 }
 
 impl Default for InferenceTelemetry {
