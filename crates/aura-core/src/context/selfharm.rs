@@ -642,6 +642,7 @@ mod tests {
                 kind,
                 confidence: 0.8,
                 subtype: None,
+                content_hash: None,
             });
         }
         timeline

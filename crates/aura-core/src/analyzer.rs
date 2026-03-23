@@ -2,16 +2,18 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
-use aura_ml::{MlConfig, MlPipeline, SafetyLabel, IntentLabel, ToxicityLabel};
-use aura_patterns::{PatternDatabase, PatternMatcher, UrlChecker};
+use aura_ml::{IntentLabel, MlConfig, MlPipeline, SafetyLabel, ToxicityLabel};
+use aura_patterns::{BlockedUrlMatch, PatternDatabase, PatternMatcher, UrlChecker};
 use tracing::debug;
 
 use crate::action::{
-    augment_recommendation_for_inference, augment_recommendation_for_reason_codes, decide_action_v2,
+    augment_recommendation_for_inference, augment_recommendation_for_reason_codes,
+    decide_action_v2, propaganda_action_for_subtype,
 };
 use crate::config::AuraConfig;
 use crate::context::enricher::{EnricherConfig, SignalEnricher};
 use crate::context::events::{ContextEvent, EventKind};
+use crate::context::propaganda::NarrativeId;
 use crate::context::timing::TimingAnalyzer;
 use crate::context::tracker::{ConversationTracker, TrackerConfig, TrackerWireState};
 use crate::ids::{ConversationId, SenderId};
@@ -139,6 +141,7 @@ impl Analyzer {
             account_holder_age: config.account_holder_age,
             auto_cleanup_interval: 100,
             timezone_offset_minutes: config.timezone_offset_minutes,
+            active_module: config.effective_module(),
             ..Default::default()
         }
     }
@@ -204,24 +207,28 @@ impl Analyzer {
                     continue;
                 }
 
-                signals.push(DetectionSignal::pattern(
+                let threat_subtype =
+                    infer_threat_subtype(&m.rule_id, threat_type, m.matched_text.as_deref());
+                let mut signal = DetectionSignal::pattern(
                     threat_type,
                     m.score,
                     score_to_confidence(m.score),
                     format!("pattern.{}", m.rule_id),
                     m.explanation,
-                ));
+                );
+                if let Some(ref threat_subtype) = threat_subtype {
+                    signal = signal.with_threat_subtype(threat_subtype.clone());
+                }
+                signals.push(signal);
             }
 
-            let blocked_urls = self.url_checker.find_blocked_urls(text);
-            for url in blocked_urls {
-                signals.push(DetectionSignal::pattern(
-                    ThreatType::Phishing,
-                    0.95,
-                    Confidence::High,
-                    "link.blocked_domain",
-                    format!("Blocked URL detected: {url}"),
-                ));
+            for blocked in self.url_checker.find_blocked_matches(text) {
+                let threat_type = parse_threat_type(&blocked.threat_type);
+                if !self.is_detection_enabled(threat_type) {
+                    continue;
+                }
+
+                signals.push(blocked_url_signal(&blocked));
             }
 
             for finding in self.url_checker.find_suspicious_urls(text) {
@@ -280,36 +287,74 @@ impl Analyzer {
                     continue;
                 }
 
-                signals.push(DetectionSignal::pattern(
+                let threat_subtype =
+                    infer_threat_subtype(&m.rule_id, threat_type, m.matched_text.as_deref());
+                let mut signal = DetectionSignal::pattern(
                     threat_type,
                     m.score,
                     score_to_confidence(m.score),
                     format!("pattern.{}", m.rule_id),
                     m.explanation,
-                ));
+                );
+                if let Some(ref threat_subtype) = threat_subtype {
+                    signal = signal.with_threat_subtype(threat_subtype.clone());
+                }
+                signals.push(signal);
 
                 if let Some(event_kind) = match_to_event_kind(&m.rule_id, threat_type) {
-                    context_events.push(ContextEvent {
-                        event_id: 0,
-                        timestamp_ms,
-                        sender_id: input.sender_id.clone(),
-                        conversation_id: input.conversation_id.clone(),
-                        kind: event_kind,
-                        confidence: m.score,
-                        subtype: None,
-                    });
+                    let event = if let Some(ref threat_subtype) = threat_subtype {
+                        ContextEvent::with_subtype(
+                            timestamp_ms,
+                            input.sender_id.clone(),
+                            input.conversation_id.clone(),
+                            event_kind,
+                            m.score,
+                            threat_subtype.clone(),
+                        )
+                    } else {
+                        ContextEvent::new(
+                            timestamp_ms,
+                            input.sender_id.clone(),
+                            input.conversation_id.clone(),
+                            event_kind,
+                            m.score,
+                        )
+                    };
+                    context_events.push(event);
                 }
             }
 
-            let blocked_urls = self.url_checker.find_blocked_urls(text);
-            for url in blocked_urls {
-                signals.push(DetectionSignal::pattern(
-                    ThreatType::Phishing,
-                    0.95,
-                    Confidence::High,
-                    "link.blocked_domain",
-                    format!("Blocked URL detected: {url}"),
-                ));
+            for blocked in self.url_checker.find_blocked_matches(text) {
+                let threat_type = parse_threat_type(&blocked.threat_type);
+                if !self.is_detection_enabled(threat_type) {
+                    continue;
+                }
+
+                let threat_subtype =
+                    infer_threat_subtype(&blocked.rule_id, threat_type, Some(&blocked.url));
+                signals.push(blocked_url_signal(&blocked));
+
+                if let Some(event_kind) = match_to_event_kind(&blocked.rule_id, threat_type) {
+                    let event = if let Some(ref threat_subtype) = threat_subtype {
+                        ContextEvent::with_subtype(
+                            timestamp_ms,
+                            input.sender_id.clone(),
+                            input.conversation_id.clone(),
+                            event_kind,
+                            blocked.score,
+                            threat_subtype.clone(),
+                        )
+                    } else {
+                        ContextEvent::new(
+                            timestamp_ms,
+                            input.sender_id.clone(),
+                            input.conversation_id.clone(),
+                            event_kind,
+                            blocked.score,
+                        )
+                    };
+                    context_events.push(event);
+                }
             }
 
             for finding in self.url_checker.find_suspicious_urls(text) {
@@ -349,6 +394,7 @@ impl Analyzer {
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -365,6 +411,7 @@ impl Analyzer {
                         kind,
                         confidence: signal.score,
                         subtype: None,
+                        content_hash: None,
                     });
                 }
             }
@@ -391,6 +438,7 @@ impl Analyzer {
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -399,22 +447,19 @@ impl Analyzer {
 
         let context_signals = self.context_tracker.record_events(context_events);
 
-        let sender_is_defender =
-            match self.context_tracker.timeline(&input.conversation_id) {
-                Some(t) => {
-                    let mut found = false;
-                    for e in t.all_events() {
-                        if e.sender_id == input.sender_id
-                            && e.kind == EventKind::DefenseOfVictim
-                        {
-                            found = true;
-                            break;
-                        }
+        let sender_is_defender = match self.context_tracker.timeline(&input.conversation_id) {
+            Some(t) => {
+                let mut found = false;
+                for e in t.all_events() {
+                    if e.sender_id == input.sender_id && e.kind == EventKind::DefenseOfVictim {
+                        found = true;
+                        break;
                     }
-                    found
                 }
-                None => false,
-            };
+                found
+            }
+            None => false,
+        };
 
         for signal in context_signals {
             let is_pile_on_signal = signal.layer == DetectionLayer::ContextAnalysis
@@ -426,15 +471,6 @@ impl Analyzer {
                 continue;
             }
             signals.push(signal);
-        }
-
-        if let Some(ref raw_text) = input.text {
-            self.apply_post_context_signal_filters(
-                input,
-                truncate_text(raw_text),
-                timestamp_ms,
-                &mut signals,
-            );
         }
 
         let is_child = self.config.account_type == AccountType::Child;
@@ -601,8 +637,7 @@ impl Analyzer {
                     match anchored_priority {
                         None => anchored_priority = Some(s),
                         Some(current) => {
-                            if threat_priority(s.threat_type)
-                                < threat_priority(current.threat_type)
+                            if threat_priority(s.threat_type) < threat_priority(current.threat_type)
                             {
                                 anchored_priority = Some(s);
                             }
@@ -642,8 +677,11 @@ impl Analyzer {
         }
         let primary = priority_signal;
 
-        let (action_v2, mut recommendation) =
-            decide_action_v2(primary.threat_type, score, protection);
+        let (action_v2, mut recommendation) = if primary.threat_type == ThreatType::Propaganda {
+            propaganda_action_for_subtype(score, protection, &primary.reason_code)
+        } else {
+            decide_action_v2(primary.threat_type, score, protection)
+        };
         let action = action_v2;
 
         let mut threat_map: std::collections::HashMap<ThreatType, f32> =
@@ -900,25 +938,37 @@ impl Analyzer {
                     ThreatType::Grooming,
                     safety.grooming,
                     "ml.safety.grooming",
-                    format!("ML safety: grooming detected (score: {:.2})", safety.grooming),
+                    format!(
+                        "ML safety: grooming detected (score: {:.2})",
+                        safety.grooming
+                    ),
                 ),
                 Some(SafetyLabel::Bullying) if safety.bullying >= safety_threshold => (
                     ThreatType::Bullying,
                     safety.bullying,
                     "ml.safety.bullying",
-                    format!("ML safety: bullying detected (score: {:.2})", safety.bullying),
+                    format!(
+                        "ML safety: bullying detected (score: {:.2})",
+                        safety.bullying
+                    ),
                 ),
                 Some(SafetyLabel::SelfHarm) if safety.self_harm >= safety_threshold => (
                     ThreatType::SelfHarm,
                     safety.self_harm,
                     "ml.safety.selfharm",
-                    format!("ML safety: self-harm detected (score: {:.2})", safety.self_harm),
+                    format!(
+                        "ML safety: self-harm detected (score: {:.2})",
+                        safety.self_harm
+                    ),
                 ),
                 Some(SafetyLabel::Manipulation) if safety.manipulation >= safety_threshold => (
                     ThreatType::Manipulation,
                     safety.manipulation,
                     "ml.safety.manipulation",
-                    format!("ML safety: manipulation detected (score: {:.2})", safety.manipulation),
+                    format!(
+                        "ML safety: manipulation detected (score: {:.2})",
+                        safety.manipulation
+                    ),
                 ),
                 _ => (ThreatType::None, 0.0, "", String::new()),
             };
@@ -944,7 +994,10 @@ impl Analyzer {
                             intent.request_meeting,
                             score_to_confidence(intent.request_meeting),
                             "ml.intent.meeting",
-                            format!("ML intent: meeting request detected (score: {:.2})", intent.request_meeting),
+                            format!(
+                                "ML intent: meeting request detected (score: {:.2})",
+                                intent.request_meeting
+                            ),
                         ));
                     }
                 }
@@ -955,7 +1008,10 @@ impl Analyzer {
                             intent.request_secret,
                             score_to_confidence(intent.request_secret),
                             "ml.intent.secret",
-                            format!("ML intent: secrecy request detected (score: {:.2})", intent.request_secret),
+                            format!(
+                                "ML intent: secrecy request detected (score: {:.2})",
+                                intent.request_secret
+                            ),
                         ));
                     }
                 }
@@ -966,7 +1022,10 @@ impl Analyzer {
                             intent.request_media,
                             score_to_confidence(intent.request_media),
                             "ml.intent.media",
-                            format!("ML intent: media request detected (score: {:.2})", intent.request_media),
+                            format!(
+                                "ML intent: media request detected (score: {:.2})",
+                                intent.request_media
+                            ),
                         ));
                     }
                 }
@@ -2852,6 +2911,163 @@ fn latent_score(latent_states: &[LatentStateEvidence], kind: LatentStateKind) ->
     result
 }
 
+fn blocked_url_signal(blocked: &BlockedUrlMatch) -> DetectionSignal {
+    let threat_type = parse_threat_type(&blocked.threat_type);
+    let reason_code = blocked_url_reason_code(threat_type, &blocked.rule_id);
+    let explanation = format!("{}: {}", blocked.explanation, blocked.url);
+    let threat_subtype = infer_threat_subtype(&blocked.rule_id, threat_type, Some(&blocked.url));
+
+    let mut signal = DetectionSignal::pattern(
+        threat_type,
+        blocked.score,
+        score_to_confidence(blocked.score),
+        reason_code,
+        explanation,
+    );
+    if matches!(
+        threat_type,
+        ThreatType::Phishing | ThreatType::MilitarySocialEng | ThreatType::Propaganda
+    ) {
+        signal.family = SignalFamily::Link;
+    }
+    if let Some(threat_subtype) = threat_subtype {
+        signal = signal.with_threat_subtype(threat_subtype);
+    }
+    signal
+}
+
+fn blocked_url_reason_code(threat_type: ThreatType, rule_id: &str) -> String {
+    if threat_type == ThreatType::Phishing {
+        "link.blocked_domain".to_string()
+    } else {
+        format!("pattern.{rule_id}")
+    }
+}
+
+fn infer_threat_subtype(
+    rule_id: &str,
+    threat_type: ThreatType,
+    matched_text: Option<&str>,
+) -> Option<String> {
+    match threat_type {
+        ThreatType::Propaganda => NarrativeId::from_rule_id(rule_id)
+            .map(|narrative| narrative.tag().to_string())
+            .or_else(|| propaganda_source_subtype(rule_id).map(str::to_string)),
+        ThreatType::Psyops => psyops_subtype(rule_id, matched_text).map(str::to_string),
+        ThreatType::MilitarySocialEng => military_social_eng_subtype(rule_id).map(str::to_string),
+        ThreatType::CoordinateLeak => coordinate_subtype(rule_id).map(str::to_string),
+        ThreatType::OpsecViolation => opsec_subtype(rule_id).map(str::to_string),
+        ThreatType::None
+        | ThreatType::Bullying
+        | ThreatType::Grooming
+        | ThreatType::Explicit
+        | ThreatType::Threat
+        | ThreatType::SelfHarm
+        | ThreatType::Spam
+        | ThreatType::Scam
+        | ThreatType::Phishing
+        | ThreatType::Manipulation
+        | ThreatType::Nsfw
+        | ThreatType::HateSpeech
+        | ThreatType::Doxxing
+        | ThreatType::PiiLeakage => None,
+    }
+}
+
+fn propaganda_source_subtype(rule_id: &str) -> Option<&'static str> {
+    if rule_id.starts_with("propaganda_domain_state_") {
+        Some("state_media")
+    } else if rule_id.starts_with("propaganda_domain_aligned_") {
+        Some("aligned_media")
+    } else if rule_id.starts_with("propaganda_domain_occupation_") {
+        Some("occupation_media")
+    } else if rule_id.starts_with("propaganda_domain_disinfo_") {
+        Some("disinfo_infra")
+    } else if rule_id.starts_with("propaganda_telegram_channel_") {
+        Some("telegram_channel")
+    } else {
+        None
+    }
+}
+
+fn psyops_subtype(rule_id: &str, matched_text: Option<&str>) -> Option<&'static str> {
+    if rule_id.starts_with("psyops_surrender_") {
+        if matched_text
+            .map(|text| {
+                let lower = text.to_lowercase();
+                lower.contains("волга") || lower.contains("volga")
+            })
+            .unwrap_or(false)
+        {
+            Some("surrender_volga")
+        } else {
+            Some("surrender")
+        }
+    } else if rule_id.starts_with("psyops_family_target_") {
+        Some("family_targeting")
+    } else if rule_id.starts_with("psyops_division_regional_") {
+        Some("regional_division")
+    } else if rule_id.starts_with("psyops_command_distrust_") {
+        Some("command_distrust")
+    } else if rule_id.starts_with("psyops_fake_ceasefire_") {
+        Some("fake_ceasefire")
+    } else if rule_id.starts_with("psyops_demoralize_direct_") {
+        Some("demoralization")
+    } else {
+        None
+    }
+}
+
+fn military_social_eng_subtype(rule_id: &str) -> Option<&'static str> {
+    if rule_id.starts_with("military_phishing_diia_") {
+        Some("phishing_diia")
+    } else if rule_id.starts_with("military_phishing_tck_") {
+        Some("phishing_tck")
+    } else if rule_id.starts_with("military_phishing_delta_") {
+        Some("phishing_delta")
+    } else if rule_id.starts_with("military_phishing_command_") {
+        Some("phishing_command")
+    } else if rule_id.starts_with("military_phishing_account_") {
+        Some("phishing_account")
+    } else if rule_id.starts_with("intel_honeytrap_") {
+        Some("honeytrap")
+    } else {
+        None
+    }
+}
+
+fn coordinate_subtype(rule_id: &str) -> Option<&'static str> {
+    if rule_id.starts_with("opsec_coordinates_w3w_") {
+        Some("w3w")
+    } else if rule_id.starts_with("opsec_coordinates_google_maps_") {
+        Some("google_maps")
+    } else if rule_id.starts_with("opsec_coordinates_ukraine_dd_") {
+        Some("ukraine_dd")
+    } else if rule_id.starts_with("opsec_coordinates_milgrid_") {
+        Some("milgrid")
+    } else if rule_id.starts_with("opsec_coordinates_mgrs_") {
+        Some("mgrs")
+    } else if rule_id.starts_with("opsec_coordinates_pluscode_") {
+        Some("pluscode")
+    } else {
+        None
+    }
+}
+
+fn opsec_subtype(rule_id: &str) -> Option<&'static str> {
+    if rule_id.starts_with("opsec_movement_") {
+        Some("movement")
+    } else if rule_id.starts_with("opsec_casualties_") {
+        Some("casualties")
+    } else if rule_id.starts_with("opsec_equipment_") {
+        Some("equipment")
+    } else if rule_id.starts_with("opsec_callsign_") {
+        Some("callsign")
+    } else {
+        None
+    }
+}
+
 fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKind> {
     if rule_id.starts_with("grooming_secrecy") {
         return Some(EventKind::SecrecyRequest);
@@ -2880,6 +3096,32 @@ fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKi
     if rule_id.starts_with("grooming_emotional_dependency") {
         return Some(EventKind::EmotionalBlackmail);
     }
+    if rule_id.starts_with("propaganda_domain_")
+        || rule_id.starts_with("propaganda_telegram_channel_")
+    {
+        return Some(EventKind::SuspiciousSource);
+    }
+    if rule_id.starts_with("opsec_coordinates_") {
+        return Some(EventKind::CoordinateMention);
+    }
+    if rule_id.starts_with("opsec_movement_") {
+        return Some(EventKind::PositionLeak);
+    }
+    if rule_id.starts_with("opsec_casualties_") || rule_id.starts_with("opsec_callsign_") {
+        return Some(EventKind::UnitInfoLeak);
+    }
+    if rule_id.starts_with("opsec_equipment_") {
+        return Some(EventKind::EquipmentLeak);
+    }
+    if rule_id.starts_with("military_phishing_") {
+        return Some(EventKind::MilitaryPhishing);
+    }
+    if rule_id.starts_with("intel_") {
+        return Some(EventKind::IntelGathering);
+    }
+    if rule_id.starts_with("psyops_fake_ceasefire_") {
+        return Some(EventKind::MilitaryDisinfo);
+    }
 
     if rule_id.contains("encourage_harm") {
         return Some(EventKind::HarmEncouragement);
@@ -2891,9 +3133,6 @@ fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKi
         || rule_id.contains("you_dont_belong")
         || rule_id.contains("isolate_suggest")
     {
-        return Some(EventKind::Exclusion);
-    }
-    if rule_id.contains("coordinate") {
         return Some(EventKind::Exclusion);
     }
     if rule_id.contains("passive_agg") {
@@ -4421,6 +4660,120 @@ mod tests {
                 .iter()
                 .any(|signal| signal.family == SignalFamily::Link),
             "blocked url signal should be classified as link family"
+        );
+    }
+
+    #[test]
+    fn propaganda_domain_generates_propaganda_signal_and_suspicious_source_event() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let r = analyzer.analyze_with_context(&default_input("check https://rt.com/story"), 1000);
+
+        assert!(r.signals.iter().any(|signal| {
+            signal.threat_type == ThreatType::Propaganda
+                && signal.family == SignalFamily::Link
+                && signal.threat_subtype == "state_media"
+                && signal
+                    .reason_code
+                    .starts_with("pattern.propaganda_domain_state_")
+        }));
+        assert!(
+            !r.signals.iter().any(|signal| {
+                signal.threat_type == ThreatType::Phishing
+                    && signal.reason_code == "link.blocked_domain"
+            }),
+            "propaganda domains should not be surfaced as generic phishing"
+        );
+
+        let timeline = analyzer
+            .context_tracker()
+            .timeline("conv_456")
+            .expect("timeline should exist");
+        assert!(timeline.all_events().iter().any(|event| {
+            event.kind == EventKind::SuspiciousSource
+                && event.subtype.as_deref() == Some("state_media")
+        }));
+    }
+
+    #[test]
+    fn propaganda_dehumanization_uses_subtype_policy_for_blocking() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let mut input = default_input("свинособаки");
+        input.language = Some("uk".to_string());
+
+        let r = analyzer.analyze(&input);
+
+        assert_eq!(r.action, Action::Block);
+        assert!(r.signals.iter().any(|signal| {
+            signal.threat_type == ThreatType::Propaganda
+                && signal.threat_subtype == "dehumanization"
+        }));
+    }
+
+    #[test]
+    fn military_update_enables_phishing_context_and_subtypes() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        analyzer.update_config(
+            AuraConfig {
+                active_module: AuraModule::Military,
+                ..AuraConfig::default()
+            },
+            &db,
+        );
+
+        let r = analyzer.analyze_with_context(&default_input("https://diia-gov.app/login"), 1000);
+
+        assert!(r.signals.iter().any(|signal| {
+            signal.threat_type == ThreatType::MilitarySocialEng
+                && signal.reason_code.contains("phishing_diia")
+        }));
+        let timeline = analyzer
+            .context_tracker()
+            .timeline("conv_456")
+            .expect("timeline should exist");
+        assert!(timeline.all_events().iter().any(|event| {
+            event.kind == EventKind::MilitaryPhishing
+                && event.subtype.as_deref() == Some("phishing_diia")
+        }));
+        assert_eq!(
+            analyzer.context_tracker().config().active_module,
+            AuraModule::Military
+        );
+    }
+
+    #[test]
+    fn coordinate_rules_map_to_coordinate_mentions() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(
+            AuraConfig {
+                active_module: AuraModule::Military,
+                ..AuraConfig::default()
+            },
+            &db,
+        );
+
+        let r = analyzer.analyze_with_context(&default_input("48.4500, 35.0000"), 1000);
+
+        assert!(r.signals.iter().any(|signal| {
+            signal.threat_type == ThreatType::CoordinateLeak
+                && signal.threat_subtype == "ukraine_dd"
+        }));
+        let timeline = analyzer
+            .context_tracker()
+            .timeline("conv_456")
+            .expect("timeline should exist");
+        assert!(timeline.all_events().iter().any(|event| {
+            event.kind == EventKind::CoordinateMention
+                && event.subtype.as_deref() == Some("ukraine_dd")
+        }));
+        assert!(
+            !timeline
+                .all_events()
+                .iter()
+                .any(|event| event.kind == EventKind::Exclusion),
+            "coordinate rules should not be routed into exclusion events"
         );
     }
 

@@ -8,6 +8,8 @@ use crate::types::{
     ThreatType,
 };
 
+use super::events::EventKind;
+
 use super::events::ContextEvent;
 
 const WEEK_MS: u64 = 7 * 24 * 60 * 60 * 1000;
@@ -35,6 +37,8 @@ pub struct BehavioralSnapshot {
     pub neutral_count: u32,
     pub grooming_count: u32,
     pub manipulation_count: u32,
+    #[serde(default)]
+    pub propaganda_count: u32,
     pub avg_severity: f32,
 }
 
@@ -49,6 +53,7 @@ pub struct BehavioralSnapshotState {
     pub neutral_count: u32,
     pub grooming_count: u32,
     pub manipulation_count: u32,
+    pub propaganda_count: u32,
     pub avg_severity: f32,
 }
 
@@ -63,6 +68,7 @@ impl From<&BehavioralSnapshot> for BehavioralSnapshotState {
             neutral_count: snapshot.neutral_count,
             grooming_count: snapshot.grooming_count,
             manipulation_count: snapshot.manipulation_count,
+            propaganda_count: snapshot.propaganda_count,
             avg_severity: snapshot.avg_severity,
         }
     }
@@ -79,6 +85,7 @@ impl From<BehavioralSnapshotState> for BehavioralSnapshot {
             neutral_count: snapshot.neutral_count,
             grooming_count: snapshot.grooming_count,
             manipulation_count: snapshot.manipulation_count,
+            propaganda_count: snapshot.propaganda_count,
             avg_severity: snapshot.avg_severity,
         }
     }
@@ -95,6 +102,7 @@ impl BehavioralSnapshot {
             neutral_count: 0,
             grooming_count: 0,
             manipulation_count: 0,
+            propaganda_count: 0,
             avg_severity: 0.0,
         }
     }
@@ -136,6 +144,30 @@ pub struct ContactProfile {
     pub grooming_event_count: u64,
     pub bullying_event_count: u64,
     pub manipulation_event_count: u64,
+    #[serde(default)]
+    pub propaganda_event_count: u64,
+    #[serde(default)]
+    pub propaganda_source_count: u64,
+    #[serde(default)]
+    pub narrative_hits: Vec<(u8, u32)>,
+    #[serde(default)]
+    pub propaganda_score: f32,
+    #[serde(default)]
+    pub narrative_diversity: u8,
+    #[serde(default)]
+    pub first_propaganda_ms: u64,
+    #[serde(default)]
+    pub last_propaganda_ms: u64,
+    #[serde(default)]
+    pub propaganda_conversations: Vec<ConversationId>,
+    #[serde(default)]
+    pub hourly_activity: [u16; 24],
+    #[serde(default)]
+    pub message_fingerprints: VecDeque<u64>,
+    #[serde(default)]
+    pub narrative_timeline: VecDeque<(u64, u8)>,
+    #[serde(default)]
+    pub weekly_propaganda_counts: VecDeque<(u64, u16)>,
     severity_count: u64,
     severity_sum: f32,
     #[serde(default = "default_rating")]
@@ -163,6 +195,18 @@ pub struct ContactProfileState {
     pub grooming_event_count: u64,
     pub bullying_event_count: u64,
     pub manipulation_event_count: u64,
+    pub propaganda_event_count: u64,
+    pub propaganda_source_count: u64,
+    pub narrative_hits: Vec<(u8, u32)>,
+    pub propaganda_score: f32,
+    pub narrative_diversity: u8,
+    pub first_propaganda_ms: u64,
+    pub last_propaganda_ms: u64,
+    pub propaganda_conversations: Vec<ConversationId>,
+    pub hourly_activity: [u16; 24],
+    pub message_fingerprints: VecDeque<u64>,
+    pub narrative_timeline: VecDeque<(u64, u8)>,
+    pub weekly_propaganda_counts: VecDeque<(u64, u16)>,
     pub is_trusted: bool,
     pub severity_sum: f32,
     pub severity_count: u64,
@@ -194,6 +238,18 @@ impl From<&ContactProfile> for ContactProfileState {
             grooming_event_count: profile.grooming_event_count,
             bullying_event_count: profile.bullying_event_count,
             manipulation_event_count: profile.manipulation_event_count,
+            propaganda_event_count: profile.propaganda_event_count,
+            propaganda_source_count: profile.propaganda_source_count,
+            narrative_hits: profile.narrative_hits.clone(),
+            propaganda_score: profile.propaganda_score,
+            narrative_diversity: profile.narrative_diversity,
+            first_propaganda_ms: profile.first_propaganda_ms,
+            last_propaganda_ms: profile.last_propaganda_ms,
+            propaganda_conversations: profile.propaganda_conversations.clone(),
+            hourly_activity: profile.hourly_activity,
+            message_fingerprints: profile.message_fingerprints.clone(),
+            narrative_timeline: profile.narrative_timeline.clone(),
+            weekly_propaganda_counts: profile.weekly_propaganda_counts.clone(),
             is_trusted: profile.is_trusted,
             severity_sum: profile.severity_sum,
             severity_count: profile.severity_count,
@@ -227,6 +283,18 @@ impl From<ContactProfileState> for ContactProfile {
             total_messages: profile.total_messages,
             conversation_count: profile.conversation_count,
             conversations: profile.conversations,
+            propaganda_event_count: profile.propaganda_event_count,
+            propaganda_source_count: profile.propaganda_source_count,
+            narrative_hits: profile.narrative_hits,
+            propaganda_score: profile.propaganda_score,
+            narrative_diversity: profile.narrative_diversity,
+            first_propaganda_ms: profile.first_propaganda_ms,
+            last_propaganda_ms: profile.last_propaganda_ms,
+            propaganda_conversations: profile.propaganda_conversations,
+            hourly_activity: profile.hourly_activity,
+            message_fingerprints: profile.message_fingerprints,
+            narrative_timeline: profile.narrative_timeline,
+            weekly_propaganda_counts: profile.weekly_propaganda_counts,
             grooming_event_count: profile.grooming_event_count,
             bullying_event_count: profile.bullying_event_count,
             manipulation_event_count: profile.manipulation_event_count,
@@ -263,6 +331,18 @@ impl ContactProfile {
             grooming_event_count: 0,
             bullying_event_count: 0,
             manipulation_event_count: 0,
+            propaganda_event_count: 0,
+            propaganda_source_count: 0,
+            narrative_hits: Vec::new(),
+            propaganda_score: 0.0,
+            narrative_diversity: 0,
+            first_propaganda_ms: 0,
+            last_propaganda_ms: 0,
+            propaganda_conversations: Vec::new(),
+            hourly_activity: [0u16; 24],
+            message_fingerprints: VecDeque::new(),
+            narrative_timeline: VecDeque::new(),
+            weekly_propaganda_counts: VecDeque::new(),
             is_trusted: false,
             severity_sum: 0.0,
             severity_count: 0,
@@ -307,6 +387,57 @@ impl ContactProfile {
         self.last_seen_ms - self.first_seen_ms
     }
 
+    fn record_narrative_hit(&mut self, subtype: &str, timestamp_ms: u64) {
+        use crate::context::propaganda::NarrativeId;
+
+        let Some(nid) = NarrativeId::from_subtype(subtype) else { return };
+        let nid_u8 = nid as u8;
+
+        let mut found = false;
+        for entry in &mut self.narrative_hits {
+            if entry.0 == nid_u8 {
+                entry.1 += 1;
+                found = true;
+                break;
+            }
+        }
+        if !found && self.narrative_hits.len() < 15 {
+            self.narrative_hits.push((nid_u8, 1));
+        }
+
+        self.narrative_diversity = self.narrative_hits.len() as u8;
+
+        if self.narrative_timeline.len() >= 100 {
+            self.narrative_timeline.pop_front();
+        }
+        self.narrative_timeline.push_back((timestamp_ms, nid_u8));
+    }
+
+    fn update_propaganda_score(&mut self) {
+        let mut score: f32 = 0.0;
+
+        let event_factor = (self.propaganda_event_count as f32 * 0.04).min(0.35);
+        score += event_factor;
+
+        let source_factor = (self.propaganda_source_count as f32 * 0.08).min(0.2);
+        score += source_factor;
+
+        let diversity_factor = (self.narrative_diversity as f32 * 0.06).min(0.25);
+        score += diversity_factor;
+
+        let conv_factor = (self.propaganda_conversations.len() as f32 * 0.05).min(0.2);
+        score += conv_factor;
+
+        if self.total_messages >= 10 {
+            let concentration = self.propaganda_event_count as f32 / self.total_messages as f32;
+            if concentration > 0.5 {
+                score += 0.15;
+            }
+        }
+
+        self.propaganda_score = score.min(1.0);
+    }
+
     /// Computes a composite risk score in the range 0.0 to 1.0 based on threat event counts and trust.
     pub fn risk_score(&self) -> f32 {
         let mut score: f32 = 0.0;
@@ -321,6 +452,10 @@ impl ContactProfile {
 
         if self.manipulation_event_count > 0 {
             score += (self.manipulation_event_count as f32 * 0.1).min(0.3);
+        }
+
+        if self.propaganda_event_count > 0 {
+            score += (self.propaganda_event_count as f32 * 0.06).min(0.3);
         }
 
         score += self.average_severity() * 0.2;
@@ -373,6 +508,10 @@ impl ContactProfile {
         if event.kind.is_hostile() {
             self.decay_trust(event.kind.severity());
         }
+
+        if event.kind.is_propaganda_indicator() {
+            self.decay_trust(event.kind.severity() * 0.5);
+        }
     }
 
     fn decay_trust(&mut self, severity: f32) {
@@ -419,6 +558,9 @@ impl ContactProfile {
         }
         if event.kind.is_manipulation_indicator() {
             snapshot.manipulation_count += 1;
+        }
+        if event.kind.is_propaganda_indicator() {
+            snapshot.propaganda_count += 1;
         }
 
         let n = snapshot.total_messages as f32;
@@ -606,6 +748,33 @@ impl ContactProfiler {
         }
         if event.kind.is_manipulation_indicator() {
             profile.manipulation_event_count += 1;
+        }
+
+        if event.kind.is_propaganda_indicator() {
+            profile.propaganda_event_count += 1;
+            if profile.first_propaganda_ms == 0 {
+                profile.first_propaganda_ms = event.timestamp_ms;
+            }
+            profile.last_propaganda_ms = event.timestamp_ms;
+
+            if let Some(ref st) = event.subtype {
+                profile.record_narrative_hit(st, event.timestamp_ms);
+            }
+
+            let hour = ((event.timestamp_ms / 3_600_000) % 24) as usize;
+            profile.hourly_activity[hour] = profile.hourly_activity[hour].saturating_add(1);
+
+            if !profile.propaganda_conversations.contains(&event.conversation_id) {
+                if profile.propaganda_conversations.len() < 50 {
+                    profile.propaganda_conversations.push(event.conversation_id.clone());
+                }
+            }
+
+            profile.update_propaganda_score();
+        }
+
+        if event.kind == EventKind::SuspiciousSource {
+            profile.propaganda_source_count += 1;
         }
 
         let severity = event.kind.severity();
@@ -928,6 +1097,40 @@ impl ContactProfiler {
                     local.manipulation_event_count = local
                         .manipulation_event_count
                         .max(incoming.manipulation_event_count);
+                    local.propaganda_event_count = local
+                        .propaganda_event_count
+                        .max(incoming.propaganda_event_count);
+                    local.propaganda_source_count = local
+                        .propaganda_source_count
+                        .max(incoming.propaganda_source_count);
+                    local.first_propaganda_ms = if local.first_propaganda_ms == 0 {
+                        incoming.first_propaganda_ms
+                    } else if incoming.first_propaganda_ms == 0 {
+                        local.first_propaganda_ms
+                    } else {
+                        local.first_propaganda_ms.min(incoming.first_propaganda_ms)
+                    };
+                    local.last_propaganda_ms = local.last_propaganda_ms.max(incoming.last_propaganda_ms);
+                    local.propaganda_score = local.propaganda_score.max(incoming.propaganda_score);
+                    local.narrative_diversity = local.narrative_diversity.max(incoming.narrative_diversity);
+                    for (nid, count) in &incoming.narrative_hits {
+                        let mut found = false;
+                        for entry in &mut local.narrative_hits {
+                            if entry.0 == *nid {
+                                entry.1 = entry.1.max(*count);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if !found && local.narrative_hits.len() < 15 {
+                            local.narrative_hits.push((*nid, *count));
+                        }
+                    }
+                    for conv in &incoming.propaganda_conversations {
+                        if !local.propaganda_conversations.contains(conv) && local.propaganda_conversations.len() < 50 {
+                            local.propaganda_conversations.push(conv.clone());
+                        }
+                    }
 
                     for conv in incoming.conversations {
                         if !local.conversations.contains(&conv) {
@@ -1067,6 +1270,7 @@ mod tests {
             kind,
             confidence: 0.8,
             subtype: None,
+            content_hash: None,
         }
     }
 

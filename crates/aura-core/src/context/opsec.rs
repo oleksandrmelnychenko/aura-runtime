@@ -214,9 +214,9 @@ impl OpsecDetector {
 
         // Incoming intel probing
         if intel_gathering >= 1 {
-            let is_new = intel_senders.iter().any(|s| {
-                contact_profiler.is_new_contact(s)
-            });
+            let is_new = intel_senders
+                .iter()
+                .any(|s| contact_profiler.is_new_contact(s));
             let base_score: f32 = if intel_gathering >= 3 {
                 0.85
             } else if intel_gathering >= 2 {
@@ -265,6 +265,7 @@ mod tests {
             kind,
             confidence: 0.8,
             subtype: None,
+            content_hash: None,
         }
     }
 
@@ -279,9 +280,12 @@ mod tests {
     #[test]
     fn no_opsec_in_normal_conversation() {
         let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
-        let events = vec![
-            make_event("soldier", "conv_1", EventKind::NormalConversation, 1000),
-        ];
+        let events = vec![make_event(
+            "soldier",
+            "conv_1",
+            EventKind::NormalConversation,
+            1000,
+        )];
         let profiler = setup_profiler(&events);
         for e in events {
             timeline.push(e);
@@ -310,7 +314,10 @@ mod tests {
         let signals = detector.analyze(&timeline, "soldier", 5000, &profiler);
         assert!(!signals.is_empty());
         assert_eq!(signals[0].threat_type, ThreatType::CoordinateLeak);
-        assert!(signals[0].score >= 0.9, "Coordinate leak should be critical");
+        assert!(
+            signals[0].score >= 0.9,
+            "Coordinate leak should be critical"
+        );
     }
 
     #[test]
@@ -369,13 +376,20 @@ mod tests {
         let has_coord_leak = signals
             .iter()
             .any(|s| s.threat_type == ThreatType::CoordinateLeak);
-        assert!(!has_coord_leak, "Should not flag other sender's coordinates");
+        assert!(
+            !has_coord_leak,
+            "Should not flag other sender's coordinates"
+        );
     }
 
     #[test]
     fn test_valid_ukraine_coordinates() {
         let matches = validate_ukraine_coordinates("48.8566, 30.3522");
-        assert_eq!(matches.len(), 1, "Should find one coordinate within Ukraine");
+        assert_eq!(
+            matches.len(),
+            1,
+            "Should find one coordinate within Ukraine"
+        );
         let m = &matches[0];
         assert!((m.lat - 48.8566).abs() < 0.001);
         assert!((m.lon - 30.3522).abs() < 0.001);

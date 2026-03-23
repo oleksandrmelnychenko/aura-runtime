@@ -84,6 +84,8 @@ pub struct ConversationTimeline {
     #[serde(default)]
     pub conversation_type: ConversationType,
     events: Vec<ContextEvent>,
+    #[serde(default)]
+    start_idx: usize,
     max_events: usize,
 }
 
@@ -102,6 +104,7 @@ impl ConversationTimeline {
             conversation_id,
             conversation_type: ConversationType::Direct,
             events: Vec::new(),
+            start_idx: 0,
             max_events,
         }
     }
@@ -116,22 +119,27 @@ impl ConversationTimeline {
             conversation_id,
             conversation_type,
             events: Vec::new(),
+            start_idx: 0,
             max_events,
         }
     }
 
     /// Appends an event to the timeline, evicting the oldest if at capacity.
     pub fn push(&mut self, event: ContextEvent) {
-        if self.events.len() >= self.max_events {
-            self.events.remove(0);
+        if self.max_events == 0 {
+            return;
+        }
+        if self.len() >= self.max_events {
+            self.start_idx += 1;
         }
         self.events.push(event);
+        self.compact_if_needed();
     }
 
     /// Returns all events with a timestamp at or after the given time.
     pub fn events_since(&self, since_ms: u64) -> Vec<&ContextEvent> {
-        let mut result = Vec::with_capacity(self.events.len());
-        for e in &self.events {
+        let mut result = Vec::with_capacity(self.len());
+        for e in self.visible_events() {
             if e.timestamp_ms >= since_ms {
                 result.push(e);
             }
@@ -141,8 +149,8 @@ impl ConversationTimeline {
 
     /// Returns events from a specific sender at or after the given time.
     pub fn events_from_sender(&self, sender_id: &str, since_ms: u64) -> Vec<&ContextEvent> {
-        let mut result = Vec::with_capacity(self.events.len());
-        for e in &self.events {
+        let mut result = Vec::with_capacity(self.len());
+        for e in self.visible_events() {
             if e.sender_id == sender_id && e.timestamp_ms >= since_ms {
                 result.push(e);
             }
@@ -153,7 +161,7 @@ impl ConversationTimeline {
     /// Counts events matching a specific sender and event kind since the given time.
     pub fn count_events(&self, sender_id: &str, kind: &EventKind, since_ms: u64) -> usize {
         let mut count = 0usize;
-        for e in &self.events {
+        for e in self.visible_events() {
             if e.sender_id == sender_id && &e.kind == kind && e.timestamp_ms >= since_ms {
                 count += 1;
             }
@@ -167,7 +175,7 @@ impl ConversationTimeline {
         F: Fn(&ContextEvent) -> bool,
     {
         let mut count = 0usize;
-        for e in &self.events {
+        for e in self.visible_events() {
             if e.timestamp_ms >= since_ms && predicate(e) {
                 count += 1;
             }
@@ -180,8 +188,8 @@ impl ConversationTimeline {
     where
         F: Fn(&ContextEvent) -> bool,
     {
-        let mut senders: Vec<SenderId> = Vec::with_capacity(self.events.len());
-        for e in &self.events {
+        let mut senders: Vec<SenderId> = Vec::with_capacity(self.len());
+        for e in self.visible_events() {
             if e.timestamp_ms >= since_ms && predicate(e) {
                 senders.push(e.sender_id.clone());
             }
@@ -193,17 +201,17 @@ impl ConversationTimeline {
 
     /// Returns a slice of all events in this timeline.
     pub fn all_events(&self) -> &[ContextEvent] {
-        &self.events
+        self.visible_events()
     }
 
     /// Returns the number of events in this timeline.
     pub fn len(&self) -> usize {
-        self.events.len()
+        self.events.len().saturating_sub(self.start_idx)
     }
 
     /// Returns true if this timeline contains no events.
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty()
+        self.len() == 0
     }
 
     /// Exports the timeline's state for serialization or transfer.
@@ -211,7 +219,7 @@ impl ConversationTimeline {
         ConversationTimelineState {
             conversation_id: self.conversation_id.clone(),
             conversation_type: self.conversation_type,
-            events: self.events.clone(),
+            events: self.visible_events().to_vec(),
         }
     }
 
@@ -221,26 +229,51 @@ impl ConversationTimeline {
     /// - Cross-tracker merge (different trackers may assign overlapping event_ids)
     pub fn merge_from(&mut self, other: ConversationTimeline) {
         let mut existing: HashSet<(u64, SenderId, EventKind)> =
-            HashSet::with_capacity(self.events.len());
-        for e in &self.events {
+            HashSet::with_capacity(self.len());
+        for e in self.visible_events() {
             existing.insert((e.timestamp_ms, e.sender_id.clone(), e.kind.clone()));
         }
 
-        for event in other.events {
+        for event in other.events.into_iter().skip(other.start_idx) {
             let key = (
                 event.timestamp_ms,
                 event.sender_id.clone(),
                 event.kind.clone(),
             );
-            if !existing.contains(&key) {
+            if existing.insert(key) {
                 self.events.push(event);
             }
         }
 
+        if self.start_idx > 0 {
+            self.events.drain(0..self.start_idx);
+            self.start_idx = 0;
+        }
         self.events.sort_by_key(|e| e.timestamp_ms);
 
-        while self.events.len() > self.max_events {
-            self.events.remove(0);
+        if self.max_events == 0 {
+            self.events.clear();
+            return;
+        }
+        let overflow = self.events.len().saturating_sub(self.max_events);
+        self.start_idx = overflow;
+        self.compact_if_needed();
+    }
+
+    fn visible_events(&self) -> &[ContextEvent] {
+        let start_idx = self.start_idx.min(self.events.len());
+        &self.events[start_idx..]
+    }
+
+    fn compact_if_needed(&mut self) {
+        if self.start_idx == 0 {
+            return;
+        }
+        let should_compact =
+            self.start_idx >= self.max_events || self.start_idx.saturating_mul(2) >= self.events.len();
+        if should_compact {
+            self.events.drain(0..self.start_idx);
+            self.start_idx = 0;
         }
     }
 }
@@ -286,6 +319,16 @@ pub struct TrackerWireState {
 }
 
 impl ConversationTracker {
+    fn military_detectors_for(
+        config: &TrackerConfig,
+    ) -> (Option<OpsecDetector>, Option<PsyopsDetector>) {
+        if config.active_module == AuraModule::Military {
+            (Some(OpsecDetector::new()), Some(PsyopsDetector::new()))
+        } else {
+            (None, None)
+        }
+    }
+
     /// Creates a new tracker with the given configuration and initializes all sub-detectors.
     pub fn new(config: TrackerConfig) -> Self {
         let grooming_detector =
@@ -305,16 +348,7 @@ impl ConversationTracker {
             AnalysisMode::Standard
         };
         let propaganda_detector = PropagandaDetector::new(propaganda_mode);
-        let opsec_detector = if config.active_module == AuraModule::Military {
-            Some(OpsecDetector::new())
-        } else {
-            None
-        };
-        let psyops_detector = if config.active_module == AuraModule::Military {
-            Some(PsyopsDetector::new())
-        } else {
-            None
-        };
+        let (opsec_detector, psyops_detector) = Self::military_detectors_for(&config);
         let contact_profiler = ContactProfiler::with_max_profiles(config.max_contact_profiles);
 
         Self {
@@ -343,13 +377,14 @@ impl ConversationTracker {
     /// Replaces the tracker configuration and adjusts timelines and limits accordingly.
     pub fn update_config(&mut self, config: TrackerConfig) {
         self.config = config;
-        self.grooming_detector = GroomingDetector::new(
-            if self.config.is_child_account || self.config.is_teen_account {
-                AnalysisMode::Strict
-            } else {
-                AnalysisMode::Standard
-            },
-        );
+        let mode = if self.config.is_child_account || self.config.is_teen_account {
+            AnalysisMode::Strict
+        } else {
+            AnalysisMode::Standard
+        };
+        self.grooming_detector = GroomingDetector::new(mode);
+        self.propaganda_detector = PropagandaDetector::new(mode);
+        (self.opsec_detector, self.psyops_detector) = Self::military_detectors_for(&self.config);
 
         for timeline in self.timelines.values_mut() {
             timeline.max_events = self.config.max_events_per_conversation;
@@ -454,8 +489,7 @@ impl ConversationTracker {
 
         // Military module: OPSEC and psyops detection
         if let Some(ref opsec) = self.opsec_detector {
-            let opsec_signals =
-                opsec.analyze(timeline, &sender_id, now_ms, &self.contact_profiler);
+            let opsec_signals = opsec.analyze(timeline, &sender_id, now_ms, &self.contact_profiler);
             signals.extend(opsec_signals);
         }
         if let Some(ref psyops) = self.psyops_detector {
@@ -618,6 +652,7 @@ mod tests {
             kind,
             confidence: 0.8,
             subtype: None,
+            content_hash: None,
         }
     }
 
@@ -653,6 +688,62 @@ mod tests {
 
         let timeline = tracker.timeline("conv_1").unwrap();
         assert_eq!(timeline.len(), 3);
+    }
+
+    #[test]
+    fn timeline_push_over_capacity_keeps_latest_events() {
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 3);
+        timeline.push(make_event("conv_1", "sender", EventKind::Flattery, 1000));
+        timeline.push(make_event("conv_1", "sender", EventKind::GiftOffer, 2000));
+        timeline.push(make_event(
+            "conv_1",
+            "sender",
+            EventKind::SecrecyRequest,
+            3000,
+        ));
+        timeline.push(make_event(
+            "conv_1",
+            "sender",
+            EventKind::NormalConversation,
+            4000,
+        ));
+        timeline.push(make_event("conv_1", "sender", EventKind::Insult, 5000));
+
+        let events = timeline.all_events();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].timestamp_ms, 3000);
+        assert_eq!(events[1].timestamp_ms, 4000);
+        assert_eq!(events[2].timestamp_ms, 5000);
+    }
+
+    #[test]
+    fn timeline_merge_over_capacity_keeps_latest_events() {
+        let mut left = ConversationTimeline::new("conv_1".into(), 3);
+        left.push(make_event("conv_1", "sender", EventKind::Flattery, 1000));
+        left.push(make_event("conv_1", "sender", EventKind::GiftOffer, 2000));
+        left.push(make_event(
+            "conv_1",
+            "sender",
+            EventKind::SecrecyRequest,
+            3000,
+        ));
+
+        let mut right = ConversationTimeline::new("conv_1".into(), 3);
+        right.push(make_event(
+            "conv_1",
+            "sender",
+            EventKind::NormalConversation,
+            4000,
+        ));
+        right.push(make_event("conv_1", "sender", EventKind::Insult, 5000));
+
+        left.merge_from(right);
+
+        let events = left.all_events();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].timestamp_ms, 3000);
+        assert_eq!(events[1].timestamp_ms, 4000);
+        assert_eq!(events[2].timestamp_ms, 5000);
     }
 
     #[test]
@@ -1239,5 +1330,21 @@ mod tests {
         let json = r#"{"timestamp_ms":1000,"sender_id":"x","conversation_id":"c","kind":"insult","confidence":0.8}"#;
         let event: ContextEvent = serde_json::from_str(json).unwrap();
         assert_eq!(event.event_id, 0);
+    }
+
+    #[test]
+    fn update_config_rebuilds_military_detectors() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        assert!(tracker.opsec_detector.is_none());
+        assert!(tracker.psyops_detector.is_none());
+
+        tracker.update_config(TrackerConfig {
+            active_module: AuraModule::Military,
+            ..TrackerConfig::default()
+        });
+
+        assert!(tracker.opsec_detector.is_some());
+        assert!(tracker.psyops_detector.is_some());
+        assert_eq!(tracker.config.active_module, AuraModule::Military);
     }
 }

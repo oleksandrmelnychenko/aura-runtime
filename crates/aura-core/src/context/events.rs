@@ -25,6 +25,9 @@ pub struct ContextEvent {
     /// military phishing to differentiate subtypes (`"phishing_diia"`, `"phishing_tck"`).
     #[serde(default)]
     pub subtype: Option<String>,
+
+    #[serde(default)]
+    pub content_hash: Option<u64>,
 }
 
 impl ContextEvent {
@@ -44,6 +47,7 @@ impl ContextEvent {
             kind,
             confidence,
             subtype: None,
+            content_hash: None,
         }
     }
 
@@ -64,6 +68,7 @@ impl ContextEvent {
             kind,
             confidence,
             subtype: Some(subtype.into()),
+            content_hash: None,
         }
     }
 }

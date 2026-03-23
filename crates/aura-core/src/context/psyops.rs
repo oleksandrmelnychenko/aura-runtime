@@ -198,6 +198,7 @@ mod tests {
             kind,
             confidence: 0.8,
             subtype: None,
+            content_hash: None,
         }
     }
 
@@ -216,6 +217,7 @@ mod tests {
             kind,
             confidence: 0.8,
             subtype: Some(subtype.to_string()),
+            content_hash: None,
         }
     }
 
@@ -230,9 +232,12 @@ mod tests {
     #[test]
     fn no_psyops_in_normal_conversation() {
         let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
-        let events = vec![
-            make_event("contact", "conv_1", EventKind::NormalConversation, 1000),
-        ];
+        let events = vec![make_event(
+            "contact",
+            "conv_1",
+            EventKind::NormalConversation,
+            1000,
+        )];
         let profiler = setup_profiler(&events);
         for e in events {
             timeline.push(e);
@@ -278,9 +283,9 @@ mod tests {
 
         let detector = PsyopsDetector::new();
         let signals = detector.analyze(&timeline, "psyop", 5000, &profiler);
-        let demoralization = signals.iter().find(|s| {
-            s.reason_code.contains("demoralization")
-        });
+        let demoralization = signals
+            .iter()
+            .find(|s| s.reason_code.contains("demoralization"));
         assert!(
             demoralization.is_some(),
             "Should detect demoralization pattern"

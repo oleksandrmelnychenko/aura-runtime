@@ -323,6 +323,7 @@ mod tests {
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
                 subtype: None,
+                content_hash: None,
             });
         }
         timeline
@@ -447,6 +448,7 @@ mod tests {
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -485,6 +487,7 @@ mod tests {
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
                 subtype: None,
+                content_hash: None,
             });
         }
 

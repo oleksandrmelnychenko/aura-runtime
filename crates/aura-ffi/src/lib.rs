@@ -1694,6 +1694,7 @@ fn context_event_to_proto(event: &CoreContextEvent) -> proto::ContextEvent {
         conversation_id: event.conversation_id.to_string(),
         kind: proto_event_kind(event.kind.clone()) as i32,
         confidence: event.confidence,
+        subtype: event.subtype.clone().unwrap_or_default(),
     }
 }
 
@@ -1705,7 +1706,12 @@ fn context_event_from_proto(event: proto::ContextEvent) -> Result<CoreContextEve
         conversation_id: aura_core::ConversationId::from(event.conversation_id),
         kind: event_kind_from_proto(event.kind)?,
         confidence: event.confidence,
-        subtype: None,
+        subtype: if event.subtype.is_empty() {
+            None
+        } else {
+            Some(event.subtype)
+        },
+        content_hash: None,
     })
 }
 
@@ -1790,6 +1796,18 @@ fn contact_profile_state_from_proto(
         grooming_event_count: state.grooming_event_count,
         bullying_event_count: state.bullying_event_count,
         manipulation_event_count: state.manipulation_event_count,
+        propaganda_event_count: 0,
+        propaganda_source_count: 0,
+        narrative_hits: Vec::new(),
+        propaganda_score: 0.0,
+        narrative_diversity: 0,
+        first_propaganda_ms: 0,
+        last_propaganda_ms: 0,
+        propaganda_conversations: Vec::new(),
+        hourly_activity: [0u16; 24],
+        message_fingerprints: std::collections::VecDeque::new(),
+        narrative_timeline: std::collections::VecDeque::new(),
+        weekly_propaganda_counts: std::collections::VecDeque::new(),
         is_trusted: state.is_trusted,
         severity_sum: state.severity_sum,
         severity_count: state.severity_count,
@@ -1838,6 +1856,7 @@ fn behavioral_snapshot_state_from_proto(
         neutral_count: state.neutral_count,
         grooming_count: state.grooming_count,
         manipulation_count: state.manipulation_count,
+        propaganda_count: 0,
         avg_severity: state.avg_severity,
     }
 }

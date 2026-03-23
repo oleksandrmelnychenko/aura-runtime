@@ -198,6 +198,7 @@ impl SignalEnricher {
                 kind: EventKind::PersonalInfoRequest,
                 confidence: (probing_count as f32 * 0.3).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -216,6 +217,7 @@ impl SignalEnricher {
                 kind: EventKind::LoveBombing,
                 confidence: (compliment_count as f32 * 0.2).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         } else if compliment_count >= 1 && is_person_directed_compliment(&lower) {
             events.push(ContextEvent {
@@ -226,6 +228,7 @@ impl SignalEnricher {
                 kind: EventKind::Flattery,
                 confidence: 0.3,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -238,6 +241,7 @@ impl SignalEnricher {
                 kind: EventKind::PeerPressure,
                 confidence: (urgency_count as f32 * 0.25).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -256,6 +260,7 @@ impl SignalEnricher {
                 kind: EventKind::DefenseOfVictim,
                 confidence: (defense_count as f32 * 0.4).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -268,6 +273,7 @@ impl SignalEnricher {
                 kind: EventKind::FarewellMessage,
                 confidence: 0.7,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -280,6 +286,7 @@ impl SignalEnricher {
                 kind: EventKind::Hopelessness,
                 confidence: 0.6,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -292,6 +299,7 @@ impl SignalEnricher {
                 kind: EventKind::Exclusion,
                 confidence: 0.7,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -304,6 +312,7 @@ impl SignalEnricher {
                 kind: EventKind::MoneyOffer,
                 confidence: 0.6,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -316,6 +325,7 @@ impl SignalEnricher {
                 kind: EventKind::PiiSelfDisclosure,
                 confidence: (pii_disclosure_count as f32 * 0.4).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -328,6 +338,7 @@ impl SignalEnricher {
                 kind: EventKind::DareChallenge,
                 confidence: (dare_count as f32 * 0.35).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -340,6 +351,7 @@ impl SignalEnricher {
                 kind: EventKind::ScreenshotThreat,
                 confidence: 0.8,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -352,6 +364,7 @@ impl SignalEnricher {
                 kind: EventKind::SuicideCoercion,
                 confidence: (suicide_coercion_count as f32 * 0.5).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -364,6 +377,7 @@ impl SignalEnricher {
                 kind: EventKind::FalseConsensus,
                 confidence: (false_consensus_count as f32 * 0.35).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -376,6 +390,7 @@ impl SignalEnricher {
                 kind: EventKind::DebtCreation,
                 confidence: (debt_creation_count as f32 * 0.4).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -388,6 +403,7 @@ impl SignalEnricher {
                 kind: EventKind::Gaslighting,
                 confidence: (0.55 + gaslighting_count as f32 * 0.1).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -400,6 +416,7 @@ impl SignalEnricher {
                 kind: EventKind::ReputationThreat,
                 confidence: (reputation_threat_count as f32 * 0.45).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -412,6 +429,7 @@ impl SignalEnricher {
                 kind: EventKind::IdentityErosion,
                 confidence: (identity_erosion_count as f32 * 0.4).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -424,6 +442,7 @@ impl SignalEnricher {
                 kind: EventKind::NetworkPoisoning,
                 confidence: (network_poisoning_count as f32 * 0.4).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -436,6 +455,7 @@ impl SignalEnricher {
                 kind: EventKind::FakeVulnerability,
                 confidence: (fake_vulnerability_count as f32 * 0.35).min(1.0),
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -448,6 +468,7 @@ impl SignalEnricher {
                 kind: EventKind::PlatformSwitch,
                 confidence: 0.7,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -460,6 +481,7 @@ impl SignalEnricher {
                 kind: EventKind::Devaluation,
                 confidence: 0.5,
                 subtype: None,
+                content_hash: None,
             });
         }
 
@@ -506,6 +528,7 @@ impl SignalEnricher {
                 kind: EventKind::PersonalInfoRequest,
                 confidence: ratio.min(1.0),
                 subtype: None,
+                content_hash: None,
             })
         } else {
             None
@@ -563,11 +586,25 @@ impl SignalEnricher {
 
 fn is_person_directed_compliment(lower: &str) -> bool {
     const PERSON_MARKERS: &[&str] = &[
-        "ти ", "ти\n", "тебе", "тобі", "тобой",
-        "you ", "you'", "your", "you\n",
-        "ты ", "ты\n", "тебя", "тебе ",
-        "така ", "такий", "такая", "такой",
-        "у тебе", "у тебя",
+        "ти ",
+        "ти\n",
+        "тебе",
+        "тобі",
+        "тобой",
+        "you ",
+        "you'",
+        "your",
+        "you\n",
+        "ты ",
+        "ты\n",
+        "тебя",
+        "тебе ",
+        "така ",
+        "такий",
+        "такая",
+        "такой",
+        "у тебе",
+        "у тебя",
     ];
     for marker in PERSON_MARKERS {
         if lower.contains(marker) {

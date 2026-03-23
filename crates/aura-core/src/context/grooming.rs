@@ -751,6 +751,7 @@ mod tests {
                 kind,
                 confidence: 0.8,
                 subtype: None,
+                content_hash: None,
             });
         }
         timeline
@@ -767,6 +768,7 @@ mod tests {
                 kind,
                 confidence: 0.8,
                 subtype: None,
+                content_hash: None,
             });
         }
         timeline
@@ -996,6 +998,7 @@ mod tests {
             kind: EventKind::NormalConversation,
             confidence: 1.0,
             subtype: None,
+            content_hash: None,
         });
         profiler_adult.set_inferred_age("predator", 30);
         let signals_adult = detector.analyze(&timeline, "predator", 0, &profiler_adult);
@@ -1190,6 +1193,7 @@ mod tests {
             kind: EventKind::NormalConversation,
             confidence: 1.0,
             subtype: None,
+            content_hash: None,
         });
         profiler.set_inferred_age("predator", 15);
         let signals = detector.analyze(&timeline, "predator", 0, &profiler);
