@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use aura_ml::{IntentLabel, MlConfig, MlPipeline, SafetyLabel, ToxicityLabel};
 use aura_patterns::{BlockedUrlMatch, PatternDatabase, PatternMatcher, UrlChecker};
+use sha2::{Digest, Sha256};
 use tracing::debug;
 
 use crate::action::{
@@ -13,6 +14,7 @@ use crate::action::{
 use crate::config::AuraConfig;
 use crate::context::enricher::{EnricherConfig, SignalEnricher};
 use crate::context::events::{ContextEvent, EventKind};
+use crate::context::opsec::validate_ukraine_coordinates;
 use crate::context::propaganda::NarrativeId;
 use crate::context::timing::TimingAnalyzer;
 use crate::context::tracker::{ConversationTracker, TrackerConfig, TrackerWireState};
@@ -85,6 +87,15 @@ fn truncate_text(text: &str) -> &str {
         end -= 1;
     }
     &text[..end]
+}
+
+fn content_fingerprint_u64(text: &str) -> u64 {
+    let mut hasher = Sha256::new();
+    hasher.update(text.as_bytes());
+    let digest = hasher.finalize();
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&digest[..8]);
+    u64::from_be_bytes(bytes)
 }
 
 /// Performs message analysis combining pattern matching, ML inference, and context tracking.
@@ -200,10 +211,23 @@ impl Analyzer {
                 let matcher = self.pattern_matcher_for(input.language.as_deref());
                 matcher.scan(text)
             };
+            let mut matched_rule_ids: HashSet<String> = HashSet::new();
+            for m in &matches {
+                matched_rule_ids.insert(m.rule_id.clone());
+            }
             for m in matches {
                 let threat_type = parse_threat_type(&m.threat_type);
 
                 if !self.is_detection_enabled(threat_type) {
+                    continue;
+                }
+                if m.rule_id == "opsec_coordinates_001"
+                    && matched_rule_ids.contains("opsec_coordinates_ukraine_dd_001")
+                {
+                    continue;
+                }
+                if should_skip_match_by_context(text, threat_type, &m.rule_id, m.matched_text.as_deref())
+                {
                     continue;
                 }
 
@@ -232,13 +256,16 @@ impl Analyzer {
             }
 
             for finding in self.url_checker.find_suspicious_urls(text) {
-                signals.push(DetectionSignal::pattern(
+                let mut signal = DetectionSignal::pattern(
                     ThreatType::Phishing,
                     finding.score,
                     score_to_confidence(finding.score),
                     "link.suspicious_url_heuristic",
                     finding.explanation,
-                ));
+                );
+                let threat_subtype = infer_suspicious_url_subtype(&signal.explanation);
+                signal = signal.with_threat_subtype(threat_subtype);
+                signals.push(signal);
             }
         }
 
@@ -274,6 +301,10 @@ impl Analyzer {
         let mut signals = Vec::with_capacity(8);
 
         let mut context_events = Vec::with_capacity(4);
+        let content_hash = match input.text.as_ref() {
+            Some(text) => Some(content_fingerprint_u64(text)),
+            None => None,
+        };
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
@@ -281,9 +312,22 @@ impl Analyzer {
                 let matcher = self.pattern_matcher_for(input.language.as_deref());
                 matcher.scan(text)
             };
+            let mut matched_rule_ids: HashSet<String> = HashSet::new();
+            for m in &matches {
+                matched_rule_ids.insert(m.rule_id.clone());
+            }
             for m in matches {
                 let threat_type = parse_threat_type(&m.threat_type);
                 if !self.is_detection_enabled(threat_type) {
+                    continue;
+                }
+                if m.rule_id == "opsec_coordinates_001"
+                    && matched_rule_ids.contains("opsec_coordinates_ukraine_dd_001")
+                {
+                    continue;
+                }
+                if should_skip_match_by_context(text, threat_type, &m.rule_id, m.matched_text.as_deref())
+                {
                     continue;
                 }
 
@@ -302,7 +346,7 @@ impl Analyzer {
                 signals.push(signal);
 
                 if let Some(event_kind) = match_to_event_kind(&m.rule_id, threat_type) {
-                    let event = if let Some(ref threat_subtype) = threat_subtype {
+                    let mut event = if let Some(ref threat_subtype) = threat_subtype {
                         ContextEvent::with_subtype(
                             timestamp_ms,
                             input.sender_id.clone(),
@@ -320,6 +364,7 @@ impl Analyzer {
                             m.score,
                         )
                     };
+                    event.content_hash = content_hash;
                     context_events.push(event);
                 }
             }
@@ -335,7 +380,7 @@ impl Analyzer {
                 signals.push(blocked_url_signal(&blocked));
 
                 if let Some(event_kind) = match_to_event_kind(&blocked.rule_id, threat_type) {
-                    let event = if let Some(ref threat_subtype) = threat_subtype {
+                    let mut event = if let Some(ref threat_subtype) = threat_subtype {
                         ContextEvent::with_subtype(
                             timestamp_ms,
                             input.sender_id.clone(),
@@ -353,28 +398,33 @@ impl Analyzer {
                             blocked.score,
                         )
                     };
+                    event.content_hash = content_hash;
                     context_events.push(event);
                 }
             }
 
             for finding in self.url_checker.find_suspicious_urls(text) {
-                signals.push(DetectionSignal::pattern(
+                let mut signal = DetectionSignal::pattern(
                     ThreatType::Phishing,
                     finding.score,
                     score_to_confidence(finding.score),
                     "link.suspicious_url_heuristic",
                     finding.explanation,
-                ));
+                );
+                let threat_subtype = infer_suspicious_url_subtype(&signal.explanation);
+                signal = signal.with_threat_subtype(threat_subtype);
+                signals.push(signal);
             }
         }
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
-            let enrichment = self.signal_enricher.enrich_full(
+            let enrichment = self.signal_enricher.enrich_full_with_hash(
                 text,
                 &input.sender_id,
                 &input.conversation_id,
                 timestamp_ms,
+                content_hash,
             );
             context_events.extend(enrichment.events);
 
@@ -394,7 +444,7 @@ impl Analyzer {
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
                 subtype: None,
-                content_hash: None,
+                content_hash,
             });
         }
 
@@ -411,7 +461,7 @@ impl Analyzer {
                         kind,
                         confidence: signal.score,
                         subtype: None,
-                        content_hash: None,
+                        content_hash,
                     });
                 }
             }
@@ -438,7 +488,7 @@ impl Analyzer {
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
                 subtype: None,
-                content_hash: None,
+                content_hash,
             });
         }
 
@@ -2406,7 +2456,7 @@ fn compute_risk_breakdown(signals: &[DetectionSignal]) -> RiskBreakdown {
 }
 
 fn collect_reason_codes(signals: &[DetectionSignal]) -> Vec<String> {
-    let mut sorted = signals.to_vec();
+    let mut sorted: Vec<&DetectionSignal> = signals.iter().collect();
     sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
 
     let mut seen = HashSet::new();
@@ -2415,7 +2465,7 @@ fn collect_reason_codes(signals: &[DetectionSignal]) -> Vec<String> {
         if signal.reason_code.is_empty() || !seen.insert(signal.reason_code.clone()) {
             continue;
         }
-        codes.push(signal.reason_code);
+        codes.push(signal.reason_code.clone());
         if codes.len() >= 8 {
             break;
         }
@@ -2974,6 +3024,52 @@ fn infer_threat_subtype(
     }
 }
 
+fn should_skip_match_by_context(
+    text: &str,
+    threat_type: ThreatType,
+    rule_id: &str,
+    matched_text: Option<&str>,
+) -> bool {
+    if threat_type == ThreatType::Propaganda {
+        let Some(matched_text) = matched_text else {
+            return false;
+        };
+        let text_lower = text.to_lowercase();
+        let matched_text = matched_text.to_lowercase();
+        let Some(pos) = text_lower.find(&matched_text) else {
+            return false;
+        };
+        if crate::context::propaganda::PropagandaDetector::check_false_positive_context(
+            &text_lower,
+            pos,
+        ) {
+            return true;
+        }
+    }
+
+    if rule_id == "opsec_coordinates_001" {
+        let Some(matched_text) = matched_text else {
+            return false;
+        };
+        if validate_ukraine_coordinates(matched_text).is_empty() {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn infer_suspicious_url_subtype(explanation: &str) -> &'static str {
+    let explanation = explanation.to_lowercase();
+    if explanation.contains("doppelganger campaign") {
+        return "doppelganger";
+    }
+    if explanation.contains("homoglyph attack") {
+        return "homoglyph";
+    }
+    "heuristic"
+}
+
 fn propaganda_source_subtype(rule_id: &str) -> Option<&'static str> {
     if rule_id.starts_with("propaganda_domain_state_") {
         Some("state_media")
@@ -3003,6 +3099,8 @@ fn psyops_subtype(rule_id: &str, matched_text: Option<&str>) -> Option<&'static 
         } else {
             Some("surrender")
         }
+    } else if rule_id.starts_with("psyops_distrust_") {
+        Some("command_distrust")
     } else if rule_id.starts_with("psyops_family_target_") {
         Some("family_targeting")
     } else if rule_id.starts_with("psyops_division_regional_") {
@@ -3031,6 +3129,8 @@ fn military_social_eng_subtype(rule_id: &str) -> Option<&'static str> {
         Some("phishing_account")
     } else if rule_id.starts_with("intel_honeytrap_") {
         Some("honeytrap")
+    } else if rule_id.starts_with("military_phishing_") {
+        Some("military_phishing")
     } else {
         None
     }
@@ -4760,6 +4860,12 @@ mod tests {
             signal.threat_type == ThreatType::CoordinateLeak
                 && signal.threat_subtype == "ukraine_dd"
         }));
+        assert!(
+            !r.signals
+                .iter()
+                .any(|signal| signal.reason_code == "pattern.opsec_coordinates_001"),
+            "generic coordinate rule should be suppressed when ukraine_dd is present"
+        );
         let timeline = analyzer
             .context_tracker()
             .timeline("conv_456")
@@ -4775,6 +4881,45 @@ mod tests {
                 .any(|event| event.kind == EventKind::Exclusion),
             "coordinate rules should not be routed into exclusion events"
         );
+    }
+
+    #[test]
+    fn military_phishing_uk_rule_sets_generic_subtype() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(
+            AuraConfig {
+                active_module: AuraModule::Military,
+                ..AuraConfig::default()
+            },
+            &db,
+        );
+        let r = analyzer.analyze_with_context(
+            &default_input("оновіть дані в дії через нову перевірку"),
+            1000,
+        );
+        assert!(r.signals.iter().any(|signal| {
+            signal.threat_type == ThreatType::MilitarySocialEng
+                && signal.reason_code == "pattern.military_phishing_uk_001"
+                && signal.threat_subtype == "military_phishing"
+        }));
+    }
+
+    #[test]
+    fn psyops_distrust_rule_sets_command_distrust_subtype() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(
+            AuraConfig {
+                active_module: AuraModule::Military,
+                ..AuraConfig::default()
+            },
+            &db,
+        );
+        let r = analyzer.analyze_with_context(&default_input("командування продало"), 1000);
+        assert!(r.signals.iter().any(|signal| {
+            signal.threat_type == ThreatType::Psyops
+                && signal.reason_code == "pattern.psyops_distrust_uk_001"
+                && signal.threat_subtype == "command_distrust"
+        }));
     }
 
     #[test]
@@ -4801,6 +4946,89 @@ mod tests {
                     && signal.reason_code == "link.suspicious_url_heuristic"
             }),
             "heuristic suspicious url should be classified as link family"
+        );
+    }
+
+    #[test]
+    fn suspicious_url_doppelganger_sets_subtype() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let r = analyzer.analyze(&default_input("read this https://bild.ltd/article"));
+        assert!(r.signals.iter().any(|signal| {
+            signal.reason_code == "link.suspicious_url_heuristic"
+                && signal.threat_subtype == "doppelganger"
+        }));
+    }
+
+    #[test]
+    fn suspicious_url_homoglyph_sets_subtype() {
+        let json = r#"{
+            "version": "test",
+            "updated_at": "2026-01-01",
+            "rules": [
+                {
+                    "id": "url_block_gov",
+                    "threat_type": "phishing",
+                    "kind": { "type": "url_domain", "domains": ["gov.ua"] },
+                    "score": 0.95,
+                    "languages": [],
+                    "explanation": "Government domain"
+                }
+            ]
+        }"#;
+        let db = PatternDatabase::from_json_validated(json).unwrap();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let r = analyzer.analyze(&default_input("https://g\u{043e}v.ua/login"));
+        assert!(r.signals.iter().any(|signal| {
+            signal.reason_code == "link.suspicious_url_heuristic"
+                && signal.threat_subtype == "homoglyph"
+        }));
+    }
+
+    #[test]
+    fn suspicious_url_heuristic_sets_default_subtype() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let r = analyzer.analyze(&default_input(
+            "grab this now http://fr33-r0bux.xyz/claim before it expires",
+        ));
+        assert!(r.signals.iter().any(|signal| {
+            signal.reason_code == "link.suspicious_url_heuristic"
+                && signal.threat_subtype == "heuristic"
+        }));
+    }
+
+    #[test]
+    fn out_of_ukraine_decimal_coordinates_are_filtered() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(
+            AuraConfig {
+                active_module: AuraModule::Military,
+                ..AuraConfig::default()
+            },
+            &db,
+        );
+        let r = analyzer.analyze_with_context(&default_input("55.7558, 37.6173"), 1000);
+        assert!(
+            !r.signals
+                .iter()
+                .any(|signal| signal.reason_code == "pattern.opsec_coordinates_001"),
+            "out-of-Ukraine decimal coordinates should be filtered"
+        );
+    }
+
+    #[test]
+    fn propaganda_counter_narrative_is_filtered() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let mut input = default_input("пропагандисти кажуть: «це спецоперація»");
+        input.language = Some("uk".to_string());
+        let r = analyzer.analyze(&input);
+        assert!(
+            !r.signals
+                .iter()
+                .any(|signal| signal.reason_code.starts_with("pattern.propaganda_")),
+            "counter-narrative framing should not emit propaganda pattern signals"
         );
     }
 
