@@ -23,12 +23,14 @@ pub mod pipeline;
 pub mod sentiment;
 pub mod telemetry;
 pub mod tokenizer;
+pub mod tokenizer_sp;
 pub mod toxicity;
 pub mod types;
 
 pub use backend::{GateModel, SentimentBackend, ToxicityBackend};
 pub use pipeline::MlPipeline;
 pub use tokenizer::WordPieceTokenizer;
+pub use tokenizer_sp::{AnyTokenizer, SentencePieceTokenizer, Tokenizer};
 pub use types::{
     CascadeTier, IntentLabel, IntentPrediction, MlConfig, MlResult, MultiHeadPrediction,
     SafetyLabel, SafetyPrediction, SentimentLabel, SentimentPrediction, ToxicityLabel,
