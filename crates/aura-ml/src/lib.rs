@@ -11,8 +11,12 @@
 //! - [`manifest`] — SHA-256 model file validation
 
 pub mod backend;
+pub mod batch;
 pub mod boundary;
 pub mod cache;
+pub mod cascade;
+pub mod gate;
+pub mod integrity;
 pub mod manifest;
 pub mod normalize;
 pub mod pipeline;
