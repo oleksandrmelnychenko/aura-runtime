@@ -2,11 +2,15 @@ use std::time::Instant;
 
 use tracing::{debug, info};
 
-use crate::backend::{SentimentBackend, ToxicityBackend};
+use crate::backend::{GateModel, SentimentBackend, ToxicityBackend};
 use crate::cache::{self, InferenceCache};
+use crate::cascade::{CascadeDecision, CascadePolicy};
+use crate::gate::LexiconGate;
+use crate::intent::IntentClassifier;
 #[cfg(feature = "onnx")]
 use crate::manifest;
 use crate::normalize::normalize_for_ml;
+use crate::safety::SafetyClassifier;
 use crate::sentiment::SentimentAnalyzer;
 use crate::telemetry::InferenceTelemetry;
 #[cfg(feature = "onnx")]
@@ -17,6 +21,10 @@ use crate::types::{CascadeTier, MlConfig, MlResult};
 pub struct MlPipeline {
     toxicity: Box<dyn ToxicityBackend>,
     sentiment: Box<dyn SentimentBackend>,
+    safety: SafetyClassifier,
+    intent: IntentClassifier,
+    gate: LexiconGate,
+    cascade: CascadePolicy,
     config: MlConfig,
     cache: InferenceCache,
     telemetry: InferenceTelemetry,
@@ -43,12 +51,23 @@ impl MlPipeline {
             "ML pipeline initialized"
         );
 
+        let safety = SafetyClassifier::fallback_only();
+        let intent = IntentClassifier::fallback_only();
+        let gate = LexiconGate::new();
+        let cascade = CascadePolicy {
+            gate_threshold: config.cascade_gate_threshold,
+            enabled: config.cascade_enabled,
+        };
         let cache = InferenceCache::new(config.cache_size, config.cache_ttl_secs);
         let telemetry = InferenceTelemetry::new();
 
         let mut pipeline = Self {
             toxicity,
             sentiment,
+            safety,
+            intent,
+            gate,
+            cascade,
             config,
             cache,
             telemetry,
@@ -72,7 +91,6 @@ impl MlPipeline {
 
     pub fn analyze_text(&mut self, text: &str) -> MlResult {
         let start = Instant::now();
-
         let normalized = normalize_for_ml(text);
         let text_hash = cache::text_hash(&normalized);
 
@@ -80,68 +98,84 @@ impl MlPipeline {
             let mut result = cached.clone();
             result.cache_hit = true;
             result.tier = CascadeTier::Cached;
-            let elapsed_us = start.elapsed().as_micros() as u64;
-            result.inference_time_us = elapsed_us;
-            self.telemetry.record(
-                timestamp_ms_now(),
-                elapsed_us as u32,
-                CascadeTier::Cached,
-                true,
-                result.toxicity.as_ref().map_or(0.0, |t| t.toxicity),
-                result.safety.as_ref().map_or(0.0, |s| s.max_risk()),
-            );
+            result.inference_time_us = start.elapsed().as_micros() as u64;
+            self.record_telemetry(&result, true);
             return result;
         }
 
-        let toxicity = self.toxicity.predict(&normalized);
-        let sentiment = self.sentiment.predict(&normalized);
+        let gate_score = self.gate.gate_score(text);
+        let decision = self.cascade.decide(gate_score);
 
-        let elapsed = start.elapsed();
-        let inference_time_us = elapsed.as_micros() as u64;
-
-        let tier = if self.has_onnx_backend() {
-            CascadeTier::Deep
+        let result = if decision.run_deep {
+            self.run_deep_inference(text, &normalized, decision)
         } else {
-            CascadeTier::Gate
+            self.run_gate_only(&normalized, decision)
         };
 
-        debug!(
-            inference_us = inference_time_us,
-            has_toxicity = toxicity.is_some(),
-            has_sentiment = sentiment.is_some(),
-            tier = ?tier,
-            "ML pipeline analysis complete"
-        );
-
-        let result = MlResult {
-            toxicity,
-            sentiment,
-            safety: None,
-            intent: None,
-            inference_time_us,
-            tier,
-            cache_hit: false,
-        };
+        let elapsed_us = start.elapsed().as_micros() as u64;
+        let mut result = result;
+        result.inference_time_us = elapsed_us;
 
         self.cache.insert(text_hash, result.clone());
-        self.telemetry.record(
-            timestamp_ms_now(),
-            inference_time_us as u32,
-            tier,
-            false,
-            result.toxicity.as_ref().map_or(0.0, |t| t.toxicity),
-            0.0,
+        self.record_telemetry(&result, false);
+
+        debug!(
+            inference_us = elapsed_us,
+            tier = ?result.tier,
+            gate_score = gate_score,
+            "ML pipeline analysis complete"
         );
 
         result
     }
 
-    /// Returns the current telemetry summary.
+    fn run_deep_inference(&mut self, raw_text: &str, normalized: &str, decision: CascadeDecision) -> MlResult {
+        let toxicity = self.toxicity.predict(normalized);
+        let sentiment = self.sentiment.predict(normalized);
+        let safety = self.safety.predict(raw_text);
+        let intent = self.intent.predict(raw_text);
+
+        MlResult {
+            toxicity,
+            sentiment,
+            safety,
+            intent,
+            inference_time_us: 0,
+            tier: decision.tier,
+            cache_hit: false,
+        }
+    }
+
+    fn run_gate_only(&mut self, text: &str, decision: CascadeDecision) -> MlResult {
+        let toxicity = self.toxicity.predict(text);
+        let sentiment = self.sentiment.predict(text);
+
+        MlResult {
+            toxicity,
+            sentiment,
+            safety: None,
+            intent: None,
+            inference_time_us: 0,
+            tier: decision.tier,
+            cache_hit: false,
+        }
+    }
+
+    fn record_telemetry(&mut self, result: &MlResult, cache_hit: bool) {
+        self.telemetry.record(
+            timestamp_ms_now(),
+            result.inference_time_us as u32,
+            result.tier,
+            cache_hit,
+            result.toxicity.as_ref().map_or(0.0, |t| t.toxicity),
+            result.safety.as_ref().map_or(0.0, |s| s.max_risk()),
+        );
+    }
+
     pub fn telemetry_summary(&self) -> crate::telemetry::TelemetrySummary {
         self.telemetry.summary()
     }
 
-    /// Returns the inference cache hit rate.
     pub fn cache_hit_rate(&self) -> f32 {
         self.cache.hit_rate()
     }
@@ -164,8 +198,9 @@ impl MlPipeline {
         let start = Instant::now();
         let _ = self.toxicity.predict("warmup");
         let _ = self.sentiment.predict("warmup");
-        let elapsed = start.elapsed();
-        info!(elapsed_ms = elapsed.as_millis(), "ML pipeline warmup complete");
+        let _ = self.safety.predict("warmup");
+        let _ = self.intent.predict("warmup");
+        info!(elapsed_ms = start.elapsed().as_millis(), "ML pipeline warmup complete");
     }
 
     #[allow(unused_variables)]
@@ -235,7 +270,7 @@ fn timestamp_ms_now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{SentimentLabel, ToxicityLabel};
+    use crate::types::{SafetyLabel, SentimentLabel, ToxicityLabel};
 
     #[test]
     fn pipeline_fallback_works() {
@@ -335,5 +370,126 @@ mod tests {
             uk.toxicity.unwrap().primary_label,
             Some(ToxicityLabel::Threat)
         );
+    }
+
+    #[test]
+    fn cascade_skips_deep_for_clean() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            cascade_gate_threshold: 0.3,
+            ..Default::default()
+        });
+        let result = pipeline.analyze_text("Hey, want to play after school?");
+        assert_eq!(result.tier, CascadeTier::Gate);
+        assert!(result.safety.is_none());
+        assert!(result.intent.is_none());
+    }
+
+    #[test]
+    fn cascade_runs_deep_for_threat() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            cascade_gate_threshold: 0.3,
+            ..Default::default()
+        });
+        let result = pipeline.analyze_text("I will kill you, you worthless idiot");
+        assert_eq!(result.tier, CascadeTier::Deep);
+        assert!(result.safety.is_some());
+        assert!(result.intent.is_some());
+    }
+
+    #[test]
+    fn cascade_produces_safety_for_grooming() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            cascade_gate_threshold: 0.3,
+            ..Default::default()
+        });
+        let result = pipeline.analyze_text("don't tell your parents, it's our little secret");
+        assert_eq!(result.tier, CascadeTier::Deep);
+        let safety = result.safety.unwrap();
+        assert!(safety.grooming >= 0.5);
+        assert_eq!(safety.primary_label, Some(SafetyLabel::Grooming));
+    }
+
+    #[test]
+    fn cascade_produces_intent_for_meeting() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            cascade_gate_threshold: 0.3,
+            ..Default::default()
+        });
+        let result = pipeline.analyze_text("come to my place alone, let's meet in secret");
+        assert!(result.intent.is_some());
+        let intent = result.intent.unwrap();
+        assert!(intent.request_meeting >= 0.5);
+    }
+
+    #[test]
+    fn cascade_disabled_always_runs_deep() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: false,
+            ..Default::default()
+        });
+        let result = pipeline.analyze_text("Hello, how are you?");
+        assert_eq!(result.tier, CascadeTier::Deep);
+        assert!(result.safety.is_some());
+    }
+
+    #[test]
+    fn cache_returns_previous_result() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            ..Default::default()
+        });
+        let r1 = pipeline.analyze_text("I will kill you");
+        assert!(!r1.cache_hit);
+        let r2 = pipeline.analyze_text("I will kill you");
+        assert!(r2.cache_hit);
+        assert_eq!(r2.tier, CascadeTier::Cached);
+    }
+
+    #[test]
+    fn telemetry_tracks_cascade_tiers() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            cascade_gate_threshold: 0.3,
+            ..Default::default()
+        });
+        pipeline.analyze_text("hello friend");
+        pipeline.analyze_text("I will kill you");
+        let summary = pipeline.telemetry_summary();
+        assert_eq!(summary.total_inferences, 2);
+        assert!(summary.gate_inferences > 0 || summary.deep_inferences > 0);
+    }
+
+    #[test]
+    fn selfharm_uk_triggers_deep_with_safety() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            cascade_gate_threshold: 0.3,
+            ..Default::default()
+        });
+        let result = pipeline.analyze_text("не хочу жити, хочу померти");
+        assert_eq!(result.tier, CascadeTier::Deep);
+        let safety = result.safety.unwrap();
+        assert!(safety.self_harm >= 0.7);
+        assert_eq!(safety.primary_label, Some(SafetyLabel::SelfHarm));
     }
 }
