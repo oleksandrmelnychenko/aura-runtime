@@ -3,6 +3,8 @@
 This document is the stable product-facing contract for messenger clients that
 integrate AURA Core through protobuf and FFI.
 
+Status: synchronized with runtime payload behavior on March 23, 2026.
+
 The rule is strict:
 
 - clients should consume `AnalysisResult.product_surface` first
@@ -18,6 +20,31 @@ The canonical integration payload is:
 - `AnalysisResult.recommended_action`
 - `AnalysisResult.inference`
 - `AnalysisResult.reason_codes`
+- `AnalysisResult.signals[].threat_subtype`
+
+## Threat Subtype Guidance
+
+`threat_subtype` is a fine-grained signal hint for UI routing, analyst context,
+and telemetry segmentation. It is additive context and does not replace primary
+policy fields like `product_surface`, `recommended_action`, or `threat_type`.
+
+Current important military/propaganda examples include:
+
+- propaganda narrative/source examples: `war_denial`, `dehumanization`,
+  `state_media`
+- coordinate examples: `ukraine_dd`, `mgrs`, `milgrid`, `google_maps`, `w3w`,
+  `pluscode`
+- military social engineering examples: `phishing_diia`, `phishing_tck`,
+  `phishing_delta`, `phishing_command`, `phishing_account`,
+  `military_phishing`
+- psyops examples: `surrender`, `surrender_volga`, `command_distrust`,
+  `family_targeting`, `regional_division`, `fake_ceasefire`, `demoralization`
+- heuristic URL examples: `doppelganger`, `homoglyph`, `heuristic`
+
+Client rule:
+
+- treat unknown/new subtype values as non-breaking additive values and fall back
+  to threat-type-level handling.
 
 For Swift/iOS, the intended path is generated `SwiftProtobuf` models from:
 

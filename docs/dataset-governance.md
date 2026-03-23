@@ -1,5 +1,7 @@
 # Dataset Governance
 
+Status: reviewed on March 23, 2026.
+
 ## Purpose
 
 The evaluation stack is one of AURA Core's main differentiators. That means the

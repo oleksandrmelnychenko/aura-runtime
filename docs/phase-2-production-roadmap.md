@@ -1,5 +1,7 @@
 # Phase 2 Production Roadmap
 
+Status refresh: reviewed on March 23, 2026.
+
 Status: Closeout snapshot as of March 15, 2026. Milestones 1 through 3 are
 operational, and this document now serves as both the record of what was
 delivered and the handoff into the next major phase.

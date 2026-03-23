@@ -1,5 +1,7 @@
 # Phase 3 Pilot Readiness Roadmap
 
+Status update: synchronized with current runtime behavior on March 23, 2026.
+
 This document is the handoff from the Phase 2 release-hardening track into the
 next major operating phase for AURA Core.
 
@@ -262,6 +264,11 @@ Current status: implementation-complete at the repo level. The delivered Phase
 - `AnalysisResult.product_surface` and stable product-facing rollout semantics
 - `pilot_gate` machine-readable pilot-ready decision contract with signoffs and rollback triggers
 - unified evidence-manifest support for pilot shadow, pilot regression, and optional pilot gate artifacts
+- runtime propaganda false-positive filtering in analyzer pattern flow
+- runtime coordinate hardening for Ukraine DD validation on generic coordinate
+  matches plus duplicate generic/specific coordinate signal suppression
+- strengthened `threat_subtype` propagation for heuristic URL detections and
+  military/psyops rule families used in pilot-facing surfaces
 
 What remains after this document is no longer build-out work inside the repo.
 What remains is live pilot execution with real operator signoffs and real

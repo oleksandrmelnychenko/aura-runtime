@@ -32,8 +32,7 @@ fn is_cyrillic(c: char) -> bool {
 }
 
 fn is_latin(c: char) -> bool {
-    c.is_ascii_alphabetic()
-        || (c as u32 >= 0x00C0 && c as u32 <= 0x024F)
+    c.is_ascii_alphabetic() || (c as u32 >= 0x00C0 && c as u32 <= 0x024F)
 }
 
 fn has_latin_neighbor(chars: &[char], pos: usize) -> bool {
@@ -256,7 +255,10 @@ mod tests {
 
     #[test]
     fn full_pipeline_preserves_clean() {
-        assert_eq!(normalize_for_ml("Hello! How are you?"), "Hello! How are you?");
+        assert_eq!(
+            normalize_for_ml("Hello! How are you?"),
+            "Hello! How are you?"
+        );
     }
 
     #[test]
@@ -283,6 +285,9 @@ mod tests {
     fn mixed_cyrillic_latin_sentence_preserved() {
         let mixed = "hey bro, \u{044F}\u{043A} \u{0441}\u{043F}\u{0440}\u{0430}\u{0432}\u{0438}?";
         let result = normalize_for_ml(mixed);
-        assert!(result.contains("\u{044F}\u{043A}"), "Cyrillic words should survive: '{result}'");
+        assert!(
+            result.contains("\u{044F}\u{043A}"),
+            "Cyrillic words should survive: '{result}'"
+        );
     }
 }

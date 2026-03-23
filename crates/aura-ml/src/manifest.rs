@@ -79,9 +79,7 @@ pub fn validate_file_hash(path: &Path, expected_sha256: &str) -> Result<(), Mani
 /// Validates all models listed in a manifest file against their expected hashes.
 pub fn validate_models_from_manifest(manifest_path: &str) -> Result<(), ManifestError> {
     let manifest = ModelManifest::from_file(manifest_path)?;
-    let manifest_dir = Path::new(manifest_path)
-        .parent()
-        .unwrap_or(Path::new("."));
+    let manifest_dir = Path::new(manifest_path).parent().unwrap_or(Path::new("."));
 
     for (name, entry) in &manifest.models {
         let model_path = manifest_dir.join(&entry.filename);

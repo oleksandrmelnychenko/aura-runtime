@@ -34,7 +34,9 @@ impl Default for InferenceEvent {
 }
 
 /// Ring buffer for inference telemetry. Fixed 16KB, never allocates.
-const HISTOGRAM_BUCKETS: [u32; 12] = [10, 50, 100, 500, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 500_000, 1_000_000];
+const HISTOGRAM_BUCKETS: [u32; 12] = [
+    10, 50, 100, 500, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 500_000, 1_000_000,
+];
 
 pub struct InferenceTelemetry {
     ring: Box<[InferenceEvent; RING_SIZE]>,
@@ -188,7 +190,14 @@ mod tests {
     fn records_and_summarizes() {
         let mut telemetry = InferenceTelemetry::new();
         for i in 0..100 {
-            telemetry.record(i * 1000, (i as u32 + 1) * 100, CascadeTier::Gate, false, 0.1, 0.0);
+            telemetry.record(
+                i * 1000,
+                (i as u32 + 1) * 100,
+                CascadeTier::Gate,
+                false,
+                0.1,
+                0.0,
+            );
         }
         let summary = telemetry.summary();
         assert_eq!(summary.total_inferences, 100);

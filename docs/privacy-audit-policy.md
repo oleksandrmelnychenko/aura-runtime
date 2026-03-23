@@ -1,5 +1,7 @@
 # Privacy and Audit Policy
 
+Status: reviewed on March 23, 2026.
+
 ## Purpose
 
 AURA Core is built for child and teen safety use cases. Privacy, explainability,

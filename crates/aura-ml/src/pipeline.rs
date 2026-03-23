@@ -5,13 +5,13 @@ use tracing::{debug, info};
 use crate::backend::{GateModel, SentimentBackend, ToxicityBackend};
 use crate::cache::{self, InferenceCache};
 use crate::cascade::{CascadeDecision, CascadePolicy};
-use crate::integrity;
 use crate::gate::LexiconGate;
-use crate::intent::{self, IntentClassifier};
+use crate::integrity;
+use crate::intent::IntentClassifier;
 #[cfg(feature = "onnx")]
 use crate::manifest;
 use crate::normalize::normalize_for_ml;
-use crate::safety::{self, SafetyClassifier};
+use crate::safety::SafetyClassifier;
 use crate::sentiment::SentimentAnalyzer;
 use crate::telemetry::InferenceTelemetry;
 #[cfg(feature = "onnx")]
@@ -93,7 +93,6 @@ impl MlPipeline {
     pub fn analyze_text(&mut self, text: &str) -> MlResult {
         let start = Instant::now();
         let text_hash = cache::text_hash(text);
-        let normalized = normalize_for_ml(text);
 
         if let Some(cached) = self.cache.get(text_hash) {
             let mut result = cached.clone();
@@ -103,14 +102,15 @@ impl MlPipeline {
             self.record_telemetry(&result, true);
             return result;
         }
+        let text = normalize_for_ml(text);
 
-        let gate_score = self.gate.gate_score(text);
+        let gate_score = self.gate.gate_score(&text);
         let decision = self.cascade.decide(gate_score);
 
         let result = if decision.run_deep {
-            self.run_deep_inference(text, &normalized, decision)
+            self.run_deep_inference(&text, decision)
         } else {
-            self.run_gate_only(&normalized, decision)
+            self.run_gate_only(&text, decision)
         };
 
         let elapsed_us = start.elapsed().as_micros() as u64;
@@ -130,11 +130,11 @@ impl MlPipeline {
         result
     }
 
-    fn run_deep_inference(&mut self, raw_text: &str, normalized: &str, decision: CascadeDecision) -> MlResult {
-        let toxicity = self.toxicity.predict(normalized);
-        let sentiment = self.sentiment.predict(normalized);
-        let safety = self.safety.predict(raw_text);
-        let intent = self.intent.predict(raw_text);
+    fn run_deep_inference(&mut self, text: &str, decision: CascadeDecision) -> MlResult {
+        let toxicity = self.toxicity.predict(text);
+        let sentiment = self.sentiment.predict(text);
+        let safety = self.safety.predict(text);
+        let intent = self.intent.predict(text);
 
         if safety.is_none() {
             tracing::warn!("safety classifier returned None");
@@ -144,7 +144,14 @@ impl MlPipeline {
         }
 
         if let Some(ref tox) = toxicity {
-            let scores = [tox.toxicity, tox.severe_toxicity, tox.insult, tox.threat, tox.sexual_explicit, tox.identity_attack];
+            let scores = [
+                tox.toxicity,
+                tox.severe_toxicity,
+                tox.insult,
+                tox.threat,
+                tox.sexual_explicit,
+                tox.identity_attack,
+            ];
             if !integrity::validate_output_range(&scores) {
                 tracing::error!("toxicity output out of range: {:?}", scores);
             }
@@ -226,7 +233,10 @@ impl MlPipeline {
         let _ = self.sentiment.predict("warmup");
         let _ = self.safety.predict("warmup");
         let _ = self.intent.predict("warmup");
-        info!(elapsed_ms = start.elapsed().as_millis(), "ML pipeline warmup complete");
+        info!(
+            elapsed_ms = start.elapsed().as_millis(),
+            "ML pipeline warmup complete"
+        );
     }
 
     #[allow(unused_variables)]
@@ -511,6 +521,25 @@ mod tests {
         });
         let result = pipeline.analyze_text("come to my place alone, let's meet in secret");
         assert!(result.intent.is_some());
+        let intent = result.intent.unwrap();
+        assert!(intent.request_meeting >= 0.5);
+    }
+
+    #[test]
+    fn cascade_uses_normalized_input_for_safety_and_intent() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            cascade_gate_threshold: 0.3,
+            ..Default::default()
+        });
+        let result =
+            pipeline.analyze_text("d\u{200B}on't tell your parents, l\u{200B}et's m\u{200B}e\u{200B}et in secret");
+
+        assert_eq!(result.tier, CascadeTier::Deep);
+        let safety = result.safety.unwrap();
+        assert!(safety.grooming >= 0.5);
         let intent = result.intent.unwrap();
         assert!(intent.request_meeting >= 0.5);
     }

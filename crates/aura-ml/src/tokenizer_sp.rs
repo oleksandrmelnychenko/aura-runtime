@@ -28,8 +28,8 @@ pub enum SpTokenizerError {
 
 impl SentencePieceTokenizer {
     pub fn from_vocab_file(path: &str, max_seq_length: usize) -> Result<Self, SpTokenizerError> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| SpTokenizerError::ReadFailed(e.to_string()))?;
+        let content =
+            fs::read_to_string(path).map_err(|e| SpTokenizerError::ReadFailed(e.to_string()))?;
         Self::from_vocab_text(&content, max_seq_length)
     }
 
@@ -179,7 +179,8 @@ impl SentencePieceTokenizer {
             for start in (search_start..end).rev() {
                 let piece: String = chars[start..end].iter().collect();
                 if let Some(&id) = self.piece_to_id.get(&piece) {
-                    let score = best_score[start] + self.scores.get(id as usize).copied().unwrap_or(0.0);
+                    let score =
+                        best_score[start] + self.scores.get(id as usize).copied().unwrap_or(0.0);
                     if score > best_score[end] {
                         best_score[end] = score;
                         best_split[end] = start;
@@ -313,7 +314,10 @@ mod tests {
         assert_eq!(encoded.input_ids.len(), 32);
         assert_eq!(encoded.input_ids[0], tok.bos_id);
         let real_tokens: usize = encoded.attention_mask.iter().filter(|&&m| m == 1).count();
-        assert!(real_tokens >= 3, "Expected at least BOS + tokens + EOS, got {real_tokens}");
+        assert!(
+            real_tokens >= 3,
+            "Expected at least BOS + tokens + EOS, got {real_tokens}"
+        );
     }
 
     #[test]
@@ -321,7 +325,10 @@ mod tests {
         let tok = SentencePieceTokenizer::from_vocab_text(&test_sp_vocab(), 32).unwrap();
         let encoded = tok.encode("\u{043F}\u{0440}\u{0438}\u{0432}\u{0456}\u{0442}");
         let real_tokens: usize = encoded.attention_mask.iter().filter(|&&m| m == 1).count();
-        assert!(real_tokens >= 3, "Expected tokens for Ukrainian, got {real_tokens}");
+        assert!(
+            real_tokens >= 3,
+            "Expected tokens for Ukrainian, got {real_tokens}"
+        );
     }
 
     #[test]

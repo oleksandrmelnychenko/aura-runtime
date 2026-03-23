@@ -13,4 +13,4 @@ pub use database::{PatternDatabase, PatternLoadError};
 pub use emoji::{EmojiAnalyzer, EmojiMatchResult};
 pub use matcher::{MatchResult, PatternMatcher, PatternMatcherBuildError};
 pub use normalizer::TextNormalizer;
-pub use url_checker::{SuspiciousUrl, UrlChecker};
+pub use url_checker::{BlockedUrlMatch, SuspiciousUrl, UrlChecker};

@@ -96,7 +96,9 @@ impl SentimentAnalyzer {
         let tokenizer = self
             .tokenizer
             .as_ref()
-            .ok_or(SentimentError::InferenceFailed("tokenizer not loaded".into()))?;
+            .ok_or(SentimentError::InferenceFailed(
+                "tokenizer not loaded".into(),
+            ))?;
         let encoded = tokenizer.encode(text);
         let seq_len = encoded.input_ids.len();
 
@@ -121,7 +123,9 @@ impl SentimentAnalyzer {
         let session = self
             .session
             .as_mut()
-            .ok_or(SentimentError::InferenceFailed("ONNX session not loaded".into()))?;
+            .ok_or(SentimentError::InferenceFailed(
+                "ONNX session not loaded".into(),
+            ))?;
         let outputs = session
             .run(ort::inputs![input_ids, attention_mask, token_type_ids])
             .map_err(|e| SentimentError::InferenceFailed(e.to_string()))?;

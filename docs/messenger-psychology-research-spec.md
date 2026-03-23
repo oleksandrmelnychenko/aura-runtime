@@ -1,5 +1,7 @@
 # Messenger Psychology Research Spec
 
+Status: reviewed on March 23, 2026.
+
 ## Scope
 
 This document defines the post-stabilization research roadmap for AURA as a

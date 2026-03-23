@@ -3,6 +3,21 @@
 
 *Research compiled: 2026-03-23*
 
+Implementation sync: reviewed against current repository behavior on 2026-03-23.
+
+## Runtime Implementation Snapshot (Current)
+
+- Current `patterns_mvp.json` footprint is 322 rules.
+- Runtime analyzer applies propaganda false-positive context filtering before
+  emitting propaganda pattern signals.
+- Generic decimal coordinate rule handling includes runtime Ukraine DD
+  validation, and duplicate generic coordinate signals are suppressed when the
+  Ukraine-specific DD rule also matches.
+- Signal payloads include `threat_subtype` and currently expose military and
+  propaganda-specific subtype values used by product and review surfaces.
+- Heuristic URL detections expose subtype values `doppelganger`, `homoglyph`,
+  and `heuristic`.
+
 ---
 
 ## Table of Contents

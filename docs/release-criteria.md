@@ -1,5 +1,7 @@
 # Release Criteria
 
+Status: synchronized with current gating posture on March 23, 2026.
+
 ## Purpose
 
 This document defines what "green" means for AURA Core as a safety-critical
@@ -42,6 +44,8 @@ The production release report should include, at minimum:
 - external curated mixed suite
 - external curated gold-only suite
 - policy-action gates for realistic, social-context, and external curated
+- military-focused validation slices that exercise propaganda, OPSEC, and psyops
+  pathways
 
 ## Blocking Dimensions
 
@@ -91,6 +95,8 @@ Every blocking suite should report:
 - positive detection rate
 - negative false positive rate
 - pre-onset detection rate when onset applies
+- subtype coverage checks for threat families that publish structured
+  `threat_subtype` values on signals
 
 Policy suites should also report:
 

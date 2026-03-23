@@ -3,6 +3,8 @@
 This folder holds the planning and operating documents that turn AURA Core from
 an evaluation-heavy prototype into a production-grade safety runtime.
 
+Status: synchronized with runtime and policy behavior on March 23, 2026.
+
 ## Active Operating Set
 
 - [Phase 2 Production Roadmap](./phase-2-production-roadmap.md)
@@ -23,6 +25,19 @@ an evaluation-heavy prototype into a production-grade safety runtime.
 
 - [Messenger Psychology Research Spec](./messenger-psychology-research-spec.md)
 - [Pig Butchering Scam Research](./pig-butchering-scam-research.md)
+- [Russian Propaganda and Disinformation Research](./russian-propaganda-detection-research.md)
+
+## Current Implementation Notes
+
+- Military anti-propaganda flow now applies runtime false-positive filtering for
+  propaganda pattern matches before signal emission.
+- Coordinate handling now enforces a runtime Ukraine DD gate for generic
+  coordinate rules and suppresses duplicate generic coordinate signals when
+  Ukraine-specific coordinate rules match the same message.
+- `DetectionSignal.threat_subtype` is part of the stable product-facing payload
+  and is now populated for heuristic URL detections (`doppelganger`,
+  `homoglyph`, `heuristic`) and broader military/psyops subtype paths.
+- Current `patterns_mvp.json` size is 322 rules.
 
 ## How To Use These Docs
 

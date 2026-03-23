@@ -1,5 +1,7 @@
 # Incidents and Rollbacks
 
+Status: synchronized with current runtime behavior on March 23, 2026.
+
 ## Purpose
 
 This document defines the minimum operational posture AURA Core uses while it
@@ -15,8 +17,11 @@ The following incident classes matter most:
 
 - critical false negative on child-safety risk
 - harmful false positive on support or trusted-adult boundary cases
+- harmful false positive in military propaganda/OPSEC context (for example,
+  counter-narrative propaganda text treated as hostile propaganda)
 - protobuf or ABI incompatibility
 - context export/import corruption
+- subtype taxonomy drift between rules and runtime mappings
 - privacy leak through logging or telemetry
 - major latency or memory regression that degrades safety behavior
 

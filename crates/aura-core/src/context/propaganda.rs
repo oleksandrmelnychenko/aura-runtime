@@ -438,13 +438,15 @@ impl NarrativeId {
 }
 
 pub struct PropagandaDetector {
-    mode: AnalysisMode,
     min_events: usize,
     window_ms: u64,
     burst_window_ms: u64,
     burst_threshold: usize,
     hammering_threshold: usize,
     velocity_threshold: f64,
+    min_velocity_events: usize,
+    min_radicalization_events: u64,
+    min_copy_paste_events: u64,
 }
 
 impl Default for PropagandaDetector {
@@ -457,19 +459,24 @@ impl PropagandaDetector {
     pub fn new(mode: AnalysisMode) -> Self {
         let strict = mode.is_strict();
         Self {
-            mode,
             min_events: if strict { 1 } else { 2 },
             window_ms: 7 * 24 * 60 * 60 * 1000,
             burst_window_ms: 30 * 60 * 1000,
             burst_threshold: if strict { 2 } else { 3 },
             hammering_threshold: 5,
             velocity_threshold: 10.0,
+            min_velocity_events: if strict { 5 } else { 6 },
+            min_radicalization_events: if strict { 8 } else { 12 },
+            min_copy_paste_events: if strict { 10 } else { 12 },
         }
     }
 
     pub fn check_false_positive_context(text: &str, match_start: usize) -> bool {
         let window = 60;
-        let start = match_start.saturating_sub(window);
+        let mut start = match_start.saturating_sub(window);
+        while start > 0 && !text.is_char_boundary(start) {
+            start -= 1;
+        }
         let before = &text[start..match_start];
         let lower = before.to_lowercase();
 
@@ -597,7 +604,8 @@ impl PropagandaDetector {
             base
         };
 
-        let names: Vec<&str> = snap.narrative_hits.keys().map(|id| id.tag()).collect();
+        let mut names: Vec<&str> = snap.narrative_hits.keys().map(|id| id.tag()).collect();
+        names.sort_unstable();
         signals.push(DetectionSignal::context(
             ThreatType::Propaganda,
             score,
@@ -703,6 +711,9 @@ impl PropagandaDetector {
     }
 
     fn check_velocity(&self, snap: &SenderSnapshot, signals: &mut Vec<DetectionSignal>) {
+        if snap.propaganda_count < self.min_velocity_events {
+            return;
+        }
         let Some(rate) = snap.velocity_per_hour() else {
             return;
         };
@@ -740,6 +751,7 @@ impl PropagandaDetector {
         self.check_narrative_escalation(profile, signals);
         self.check_temporal_patterns(profile, signals);
         self.check_persistent_hammering(profile, signals);
+        self.check_copy_paste(profile, signals);
     }
 
     fn check_new_account_immediate(
@@ -750,14 +762,19 @@ impl PropagandaDetector {
         if profile.first_propaganda_ms == 0 {
             return;
         }
-        let onset_delay = profile.first_propaganda_ms.saturating_sub(profile.first_seen_ms);
+        let onset_delay = profile
+            .first_propaganda_ms
+            .saturating_sub(profile.first_seen_ms);
         let one_day = 24 * 60 * 60 * 1000;
         if onset_delay >= one_day || profile.propaganda_event_count < 3 {
             return;
         }
         let score = (0.80 + profile.propaganda_event_count as f32 * 0.02).min(0.92);
         signals.push(DetectionSignal::context(
-            ThreatType::Propaganda, score, Confidence::High, SignalFamily::Content,
+            ThreatType::Propaganda,
+            score,
+            Confidence::High,
+            SignalFamily::Content,
             "conversation.propaganda.behavioral.new_account_immediate",
             format!(
                 "New account started propaganda within {}h ({} events)",
@@ -781,7 +798,10 @@ impl PropagandaDetector {
         }
         let score = (ratio * 0.9).min(0.95);
         signals.push(DetectionSignal::context(
-            ThreatType::Propaganda, score, Confidence::High, SignalFamily::Content,
+            ThreatType::Propaganda,
+            score,
+            Confidence::High,
+            SignalFamily::Content,
             "conversation.propaganda.behavioral.high_concentration",
             format!(
                 "Propaganda concentration: {:.0}% of {} messages",
@@ -800,14 +820,22 @@ impl PropagandaDetector {
         if conv_count < 3 || profile.propaganda_event_count < 10 {
             return;
         }
-        let score = if conv_count >= 5 { 0.95 } else if conv_count >= 4 { 0.92 } else { 0.90 };
+        let score = if conv_count >= 5 {
+            0.95
+        } else if conv_count >= 4 {
+            0.92
+        } else {
+            0.90
+        };
         signals.push(DetectionSignal::context(
-            ThreatType::Propaganda, score, Confidence::High, SignalFamily::Content,
+            ThreatType::Propaganda,
+            score,
+            Confidence::High,
+            SignalFamily::Content,
             "conversation.propaganda.behavioral.multi_chat_spreader",
             format!(
                 "Sender spreads propaganda across {} conversations ({} total events)",
-                conv_count,
-                profile.propaganda_event_count
+                conv_count, profile.propaganda_event_count
             ),
         ));
     }
@@ -817,21 +845,41 @@ impl PropagandaDetector {
         profile: &super::contact::ContactProfile,
         signals: &mut Vec<DetectionSignal>,
     ) {
+        if profile.propaganda_event_count < self.min_radicalization_events {
+            return;
+        }
         let counts = &profile.weekly_propaganda_counts;
         if counts.len() < 3 {
             return;
         }
         let half = counts.len() / 2;
-        let early_avg: f32 = counts.iter().take(half).map(|(_, c)| *c as f32).sum::<f32>() / half as f32;
-        let late_avg: f32 = counts.iter().skip(half).map(|(_, c)| *c as f32).sum::<f32>() / (counts.len() - half) as f32;
+        let early_avg: f32 = counts
+            .iter()
+            .take(half)
+            .map(|(_, c)| *c as f32)
+            .sum::<f32>()
+            / half as f32;
+        let late_avg: f32 = counts
+            .iter()
+            .skip(half)
+            .map(|(_, c)| *c as f32)
+            .sum::<f32>()
+            / (counts.len() - half) as f32;
 
-        if late_avg <= early_avg || early_avg >= late_avg * 0.8 {
+        if late_avg <= early_avg || early_avg >= late_avg * 0.8 || late_avg < 2.0 {
             return;
         }
 
-        let score = if late_avg > early_avg * 3.0 { 0.85 } else { 0.70 };
+        let score = if late_avg > early_avg * 3.0 {
+            0.85
+        } else {
+            0.70
+        };
         signals.push(DetectionSignal::context(
-            ThreatType::Propaganda, score, Confidence::High, SignalFamily::Content,
+            ThreatType::Propaganda,
+            score,
+            Confidence::High,
+            SignalFamily::Content,
             "conversation.propaganda.behavioral.radicalization",
             format!(
                 "Radicalization trajectory: early avg {:.1}, recent avg {:.1} propaganda/week",
@@ -851,7 +899,9 @@ impl PropagandaDetector {
         }
         let half = tl.len() / 2;
 
-        let early_severity: f32 = tl.iter().take(half)
+        let early_severity: f32 = tl
+            .iter()
+            .take(half)
             .filter_map(|(_, nid_u8)| {
                 for spec in NARRATIVES {
                     if spec.id as u8 == *nid_u8 {
@@ -860,9 +910,12 @@ impl PropagandaDetector {
                 }
                 None
             })
-            .sum::<f32>() / half as f32;
+            .sum::<f32>()
+            / half as f32;
 
-        let late_severity: f32 = tl.iter().skip(half)
+        let late_severity: f32 = tl
+            .iter()
+            .skip(half)
             .filter_map(|(_, nid_u8)| {
                 for spec in NARRATIVES {
                     if spec.id as u8 == *nid_u8 {
@@ -871,13 +924,17 @@ impl PropagandaDetector {
                 }
                 None
             })
-            .sum::<f32>() / (tl.len() - half) as f32;
+            .sum::<f32>()
+            / (tl.len() - half) as f32;
 
         if late_severity <= early_severity + 0.1 {
             return;
         }
         signals.push(DetectionSignal::context(
-            ThreatType::Propaganda, 0.82, Confidence::High, SignalFamily::Content,
+            ThreatType::Propaganda,
+            0.82,
+            Confidence::High,
+            SignalFamily::Content,
             "conversation.propaganda.behavioral.narrative_escalation",
             format!(
                 "Narrative escalation: early severity {:.2} → recent {:.2}",
@@ -891,18 +948,33 @@ impl PropagandaDetector {
         profile: &super::contact::ContactProfile,
         signals: &mut Vec<DetectionSignal>,
     ) {
-        let total: u32 = profile.hourly_activity.iter().copied().map(|x| x as u32).sum();
+        let total: u32 = profile
+            .hourly_activity
+            .iter()
+            .copied()
+            .map(|x| x as u32)
+            .sum();
         if total < 10 {
             return;
         }
         let total_f = total as f32;
 
-        let night_sum: u32 = profile.hourly_activity[0..6].iter().copied().map(|x| x as u32).sum();
+        let night_sum: u32 = profile.hourly_activity[0..6]
+            .iter()
+            .copied()
+            .map(|x| x as u32)
+            .sum();
         if night_sum as f32 / total_f > 0.6 {
             signals.push(DetectionSignal::context(
-                ThreatType::Propaganda, 0.75, Confidence::Medium, SignalFamily::Content,
+                ThreatType::Propaganda,
+                0.75,
+                Confidence::Medium,
+                SignalFamily::Content,
                 "conversation.propaganda.behavioral.nocturnal_posting",
-                format!("Nocturnal propaganda posting: {:.0}% between 0-6h", night_sum as f32 / total_f * 100.0),
+                format!(
+                    "Nocturnal propaganda posting: {:.0}% between 0-6h",
+                    night_sum as f32 / total_f * 100.0
+                ),
             ));
         }
 
@@ -910,15 +982,27 @@ impl PropagandaDetector {
         if mean < 1.0 {
             return;
         }
-        let variance: f32 = profile.hourly_activity.iter()
-            .map(|&x| { let diff = x as f32 - mean; diff * diff })
-            .sum::<f32>() / 24.0;
+        let variance: f32 = profile
+            .hourly_activity
+            .iter()
+            .map(|&x| {
+                let diff = x as f32 - mean;
+                diff * diff
+            })
+            .sum::<f32>()
+            / 24.0;
         let std_dev = variance.sqrt();
         if std_dev < mean * 0.5 && total >= 20 {
             signals.push(DetectionSignal::context(
-                ThreatType::Propaganda, 0.80, Confidence::High, SignalFamily::Content,
+                ThreatType::Propaganda,
+                0.80,
+                Confidence::High,
+                SignalFamily::Content,
                 "conversation.propaganda.behavioral.uniform_timing",
-                format!("Uniform posting distribution (std_dev={:.1}, mean={:.1}) — bot-like", std_dev, mean),
+                format!(
+                    "Uniform posting distribution (std_dev={:.1}, mean={:.1}) — bot-like",
+                    std_dev, mean
+                ),
             ));
         }
     }
@@ -930,17 +1014,71 @@ impl PropagandaDetector {
     ) {
         for &(nid_u8, count) in &profile.narrative_hits {
             if count >= 20 {
-                let tag = NARRATIVES.iter()
+                let tag = NARRATIVES
+                    .iter()
                     .find(|s| s.id as u8 == nid_u8)
                     .map(|s| s.tag)
                     .unwrap_or("unknown");
                 signals.push(DetectionSignal::context(
-                    ThreatType::Propaganda, 0.83, Confidence::High, SignalFamily::Content,
+                    ThreatType::Propaganda,
+                    0.83,
+                    Confidence::High,
+                    SignalFamily::Content,
                     "conversation.propaganda.behavioral.persistent_hammering",
-                    format!("Persistent narrative hammering: '{}' repeated {} times (lifetime)", tag, count),
+                    format!(
+                        "Persistent narrative hammering: '{}' repeated {} times (lifetime)",
+                        tag, count
+                    ),
                 ));
             }
         }
+    }
+
+    fn check_copy_paste(
+        &self,
+        profile: &super::contact::ContactProfile,
+        signals: &mut Vec<DetectionSignal>,
+    ) {
+        if profile.propaganda_event_count < self.min_copy_paste_events {
+            return;
+        }
+        let total = profile.message_fingerprints.len();
+        if total < self.min_copy_paste_events as usize {
+            return;
+        }
+
+        let mut counts: HashMap<u64, usize> = HashMap::new();
+        for hash in &profile.message_fingerprints {
+            let entry = counts.entry(*hash).or_insert(0);
+            *entry += 1;
+        }
+
+        let mut max_repeats = 0usize;
+        for count in counts.values() {
+            if *count > max_repeats {
+                max_repeats = *count;
+            }
+        }
+
+        let ratio = max_repeats as f32 / total as f32;
+        if max_repeats < 6 || ratio < 0.55 {
+            return;
+        }
+
+        let score = (0.72 + ratio * 0.2).min(0.9);
+        signals.push(DetectionSignal::context(
+            ThreatType::Propaganda,
+            score,
+            Confidence::High,
+            SignalFamily::Content,
+            "conversation.propaganda.behavioral.copy_paste_reuse",
+            format!(
+                "Repeated copy-paste pattern: top message repeated {}/{} times ({:.0}%)",
+                max_repeats,
+                total,
+                ratio * 100.0
+            ),
+        ));
     }
 
     pub fn analyze_cross_conversation(
@@ -951,11 +1089,10 @@ impl PropagandaDetector {
     ) -> Vec<DetectionSignal> {
         let window_start = now_ms.saturating_sub(self.window_ms);
         let mut conv_count = 0usize;
-        let mut cross_narratives = 0usize;
+        let mut unique_narratives: HashMap<NarrativeId, bool> = HashMap::new();
 
         for timeline in timelines {
             let mut has_propaganda = false;
-            let mut local_narratives: HashMap<NarrativeId, bool> = HashMap::new();
             for event in timeline.events_since(window_start) {
                 if &*event.sender_id != sender_id {
                     continue;
@@ -964,14 +1101,13 @@ impl PropagandaDetector {
                     has_propaganda = true;
                     if let Some(ref st) = event.subtype {
                         if let Some(nid) = NarrativeId::from_subtype(st) {
-                            local_narratives.insert(nid, true);
+                            unique_narratives.insert(nid, true);
                         }
                     }
                 }
             }
             if has_propaganda {
                 conv_count += 1;
-                cross_narratives += local_narratives.len();
             }
         }
 
@@ -985,7 +1121,8 @@ impl PropagandaDetector {
                 "cross_conversation.propaganda.coordinated",
                 format!(
                     "Sender pushes propaganda in {} conversations with {} narrative types",
-                    conv_count, cross_narratives
+                    conv_count,
+                    unique_narratives.len()
                 ),
             ));
         }
@@ -1422,6 +1559,69 @@ mod tests {
     }
 
     #[test]
+    fn behavioral_copy_paste_reuse_detected() {
+        let mut events = Vec::new();
+        for i in 0..12 {
+            let mut event = ContextEvent::with_subtype(
+                1_000 + i * 1_000,
+                "bot",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                0.8,
+                "war_denial",
+            );
+            event.content_hash = Some(if i < 8 { 777 } else { 888 + i });
+            events.push(event);
+        }
+
+        let (tl, pr) = build(events);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", 20_000, &pr);
+        assert!(has_reason(&s, "copy_paste_reuse"));
+    }
+
+    #[test]
+    fn behavioral_copy_paste_not_triggered_on_low_volume() {
+        let mut events = Vec::new();
+        for i in 0..9 {
+            let mut event = ContextEvent::with_subtype(
+                1_000 + i * 1_000,
+                "bot",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                0.8,
+                "war_denial",
+            );
+            event.content_hash = Some(123);
+            events.push(event);
+        }
+
+        let (tl, pr) = build(events);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", 20_000, &pr);
+        assert!(!has_reason(&s, "copy_paste_reuse"));
+    }
+
+    #[test]
+    fn high_velocity_not_triggered_below_min_event_count() {
+        let base = 100_000u64;
+        let mut events = Vec::new();
+        for i in 0..5 {
+            events.push(typed_event(
+                "bot",
+                "conv_1",
+                base + i * 10_000,
+                "war_denial",
+            ));
+        }
+
+        let (tl, pr) = build(events);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", base + 200_000, &pr);
+        assert!(!has_reason(&s, "high_velocity"));
+    }
+
+    #[test]
     fn cross_conversation_coordination() {
         let mut tl1 = ConversationTimeline::new("conv_1".into(), 500);
         let mut tl2 = ConversationTimeline::new("conv_2".into(), 500);
@@ -1445,6 +1645,30 @@ mod tests {
         let d = PropagandaDetector::new(AnalysisMode::Standard);
         let s = d.analyze_cross_conversation(&[&tl1], "bot", 5000);
         assert!(s.is_empty());
+    }
+
+    #[test]
+    fn cross_conversation_narrative_count_is_unique() {
+        let mut tl1 = ConversationTimeline::new("conv_1".into(), 500);
+        let mut tl2 = ConversationTimeline::new("conv_2".into(), 500);
+        let mut tl3 = ConversationTimeline::new("conv_3".into(), 500);
+
+        tl1.push(typed_event("bot", "conv_1", 1000, "war_denial"));
+        tl2.push(typed_event("bot", "conv_2", 2000, "war_denial"));
+        tl3.push(typed_event("bot", "conv_3", 3000, "war_denial"));
+
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze_cross_conversation(&[&tl1, &tl2, &tl3], "bot", 5000);
+        assert!(has_reason(&s, "cross_conversation"));
+        let sig = s
+            .iter()
+            .find(|signal| signal.reason_code.contains("cross_conversation"))
+            .unwrap();
+        assert!(
+            sig.explanation.contains("with 1 narrative types"),
+            "Expected unique narrative count in explanation, got: {}",
+            sig.explanation
+        );
     }
 
     #[test]

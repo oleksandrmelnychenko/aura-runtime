@@ -414,7 +414,8 @@ fn wordpiece_encodes_english() {
     let tok = WordPieceTokenizer::from_vocab_text(
         &["[PAD]", "[UNK]", "[CLS]", "[SEP]", "hello", "world"].join("\n"),
         16,
-    ).unwrap();
+    )
+    .unwrap();
     let enc = tok.encode("hello world");
     assert_eq!(enc.input_ids.len(), 16);
     assert_eq!(enc.attention_mask[0], 1);
@@ -423,10 +424,18 @@ fn wordpiece_encodes_english() {
 #[test]
 fn sentencepiece_encodes() {
     let vocab = [
-        "<unk>\t0", "<s>\t0", "</s>\t0", "<pad>\t0",
-        "\u{2581}hello\t-1.0", "\u{2581}world\t-1.5",
-        "h\t-5.0", "e\t-5.0", "l\t-5.0", "o\t-5.0",
-    ].join("\n");
+        "<unk>\t0",
+        "<s>\t0",
+        "</s>\t0",
+        "<pad>\t0",
+        "\u{2581}hello\t-1.0",
+        "\u{2581}world\t-1.5",
+        "h\t-5.0",
+        "e\t-5.0",
+        "l\t-5.0",
+        "o\t-5.0",
+    ]
+    .join("\n");
     let tok = SentencePieceTokenizer::from_vocab_text(&vocab, 16).unwrap();
     let enc = tok.encode("hello world");
     assert_eq!(enc.input_ids.len(), 16);
@@ -457,13 +466,8 @@ fn single_segment_all_zeros() {
 
 #[test]
 fn pair_segments_marks_second() {
-    let input = aura_ml::tokenizer::TokenizedInput::pair_segments(
-        &[101, 1, 2],
-        &[3, 4, 102],
-        102,
-        0,
-        10,
-    );
+    let input =
+        aura_ml::tokenizer::TokenizedInput::pair_segments(&[101, 1, 2], &[3, 4, 102], 102, 0, 10);
     assert_eq!(input.token_type_ids[0], 0);
     assert_eq!(input.token_type_ids[1], 0);
     assert_eq!(input.token_type_ids[2], 0);
@@ -478,7 +482,9 @@ fn pair_segments_marks_second() {
 
 #[test]
 fn integrity_validates_good_range() {
-    assert!(aura_ml::integrity::validate_output_range(&[0.0, 0.5, 1.0, 0.3]));
+    assert!(aura_ml::integrity::validate_output_range(&[
+        0.0, 0.5, 1.0, 0.3
+    ]));
 }
 
 #[test]

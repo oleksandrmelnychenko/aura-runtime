@@ -97,7 +97,9 @@ impl SafetyClassifier {
         use std::time::Instant;
         let start = Instant::now();
 
-        let tokenizer = self.tokenizer.as_ref()
+        let tokenizer = self
+            .tokenizer
+            .as_ref()
             .ok_or_else(|| MlError::InferenceFailed("tokenizer not loaded".into()))?;
         let encoded = tokenizer.encode(text);
         let seq_len = encoded.input_ids.len();
@@ -105,19 +107,24 @@ impl SafetyClassifier {
         let input_ids = ort::value::Tensor::from_array(
             ndarray::Array2::from_shape_vec((1, seq_len), encoded.input_ids)
                 .map_err(|e| MlError::InferenceFailed(e.to_string()))?,
-        ).map_err(|e| MlError::InferenceFailed(e.to_string()))?;
+        )
+        .map_err(|e| MlError::InferenceFailed(e.to_string()))?;
 
         let attention_mask = ort::value::Tensor::from_array(
             ndarray::Array2::from_shape_vec((1, seq_len), encoded.attention_mask)
                 .map_err(|e| MlError::InferenceFailed(e.to_string()))?,
-        ).map_err(|e| MlError::InferenceFailed(e.to_string()))?;
+        )
+        .map_err(|e| MlError::InferenceFailed(e.to_string()))?;
 
         let token_type_ids = ort::value::Tensor::from_array(
             ndarray::Array2::from_shape_vec((1, seq_len), encoded.token_type_ids)
                 .map_err(|e| MlError::InferenceFailed(e.to_string()))?,
-        ).map_err(|e| MlError::InferenceFailed(e.to_string()))?;
+        )
+        .map_err(|e| MlError::InferenceFailed(e.to_string()))?;
 
-        let session = self.session.as_mut()
+        let session = self
+            .session
+            .as_mut()
             .ok_or_else(|| MlError::InferenceFailed("session not loaded".into()))?;
         let outputs = session
             .run(ort::inputs![input_ids, attention_mask, token_type_ids])
@@ -127,7 +134,10 @@ impl SafetyClassifier {
             .try_extract_tensor::<f32>()
             .map_err(|e| MlError::InferenceFailed(e.to_string()))?;
 
-        debug!(elapsed_us = start.elapsed().as_micros(), "Safety ONNX inference");
+        debug!(
+            elapsed_us = start.elapsed().as_micros(),
+            "Safety ONNX inference"
+        );
 
         if scores.len() >= 5 {
             Ok(SafetyPrediction::from_scores(
@@ -140,7 +150,8 @@ impl SafetyClassifier {
             ))
         } else {
             Err(MlError::InferenceFailed(format!(
-                "Expected 5 output scores, got {}", scores.len()
+                "Expected 5 output scores, got {}",
+                scores.len()
             )))
         }
     }
@@ -174,7 +185,14 @@ impl SafetyClassifier {
         let max_risk = grooming.max(bullying).max(self_harm).max(manipulation);
         let safe = if max_risk < 0.3 { 1.0 - max_risk } else { 0.0 };
 
-        SafetyPrediction::from_scores(grooming, bullying, self_harm, manipulation, safe, self.threshold)
+        SafetyPrediction::from_scores(
+            grooming,
+            bullying,
+            self_harm,
+            manipulation,
+            safe,
+            self.threshold,
+        )
     }
 }
 
@@ -197,18 +215,15 @@ fn build_fallback_matcher() -> SafetyFallbackMatcher {
         ("come to my place", Grooming, 0.7),
         ("let's meet in secret", Grooming, 0.7),
         ("don't tell anyone", Grooming, 0.5),
-
         ("не кажи батькам", Grooming, 0.7),
         ("наш секрет", Grooming, 0.6),
         ("тільки між нами", Grooming, 0.5),
         ("скільки тобі років", Grooming, 0.4),
         ("ти одна вдома", Grooming, 0.6),
-
         ("не говори родителям", Grooming, 0.7),
         ("наш секрет", Grooming, 0.6),
         ("только между нами", Grooming, 0.5),
         ("сколько тебе лет", Grooming, 0.4),
-
         ("nobody likes you", Bullying, 0.6),
         ("everyone hates you", Bullying, 0.7),
         ("you're worthless", Bullying, 0.7),
@@ -216,17 +231,14 @@ fn build_fallback_matcher() -> SafetyFallbackMatcher {
         ("you're ugly", Bullying, 0.5),
         ("kill yourself", Bullying, 0.9),
         ("go die", Bullying, 0.8),
-
         ("тебе ніхто не любить", Bullying, 0.6),
         ("ти нікому не потрібна", Bullying, 0.7),
         ("ти нікому не потрібен", Bullying, 0.7),
         ("здохни", Bullying, 0.8),
-
         ("тебя никто не любит", Bullying, 0.6),
         ("ты никому не нужна", Bullying, 0.7),
         ("ты никому не нужен", Bullying, 0.7),
         ("сдохни", Bullying, 0.8),
-
         ("want to end it all", SelfHarm, 0.8),
         ("no reason to live", SelfHarm, 0.8),
         ("want to die", SelfHarm, 0.8),
@@ -236,16 +248,13 @@ fn build_fallback_matcher() -> SafetyFallbackMatcher {
         ("goodbye forever", SelfHarm, 0.7),
         ("nobody would notice", SelfHarm, 0.6),
         ("better off without me", SelfHarm, 0.7),
-
         ("не хочу жити", SelfHarm, 0.8),
         ("хочу померти", SelfHarm, 0.8),
         ("ріжу себе", SelfHarm, 0.9),
         ("нікому не потрібна", SelfHarm, 0.6),
-
         ("не хочу жить", SelfHarm, 0.8),
         ("хочу умереть", SelfHarm, 0.8),
         ("режу себя", SelfHarm, 0.9),
-
         ("you owe me", Manipulation, 0.6),
         ("after everything i did", Manipulation, 0.5),
         ("if you loved me", Manipulation, 0.6),
@@ -253,12 +262,10 @@ fn build_fallback_matcher() -> SafetyFallbackMatcher {
         ("everyone does it", Manipulation, 0.4),
         ("prove you're not afraid", Manipulation, 0.5),
         ("i'll hurt myself if you", Manipulation, 0.8),
-
         ("ти мені винна", Manipulation, 0.6),
         ("ти мені винен", Manipulation, 0.6),
         ("якщо ти мене любиш", Manipulation, 0.6),
         ("всі так роблять", Manipulation, 0.4),
-
         ("ты мне должна", Manipulation, 0.6),
         ("ты мне должен", Manipulation, 0.6),
         ("все так делают", Manipulation, 0.4),
@@ -309,14 +316,20 @@ mod tests {
     fn clean_message_is_safe() {
         let mut clf = SafetyClassifier::fallback_only();
         let pred = clf.predict("Hey! Want to play after school?").unwrap();
-        assert!(pred.safe > 0.5, "Clean message should be safe, got safe={}", pred.safe);
+        assert!(
+            pred.safe > 0.5,
+            "Clean message should be safe, got safe={}",
+            pred.safe
+        );
         assert!(pred.primary_label.is_none());
     }
 
     #[test]
     fn grooming_en_detected() {
         let mut clf = SafetyClassifier::fallback_only();
-        let pred = clf.predict("don't tell your parents about us, it's our little secret").unwrap();
+        let pred = clf
+            .predict("don't tell your parents about us, it's our little secret")
+            .unwrap();
         assert!(pred.grooming >= 0.6);
         assert_eq!(pred.primary_label, Some(SafetyLabel::Grooming));
     }
@@ -339,7 +352,9 @@ mod tests {
     #[test]
     fn selfharm_detected() {
         let mut clf = SafetyClassifier::fallback_only();
-        let pred = clf.predict("I want to end it all, no reason to live").unwrap();
+        let pred = clf
+            .predict("I want to end it all, no reason to live")
+            .unwrap();
         assert!(pred.self_harm >= 0.7);
         assert_eq!(pred.primary_label, Some(SafetyLabel::SelfHarm));
     }
@@ -354,7 +369,9 @@ mod tests {
     #[test]
     fn manipulation_detected() {
         let mut clf = SafetyClassifier::fallback_only();
-        let pred = clf.predict("after everything i did for you, you owe me").unwrap();
+        let pred = clf
+            .predict("after everything i did for you, you owe me")
+            .unwrap();
         assert!(pred.manipulation >= 0.5);
         assert_eq!(pred.primary_label, Some(SafetyLabel::Manipulation));
     }
@@ -375,7 +392,9 @@ mod tests {
     #[test]
     fn mixed_language_grooming() {
         let mut clf = SafetyClassifier::fallback_only();
-        let pred = clf.predict("hey, тільки між нами, send me a photo").unwrap();
+        let pred = clf
+            .predict("hey, тільки між нами, send me a photo")
+            .unwrap();
         assert!(pred.grooming >= 0.5);
     }
 }

@@ -98,7 +98,7 @@ impl SignalEnricher {
         conversation_id: &str,
         timestamp_ms: u64,
     ) -> Vec<ContextEvent> {
-        self.enrich_full(text, sender_id, conversation_id, timestamp_ms)
+        self.enrich_full_with_hash(text, sender_id, conversation_id, timestamp_ms, None)
             .events
     }
 
@@ -109,6 +109,18 @@ impl SignalEnricher {
         sender_id: &str,
         conversation_id: &str,
         timestamp_ms: u64,
+    ) -> EnrichmentResult {
+        self.enrich_full_with_hash(text, sender_id, conversation_id, timestamp_ms, None)
+    }
+
+    /// Enriches a message and propagates optional message fingerprint into produced events.
+    pub fn enrich_full_with_hash(
+        &self,
+        text: &str,
+        sender_id: &str,
+        conversation_id: &str,
+        timestamp_ms: u64,
+        content_hash: Option<u64>,
     ) -> EnrichmentResult {
         let mut events = Vec::with_capacity(4);
         let lower = text.to_lowercase();
@@ -486,6 +498,9 @@ impl SignalEnricher {
         }
 
         let extracted_age = Self::extract_age(&lower);
+        for event in &mut events {
+            event.content_hash = content_hash;
+        }
 
         EnrichmentResult {
             events,
@@ -1526,6 +1541,25 @@ mod tests {
         let enricher = default_enricher();
         let result = enricher.enrich_full("Want to play Minecraft?", "friend", "conv_1", 1000);
         assert_eq!(result.extracted_age, None);
+    }
+
+    #[test]
+    fn enrich_full_with_hash_sets_content_hash_on_events() {
+        let enricher = default_enricher();
+        let result = enricher.enrich_full_with_hash(
+            "Where do you live? What school do you go to?",
+            "stranger",
+            "conv_1",
+            1_000,
+            Some(12345),
+        );
+        assert!(
+            result
+                .events
+                .iter()
+                .all(|event| event.content_hash == Some(12345)),
+            "Expected all events to carry content hash"
+        );
     }
 
     #[test]

@@ -124,7 +124,14 @@ pub struct SafetyPrediction {
 
 impl SafetyPrediction {
     /// Builds a prediction from raw scores, selecting the primary label above threshold.
-    pub fn from_scores(grooming: f32, bullying: f32, self_harm: f32, manipulation: f32, safe: f32, threshold: f32) -> Self {
+    pub fn from_scores(
+        grooming: f32,
+        bullying: f32,
+        self_harm: f32,
+        manipulation: f32,
+        safe: f32,
+        threshold: f32,
+    ) -> Self {
         let scores = [
             (grooming, SafetyLabel::Grooming),
             (bullying, SafetyLabel::Bullying),
@@ -136,12 +143,22 @@ impl SafetyPrediction {
             .filter(|(s, _)| *s >= threshold)
             .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(_, label)| *label);
-        Self { grooming, bullying, self_harm, manipulation, safe, primary_label }
+        Self {
+            grooming,
+            bullying,
+            self_harm,
+            manipulation,
+            safe,
+            primary_label,
+        }
     }
 
     /// Returns the maximum risk score across all non-safe categories.
     pub fn max_risk(&self) -> f32 {
-        self.grooming.max(self.bullying).max(self.self_harm).max(self.manipulation)
+        self.grooming
+            .max(self.bullying)
+            .max(self.self_harm)
+            .max(self.manipulation)
     }
 }
 
@@ -166,7 +183,13 @@ pub struct IntentPrediction {
 
 impl IntentPrediction {
     /// Builds a prediction from raw scores.
-    pub fn from_scores(request_meeting: f32, request_secret: f32, request_media: f32, benign: f32, threshold: f32) -> Self {
+    pub fn from_scores(
+        request_meeting: f32,
+        request_secret: f32,
+        request_media: f32,
+        benign: f32,
+        threshold: f32,
+    ) -> Self {
         let intents = [
             (request_meeting, IntentLabel::RequestMeeting),
             (request_secret, IntentLabel::RequestSecret),
@@ -177,7 +200,13 @@ impl IntentPrediction {
             .filter(|(s, _)| *s >= threshold)
             .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(_, label)| *label);
-        Self { request_meeting, request_secret, request_media, benign, primary_intent }
+        Self {
+            request_meeting,
+            request_secret,
+            request_media,
+            benign,
+            primary_intent,
+        }
     }
 }
 

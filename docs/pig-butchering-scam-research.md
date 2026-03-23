@@ -2,6 +2,7 @@
 ## Comprehensive Reference for AURA Detection Engine
 
 *Research compiled: 2026-03-15*
+*Documentation status reviewed: 2026-03-23*
 
 ---
 

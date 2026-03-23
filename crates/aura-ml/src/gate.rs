@@ -63,10 +63,7 @@ impl LexiconGate {
             .build(&words)
             .expect("gate lexicon AhoCorasick build");
 
-        Self {
-            automaton,
-            entries,
-        }
+        Self { automaton, entries }
     }
 }
 
@@ -130,24 +127,20 @@ fn build_gate_patterns() -> Vec<(&'static str, RiskCategory)> {
         ("shoot", HighThreat),
         ("murder", HighThreat),
         ("strangle", HighThreat),
-
         ("i will find you", HighThreat),
         ("i know where you live", HighThreat),
         ("you're dead", HighThreat),
-
         // UK
         ("вб'ю", HighThreat),
         ("здохни", HighThreat),
         ("я тебе знайду", HighThreat),
         ("ти труп", HighThreat),
         ("я тебе вб'ю", HighThreat),
-
         // RU
         ("убью", HighThreat),
         ("сдохни", HighThreat),
         ("я тебя найду", HighThreat),
         ("ты труп", HighThreat),
-
         // === High Safety ===
         ("want to end it all", HighSafety),
         ("no reason to live", HighSafety),
@@ -162,20 +155,17 @@ fn build_gate_patterns() -> Vec<(&'static str, RiskCategory)> {
         ("don't tell your parents", HighSafety),
         ("our little secret", HighSafety),
         ("come to my place alone", HighSafety),
-
         // UK
         ("не хочу жити", HighSafety),
         ("хочу померти", HighSafety),
         ("ріжу себе", HighSafety),
         ("не кажи батькам", HighSafety),
         ("наш секрет", HighSafety),
-
         // RU
         ("не хочу жить", HighSafety),
         ("хочу умереть", HighSafety),
         ("режу себя", HighSafety),
         ("не говори родителям", HighSafety),
-
         // === Medium Toxicity ===
         ("idiot", MediumToxicity),
         ("stupid", MediumToxicity),
@@ -185,17 +175,14 @@ fn build_gate_patterns() -> Vec<(&'static str, RiskCategory)> {
         ("ugly", MediumToxicity),
         ("nobody likes you", MediumToxicity),
         ("everyone hates you", MediumToxicity),
-
         ("дебіл", MediumToxicity),
         ("тупий", MediumToxicity),
         ("ідіот", MediumToxicity),
         ("покидьок", MediumToxicity),
-
         ("дебил", MediumToxicity),
         ("тупой", MediumToxicity),
         ("идиот", MediumToxicity),
         ("урод", MediumToxicity),
-
         // === Medium Manipulation ===
         ("you owe me", MediumManipulation),
         ("after everything i did", MediumManipulation),
@@ -204,14 +191,11 @@ fn build_gate_patterns() -> Vec<(&'static str, RiskCategory)> {
         ("i'll hurt myself if", MediumManipulation),
         ("everyone does it", MediumManipulation),
         ("prove you're not afraid", MediumManipulation),
-
         ("ти мені винна", MediumManipulation),
         ("ти мені винен", MediumManipulation),
         ("якщо ти мене любиш", MediumManipulation),
-
         ("ты мне должна", MediumManipulation),
         ("ты мне должен", MediumManipulation),
-
         // === Low Grooming ===
         ("how old are you", LowGrooming),
         ("are you home alone", LowGrooming),
@@ -219,23 +203,19 @@ fn build_gate_patterns() -> Vec<(&'static str, RiskCategory)> {
         ("just between us", LowGrooming),
         ("keep this between us", LowGrooming),
         ("let's meet in secret", LowGrooming),
-
         ("скільки тобі років", LowGrooming),
         ("ти одна вдома", LowGrooming),
         ("ти один вдома", LowGrooming),
         ("тільки між нами", LowGrooming),
-
         ("сколько тебе лет", LowGrooming),
         ("ты одна дома", LowGrooming),
         ("только между нами", LowGrooming),
-
         // === Low Profanity ===
         ("fuck", LowProfanity),
         ("shit", LowProfanity),
         ("ass", LowProfanity),
         ("bitch", LowProfanity),
         ("damn", LowProfanity),
-
         ("хуй", LowProfanity),
         ("блять", LowProfanity),
         ("сука", LowProfanity),
@@ -286,14 +266,20 @@ mod tests {
     fn ukrainian_threat_detected() {
         let gate = LexiconGate::new();
         let score = gate.gate_score("Здохни, я тебе вб'ю");
-        assert!(score >= 0.9, "Ukrainian threat should score high, got {score}");
+        assert!(
+            score >= 0.9,
+            "Ukrainian threat should score high, got {score}"
+        );
     }
 
     #[test]
     fn russian_threat_detected() {
         let gate = LexiconGate::new();
         let score = gate.gate_score("Я тебя убью");
-        assert!(score >= 0.9, "Russian threat should score high, got {score}");
+        assert!(
+            score >= 0.9,
+            "Russian threat should score high, got {score}"
+        );
     }
 
     #[test]
@@ -328,10 +314,7 @@ mod tests {
     fn manipulation_detected() {
         let gate = LexiconGate::new();
         let score = gate.gate_score("after everything i did for you, you owe me");
-        assert!(
-            score >= 0.6,
-            "Manipulation should be detected, got {score}"
-        );
+        assert!(score >= 0.6, "Manipulation should be detected, got {score}");
     }
 
     #[test]

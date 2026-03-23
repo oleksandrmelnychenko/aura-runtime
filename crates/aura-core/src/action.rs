@@ -347,7 +347,7 @@ pub fn propaganda_action_for_subtype(
     protection_level: ProtectionLevel,
     reason_code: &str,
 ) -> (Action, ActionRecommendation) {
-    if reason_code.contains("dehumanization") {
+    if reason_code.contains("dehumanization") || reason_code.contains("dehumanize") {
         let action = if score >= 0.85 {
             Action::Block
         } else if score >= 0.6 {

@@ -1,5 +1,7 @@
 # Proto and ABI Stability
 
+Status: synchronized with current wire and state schema on March 23, 2026.
+
 ## Purpose
 
 This document defines change rules for the messenger protobuf contract, the C
@@ -60,6 +62,13 @@ As of the current release-hardening track:
 - contract evidence emitted by `contract_evidence`
 - C header smoke compile enforced in CI and promotion workflows
 - FFI request-size caps emitted as machine-readable evidence
+
+Notable additive fields currently in active use:
+
+- `DetectionSignal.threat_subtype`
+- `ContextEvent.content_hash`
+- expanded propaganda state fields under `ContactProfileState` and
+  `BehavioralSnapshotState.propaganda_count`
 
 ## Wire Compatibility Rules
 

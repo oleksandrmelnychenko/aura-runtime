@@ -3,6 +3,8 @@
 This document defines the operator-facing process for running AURA in shadow
 mode or controlled pilot rollout.
 
+Status: synchronized with current pilot/runtime behavior on March 23, 2026.
+
 ## Pilot-Ready Contract
 
 A pilot is considered ready only when all of the following are true:
@@ -35,6 +37,7 @@ Every pilot gate requires one latest signoff for each area:
 - `self_harm_boundary_cases`
 - `trusted_adult_scenarios`
 - `reputation_image_abuse`
+- `military_propaganda_opsec_psyops`
 
 Statuses:
 
@@ -69,6 +72,12 @@ Reviewers should confirm:
 - trusted-adult supportive traffic is not over-escalated
 - supportive self-harm replies are not treated as crisis-originating content
 - reputation/image-abuse cases open review with the expected urgency
+- propaganda counter-narrative/citation messages are not escalated as hostile
+  propaganda
+- coordinate leaks are not duplicated as both generic and Ukraine-specific
+  signals for the same message
+- military phishing and psyops subtypes in signals are present and coherent for
+  review tooling
 
 ## Operator Cadence
 

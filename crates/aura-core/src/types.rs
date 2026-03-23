@@ -299,6 +299,12 @@ impl DetectionSignal {
             threat_subtype: String::new(),
         }
     }
+
+    /// Attaches a fine-grained subtype to the signal.
+    pub fn with_threat_subtype(mut self, subtype: impl Into<String>) -> Self {
+        self.threat_subtype = subtype.into();
+        self
+    }
 }
 
 /// Holds per-family risk scores that compose the overall risk assessment.

@@ -96,7 +96,9 @@ impl IntentClassifier {
         use std::time::Instant;
         let start = Instant::now();
 
-        let tokenizer = self.tokenizer.as_ref()
+        let tokenizer = self
+            .tokenizer
+            .as_ref()
             .ok_or_else(|| MlError::InferenceFailed("tokenizer not loaded".into()))?;
         let encoded = tokenizer.encode(text);
         let seq_len = encoded.input_ids.len();
@@ -104,19 +106,24 @@ impl IntentClassifier {
         let input_ids = ort::value::Tensor::from_array(
             ndarray::Array2::from_shape_vec((1, seq_len), encoded.input_ids)
                 .map_err(|e| MlError::InferenceFailed(e.to_string()))?,
-        ).map_err(|e| MlError::InferenceFailed(e.to_string()))?;
+        )
+        .map_err(|e| MlError::InferenceFailed(e.to_string()))?;
 
         let attention_mask = ort::value::Tensor::from_array(
             ndarray::Array2::from_shape_vec((1, seq_len), encoded.attention_mask)
                 .map_err(|e| MlError::InferenceFailed(e.to_string()))?,
-        ).map_err(|e| MlError::InferenceFailed(e.to_string()))?;
+        )
+        .map_err(|e| MlError::InferenceFailed(e.to_string()))?;
 
         let token_type_ids = ort::value::Tensor::from_array(
             ndarray::Array2::from_shape_vec((1, seq_len), encoded.token_type_ids)
                 .map_err(|e| MlError::InferenceFailed(e.to_string()))?,
-        ).map_err(|e| MlError::InferenceFailed(e.to_string()))?;
+        )
+        .map_err(|e| MlError::InferenceFailed(e.to_string()))?;
 
-        let session = self.session.as_mut()
+        let session = self
+            .session
+            .as_mut()
             .ok_or_else(|| MlError::InferenceFailed("session not loaded".into()))?;
         let outputs = session
             .run(ort::inputs![input_ids, attention_mask, token_type_ids])
@@ -126,7 +133,10 @@ impl IntentClassifier {
             .try_extract_tensor::<f32>()
             .map_err(|e| MlError::InferenceFailed(e.to_string()))?;
 
-        debug!(elapsed_us = start.elapsed().as_micros(), "Intent ONNX inference");
+        debug!(
+            elapsed_us = start.elapsed().as_micros(),
+            "Intent ONNX inference"
+        );
 
         if scores.len() >= 4 {
             Ok(IntentPrediction::from_scores(
@@ -138,7 +148,8 @@ impl IntentClassifier {
             ))
         } else {
             Err(MlError::InferenceFailed(format!(
-                "Expected 4 output scores, got {}", scores.len()
+                "Expected 4 output scores, got {}",
+                scores.len()
             )))
         }
     }
@@ -168,7 +179,11 @@ impl IntentClassifier {
         }
 
         let max_intent = meeting.max(secret).max(media);
-        let benign = if max_intent < 0.3 { 1.0 - max_intent } else { 0.0 };
+        let benign = if max_intent < 0.3 {
+            1.0 - max_intent
+        } else {
+            0.0
+        };
 
         IntentPrediction::from_scores(meeting, secret, media, benign, self.threshold)
     }
@@ -191,16 +206,13 @@ fn build_fallback_matcher() -> IntentFallbackMatcher {
         ("come alone", Meeting, 0.7),
         ("let's meet in secret", Meeting, 0.8),
         ("i'll come get you", Meeting, 0.6),
-
         ("давай зустрінемось", Meeting, 0.6),
         ("приходь до мене", Meeting, 0.7),
         ("де ти живеш", Meeting, 0.5),
         ("приїду за тобою", Meeting, 0.6),
-
         ("давай встретимся", Meeting, 0.6),
         ("приходи ко мне", Meeting, 0.7),
         ("где ты живешь", Meeting, 0.5),
-
         ("don't tell anyone", Secret, 0.6),
         ("don't tell your parents", Secret, 0.7),
         ("our little secret", Secret, 0.7),
@@ -208,16 +220,13 @@ fn build_fallback_matcher() -> IntentFallbackMatcher {
         ("just between us", Secret, 0.5),
         ("promise not to tell", Secret, 0.6),
         ("your parents wouldn't understand", Secret, 0.6),
-
         ("не кажи нікому", Secret, 0.6),
         ("не кажи батькам", Secret, 0.7),
         ("тільки між нами", Secret, 0.5),
         ("обіцяй що нікому", Secret, 0.6),
-
         ("не говори никому", Secret, 0.6),
         ("не говори родителям", Secret, 0.7),
         ("только между нами", Secret, 0.5),
-
         ("send me a photo", Media, 0.7),
         ("send nudes", Media, 0.9),
         ("show me", Media, 0.4),
@@ -226,12 +235,10 @@ fn build_fallback_matcher() -> IntentFallbackMatcher {
         ("turn on camera", Media, 0.6),
         ("send a selfie", Media, 0.5),
         ("show me your", Media, 0.6),
-
         ("скинь фото", Media, 0.7),
         ("покажи себе", Media, 0.5),
         ("увімкни камеру", Media, 0.6),
         ("відеодзвінок", Media, 0.4),
-
         ("скинь фотку", Media, 0.7),
         ("покажи себя", Media, 0.5),
         ("включи камеру", Media, 0.6),
@@ -289,7 +296,9 @@ mod tests {
     #[test]
     fn meeting_request_en() {
         let mut clf = IntentClassifier::fallback_only();
-        let pred = clf.predict("come to my place alone, I'll come get you").unwrap();
+        let pred = clf
+            .predict("come to my place alone, I'll come get you")
+            .unwrap();
         assert!(pred.request_meeting >= 0.6);
         assert_eq!(pred.primary_intent, Some(IntentLabel::RequestMeeting));
     }
@@ -304,7 +313,9 @@ mod tests {
     #[test]
     fn secret_request_en() {
         let mut clf = IntentClassifier::fallback_only();
-        let pred = clf.predict("don't tell your parents, it's our little secret").unwrap();
+        let pred = clf
+            .predict("don't tell your parents, it's our little secret")
+            .unwrap();
         assert!(pred.request_secret >= 0.6);
         assert_eq!(pred.primary_intent, Some(IntentLabel::RequestSecret));
     }
@@ -312,7 +323,9 @@ mod tests {
     #[test]
     fn secret_request_ru() {
         let mut clf = IntentClassifier::fallback_only();
-        let pred = clf.predict("не говори родителям, только между нами").unwrap();
+        let pred = clf
+            .predict("не говори родителям, только между нами")
+            .unwrap();
         assert!(pred.request_secret >= 0.5);
     }
 
@@ -334,7 +347,9 @@ mod tests {
     #[test]
     fn combined_grooming_intents() {
         let mut clf = IntentClassifier::fallback_only();
-        let pred = clf.predict("send me a photo, don't tell anyone, let's meet in secret").unwrap();
+        let pred = clf
+            .predict("send me a photo, don't tell anyone, let's meet in secret")
+            .unwrap();
         assert!(pred.request_media >= 0.5);
         assert!(pred.request_secret >= 0.5);
         assert!(pred.request_meeting >= 0.5);

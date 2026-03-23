@@ -1695,6 +1695,7 @@ fn context_event_to_proto(event: &CoreContextEvent) -> proto::ContextEvent {
         kind: proto_event_kind(event.kind.clone()) as i32,
         confidence: event.confidence,
         subtype: event.subtype.clone().unwrap_or_default(),
+        content_hash: event.content_hash,
     }
 }
 
@@ -1711,7 +1712,7 @@ fn context_event_from_proto(event: proto::ContextEvent) -> Result<CoreContextEve
         } else {
             Some(event.subtype)
         },
-        content_hash: None,
+        content_hash: event.content_hash,
     })
 }
 
@@ -1740,6 +1741,45 @@ fn contact_profiler_state_from_proto(
 }
 
 fn contact_profile_state_to_proto(state: &CoreContactProfileState) -> proto::ContactProfileState {
+    let mut narrative_hits = Vec::with_capacity(state.narrative_hits.len());
+    for (narrative_id, count) in &state.narrative_hits {
+        narrative_hits.push(proto::NarrativeHit {
+            narrative_id: u32::from(*narrative_id),
+            count: *count,
+        });
+    }
+
+    let mut hourly_activity = Vec::with_capacity(state.hourly_activity.len());
+    for count in state.hourly_activity {
+        hourly_activity.push(u32::from(count));
+    }
+
+    let mut message_fingerprints = Vec::with_capacity(state.message_fingerprints.len());
+    for fingerprint in &state.message_fingerprints {
+        message_fingerprints.push(*fingerprint);
+    }
+
+    let mut narrative_timeline = Vec::with_capacity(state.narrative_timeline.len());
+    for (timestamp_ms, narrative_id) in &state.narrative_timeline {
+        narrative_timeline.push(proto::NarrativeTimelineEntry {
+            timestamp_ms: *timestamp_ms,
+            narrative_id: u32::from(*narrative_id),
+        });
+    }
+
+    let mut weekly_propaganda_counts = Vec::with_capacity(state.weekly_propaganda_counts.len());
+    for (week_start_ms, count) in &state.weekly_propaganda_counts {
+        weekly_propaganda_counts.push(proto::WeeklyPropagandaCount {
+            week_start_ms: *week_start_ms,
+            count: u32::from(*count),
+        });
+    }
+
+    let mut propaganda_conversations = Vec::with_capacity(state.propaganda_conversations.len());
+    for conversation_id in &state.propaganda_conversations {
+        propaganda_conversations.push(conversation_id.to_string());
+    }
+
     proto::ContactProfileState {
         sender_id: state.sender_id.to_string(),
         first_seen_ms: state.first_seen_ms,
@@ -1768,6 +1808,18 @@ fn contact_profile_state_to_proto(state: &CoreContactProfileState) -> proto::Con
             .as_ref()
             .map(behavioral_snapshot_state_to_proto),
         active_days: state.active_days.clone(),
+        propaganda_event_count: state.propaganda_event_count,
+        propaganda_source_count: state.propaganda_source_count,
+        narrative_hits,
+        propaganda_score: state.propaganda_score,
+        narrative_diversity: u32::from(state.narrative_diversity),
+        first_propaganda_ms: state.first_propaganda_ms,
+        last_propaganda_ms: state.last_propaganda_ms,
+        propaganda_conversations,
+        hourly_activity,
+        message_fingerprints,
+        narrative_timeline,
+        weekly_propaganda_counts,
     }
 }
 
@@ -1781,6 +1833,62 @@ fn contact_profile_state_from_proto(
         Some(age) => Some(age as u16),
         None => None,
     };
+
+    let mut narrative_hits = Vec::with_capacity(state.narrative_hits.len());
+    for entry in state.narrative_hits {
+        if entry.narrative_id > u8::MAX as u32 {
+            return Err(format!(
+                "narrative_id {} exceeds u8 range",
+                entry.narrative_id
+            ));
+        }
+        narrative_hits.push((entry.narrative_id as u8, entry.count));
+    }
+
+    if state.narrative_diversity > u8::MAX as u32 {
+        return Err(format!(
+            "narrative_diversity {} exceeds u8 range",
+            state.narrative_diversity
+        ));
+    }
+
+    let mut hourly_activity = [0u16; 24];
+    let hourly_len = state.hourly_activity.len().min(24);
+    for (idx, count) in state.hourly_activity.iter().take(hourly_len).enumerate() {
+        if *count > u16::MAX as u32 {
+            return Err(format!("hourly_activity[{idx}]={count} exceeds u16 range"));
+        }
+        hourly_activity[idx] = *count as u16;
+    }
+
+    let mut narrative_timeline =
+        std::collections::VecDeque::with_capacity(state.narrative_timeline.len());
+    for entry in state.narrative_timeline {
+        if entry.narrative_id > u8::MAX as u32 {
+            return Err(format!(
+                "narrative_timeline narrative_id {} exceeds u8 range",
+                entry.narrative_id
+            ));
+        }
+        narrative_timeline.push_back((entry.timestamp_ms, entry.narrative_id as u8));
+    }
+
+    let mut weekly_propaganda_counts =
+        std::collections::VecDeque::with_capacity(state.weekly_propaganda_counts.len());
+    for entry in state.weekly_propaganda_counts {
+        if entry.count > u16::MAX as u32 {
+            return Err(format!(
+                "weekly_propaganda_counts count {} exceeds u16 range",
+                entry.count
+            ));
+        }
+        weekly_propaganda_counts.push_back((entry.week_start_ms, entry.count as u16));
+    }
+
+    let mut propaganda_conversations = Vec::with_capacity(state.propaganda_conversations.len());
+    for conversation_id in state.propaganda_conversations {
+        propaganda_conversations.push(aura_core::ConversationId::from(conversation_id));
+    }
 
     Ok(CoreContactProfileState {
         sender_id: aura_core::SenderId::from(state.sender_id),
@@ -1796,18 +1904,18 @@ fn contact_profile_state_from_proto(
         grooming_event_count: state.grooming_event_count,
         bullying_event_count: state.bullying_event_count,
         manipulation_event_count: state.manipulation_event_count,
-        propaganda_event_count: 0,
-        propaganda_source_count: 0,
-        narrative_hits: Vec::new(),
-        propaganda_score: 0.0,
-        narrative_diversity: 0,
-        first_propaganda_ms: 0,
-        last_propaganda_ms: 0,
-        propaganda_conversations: Vec::new(),
-        hourly_activity: [0u16; 24],
-        message_fingerprints: std::collections::VecDeque::new(),
-        narrative_timeline: std::collections::VecDeque::new(),
-        weekly_propaganda_counts: std::collections::VecDeque::new(),
+        propaganda_event_count: state.propaganda_event_count,
+        propaganda_source_count: state.propaganda_source_count,
+        narrative_hits,
+        propaganda_score: state.propaganda_score,
+        narrative_diversity: state.narrative_diversity as u8,
+        first_propaganda_ms: state.first_propaganda_ms,
+        last_propaganda_ms: state.last_propaganda_ms,
+        propaganda_conversations,
+        hourly_activity,
+        message_fingerprints: std::collections::VecDeque::from(state.message_fingerprints),
+        narrative_timeline,
+        weekly_propaganda_counts,
         is_trusted: state.is_trusted,
         severity_sum: state.severity_sum,
         severity_count: state.severity_count,
@@ -1841,6 +1949,7 @@ fn behavioral_snapshot_state_to_proto(
         grooming_count: state.grooming_count,
         manipulation_count: state.manipulation_count,
         avg_severity: state.avg_severity,
+        propaganda_count: state.propaganda_count,
     }
 }
 
@@ -1856,7 +1965,7 @@ fn behavioral_snapshot_state_from_proto(
         neutral_count: state.neutral_count,
         grooming_count: state.grooming_count,
         manipulation_count: state.manipulation_count,
-        propaganda_count: 0,
+        propaganda_count: state.propaganda_count,
         avg_severity: state.avg_severity,
     }
 }

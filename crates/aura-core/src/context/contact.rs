@@ -15,6 +15,9 @@ use super::events::ContextEvent;
 const WEEK_MS: u64 = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 const MAX_SNAPSHOTS: usize = 26;
+const MAX_NARRATIVE_TIMELINE: usize = 100;
+const MAX_MESSAGE_FINGERPRINTS: usize = 200;
+const MAX_WEEKLY_PROPAGANDA_BUCKETS: usize = 52;
 /// Default upper bound for the number of contact profiles stored.
 pub const DEFAULT_MAX_CONTACT_PROFILES: usize = 1_000;
 
@@ -168,6 +171,8 @@ pub struct ContactProfile {
     pub narrative_timeline: VecDeque<(u64, u8)>,
     #[serde(default)]
     pub weekly_propaganda_counts: VecDeque<(u64, u16)>,
+    #[serde(default)]
+    last_fingerprint_marker: Option<(u64, u64)>,
     severity_count: u64,
     severity_sum: f32,
     #[serde(default = "default_rating")]
@@ -295,6 +300,7 @@ impl From<ContactProfileState> for ContactProfile {
             message_fingerprints: profile.message_fingerprints,
             narrative_timeline: profile.narrative_timeline,
             weekly_propaganda_counts: profile.weekly_propaganda_counts,
+            last_fingerprint_marker: None,
             grooming_event_count: profile.grooming_event_count,
             bullying_event_count: profile.bullying_event_count,
             manipulation_event_count: profile.manipulation_event_count,
@@ -343,6 +349,7 @@ impl ContactProfile {
             message_fingerprints: VecDeque::new(),
             narrative_timeline: VecDeque::new(),
             weekly_propaganda_counts: VecDeque::new(),
+            last_fingerprint_marker: None,
             is_trusted: false,
             severity_sum: 0.0,
             severity_count: 0,
@@ -390,7 +397,9 @@ impl ContactProfile {
     fn record_narrative_hit(&mut self, subtype: &str, timestamp_ms: u64) {
         use crate::context::propaganda::NarrativeId;
 
-        let Some(nid) = NarrativeId::from_subtype(subtype) else { return };
+        let Some(nid) = NarrativeId::from_subtype(subtype) else {
+            return;
+        };
         let nid_u8 = nid as u8;
 
         let mut found = false;
@@ -407,10 +416,45 @@ impl ContactProfile {
 
         self.narrative_diversity = self.narrative_hits.len() as u8;
 
-        if self.narrative_timeline.len() >= 100 {
+        if self.narrative_timeline.len() >= MAX_NARRATIVE_TIMELINE {
             self.narrative_timeline.pop_front();
         }
         self.narrative_timeline.push_back((timestamp_ms, nid_u8));
+    }
+
+    fn record_weekly_propaganda_count(&mut self, timestamp_ms: u64) {
+        let week_start_ms = (timestamp_ms / WEEK_MS) * WEEK_MS;
+        for bucket in &mut self.weekly_propaganda_counts {
+            if bucket.0 == week_start_ms {
+                bucket.1 = bucket.1.saturating_add(1);
+                return;
+            }
+        }
+        let mut insert_idx = self.weekly_propaganda_counts.len();
+        for (idx, bucket) in self.weekly_propaganda_counts.iter().enumerate() {
+            if week_start_ms < bucket.0 {
+                insert_idx = idx;
+                break;
+            }
+        }
+        self.weekly_propaganda_counts
+            .insert(insert_idx, (week_start_ms, 1));
+        while self.weekly_propaganda_counts.len() > MAX_WEEKLY_PROPAGANDA_BUCKETS {
+            self.weekly_propaganda_counts.pop_front();
+        }
+    }
+
+    fn record_message_fingerprint(&mut self, timestamp_ms: u64, content_hash: u64) {
+        if let Some((last_timestamp_ms, last_hash)) = self.last_fingerprint_marker {
+            if last_timestamp_ms == timestamp_ms && last_hash == content_hash {
+                return;
+            }
+        }
+        if self.message_fingerprints.len() >= MAX_MESSAGE_FINGERPRINTS {
+            self.message_fingerprints.pop_front();
+        }
+        self.message_fingerprints.push_back(content_hash);
+        self.last_fingerprint_marker = Some((timestamp_ms, content_hash));
     }
 
     fn update_propaganda_score(&mut self) {
@@ -488,6 +532,12 @@ impl ContactProfile {
         let bullying_score = (self.bullying_event_count as f32 * 0.08).min(0.3);
         if bullying_score > best_score && bullying_score > 0.0 {
             dominant = ThreatType::Bullying;
+            best_score = bullying_score;
+        }
+
+        let propaganda_score = (self.propaganda_event_count as f32 * 0.06).min(0.3);
+        if propaganda_score > best_score && propaganda_score > 0.0 {
+            dominant = ThreatType::Propaganda;
         }
 
         dominant
@@ -505,12 +555,10 @@ impl ContactProfile {
 
         self.recalculate_circle_tier();
 
-        if event.kind.is_hostile() {
-            self.decay_trust(event.kind.severity());
-        }
-
         if event.kind.is_propaganda_indicator() {
             self.decay_trust(event.kind.severity() * 0.5);
+        } else if event.kind.is_hostile() {
+            self.decay_trust(event.kind.severity());
         }
     }
 
@@ -750,7 +798,8 @@ impl ContactProfiler {
             profile.manipulation_event_count += 1;
         }
 
-        if event.kind.is_propaganda_indicator() {
+        let is_propaganda_event = event.kind.is_propaganda_indicator();
+        if is_propaganda_event {
             profile.propaganda_event_count += 1;
             if profile.first_propaganda_ms == 0 {
                 profile.first_propaganda_ms = event.timestamp_ms;
@@ -760,21 +809,31 @@ impl ContactProfiler {
             if let Some(ref st) = event.subtype {
                 profile.record_narrative_hit(st, event.timestamp_ms);
             }
+            profile.record_weekly_propaganda_count(event.timestamp_ms);
+            if let Some(content_hash) = event.content_hash {
+                profile.record_message_fingerprint(event.timestamp_ms, content_hash);
+            }
 
             let hour = ((event.timestamp_ms / 3_600_000) % 24) as usize;
             profile.hourly_activity[hour] = profile.hourly_activity[hour].saturating_add(1);
 
-            if !profile.propaganda_conversations.contains(&event.conversation_id) {
+            if !profile
+                .propaganda_conversations
+                .contains(&event.conversation_id)
+            {
                 if profile.propaganda_conversations.len() < 50 {
-                    profile.propaganda_conversations.push(event.conversation_id.clone());
+                    profile
+                        .propaganda_conversations
+                        .push(event.conversation_id.clone());
                 }
             }
 
-            profile.update_propaganda_score();
+            if event.kind == EventKind::SuspiciousSource {
+                profile.propaganda_source_count += 1;
+            }
         }
-
-        if event.kind == EventKind::SuspiciousSource {
-            profile.propaganda_source_count += 1;
+        if profile.propaganda_event_count > 0 {
+            profile.update_propaganda_score();
         }
 
         let severity = event.kind.severity();
@@ -1110,9 +1169,11 @@ impl ContactProfiler {
                     } else {
                         local.first_propaganda_ms.min(incoming.first_propaganda_ms)
                     };
-                    local.last_propaganda_ms = local.last_propaganda_ms.max(incoming.last_propaganda_ms);
+                    local.last_propaganda_ms =
+                        local.last_propaganda_ms.max(incoming.last_propaganda_ms);
                     local.propaganda_score = local.propaganda_score.max(incoming.propaganda_score);
-                    local.narrative_diversity = local.narrative_diversity.max(incoming.narrative_diversity);
+                    local.narrative_diversity =
+                        local.narrative_diversity.max(incoming.narrative_diversity);
                     for (nid, count) in &incoming.narrative_hits {
                         let mut found = false;
                         for entry in &mut local.narrative_hits {
@@ -1126,10 +1187,100 @@ impl ContactProfiler {
                             local.narrative_hits.push((*nid, *count));
                         }
                     }
+                    local.narrative_diversity = local.narrative_hits.len() as u8;
                     for conv in &incoming.propaganda_conversations {
-                        if !local.propaganda_conversations.contains(conv) && local.propaganda_conversations.len() < 50 {
+                        if !local.propaganda_conversations.contains(conv)
+                            && local.propaganda_conversations.len() < 50
+                        {
                             local.propaganda_conversations.push(conv.clone());
                         }
+                    }
+                    for (idx, count) in incoming.hourly_activity.iter().enumerate() {
+                        local.hourly_activity[idx] = local.hourly_activity[idx].max(*count);
+                    }
+
+                    let mut local_fingerprint_counts: HashMap<u64, usize> = HashMap::new();
+                    for fingerprint in &local.message_fingerprints {
+                        let entry = local_fingerprint_counts.entry(*fingerprint).or_insert(0);
+                        *entry += 1;
+                    }
+                    let mut incoming_fingerprint_counts: HashMap<u64, usize> = HashMap::new();
+                    for fingerprint in incoming.message_fingerprints {
+                        let entry = incoming_fingerprint_counts.entry(fingerprint).or_insert(0);
+                        *entry += 1;
+                    }
+                    let mut fingerprint_counts = local_fingerprint_counts;
+                    for (fingerprint, incoming_count) in incoming_fingerprint_counts {
+                        let entry = fingerprint_counts.entry(fingerprint).or_insert(0);
+                        *entry = (*entry).max(incoming_count);
+                    }
+                    let mut ranked_fingerprints: Vec<(u64, usize)> =
+                        Vec::with_capacity(fingerprint_counts.len());
+                    for (fingerprint, count) in fingerprint_counts {
+                        ranked_fingerprints.push((fingerprint, count));
+                    }
+                    ranked_fingerprints
+                        .sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+                    local.message_fingerprints.clear();
+                    'outer: for (fingerprint, count) in ranked_fingerprints {
+                        for _ in 0..count {
+                            if local.message_fingerprints.len() >= MAX_MESSAGE_FINGERPRINTS {
+                                break 'outer;
+                            }
+                            local.message_fingerprints.push_back(fingerprint);
+                        }
+                    }
+                    local.last_fingerprint_marker = None;
+
+                    let mut merged_timeline = Vec::with_capacity(
+                        local.narrative_timeline.len() + incoming.narrative_timeline.len(),
+                    );
+                    for point in &local.narrative_timeline {
+                        merged_timeline.push(*point);
+                    }
+                    for point in incoming.narrative_timeline {
+                        merged_timeline.push(point);
+                    }
+                    merged_timeline
+                        .sort_unstable_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+                    merged_timeline.dedup();
+                    if merged_timeline.len() > MAX_NARRATIVE_TIMELINE {
+                        let overflow = merged_timeline.len() - MAX_NARRATIVE_TIMELINE;
+                        merged_timeline.drain(0..overflow);
+                    }
+                    local.narrative_timeline.clear();
+                    for point in merged_timeline {
+                        local.narrative_timeline.push_back(point);
+                    }
+
+                    for (week_start_ms, count) in incoming.weekly_propaganda_counts {
+                        let mut found = false;
+                        for entry in &mut local.weekly_propaganda_counts {
+                            if entry.0 == week_start_ms {
+                                entry.1 = entry.1.max(count);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if !found {
+                            local
+                                .weekly_propaganda_counts
+                                .push_back((week_start_ms, count));
+                        }
+                    }
+                    let mut merged_weekly =
+                        Vec::with_capacity(local.weekly_propaganda_counts.len());
+                    for entry in &local.weekly_propaganda_counts {
+                        merged_weekly.push(*entry);
+                    }
+                    merged_weekly.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+                    if merged_weekly.len() > MAX_WEEKLY_PROPAGANDA_BUCKETS {
+                        let overflow = merged_weekly.len() - MAX_WEEKLY_PROPAGANDA_BUCKETS;
+                        merged_weekly.drain(0..overflow);
+                    }
+                    local.weekly_propaganda_counts.clear();
+                    for entry in merged_weekly {
+                        local.weekly_propaganda_counts.push_back(entry);
                     }
 
                     for conv in incoming.conversations {
@@ -1153,6 +1304,9 @@ impl ContactProfiler {
 
                     local.severity_sum = local.severity_sum.max(incoming.severity_sum);
                     local.severity_count = local.severity_count.max(incoming.severity_count);
+                    if local.propaganda_event_count > 0 {
+                        local.update_propaganda_score();
+                    }
                 }
                 None => {
                     self.profiles.insert(incoming.sender_id.clone(), incoming);
@@ -1485,6 +1639,29 @@ mod tests {
     }
 
     #[test]
+    fn new_risky_contact_uses_propaganda_when_profile_is_propaganda_dominant() {
+        let mut profiler = ContactProfiler::new();
+        for i in 0..6 {
+            let mut event = make_event(
+                "propagandist",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                1000 + i * 1000,
+            );
+            event.subtype = Some("war_denial".to_string());
+            profiler.record_event(&event);
+        }
+
+        let signals = profiler.check_anomalies("propagandist", true);
+        assert!(
+            signals
+                .iter()
+                .any(|signal| signal.threat_type == ThreatType::Propaganda),
+            "propaganda-dominant new contact should emit propaganda anomaly: {signals:?}"
+        );
+    }
+
+    #[test]
     fn cleanup_removes_old_contacts() {
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event(
@@ -1804,6 +1981,152 @@ mod tests {
             profile.trust_level < 0.7,
             "Trust level should be below 0.7, got {}",
             profile.trust_level
+        );
+    }
+
+    #[test]
+    fn propaganda_trust_decay_uses_half_rate() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event(
+            "friend",
+            "conv_1",
+            EventKind::NormalConversation,
+            1_000,
+        ));
+        profiler.mark_trusted("friend");
+
+        profiler.record_event(&make_event(
+            "friend",
+            "conv_1",
+            EventKind::SuspiciousSource,
+            2_000,
+        ));
+
+        let profile = profiler.profile("friend").unwrap();
+        let expected = 1.0 - EventKind::SuspiciousSource.severity() * 0.15 * 0.5;
+        assert!(
+            (profile.trust_level - expected).abs() < 1e-6,
+            "Expected trust_level {}, got {}",
+            expected,
+            profile.trust_level
+        );
+    }
+
+    #[test]
+    fn propaganda_weekly_counts_and_fingerprints_recorded() {
+        let mut profiler = ContactProfiler::new();
+
+        let mut event_a = make_event("agent", "conv_1", EventKind::PropagandaNarrative, 1_000);
+        event_a.subtype = Some("war_denial".to_string());
+        event_a.content_hash = Some(11);
+        profiler.record_event(&event_a);
+
+        let mut event_b = make_event("agent", "conv_1", EventKind::PropagandaNarrative, 2_000);
+        event_b.subtype = Some("war_denial".to_string());
+        event_b.content_hash = Some(11);
+        profiler.record_event(&event_b);
+
+        let mut event_c = make_event(
+            "agent",
+            "conv_1",
+            EventKind::PropagandaNarrative,
+            WEEK_MS + 3_000,
+        );
+        event_c.subtype = Some("capitulation".to_string());
+        event_c.content_hash = Some(22);
+        profiler.record_event(&event_c);
+
+        let profile = profiler.profile("agent").unwrap();
+        assert_eq!(profile.weekly_propaganda_counts.len(), 2);
+        assert_eq!(profile.weekly_propaganda_counts[0].1, 2);
+        assert_eq!(profile.weekly_propaganda_counts[1].1, 1);
+        assert_eq!(profile.message_fingerprints.len(), 3);
+        assert_eq!(profile.message_fingerprints[0], 11);
+        assert_eq!(profile.message_fingerprints[1], 11);
+        assert_eq!(profile.message_fingerprints[2], 22);
+    }
+
+    #[test]
+    fn propaganda_fingerprint_dedup_same_message_marker() {
+        let mut profiler = ContactProfiler::new();
+
+        let mut event_a = make_event("agent", "conv_1", EventKind::PropagandaNarrative, 10_000);
+        event_a.subtype = Some("war_denial".to_string());
+        event_a.content_hash = Some(999);
+        profiler.record_event(&event_a);
+
+        let mut event_b = make_event("agent", "conv_1", EventKind::SuspiciousSource, 10_000);
+        event_b.content_hash = Some(999);
+        profiler.record_event(&event_b);
+
+        let profile = profiler.profile("agent").unwrap();
+        let count = profile
+            .message_fingerprints
+            .iter()
+            .filter(|&&fingerprint| fingerprint == 999)
+            .count();
+        assert_eq!(
+            count, 1,
+            "Same message marker should not duplicate fingerprint"
+        );
+    }
+
+    #[test]
+    fn propaganda_weekly_counts_keep_chronological_order() {
+        let mut profiler = ContactProfiler::new();
+
+        let mut newer = make_event(
+            "agent",
+            "conv_1",
+            EventKind::PropagandaNarrative,
+            WEEK_MS + 1_000,
+        );
+        newer.subtype = Some("war_denial".to_string());
+        profiler.record_event(&newer);
+
+        let mut older = make_event("agent", "conv_1", EventKind::PropagandaNarrative, 1_000);
+        older.subtype = Some("war_denial".to_string());
+        profiler.record_event(&older);
+
+        let profile = profiler.profile("agent").unwrap();
+        assert_eq!(profile.weekly_propaganda_counts.len(), 2);
+        assert!(
+            profile.weekly_propaganda_counts[0].0 < profile.weekly_propaganda_counts[1].0,
+            "Weekly propaganda buckets should stay chronological"
+        );
+    }
+
+    #[test]
+    fn propaganda_score_recomputes_when_concentration_drops() {
+        let mut profiler = ContactProfiler::new();
+
+        for i in 0..10 {
+            let mut event = make_event(
+                "agent",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                1_000 + i * 1_000,
+            );
+            event.subtype = Some("war_denial".to_string());
+            event.content_hash = Some(500 + i);
+            profiler.record_event(&event);
+        }
+
+        let score_before = profiler.profile("agent").unwrap().propaganda_score;
+
+        for i in 0..30 {
+            profiler.record_event(&make_event(
+                "agent",
+                "conv_1",
+                EventKind::NormalConversation,
+                50_000 + i * 1_000,
+            ));
+        }
+
+        let score_after = profiler.profile("agent").unwrap().propaganda_score;
+        assert!(
+            score_after < score_before,
+            "Expected propaganda score to drop after concentration decreases: before={score_before}, after={score_after}"
         );
     }
 
@@ -4054,5 +4377,204 @@ mod tests {
             profile.first_seen_ms, 1000,
             "Should take earliest first_seen"
         );
+    }
+
+    #[test]
+    fn merge_import_preserves_fingerprint_frequency() {
+        let mut profiler_a = ContactProfiler::new();
+        let mut event_a = make_event("alice", "conv_1", EventKind::PropagandaNarrative, 1_000);
+        event_a.subtype = Some("war_denial".to_string());
+        event_a.content_hash = Some(777);
+        profiler_a.record_event(&event_a);
+
+        let mut profiler_b = ContactProfiler::new();
+        for i in 0..5 {
+            let mut event_b = make_event(
+                "alice",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                2_000 + i * 1_000,
+            );
+            event_b.subtype = Some("war_denial".to_string());
+            event_b.content_hash = Some(777);
+            profiler_b.record_event(&event_b);
+        }
+
+        profiler_a.merge_import(profiler_b.export());
+
+        let profile = profiler_a.profile("alice").unwrap();
+        let count = profile
+            .message_fingerprints
+            .iter()
+            .filter(|&&fingerprint| fingerprint == 777)
+            .count();
+        assert!(count >= 5, "Expected repeated fingerprints to be preserved");
+    }
+
+    #[test]
+    fn merge_import_same_state_does_not_inflate_fingerprints() {
+        let mut source = ContactProfiler::new();
+        for i in 0..4 {
+            let mut event = make_event(
+                "alice",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                1_000 + i * 1_000,
+            );
+            event.subtype = Some("war_denial".to_string());
+            event.content_hash = Some(404);
+            source.record_event(&event);
+        }
+
+        let state = source.export();
+        let mut local = ContactProfiler::new();
+        local.merge_import(state.clone());
+        local.merge_import(state);
+
+        let profile = local.profile("alice").unwrap();
+        let count = profile
+            .message_fingerprints
+            .iter()
+            .filter(|&&fingerprint| fingerprint == 404)
+            .count();
+        assert_eq!(
+            count, 4,
+            "Repeated merge of same state should not inflate counts"
+        );
+    }
+
+    #[test]
+    fn merge_import_recomputes_narrative_diversity_from_union() {
+        let mut profiler_a = ContactProfiler::new();
+        let mut a = make_event("alice", "conv_1", EventKind::PropagandaNarrative, 1_000);
+        a.subtype = Some("war_denial".to_string());
+        profiler_a.record_event(&a);
+
+        let mut profiler_b = ContactProfiler::new();
+        let mut b = make_event("alice", "conv_1", EventKind::PropagandaNarrative, 2_000);
+        b.subtype = Some("capitulation".to_string());
+        profiler_b.record_event(&b);
+
+        profiler_a.merge_import(profiler_b.export());
+
+        let profile = profiler_a.profile("alice").unwrap();
+        assert_eq!(
+            profile.narrative_diversity, 2,
+            "Narrative diversity should reflect merged unique narrative ids"
+        );
+    }
+
+    #[test]
+    fn merge_import_same_state_does_not_inflate_weekly_counts() {
+        let mut source = ContactProfiler::new();
+        for i in 0..4 {
+            let mut event = make_event(
+                "alice",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                1_000 + i * 1_000,
+            );
+            event.subtype = Some("war_denial".to_string());
+            source.record_event(&event);
+        }
+
+        let state = source.export();
+        let mut local = ContactProfiler::new();
+        local.merge_import(state.clone());
+        local.merge_import(state);
+
+        let profile = local.profile("alice").unwrap();
+        assert_eq!(profile.weekly_propaganda_counts.len(), 1);
+        assert_eq!(
+            profile.weekly_propaganda_counts[0].1, 4,
+            "Repeated merge of same state should not inflate per-week counts"
+        );
+    }
+
+    #[test]
+    fn merge_import_is_idempotent_for_same_state() {
+        let mut source = ContactProfiler::new();
+        for i in 0..6 {
+            let mut event = make_event(
+                "alice",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                1_000 + i * 1_000,
+            );
+            event.subtype = Some("war_denial".to_string());
+            event.content_hash = Some(901);
+            source.record_event(&event);
+        }
+        for i in 0..3 {
+            source.record_event(&make_event(
+                "alice",
+                "conv_1",
+                EventKind::NormalConversation,
+                20_000 + i * 1_000,
+            ));
+        }
+
+        let state = source.export();
+        let mut local = ContactProfiler::new();
+        local.merge_import(state.clone());
+        let before = local.profile("alice").unwrap().clone();
+        local.merge_import(state);
+        let after = local.profile("alice").unwrap().clone();
+
+        assert_eq!(before.propaganda_event_count, after.propaganda_event_count);
+        assert_eq!(
+            before.propaganda_source_count,
+            after.propaganda_source_count
+        );
+        assert_eq!(before.narrative_hits, after.narrative_hits);
+        assert_eq!(before.narrative_diversity, after.narrative_diversity);
+        assert_eq!(
+            before.weekly_propaganda_counts,
+            after.weekly_propaganda_counts
+        );
+        assert_eq!(before.message_fingerprints, after.message_fingerprints);
+        assert!(
+            (before.propaganda_score - after.propaganda_score).abs() < 1e-6,
+            "Idempotent merge should keep propaganda_score stable"
+        );
+    }
+
+    #[test]
+    fn merge_import_never_decreases_cautious_counters() {
+        let mut local = ContactProfiler::new();
+        let mut local_event = make_event("alice", "conv_1", EventKind::PropagandaNarrative, 1_000);
+        local_event.subtype = Some("war_denial".to_string());
+        local_event.content_hash = Some(777);
+        local.record_event(&local_event);
+        local.record_event(&make_event(
+            "alice",
+            "conv_1",
+            EventKind::SuspiciousSource,
+            2_000,
+        ));
+
+        let mut incoming_profiler = ContactProfiler::new();
+        for i in 0..4 {
+            let mut event = make_event(
+                "alice",
+                "conv_2",
+                EventKind::PropagandaNarrative,
+                3_000 + i * 1_000,
+            );
+            event.subtype = Some("capitulation".to_string());
+            event.content_hash = Some(888);
+            incoming_profiler.record_event(&event);
+        }
+
+        let before = local.profile("alice").unwrap().clone();
+        local.merge_import(incoming_profiler.export());
+        let after = local.profile("alice").unwrap().clone();
+
+        assert!(after.propaganda_event_count >= before.propaganda_event_count);
+        assert!(after.propaganda_source_count >= before.propaganda_source_count);
+        assert!(after.narrative_diversity >= before.narrative_diversity);
+        assert!(after.propaganda_conversations.len() >= before.propaganda_conversations.len());
+        assert!(after.last_seen_ms >= before.last_seen_ms);
+        assert!(after.first_seen_ms <= before.first_seen_ms);
     }
 }

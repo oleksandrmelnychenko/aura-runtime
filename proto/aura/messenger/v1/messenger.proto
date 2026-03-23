@@ -508,6 +508,8 @@ message ContextEvent {
   string conversation_id = 4;
   EventKind kind = 5;
   float confidence = 6;
+  string subtype = 7;
+  optional uint64 content_hash = 8;
 }
 
 message ConversationTimelineState {
@@ -526,6 +528,22 @@ message BehavioralSnapshotState {
   uint32 grooming_count = 7;
   uint32 manipulation_count = 8;
   float avg_severity = 9;
+  uint32 propaganda_count = 10;
+}
+
+message NarrativeHit {
+  uint32 narrative_id = 1;
+  uint32 count = 2;
+}
+
+message NarrativeTimelineEntry {
+  uint64 timestamp_ms = 1;
+  uint32 narrative_id = 2;
+}
+
+message WeeklyPropagandaCount {
+  uint64 week_start_ms = 1;
+  uint32 count = 2;
 }
 
 message ContactProfileState {
@@ -549,6 +567,18 @@ message ContactProfileState {
   repeated BehavioralSnapshotState weekly_snapshots = 18;
   BehavioralSnapshotState current_snapshot = 19;
   repeated uint32 active_days = 20;
+  uint64 propaganda_event_count = 21;
+  uint64 propaganda_source_count = 22;
+  repeated NarrativeHit narrative_hits = 23;
+  float propaganda_score = 24;
+  uint32 narrative_diversity = 25;
+  uint64 first_propaganda_ms = 26;
+  uint64 last_propaganda_ms = 27;
+  repeated string propaganda_conversations = 28;
+  repeated uint32 hourly_activity = 29;
+  repeated uint64 message_fingerprints = 30;
+  repeated NarrativeTimelineEntry narrative_timeline = 31;
+  repeated WeeklyPropagandaCount weekly_propaganda_counts = 32;
 }
 
 message ContactProfilerState {
