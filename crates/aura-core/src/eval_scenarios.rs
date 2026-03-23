@@ -47,6 +47,788 @@ pub fn canonical_multilingual_scenarios() -> Vec<ScenarioCase> {
     ]
 }
 
+pub fn canonical_propaganda_scenarios() -> Vec<ScenarioCase> {
+    vec![
+        propaganda_bot_new_account_case(),
+        propaganda_bot_multi_chat_case(),
+        propaganda_radicalization_slow_burn_case(),
+        propaganda_narrative_escalation_case(),
+        propaganda_nocturnal_bot_case(),
+        propaganda_high_concentration_case(),
+        propaganda_persistent_hammering_case(),
+        propaganda_mixed_grooming_case(),
+        propaganda_ru_narrative_flood_case(),
+        propaganda_uk_whataboutism_case(),
+        propaganda_source_seeding_case(),
+        propaganda_multi_narrative_campaign_case(),
+        propaganda_false_consensus_case(),
+        propaganda_economic_fear_case(),
+        propaganda_religious_manipulation_case(),
+        negative_control_political_discussion_case(),
+        negative_control_history_lesson_case(),
+        negative_control_news_sharing_case(),
+    ]
+}
+
+fn propaganda_bot_new_account_case() -> ScenarioCase {
+    let min = 60_000u64;
+    ScenarioCase {
+        name: "propaganda_bot_new_account".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang(
+                    "\u{0423}\u{043A}\u{0440}\u{0430}\u{0457}\u{043D}\u{0430} \u{043C}\u{0430}\u{0440}\u{0456}\u{043E}\u{043D}\u{0435}\u{0442}\u{043A}\u{043E}\u{0432}\u{0438}\u{0439} \u{0440}\u{0435}\u{0436}\u{0438}\u{043C}, \u{043D}\u{0430}\u{0446}\u{0438}\u{0441}\u{0442}\u{0438} \u{043F}\u{0440}\u{0438} \u{0432}\u{043B}\u{0430}\u{0434}\u{0456}",
+                    "new_bot_1",
+                    "group_chat_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * min,
+                input: group_msg_lang(
+                    "\u{0417}\u{0430}\u{0445}\u{0456}\u{0434} \u{043D}\u{0435} \u{043F}\u{043E}\u{0442}\u{0440}\u{0456}\u{0431}\u{0435}\u{043D}, \u{0442}\u{0440}\u{0435}\u{0431}\u{0430} \u{0437}\u{0434}\u{0430}\u{0442}\u{0438}\u{0441}\u{044F} \u{0456} \u{0432}\u{0441}\u{0435} \u{0431}\u{0443}\u{0434}\u{0435} \u{043D}\u{043E}\u{0440}\u{043C}\u{0430}\u{043B}\u{044C}\u{043D}\u{043E}",
+                    "new_bot_1",
+                    "group_chat_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 4 * min,
+                input: group_msg_lang(
+                    "\u{041C}\u{0438} \u{0431}\u{0440}\u{0430}\u{0442}\u{0441}\u{044C}\u{043A}\u{0456} \u{043D}\u{0430}\u{0440}\u{043E}\u{0434}\u{0438}, \u{043D}\u{0430}\u{0432}\u{0456}\u{0449}\u{043E} \u{0432}\u{043E}\u{044E}\u{0432}\u{0430}\u{0442}\u{0438}?",
+                    "new_bot_1",
+                    "group_chat_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 6 * min,
+                input: group_msg_lang(
+                    "\u{0417}\u{0430}\u{0445}\u{0456}\u{0434} \u{043F}\u{0440}\u{043E}\u{0434}\u{0430}\u{0432} \u{0423}\u{043A}\u{0440}\u{0430}\u{0457}\u{043D}\u{0443} \u{0437}\u{0430}\u{0445}\u{043E}\u{0434}\u{0443}. \u{041A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F} \u{2014} \u{0454}\u{0434}\u{0438}\u{043D}\u{0438}\u{0439} \u{0432}\u{0438}\u{0445}\u{0456}\u{0434}.",
+                    "new_bot_1",
+                    "group_chat_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 8 * min,
+                input: group_msg_lang(
+                    "\u{041D}\u{0410}\u{0422}\u{041E} \u{043D}\u{0430}\u{0441} \u{043E}\u{0431}\u{043C}\u{0430}\u{043D}\u{044E}\u{0454}, \u{0410}\u{043C}\u{0435}\u{0440}\u{0438}\u{043A}\u{0430} \u{0432}\u{0438}\u{043A}\u{043E}\u{0440}\u{0438}\u{0441}\u{0442}\u{043E}\u{0432}\u{0443}\u{0454} \u{0423}\u{043A}\u{0440}\u{0430}\u{0457}\u{043D}\u{0443}",
+                    "new_bot_1",
+                    "group_chat_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_bot_multi_chat_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_bot_multi_chat".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang(
+                    "\u{0412}\u{0456}\u{0439}\u{043D}\u{0430} \u{0432}\u{0436}\u{0435} \u{043F}\u{0440}\u{043E}\u{0433}\u{0440}\u{0430}\u{043D}\u{0430}, \u{043A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F}!",
+                    "bot_spreader",
+                    "chat_a",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg_lang(
+                    "\u{0412}\u{0456}\u{0439}\u{043D}\u{0430} \u{0432}\u{0436}\u{0435} \u{043F}\u{0440}\u{043E}\u{0433}\u{0440}\u{0430}\u{043D}\u{0430}, \u{043A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F}!",
+                    "bot_spreader",
+                    "chat_b",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: group_msg_lang(
+                    "\u{041D}\u{0430}\u{0446}\u{0438}\u{0441}\u{0442}\u{0438} \u{043F}\u{0440}\u{0438} \u{0432}\u{043B}\u{0430}\u{0434}\u{0456}, \u{043D}\u{0435} \u{0432}\u{0456}\u{0440}\u{0442}\u{0435} \u{0417}\u{041C}\u{0406}",
+                    "bot_spreader",
+                    "chat_c",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 3 * hour,
+                input: group_msg_lang(
+                    "\u{0417}\u{0430}\u{0445}\u{0456}\u{0434} \u{043F}\u{0440}\u{043E}\u{0434}\u{0430}\u{0432} \u{043D}\u{0430}\u{0441}!",
+                    "bot_spreader",
+                    "chat_d",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 4 * hour,
+                input: group_msg_lang(
+                    "\u{0411}\u{0440}\u{0430}\u{0442}\u{0441}\u{044C}\u{043A}\u{0456} \u{043D}\u{0430}\u{0440}\u{043E}\u{0434}\u{0438}, \u{043E}\u{0434}\u{043D}\u{0430} \u{0456}\u{0441}\u{0442}\u{043E}\u{0440}\u{0456}\u{044F}",
+                    "bot_spreader",
+                    "chat_e",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_radicalization_slow_burn_case() -> ScenarioCase {
+    let week = 7 * 24 * 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_radicalization_slow_burn".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(3),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg("Hey guys, how's everyone doing?", "radicalizing_user", "group_1"),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: week,
+                input: group_msg("I saw some news, things are complicated with the war", "radicalizing_user", "group_1"),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * week,
+                input: group_msg("Maybe both sides are to blame, you know? Whataboutism cuts both ways", "radicalizing_user", "group_1"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 3 * week,
+                input: group_msg_lang(
+                    "\u{0410} \u{0447}\u{043E}\u{043C}\u{0443} \u{043D}\u{0456}\u{0445}\u{0442}\u{043E} \u{043D}\u{0435} \u{043A}\u{0430}\u{0436}\u{0435} \u{043F}\u{0440}\u{043E} \u{043D}\u{0430}\u{0446}\u{0438}\u{0441}\u{0442}\u{0456}\u{0432} \u{0432} \u{0423}\u{043A}\u{0440}\u{0430}\u{0457}\u{043D}\u{0456}?",
+                    "radicalizing_user",
+                    "group_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 4 * week,
+                input: group_msg_lang(
+                    "\u{041A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F} \u{0454}\u{0434}\u{0438}\u{043D}\u{0438}\u{0439} \u{0432}\u{0438}\u{0445}\u{0456}\u{0434}, \u{0446}\u{0456} \u{0443}\u{043A}\u{0440}\u{043E}\u{043F}\u{0438} \u{043D}\u{0430}\u{0441} \u{0432}\u{0431}\u{0438}\u{0432}\u{0430}\u{044E}\u{0442}\u{044C}",
+                    "radicalizing_user",
+                    "group_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_narrative_escalation_case() -> ScenarioCase {
+    let day = 86_400_000u64;
+    ScenarioCase {
+        name: "propaganda_narrative_escalation".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg("But what about American wars? Nobody talks about Iraq", "escalator", "esc_1"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: day,
+                input: group_msg_lang("\u{041C}\u{0438} \u{0431}\u{0440}\u{0430}\u{0442}\u{0441}\u{044C}\u{043A}\u{0456} \u{043D}\u{0430}\u{0440}\u{043E}\u{0434}\u{0438}, \u{043E}\u{0434}\u{043D}\u{0430} \u{043A}\u{0443}\u{043B}\u{044C}\u{0442}\u{0443}\u{0440}\u{0430}", "escalator", "esc_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 3 * day,
+                input: group_msg_lang("\u{0412}\u{0456}\u{0439}\u{043D}\u{0430} \u{043D}\u{0435} \u{0432}\u{0456}\u{0439}\u{043D}\u{0430}, \u{0446}\u{0435} \u{0441}\u{043F}\u{0435}\u{0446}\u{043E}\u{043F}\u{0435}\u{0440}\u{0430}\u{0446}\u{0456}\u{044F}. \u{041D}\u{0456}\u{0445}\u{0442}\u{043E} \u{043D}\u{0435} \u{0432}\u{043C}\u{0438}\u{0440}\u{0430}\u{0454}", "escalator", "esc_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 5 * day,
+                input: group_msg_lang(
+                    "\u{0426}\u{0456} \u{0443}\u{043A}\u{0440}\u{043E}\u{043F}\u{0438} \u{043D}\u{0435} \u{043B}\u{044E}\u{0434}\u{0438}, \u{0432}\u{043E}\u{043D}\u{0438} \u{0437}\u{0430}\u{0441}\u{043B}\u{0443}\u{0433}\u{043E}\u{0432}\u{0443}\u{044E}\u{0442}\u{044C} \u{0442}\u{0435}, \u{0449}\u{043E} \u{0432}\u{0456}\u{0434}\u{0431}\u{0443}\u{0432}\u{0430}\u{0454}\u{0442}\u{044C}\u{0441}\u{044F}",
+                    "escalator",
+                    "esc_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_nocturnal_bot_case() -> ScenarioCase {
+    let base = 1_710_000_000_000u64;
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_nocturnal_bot".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: base + 2 * hour,
+                input: group_msg_lang("\u{0417}\u{0430}\u{0445}\u{0456}\u{0434} \u{043D}\u{0430}\u{0441} \u{043F}\u{0440}\u{043E}\u{0434}\u{0430}\u{0432}!", "night_bot", "nocturnal_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: base + 3 * hour,
+                input: group_msg_lang("\u{041A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F} \u{0454}\u{0434}\u{0438}\u{043D}\u{0438}\u{0439} \u{0432}\u{0438}\u{0445}\u{0456}\u{0434}!", "night_bot", "nocturnal_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: base + 4 * hour,
+                input: group_msg_lang("\u{041D}\u{0430}\u{0446}\u{0438}\u{0441}\u{0442}\u{0438} \u{043F}\u{0440}\u{0438} \u{0432}\u{043B}\u{0430}\u{0434}\u{0456}!", "night_bot", "nocturnal_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: base + 24 * hour + 1 * hour,
+                input: group_msg_lang("\u{041D}\u{0410}\u{0422}\u{041E} \u{043D}\u{0430}\u{0441} \u{043E}\u{0431}\u{043C}\u{0430}\u{043D}\u{044E}\u{0454}!", "night_bot", "nocturnal_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: base + 24 * hour + 3 * hour,
+                input: group_msg_lang("\u{0411}\u{0440}\u{0430}\u{0442}\u{0441}\u{044C}\u{043A}\u{0456} \u{043D}\u{0430}\u{0440}\u{043E}\u{0434}\u{0438}!", "night_bot", "nocturnal_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_high_concentration_case() -> ScenarioCase {
+    let min = 60_000u64;
+    ScenarioCase {
+        name: "propaganda_high_concentration".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang("\u{041D}\u{0430}\u{0446}\u{0438}\u{0441}\u{0442}\u{0438} \u{043F}\u{0440}\u{0438} \u{0432}\u{043B}\u{0430}\u{0434}\u{0456}!", "concentrated", "conc_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: min,
+                input: group_msg_lang("\u{0411}\u{0440}\u{0430}\u{0442}\u{0441}\u{044C}\u{043A}\u{0456} \u{043D}\u{0430}\u{0440}\u{043E}\u{0434}\u{0438}, \u{043E}\u{0434}\u{043D}\u{0430} \u{043A}\u{0443}\u{043B}\u{044C}\u{0442}\u{0443}\u{0440}\u{0430}!", "concentrated", "conc_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * min,
+                input: group_msg_lang("\u{0417}\u{0430}\u{0445}\u{0456}\u{0434} \u{043F}\u{0440}\u{043E}\u{0434}\u{0430}\u{0432} \u{043D}\u{0430}\u{0441}!", "concentrated", "conc_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 3 * min,
+                input: group_msg_lang("\u{041A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F}!", "concentrated", "conc_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 4 * min,
+                input: group_msg("NATO is using Ukraine as a pawn, wake up!", "concentrated", "conc_1"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 5 * min,
+                input: group_msg_lang("\u{0426}\u{0456} \u{0443}\u{043A}\u{0440}\u{043E}\u{043F}\u{0438} \u{043D}\u{0435} \u{043B}\u{044E}\u{0434}\u{0438}!", "concentrated", "conc_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_persistent_hammering_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_persistent_hammering".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang("\u{041A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F}!", "hammer", "h_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg_lang("\u{0422}\u{0440}\u{0435}\u{0431}\u{0430} \u{0437}\u{0434}\u{0430}\u{0442}\u{0438}\u{0441}\u{044F}!", "hammer", "h_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: group_msg_lang("\u{041A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F} \u{0454}\u{0434}\u{0438}\u{043D}\u{0438}\u{0439} \u{0432}\u{0438}\u{0445}\u{0456}\u{0434}!", "hammer", "h_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 3 * hour,
+                input: group_msg_lang("\u{0417}\u{0434}\u{0430}\u{0439}\u{0442}\u{0435}\u{0441}\u{044F}, \u{0446}\u{0435} \u{043A}\u{0440}\u{0430}\u{0449}\u{0435}!", "hammer", "h_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 4 * hour,
+                input: group_msg_lang("\u{041A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F} \u{0437}\u{0430}\u{0440}\u{0430}\u{0437}!", "hammer", "h_1", "uk"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_mixed_grooming_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_mixed_grooming".to_string(),
+        config: child_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(2),
+        detection_threshold: 0.50,
+        tracked_threats: vec![ThreatType::Propaganda, ThreatType::Grooming],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: direct_msg("Hey, you seem like a smart kid, you're special", "hybrid_pred", "hybrid_1"),
+                observed_threats: vec![ThreatType::Grooming],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: direct_msg_lang(
+                    "\u{0422}\u{0432}\u{043E}\u{0457} \u{0432}\u{0447}\u{0438}\u{0442}\u{0435}\u{043B}\u{0456} \u{0431}\u{0440}\u{0435}\u{0448}\u{0443}\u{0442}\u{044C}. \u{041D}\u{0430}\u{0446}\u{0438}\u{0441}\u{0442}\u{0438} \u{043F}\u{0440}\u{0438} \u{0432}\u{043B}\u{0430}\u{0434}\u{0456}, \u{043A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F}!",
+                    "hybrid_pred",
+                    "hybrid_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: direct_msg(
+                    "Don't tell your parents about me, they won't understand. Keep it secret.",
+                    "hybrid_pred",
+                    "hybrid_1",
+                ),
+                observed_threats: vec![ThreatType::Propaganda, ThreatType::Grooming],
+            },
+            ScenarioStep {
+                timestamp_ms: 3 * hour,
+                input: direct_msg(
+                    "Send me a photo and move to Telegram, I'll show you the real truth",
+                    "hybrid_pred",
+                    "hybrid_1",
+                ),
+                observed_threats: vec![ThreatType::Propaganda, ThreatType::Grooming],
+            },
+        ],
+    }
+}
+
+fn propaganda_ru_narrative_flood_case() -> ScenarioCase {
+    let min = 60_000u64;
+    ScenarioCase {
+        name: "propaganda_ru_narrative_flood".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang(
+                    "\u{042D}\u{0442}\u{043E} \u{043D}\u{0435} \u{0432}\u{043E}\u{0439}\u{043D}\u{0430}, \u{0430} \u{0441}\u{043F}\u{0435}\u{0446}\u{043E}\u{043F}\u{0435}\u{0440}\u{0430}\u{0446}\u{0438}\u{044F}. \u{0423}\u{043A}\u{0440}\u{0430}\u{0438}\u{043D}\u{0430} \u{043D}\u{0435} \u{0441}\u{0443}\u{0449}\u{0435}\u{0441}\u{0442}\u{0432}\u{0443}\u{0435}\u{0442}",
+                    "ru_bot",
+                    "ru_chat_1",
+                    "ru",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * min,
+                input: group_msg_lang(
+                    "\u{041D}\u{0430}\u{0446}\u{0438}\u{0441}\u{0442}\u{044B} \u{0443} \u{0432}\u{043B}\u{0430}\u{0441}\u{0442}\u{0438}, \u{043D}\u{0430}\u{0434}\u{043E} \u{0434}\u{0435}\u{043D}\u{0430}\u{0446}\u{0438}\u{0444}\u{0438}\u{043A}\u{0430}\u{0446}\u{0438}\u{044F}",
+                    "ru_bot",
+                    "ru_chat_1",
+                    "ru",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 4 * min,
+                input: group_msg_lang(
+                    "\u{0411}\u{0440}\u{0430}\u{0442}\u{0441}\u{043A}\u{0438}\u{0435} \u{043D}\u{0430}\u{0440}\u{043E}\u{0434}\u{044B}, \u{043E}\u{0434}\u{0438}\u{043D} \u{044F}\u{0437}\u{044B}\u{043A}, \u{043E}\u{0434}\u{043D}\u{0430} \u{043A}\u{0443}\u{043B}\u{044C}\u{0442}\u{0443}\u{0440}\u{0430}",
+                    "ru_bot",
+                    "ru_chat_1",
+                    "ru",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 6 * min,
+                input: group_msg_lang(
+                    "\u{041D}\u{0410}\u{0422}\u{041E} \u{0438}\u{0441}\u{043F}\u{043E}\u{043B}\u{044C}\u{0437}\u{0443}\u{0435}\u{0442} \u{0423}\u{043A}\u{0440}\u{0430}\u{0438}\u{043D}\u{0443} \u{043A}\u{0430}\u{043A} \u{043F}\u{0443}\u{0448}\u{0435}\u{0447}\u{043D}\u{043E}\u{0435} \u{043C}\u{044F}\u{0441}\u{043E}",
+                    "ru_bot",
+                    "ru_chat_1",
+                    "ru",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_uk_whataboutism_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_uk_whataboutism".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang(
+                    "\u{0410} \u{0449}\u{043E} \u{0410}\u{043C}\u{0435}\u{0440}\u{0438}\u{043A}\u{0430}? \u{0412}\u{043E}\u{043D}\u{0438} \u{0432} \u{0406}\u{0440}\u{0430}\u{043A}\u{0443} \u{0449}\u{043E} \u{0440}\u{043E}\u{0431}\u{0438}\u{043B}\u{0438}?",
+                    "whataboutist",
+                    "whatabout_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg_lang(
+                    "\u{041D}\u{0456}\u{0445}\u{0442}\u{043E} \u{043D}\u{0435} \u{043A}\u{0430}\u{0436}\u{0435} \u{043F}\u{0440}\u{043E} \u{0437}\u{043B}\u{043E}\u{0447}\u{0438}\u{043D}\u{0438} \u{0417}\u{0421}\u{0423}, \u{0442}\u{0456}\u{043B}\u{044C}\u{043A}\u{0438} \u{043F}\u{0440}\u{043E} \u{0420}\u{043E}\u{0441}\u{0456}\u{044E}!",
+                    "whataboutist",
+                    "whatabout_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: group_msg_lang(
+                    "\u{041F}\u{043E}\u{0434}\u{0432}\u{0456}\u{0439}\u{043D}\u{0456} \u{0441}\u{0442}\u{0430}\u{043D}\u{0434}\u{0430}\u{0440}\u{0442}\u{0438}! \u{0417}\u{0430}\u{0445}\u{0456}\u{0434} \u{0440}\u{043E}\u{0431}\u{0438}\u{0442}\u{044C} \u{0442}\u{0435} \u{0441}\u{0430}\u{043C}\u{0435}",
+                    "whataboutist",
+                    "whatabout_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_source_seeding_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_source_seeding".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg("Look at this, real truth: rt.com/article/12345", "seeder", "seed_1"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg("Check this out: tass.com/world/67890", "seeder", "seed_1"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: group_msg("Real journalism: sputniknews.com/politics", "seeder", "seed_1"),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_multi_narrative_campaign_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_multi_narrative_campaign".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang(
+                    "\u{0423}\u{043A}\u{0440}\u{0430}\u{0457}\u{043D}\u{0430} \u{043C}\u{0430}\u{0440}\u{0456}\u{043E}\u{043D}\u{0435}\u{0442}\u{043A}\u{043E}\u{0432}\u{0438}\u{0439} \u{0440}\u{0435}\u{0436}\u{0438}\u{043C}",
+                    "campaign",
+                    "campaign_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg_lang(
+                    "\u{0415}\u{043A}\u{043E}\u{043D}\u{043E}\u{043C}\u{0456}\u{043A}\u{0430} \u{0440}\u{0443}\u{0445}\u{043D}\u{0435}, \u{0433}\u{0440}\u{0438}\u{0432}\u{043D}\u{044F} \u{043D}\u{0456}\u{0447}\u{043E}\u{0433}\u{043E} \u{043D}\u{0435} \u{0432}\u{0430}\u{0440}\u{0442}\u{0430}",
+                    "campaign",
+                    "campaign_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: group_msg_lang(
+                    "\u{0411}\u{0456}\u{0436}\u{0435}\u{043D}\u{0446}\u{0456} \u{0437}\u{0430}\u{0431}\u{0438}\u{0440}\u{0430}\u{044E}\u{0442}\u{044C} \u{0440}\u{043E}\u{0431}\u{043E}\u{0442}\u{0443} \u{0443} \u{0454}\u{0432}\u{0440}\u{043E}\u{043F}\u{0435}\u{0439}\u{0446}\u{0456}\u{0432}",
+                    "campaign",
+                    "campaign_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: 3 * hour,
+                input: group_msg_lang(
+                    "\u{0426}\u{0435}\u{0440}\u{043A}\u{0432}\u{0430} \u{043A}\u{0430}\u{0436}\u{0435} \u{043F}\u{0440}\u{0430}\u{0432}\u{0434}\u{0443} \u{2014} \u{0442}\u{0440}\u{0435}\u{0431}\u{0430} \u{043C}\u{0438}\u{0440}",
+                    "campaign",
+                    "campaign_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_false_consensus_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_false_consensus".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang(
+                    "\u{0412}\u{0441}\u{0456} \u{0437}\u{043D}\u{0430}\u{044E}\u{0442}\u{044C} \u{0449}\u{043E} \u{043D}\u{0430}\u{0446}\u{0438}\u{0441}\u{0442}\u{0438} \u{043F}\u{0440}\u{0438} \u{0432}\u{043B}\u{0430}\u{0434}\u{0456}, \u{043F}\u{0440}\u{043E}\u{0441}\u{0442}\u{043E} \u{0431}\u{043E}\u{044F}\u{0442}\u{044C}\u{0441}\u{044F} \u{0441}\u{043A}\u{0430}\u{0437}\u{0430}\u{0442}\u{0438}",
+                    "false_consensus",
+                    "fc_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg_lang(
+                    "\u{0412}\u{0441}\u{0456} \u{043C}\u{043E}\u{0457} \u{0434}\u{0440}\u{0443}\u{0437}\u{0456} \u{0437}\u{043D}\u{0430}\u{044E}\u{0442}\u{044C} \u{043F}\u{0440}\u{0430}\u{0432}\u{0434}\u{0443} \u{2014} \u{0437}\u{0430}\u{0445}\u{0456}\u{0434} \u{043D}\u{0430}\u{0441} \u{043F}\u{0440}\u{043E}\u{0434}\u{0430}\u{0432}",
+                    "false_consensus",
+                    "fc_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_economic_fear_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_economic_fear".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang(
+                    "\u{0415}\u{043A}\u{043E}\u{043D}\u{043E}\u{043C}\u{0456}\u{043A}\u{0430} \u{0440}\u{0443}\u{0445}\u{043D}\u{0435}, \u{0432}\u{0441}\u{0435} \u{043F}\u{0456}\u{0434}\u{0435} \u{0434}\u{043E}\u{043B}\u{0443}! \u{0413}\u{0440}\u{0438}\u{0432}\u{043D}\u{044F} \u{0431}\u{0443}\u{0434}\u{0435} 100 \u{0437}\u{0430} \u{0434}\u{043E}\u{043B}\u{0430}\u{0440}!",
+                    "fear_monger",
+                    "econ_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg_lang(
+                    "\u{0412}\u{0441}\u{0456} \u{0437}\u{0430}\u{0432}\u{043E}\u{0434}\u{0438} \u{0437}\u{0430}\u{043A}\u{0440}\u{0438}\u{044E}\u{0442}\u{044C}\u{0441}\u{044F}, \u{0440}\u{043E}\u{0431}\u{043E}\u{0442}\u{0438} \u{043D}\u{0435} \u{0431}\u{0443}\u{0434}\u{0435}. \u{041A}\u{0430}\u{043F}\u{0456}\u{0442}\u{0443}\u{043B}\u{044F}\u{0446}\u{0456}\u{044F}!",
+                    "fear_monger",
+                    "econ_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn propaganda_religious_manipulation_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "propaganda_religious_manipulation".to_string(),
+        config: teen_config(),
+        primary_threat: Some(ThreatType::Propaganda),
+        onset_step: Some(0),
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg_lang(
+                    "\u{0426}\u{0435}\u{0440}\u{043A}\u{0432}\u{0430} \u{043A}\u{0430}\u{0436}\u{0435} \u{2014} \u{0442}\u{0440}\u{0435}\u{0431}\u{0430} \u{043C}\u{0438}\u{0440}, \u{0411}\u{043E}\u{0433} \u{043D}\u{0435} \u{0445}\u{043E}\u{0447}\u{0435} \u{0432}\u{0456}\u{0439}\u{043D}\u{0438}",
+                    "religious",
+                    "rel_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg_lang(
+                    "\u{041F}\u{0440}\u{0430}\u{0432}\u{043E}\u{0441}\u{043B}\u{0430}\u{0432}\u{043D}\u{0456} \u{0431}\u{0440}\u{0430}\u{0442}\u{0438}, \u{0437}\u{0434}\u{0430}\u{0439}\u{0442}\u{0435}\u{0441}\u{044F} \u{0437}\u{0430}\u{0440}\u{0430}\u{0434}\u{0438} \u{043C}\u{0438}\u{0440}\u{0443}",
+                    "religious",
+                    "rel_1",
+                    "uk",
+                ),
+                observed_threats: vec![ThreatType::Propaganda],
+            },
+        ],
+    }
+}
+
+fn negative_control_political_discussion_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "negative_control_political_discussion".to_string(),
+        config: teen_config(),
+        primary_threat: None,
+        onset_step: None,
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg("What do you guys think about the election?", "student_1", "class_chat"),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg("I think we should vote for whoever has the best economic plan", "student_2", "class_chat"),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: group_msg("Yeah, but foreign policy matters too. Peace is important.", "student_3", "class_chat"),
+                observed_threats: vec![],
+            },
+        ],
+    }
+}
+
+fn negative_control_history_lesson_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "negative_control_history_lesson".to_string(),
+        config: teen_config(),
+        primary_threat: None,
+        onset_step: None,
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg(
+                    "For tomorrow's homework, read about WWII and the Eastern Front",
+                    "teacher",
+                    "school_1",
+                ),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg(
+                    "The Nazi regime committed terrible atrocities, we study this to prevent it from happening again",
+                    "teacher",
+                    "school_1",
+                ),
+                observed_threats: vec![],
+            },
+        ],
+    }
+}
+
+fn negative_control_news_sharing_case() -> ScenarioCase {
+    let hour = 3_600_000u64;
+    ScenarioCase {
+        name: "negative_control_news_sharing".to_string(),
+        config: teen_config(),
+        primary_threat: None,
+        onset_step: None,
+        detection_threshold: 0.55,
+        tracked_threats: vec![ThreatType::Propaganda],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg("Did you see the news today? The president gave a speech about peace talks.", "friend_1", "friends_chat"),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: group_msg("Yeah, I hope they can find a solution. War is terrible for everyone.", "friend_2", "friends_chat"),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: group_msg("My cousin is serving, I just want him to come home safe.", "friend_1", "friends_chat"),
+                observed_threats: vec![],
+            },
+        ],
+    }
+}
+
 pub fn canonical_noisy_slang_scenarios() -> Vec<ScenarioCase> {
     vec![
         noisy_shorthand_grooming_case(),
@@ -1702,6 +2484,239 @@ mod tests {
             peak_manipulation >= case.detection_threshold,
             "mixed-language screenshot/reputation blackmail should hit manipulation threshold, got {}",
             peak_manipulation
+        );
+    }
+
+    #[test]
+    fn propaganda_pack_contains_positive_and_negative_cases() {
+        let pack = canonical_propaganda_scenarios();
+        let positive_count = pack.iter().filter(|c| c.primary_threat.is_some()).count();
+        let negative_count = pack.iter().filter(|c| c.primary_threat.is_none()).count();
+        assert_eq!(positive_count, 15, "should have 15 positive propaganda scenarios");
+        assert_eq!(negative_count, 3, "should have 3 negative control scenarios");
+    }
+
+    #[test]
+    fn propaganda_pack_runs_through_eval_harness() {
+        let db = PatternDatabase::default_mvp();
+        let pack = canonical_propaganda_scenarios();
+        let runs: Vec<_> = pack
+            .iter()
+            .map(|case| run_scenario_case(&db, case))
+            .collect();
+        let summary = summarize_scenario_runs(&runs, 6);
+
+        assert!(summary.calibration.count > 0);
+        assert_eq!(summary.classification.total_positive_scenarios, 15);
+        assert_eq!(summary.classification.total_negative_scenarios, 3);
+        assert!(
+            summary.classification.positive_detection_rate >= 0.60,
+            "propaganda positives should mostly detect, got {:.2}",
+            summary.classification.positive_detection_rate
+        );
+        assert!(
+            summary.classification.negative_false_positive_rate <= 0.34,
+            "propaganda negative controls should stay mostly clean, got {:.2}",
+            summary.classification.negative_false_positive_rate
+        );
+    }
+
+    #[test]
+    fn propaganda_bot_new_account_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_bot_new_account_case();
+        let run = run_scenario_case(&db, &case);
+        let peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak >= 0.55,
+            "new account bot should be detected, peak={}",
+            peak
+        );
+    }
+
+    #[test]
+    fn propaganda_multi_chat_spreader_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_bot_multi_chat_case();
+        let run = run_scenario_case(&db, &case);
+        let peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak >= 0.55,
+            "multi-chat spreader should be detected, peak={}",
+            peak
+        );
+    }
+
+    #[test]
+    fn propaganda_radicalization_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_radicalization_slow_burn_case();
+        let run = run_scenario_case(&db, &case);
+        let last_step = run.step_results.last().unwrap();
+        let prop_score = predicted_score_for_threat(last_step, ThreatType::Propaganda);
+        assert!(
+            prop_score >= 0.50,
+            "radicalization should be detected by final step, score={}",
+            prop_score
+        );
+    }
+
+    #[test]
+    fn propaganda_narrative_escalation_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_narrative_escalation_case();
+        let run = run_scenario_case(&db, &case);
+        let peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak >= 0.55,
+            "narrative escalation should be detected, peak={}",
+            peak
+        );
+    }
+
+    #[test]
+    fn propaganda_high_concentration_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_high_concentration_case();
+        let run = run_scenario_case(&db, &case);
+        let peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak >= 0.55,
+            "high concentration should be detected, peak={}",
+            peak
+        );
+    }
+
+    #[test]
+    fn propaganda_persistent_hammering_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_persistent_hammering_case();
+        let run = run_scenario_case(&db, &case);
+        let peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak >= 0.55,
+            "persistent hammering should be detected, peak={}",
+            peak
+        );
+    }
+
+    #[test]
+    fn propaganda_mixed_with_grooming_both_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_mixed_grooming_case();
+        let run = run_scenario_case(&db, &case);
+        let prop_peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        let groom_peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Grooming))
+            .fold(0.0f32, f32::max);
+        assert!(
+            prop_peak >= 0.40,
+            "propaganda should be detected in hybrid case, peak={}",
+            prop_peak
+        );
+        assert!(
+            groom_peak >= 0.40,
+            "grooming should also be detected in hybrid case, peak={}",
+            groom_peak
+        );
+    }
+
+    #[test]
+    fn propaganda_ru_narrative_flood_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_ru_narrative_flood_case();
+        let run = run_scenario_case(&db, &case);
+        let peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak >= 0.55,
+            "RU narrative flood should be detected, peak={}",
+            peak
+        );
+    }
+
+    #[test]
+    fn propaganda_source_seeding_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_source_seeding_case();
+        let run = run_scenario_case(&db, &case);
+        let peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak >= 0.55,
+            "source seeding should be detected, peak={}",
+            peak
+        );
+    }
+
+    #[test]
+    fn propaganda_negative_controls_stay_clean() {
+        let db = PatternDatabase::default_mvp();
+        for case in [
+            negative_control_political_discussion_case(),
+            negative_control_history_lesson_case(),
+            negative_control_news_sharing_case(),
+        ] {
+            let run = run_scenario_case(&db, &case);
+            let peak = run
+                .step_results
+                .iter()
+                .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+                .fold(0.0f32, f32::max);
+            assert!(
+                peak < 0.55,
+                "{} should not trigger propaganda, peak={}",
+                case.name, peak
+            );
+        }
+    }
+
+    #[test]
+    fn propaganda_multi_narrative_campaign_detected() {
+        let db = PatternDatabase::default_mvp();
+        let case = propaganda_multi_narrative_campaign_case();
+        let run = run_scenario_case(&db, &case);
+        let peak = run
+            .step_results
+            .iter()
+            .map(|r| predicted_score_for_threat(r, ThreatType::Propaganda))
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak >= 0.55,
+            "multi-narrative campaign should be detected, peak={}",
+            peak
         );
     }
 

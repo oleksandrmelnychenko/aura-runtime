@@ -153,6 +153,7 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
         grooming_count: 5,
         manipulation_count: 2,
         avg_severity: 0.88,
+        propaganda_count: 1,
     };
     let current_snapshot = proto::BehavioralSnapshotState {
         period_start_ms: 1_710_003_600_000,
@@ -164,6 +165,7 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
         grooming_count: 3,
         manipulation_count: 1,
         avg_severity: 0.91,
+        propaganda_count: 2,
     };
 
     proto::TrackerState {
@@ -179,6 +181,8 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
                     conversation_id: "conv_fixture_1".to_string(),
                     kind: proto::EventKind::Flattery as i32,
                     confidence: 0.87,
+                    subtype: String::new(),
+                    content_hash: None,
                 },
                 proto::ContextEvent {
                     event_id: 2,
@@ -187,6 +191,8 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
                     conversation_id: "conv_fixture_1".to_string(),
                     kind: proto::EventKind::SecrecyRequest as i32,
                     confidence: 0.96,
+                    subtype: String::new(),
+                    content_hash: None,
                 },
             ],
         }],
@@ -212,6 +218,27 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
                 weekly_snapshots: vec![weekly_snapshot],
                 current_snapshot: Some(current_snapshot),
                 active_days: vec![1, 2, 4],
+                propaganda_event_count: 2,
+                propaganda_source_count: 1,
+                narrative_hits: vec![proto::NarrativeHit {
+                    narrative_id: 0,
+                    count: 2,
+                }],
+                propaganda_score: 0.42,
+                narrative_diversity: 1,
+                first_propaganda_ms: 1_710_000_150_000,
+                last_propaganda_ms: 1_710_000_200_000,
+                propaganda_conversations: vec!["conv_fixture_1".to_string()],
+                hourly_activity: vec![0; 24],
+                message_fingerprints: vec![0x1122_3344_5566_7788],
+                narrative_timeline: vec![proto::NarrativeTimelineEntry {
+                    timestamp_ms: 1_710_000_150_000,
+                    narrative_id: 0,
+                }],
+                weekly_propaganda_counts: vec![proto::WeeklyPropagandaCount {
+                    week_start_ms: 1_709_913_600_000,
+                    count: 2,
+                }],
             }],
         }),
     }
