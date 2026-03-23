@@ -228,6 +228,8 @@ pub enum InferencePriority {
 pub struct MlConfig {
     pub toxicity_model_path: Option<String>,
     pub sentiment_model_path: Option<String>,
+    pub safety_model_path: Option<String>,
+    pub intent_model_path: Option<String>,
     pub vocab_path: Option<String>,
     pub max_seq_length: usize,
     pub toxicity_threshold: f32,
@@ -284,6 +286,8 @@ impl Default for MlConfig {
         Self {
             toxicity_model_path: None,
             sentiment_model_path: None,
+            safety_model_path: None,
+            intent_model_path: None,
             vocab_path: None,
             max_seq_length: 128,
             toxicity_threshold: 0.5,

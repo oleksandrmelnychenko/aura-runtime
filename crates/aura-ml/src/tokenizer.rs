@@ -16,10 +16,53 @@ pub struct WordPieceTokenizer {
 #[derive(Debug, Clone)]
 pub struct TokenizedInput {
     pub input_ids: Vec<i64>,
-
     pub attention_mask: Vec<i64>,
-
     pub token_type_ids: Vec<i64>,
+}
+
+impl TokenizedInput {
+    pub fn single_segment(input_ids: Vec<i64>, attention_mask: Vec<i64>) -> Self {
+        let len = input_ids.len();
+        Self {
+            input_ids,
+            attention_mask,
+            token_type_ids: vec![0i64; len],
+        }
+    }
+
+    pub fn pair_segments(
+        ids_a: &[i64],
+        ids_b: &[i64],
+        sep_id: i64,
+        pad_id: i64,
+        max_len: usize,
+    ) -> Self {
+        let total = ids_a.len() + 1 + ids_b.len();
+        let real_len = total.min(max_len);
+
+        let mut input_ids = Vec::with_capacity(max_len);
+        input_ids.extend_from_slice(ids_a);
+        input_ids.push(sep_id);
+        let b_budget = real_len.saturating_sub(ids_a.len() + 1);
+        input_ids.extend_from_slice(&ids_b[..b_budget.min(ids_b.len())]);
+        let real_len = input_ids.len();
+        input_ids.resize(max_len, pad_id);
+
+        let mut attention_mask = vec![1i64; real_len];
+        attention_mask.resize(max_len, 0);
+
+        let mut token_type_ids = vec![0i64; max_len];
+        let seg_b_start = ids_a.len() + 1;
+        for i in seg_b_start..real_len {
+            token_type_ids[i] = 1;
+        }
+
+        Self {
+            input_ids,
+            attention_mask,
+            token_type_ids,
+        }
+    }
 }
 
 impl WordPieceTokenizer {

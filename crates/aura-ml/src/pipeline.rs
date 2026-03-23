@@ -5,12 +5,13 @@ use tracing::{debug, info};
 use crate::backend::{GateModel, SentimentBackend, ToxicityBackend};
 use crate::cache::{self, InferenceCache};
 use crate::cascade::{CascadeDecision, CascadePolicy};
+use crate::integrity;
 use crate::gate::LexiconGate;
-use crate::intent::IntentClassifier;
+use crate::intent::{self, IntentClassifier};
 #[cfg(feature = "onnx")]
 use crate::manifest;
 use crate::normalize::normalize_for_ml;
-use crate::safety::SafetyClassifier;
+use crate::safety::{self, SafetyClassifier};
 use crate::sentiment::SentimentAnalyzer;
 use crate::telemetry::InferenceTelemetry;
 #[cfg(feature = "onnx")]
@@ -51,8 +52,8 @@ impl MlPipeline {
             "ML pipeline initialized"
         );
 
-        let safety = SafetyClassifier::fallback_only();
-        let intent = IntentClassifier::fallback_only();
+        let safety = Self::load_safety(&config);
+        let intent = Self::load_intent(&config);
         let gate = LexiconGate::new();
         let cascade = CascadePolicy {
             gate_threshold: config.cascade_gate_threshold,
@@ -142,6 +143,19 @@ impl MlPipeline {
             tracing::warn!("intent classifier returned None");
         }
 
+        if let Some(ref tox) = toxicity {
+            let scores = [tox.toxicity, tox.severe_toxicity, tox.insult, tox.threat, tox.sexual_explicit, tox.identity_attack];
+            if !integrity::validate_output_range(&scores) {
+                tracing::error!("toxicity output out of range: {:?}", scores);
+            }
+        }
+        if let Some(ref s) = safety {
+            let scores = [s.grooming, s.bullying, s.self_harm, s.manipulation, s.safe];
+            if !integrity::validate_output_range(&scores) {
+                tracing::error!("safety output out of range: {:?}", scores);
+            }
+        }
+
         MlResult {
             toxicity,
             sentiment,
@@ -174,6 +188,14 @@ impl MlPipeline {
             result.toxicity.as_ref().map_or(0.0, |t| t.toxicity),
             result.safety.as_ref().map_or(0.0, |s| s.max_risk()),
         );
+    }
+
+    pub fn analyze_batch(&mut self, texts: &[&str]) -> Vec<MlResult> {
+        let mut results = Vec::with_capacity(texts.len());
+        for text in texts {
+            results.push(self.analyze_text(text));
+        }
+        results
     }
 
     pub fn telemetry_summary(&self) -> crate::telemetry::TelemetrySummary {
@@ -261,6 +283,62 @@ impl MlPipeline {
         }
 
         Box::new(SentimentAnalyzer::fallback_only())
+    }
+
+    #[allow(unused_variables)]
+    fn load_safety(config: &MlConfig) -> SafetyClassifier {
+        #[cfg(feature = "onnx")]
+        if let Some(ref model_path) = config.safety_model_path {
+            if let Some(ref vocab_path) = config.vocab_path {
+                match WordPieceTokenizer::from_file(vocab_path, config.max_seq_length) {
+                    Ok(tokenizer) => {
+                        match SafetyClassifier::with_model(
+                            model_path,
+                            tokenizer,
+                            config.intra_threads,
+                        ) {
+                            Ok(classifier) => return classifier,
+                            Err(e) => {
+                                tracing::warn!("Failed to load safety ONNX model: {e}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to load tokenizer vocab for safety: {e}");
+                    }
+                }
+            }
+        }
+
+        SafetyClassifier::fallback_only()
+    }
+
+    #[allow(unused_variables)]
+    fn load_intent(config: &MlConfig) -> IntentClassifier {
+        #[cfg(feature = "onnx")]
+        if let Some(ref model_path) = config.intent_model_path {
+            if let Some(ref vocab_path) = config.vocab_path {
+                match WordPieceTokenizer::from_file(vocab_path, config.max_seq_length) {
+                    Ok(tokenizer) => {
+                        match IntentClassifier::with_model(
+                            model_path,
+                            tokenizer,
+                            config.intra_threads,
+                        ) {
+                            Ok(classifier) => return classifier,
+                            Err(e) => {
+                                tracing::warn!("Failed to load intent ONNX model: {e}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to load tokenizer vocab for intent: {e}");
+                    }
+                }
+            }
+        }
+
+        IntentClassifier::fallback_only()
     }
 }
 

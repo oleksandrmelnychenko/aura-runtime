@@ -13,6 +13,7 @@ pub struct SentencePieceTokenizer {
     eos_id: i64,
     pad_id: i64,
     max_seq_length: usize,
+    max_piece_len: usize,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -62,6 +63,8 @@ impl SentencePieceTokenizer {
         let eos_id = piece_to_id.get("</s>").copied().unwrap_or(2);
         let pad_id = piece_to_id.get("<pad>").copied().unwrap_or(0);
 
+        let max_piece_len = pieces.iter().map(|p| p.chars().count()).max().unwrap_or(1);
+
         Ok(Self {
             pieces,
             piece_to_id,
@@ -71,6 +74,7 @@ impl SentencePieceTokenizer {
             eos_id,
             pad_id,
             max_seq_length,
+            max_piece_len,
         })
     }
 
@@ -94,6 +98,7 @@ impl SentencePieceTokenizer {
             eos_id: 2,
             pad_id: 3,
             max_seq_length,
+            max_piece_len: 5,
         }
     }
 
@@ -158,15 +163,20 @@ impl SentencePieceTokenizer {
         let chars: Vec<char> = text.chars().collect();
         let n = chars.len();
 
+        let max_piece_len = self.max_piece_len.min(n);
+
         let mut best_score = vec![f32::NEG_INFINITY; n + 1];
         let mut best_split = vec![0usize; n + 1];
         best_score[0] = 0.0;
 
         for end in 1..=n {
-            for start in (0..end).rev() {
-                if end - start > 32 {
-                    break;
-                }
+            let search_start = if end > max_piece_len {
+                end - max_piece_len
+            } else {
+                0
+            };
+
+            for start in (search_start..end).rev() {
                 let piece: String = chars[start..end].iter().collect();
                 if let Some(&id) = self.piece_to_id.get(&piece) {
                     let score = best_score[start] + self.scores.get(id as usize).copied().unwrap_or(0.0);
