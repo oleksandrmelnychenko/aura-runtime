@@ -3,18 +3,23 @@ use std::time::Instant;
 use tracing::{debug, info};
 
 use crate::backend::{SentimentBackend, ToxicityBackend};
+use crate::cache::{self, InferenceCache};
 #[cfg(feature = "onnx")]
 use crate::manifest;
+use crate::normalize::normalize_for_ml;
 use crate::sentiment::SentimentAnalyzer;
+use crate::telemetry::InferenceTelemetry;
 #[cfg(feature = "onnx")]
 use crate::tokenizer::WordPieceTokenizer;
 use crate::toxicity::ToxicityClassifier;
-use crate::types::{MlConfig, MlResult};
+use crate::types::{CascadeTier, MlConfig, MlResult};
 
 pub struct MlPipeline {
     toxicity: Box<dyn ToxicityBackend>,
     sentiment: Box<dyn SentimentBackend>,
     config: MlConfig,
+    cache: InferenceCache,
+    telemetry: InferenceTelemetry,
 }
 
 impl MlPipeline {
@@ -38,10 +43,15 @@ impl MlPipeline {
             "ML pipeline initialized"
         );
 
+        let cache = InferenceCache::new(config.cache_size, config.cache_ttl_secs);
+        let telemetry = InferenceTelemetry::new();
+
         let mut pipeline = Self {
             toxicity,
             sentiment,
             config,
+            cache,
+            telemetry,
         };
 
         if pipeline.has_onnx_backend() && pipeline.config.warmup_on_init {
@@ -55,6 +65,7 @@ impl MlPipeline {
         Self::new(MlConfig {
             use_fallback: true,
             warmup_on_init: false,
+            cascade_enabled: false,
             ..Default::default()
         })
     }
@@ -62,24 +73,77 @@ impl MlPipeline {
     pub fn analyze_text(&mut self, text: &str) -> MlResult {
         let start = Instant::now();
 
-        let toxicity = self.toxicity.predict(text);
-        let sentiment = self.sentiment.predict(text);
+        let normalized = normalize_for_ml(text);
+        let text_hash = cache::text_hash(&normalized);
+
+        if let Some(cached) = self.cache.get(text_hash) {
+            let mut result = cached.clone();
+            result.cache_hit = true;
+            result.tier = CascadeTier::Cached;
+            let elapsed_us = start.elapsed().as_micros() as u64;
+            result.inference_time_us = elapsed_us;
+            self.telemetry.record(
+                timestamp_ms_now(),
+                elapsed_us as u32,
+                CascadeTier::Cached,
+                true,
+                result.toxicity.as_ref().map_or(0.0, |t| t.toxicity),
+                result.safety.as_ref().map_or(0.0, |s| s.max_risk()),
+            );
+            return result;
+        }
+
+        let toxicity = self.toxicity.predict(&normalized);
+        let sentiment = self.sentiment.predict(&normalized);
 
         let elapsed = start.elapsed();
         let inference_time_us = elapsed.as_micros() as u64;
+
+        let tier = if self.has_onnx_backend() {
+            CascadeTier::Deep
+        } else {
+            CascadeTier::Gate
+        };
 
         debug!(
             inference_us = inference_time_us,
             has_toxicity = toxicity.is_some(),
             has_sentiment = sentiment.is_some(),
+            tier = ?tier,
             "ML pipeline analysis complete"
         );
 
-        MlResult {
+        let result = MlResult {
             toxicity,
             sentiment,
+            safety: None,
+            intent: None,
             inference_time_us,
-        }
+            tier,
+            cache_hit: false,
+        };
+
+        self.cache.insert(text_hash, result.clone());
+        self.telemetry.record(
+            timestamp_ms_now(),
+            inference_time_us as u32,
+            tier,
+            false,
+            result.toxicity.as_ref().map_or(0.0, |t| t.toxicity),
+            0.0,
+        );
+
+        result
+    }
+
+    /// Returns the current telemetry summary.
+    pub fn telemetry_summary(&self) -> crate::telemetry::TelemetrySummary {
+        self.telemetry.summary()
+    }
+
+    /// Returns the inference cache hit rate.
+    pub fn cache_hit_rate(&self) -> f32 {
+        self.cache.hit_rate()
     }
 
     pub fn toxicity_threshold(&self) -> f32 {
@@ -159,6 +223,13 @@ impl MlPipeline {
 
         Box::new(SentimentAnalyzer::fallback_only())
     }
+}
+
+fn timestamp_ms_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

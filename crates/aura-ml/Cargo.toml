@@ -17,6 +17,7 @@ thiserror.workspace = true
 tracing.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+unicode-normalization.workspace = true
 aho-corasick = "1"
 
 # ONNX Runtime — optional, only when `onnx` feature is enabled.
