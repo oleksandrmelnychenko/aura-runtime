@@ -40,10 +40,14 @@ pub struct ToxicityClassifier {
 
 impl ToxicityClassifier {
     #[cfg(feature = "onnx")]
-    pub fn with_model(model_path: &str, tokenizer: WordPieceTokenizer) -> Result<Self, MlError> {
+    pub fn with_model(
+        model_path: &str,
+        tokenizer: WordPieceTokenizer,
+        intra_threads: usize,
+    ) -> Result<Self, MlError> {
         let session = ort::session::Session::builder()
             .map_err(|e| MlError::ModelLoadFailed(e.to_string()))?
-            .with_intra_threads(1)
+            .with_intra_threads(intra_threads)
             .map_err(|e| MlError::ModelLoadFailed(e.to_string()))?
             .commit_from_file(model_path)
             .map_err(|e| MlError::ModelLoadFailed(e.to_string()))?;
@@ -102,7 +106,7 @@ impl ToxicityClassifier {
         let tokenizer = self
             .tokenizer
             .as_ref()
-            .expect("predict_onnx only used when ONNX loaded");
+            .ok_or_else(|| MlError::InferenceFailed("tokenizer not loaded".into()))?;
         let encoded = tokenizer.encode(text);
         let seq_len = encoded.input_ids.len();
 
@@ -127,7 +131,7 @@ impl ToxicityClassifier {
         let session = self
             .session
             .as_mut()
-            .expect("predict_onnx only used when ONNX loaded");
+            .ok_or_else(|| MlError::InferenceFailed("ONNX session not loaded".into()))?;
         let outputs = session
             .run(ort::inputs![input_ids, attention_mask, token_type_ids])
             .map_err(|e| MlError::InferenceFailed(e.to_string()))?;

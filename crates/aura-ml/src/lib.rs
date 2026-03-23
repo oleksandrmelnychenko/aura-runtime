@@ -5,6 +5,7 @@
 
 pub mod backend;
 pub mod boundary;
+pub mod manifest;
 pub mod pipeline;
 pub mod sentiment;
 pub mod tokenizer;

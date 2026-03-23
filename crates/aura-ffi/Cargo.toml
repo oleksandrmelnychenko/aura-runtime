@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 description = "C FFI bindings for AURA Core (Android NDK, iOS, Desktop)"
 
+[features]
+default = []
+onnx = ["aura-core/onnx"]
+
 [lib]
 crate-type = ["cdylib", "staticlib"]
 

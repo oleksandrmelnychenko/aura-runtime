@@ -108,6 +108,26 @@ pub struct MlConfig {
     pub toxicity_threshold: f32,
     pub use_fallback: bool,
     pub language: String,
+
+    #[serde(default = "default_intra_threads")]
+    pub intra_threads: usize,
+
+    #[serde(default = "default_true")]
+    pub warmup_on_init: bool,
+
+    #[serde(default = "default_true")]
+    pub validate_hashes: bool,
+
+    #[serde(default)]
+    pub manifest_path: Option<String>,
+}
+
+fn default_intra_threads() -> usize {
+    2
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for MlConfig {
@@ -120,6 +140,10 @@ impl Default for MlConfig {
             toxicity_threshold: 0.5,
             use_fallback: true,
             language: "uk".to_string(),
+            intra_threads: default_intra_threads(),
+            warmup_on_init: true,
+            validate_hashes: true,
+            manifest_path: None,
         }
     }
 }

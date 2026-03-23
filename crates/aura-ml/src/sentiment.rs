@@ -35,10 +35,11 @@ impl SentimentAnalyzer {
     pub fn with_model(
         model_path: &str,
         tokenizer: WordPieceTokenizer,
+        intra_threads: usize,
     ) -> Result<Self, SentimentError> {
         let session = ort::session::Session::builder()
             .map_err(|e| SentimentError::ModelLoadFailed(e.to_string()))?
-            .with_intra_threads(1)
+            .with_intra_threads(intra_threads)
             .map_err(|e| SentimentError::ModelLoadFailed(e.to_string()))?
             .commit_from_file(model_path)
             .map_err(|e| SentimentError::ModelLoadFailed(e.to_string()))?;
@@ -95,7 +96,7 @@ impl SentimentAnalyzer {
         let tokenizer = self
             .tokenizer
             .as_ref()
-            .expect("predict_onnx only used when ONNX loaded");
+            .ok_or(SentimentError::InferenceFailed("tokenizer not loaded".into()))?;
         let encoded = tokenizer.encode(text);
         let seq_len = encoded.input_ids.len();
 
@@ -120,7 +121,7 @@ impl SentimentAnalyzer {
         let session = self
             .session
             .as_mut()
-            .expect("predict_onnx only used when ONNX loaded");
+            .ok_or(SentimentError::InferenceFailed("ONNX session not loaded".into()))?;
         let outputs = session
             .run(ort::inputs![input_ids, attention_mask, token_type_ids])
             .map_err(|e| SentimentError::InferenceFailed(e.to_string()))?;

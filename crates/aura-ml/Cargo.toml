@@ -16,8 +16,9 @@ serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 aho-corasick = "1"
 
 # ONNX Runtime — optional, only when `onnx` feature is enabled.
-ort = { version = "2.0.0-rc.11", features = ["load-dynamic", "ndarray"], optional = true }
+ort = { version = "2.0.0-rc.12", features = ["load-dynamic", "ndarray"], optional = true }
 ndarray = { workspace = true, optional = true }

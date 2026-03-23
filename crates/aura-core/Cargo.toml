@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 description = "Core analysis engine for AURA protection system"
 
+[features]
+default = []
+onnx = ["aura-ml/onnx"]
+
 [dependencies]
 aura-patterns = { path = "../aura-patterns" }
 aura-ml = { path = "../aura-ml" }

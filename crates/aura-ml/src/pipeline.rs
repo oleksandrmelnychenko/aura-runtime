@@ -3,6 +3,8 @@ use std::time::Instant;
 use tracing::{debug, info};
 
 use crate::backend::{SentimentBackend, ToxicityBackend};
+#[cfg(feature = "onnx")]
+use crate::manifest;
 use crate::sentiment::SentimentAnalyzer;
 #[cfg(feature = "onnx")]
 use crate::tokenizer::WordPieceTokenizer;
@@ -17,6 +19,16 @@ pub struct MlPipeline {
 
 impl MlPipeline {
     pub fn new(config: MlConfig) -> Self {
+        #[cfg(feature = "onnx")]
+        if config.validate_hashes {
+            if let Some(ref manifest_path) = config.manifest_path {
+                match manifest::validate_models_from_manifest(manifest_path) {
+                    Ok(()) => info!("Model manifest validation passed"),
+                    Err(e) => tracing::warn!("Model manifest validation failed: {e}"),
+                }
+            }
+        }
+
         let toxicity = Self::load_toxicity(&config);
         let sentiment = Self::load_sentiment(&config);
 
@@ -26,16 +38,23 @@ impl MlPipeline {
             "ML pipeline initialized"
         );
 
-        Self {
+        let mut pipeline = Self {
             toxicity,
             sentiment,
             config,
+        };
+
+        if pipeline.has_onnx_backend() && pipeline.config.warmup_on_init {
+            pipeline.warmup();
         }
+
+        pipeline
     }
 
     pub fn fallback() -> Self {
         Self::new(MlConfig {
             use_fallback: true,
+            warmup_on_init: false,
             ..Default::default()
         })
     }
@@ -73,18 +92,36 @@ impl MlPipeline {
             || self.config.sentiment_model_path.is_some()
     }
 
+    fn has_onnx_backend(&self) -> bool {
+        self.toxicity.name().contains("onnx") || self.sentiment.name().contains("onnx")
+    }
+
+    fn warmup(&mut self) {
+        let start = Instant::now();
+        let _ = self.toxicity.predict("warmup");
+        let _ = self.sentiment.predict("warmup");
+        let elapsed = start.elapsed();
+        info!(elapsed_ms = elapsed.as_millis(), "ML pipeline warmup complete");
+    }
+
     #[allow(unused_variables)]
     fn load_toxicity(config: &MlConfig) -> Box<dyn ToxicityBackend> {
         #[cfg(feature = "onnx")]
         if let Some(ref model_path) = config.toxicity_model_path {
             if let Some(ref vocab_path) = config.vocab_path {
                 match WordPieceTokenizer::from_file(vocab_path, config.max_seq_length) {
-                    Ok(tokenizer) => match ToxicityClassifier::with_model(model_path, tokenizer) {
-                        Ok(classifier) => return Box::new(classifier),
-                        Err(e) => {
-                            tracing::warn!("Failed to load toxicity ONNX model: {e}");
+                    Ok(tokenizer) => {
+                        match ToxicityClassifier::with_model(
+                            model_path,
+                            tokenizer,
+                            config.intra_threads,
+                        ) {
+                            Ok(classifier) => return Box::new(classifier),
+                            Err(e) => {
+                                tracing::warn!("Failed to load toxicity ONNX model: {e}");
+                            }
                         }
-                    },
+                    }
                     Err(e) => {
                         tracing::warn!("Failed to load tokenizer vocab: {e}");
                     }
@@ -101,12 +138,18 @@ impl MlPipeline {
         if let Some(ref model_path) = config.sentiment_model_path {
             if let Some(ref vocab_path) = config.vocab_path {
                 match WordPieceTokenizer::from_file(vocab_path, config.max_seq_length) {
-                    Ok(tokenizer) => match SentimentAnalyzer::with_model(model_path, tokenizer) {
-                        Ok(analyzer) => return Box::new(analyzer),
-                        Err(e) => {
-                            tracing::warn!("Failed to load sentiment ONNX model: {e}");
+                    Ok(tokenizer) => {
+                        match SentimentAnalyzer::with_model(
+                            model_path,
+                            tokenizer,
+                            config.intra_threads,
+                        ) {
+                            Ok(analyzer) => return Box::new(analyzer),
+                            Err(e) => {
+                                tracing::warn!("Failed to load sentiment ONNX model: {e}");
+                            }
                         }
-                    },
+                    }
                     Err(e) => {
                         tracing::warn!("Failed to load tokenizer vocab: {e}");
                     }
