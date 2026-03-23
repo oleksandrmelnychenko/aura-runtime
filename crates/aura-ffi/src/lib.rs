@@ -1004,6 +1004,7 @@ fn aura_config_from_proto(config: proto::AuraConfig) -> Result<AuraConfig, Strin
             config.ttl_days
         },
         timezone_offset_minutes: config.timezone_offset_minutes,
+        active_module: aura_module_from_proto(config.active_module),
     })
 }
 
@@ -1045,6 +1046,11 @@ fn shadow_mode_expectation_from_proto(
             proto::ThreatType::HateSpeech => Some(aura_core::ThreatType::HateSpeech),
             proto::ThreatType::Doxxing => Some(aura_core::ThreatType::Doxxing),
             proto::ThreatType::PiiLeakage => Some(aura_core::ThreatType::PiiLeakage),
+            proto::ThreatType::Propaganda => Some(aura_core::ThreatType::Propaganda),
+            proto::ThreatType::OpsecViolation => Some(aura_core::ThreatType::OpsecViolation),
+            proto::ThreatType::Psyops => Some(aura_core::ThreatType::Psyops),
+            proto::ThreatType::MilitarySocialEng => Some(aura_core::ThreatType::MilitarySocialEng),
+            proto::ThreatType::CoordinateLeak => Some(aura_core::ThreatType::CoordinateLeak),
         };
         let expect_min_action = match proto::Action::try_from(expectation.expect_min_action)
             .unwrap_or(proto::Action::Unspecified)
@@ -1176,6 +1182,11 @@ fn threat_label(value: aura_core::ThreatType) -> &'static str {
         aura_core::ThreatType::HateSpeech => "hate_speech",
         aura_core::ThreatType::Doxxing => "doxxing",
         aura_core::ThreatType::PiiLeakage => "pii_leakage",
+        aura_core::ThreatType::Propaganda => "propaganda",
+        aura_core::ThreatType::OpsecViolation => "opsec_violation",
+        aura_core::ThreatType::Psyops => "psyops",
+        aura_core::ThreatType::MilitarySocialEng => "military_social_eng",
+        aura_core::ThreatType::CoordinateLeak => "coordinate_leak",
     }
 }
 
@@ -1312,6 +1323,7 @@ fn detection_signal_to_proto(signal: &aura_core::DetectionSignal) -> proto::Dete
         family: proto_signal_family(signal.family) as i32,
         reason_code: signal.reason_code.clone(),
         explanation: signal.explanation.clone(),
+        threat_subtype: signal.threat_subtype.clone(),
     }
 }
 
@@ -1693,6 +1705,7 @@ fn context_event_from_proto(event: proto::ContextEvent) -> Result<CoreContextEve
         conversation_id: aura_core::ConversationId::from(event.conversation_id),
         kind: event_kind_from_proto(event.kind)?,
         confidence: event.confidence,
+        subtype: None,
     })
 }
 
@@ -1850,6 +1863,16 @@ fn account_type_from_proto(value: i32) -> aura_core::AccountType {
     }
 }
 
+fn aura_module_from_proto(value: i32) -> aura_core::AuraModule {
+    match proto::AuraModule::try_from(value).unwrap_or(proto::AuraModule::Unspecified) {
+        proto::AuraModule::Unspecified | proto::AuraModule::CoreOnly => {
+            aura_core::AuraModule::CoreOnly
+        }
+        proto::AuraModule::Kids => aura_core::AuraModule::Kids,
+        proto::AuraModule::Military => aura_core::AuraModule::Military,
+    }
+}
+
 fn cultural_context_from_proto(context: Option<proto::CulturalContext>) -> CulturalContext {
     let Some(context) = context else {
         return CulturalContext::default();
@@ -1911,6 +1934,11 @@ fn proto_threat_type(value: aura_core::ThreatType) -> proto::ThreatType {
         aura_core::ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
         aura_core::ThreatType::Doxxing => proto::ThreatType::Doxxing,
         aura_core::ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
+        aura_core::ThreatType::Propaganda => proto::ThreatType::Propaganda,
+        aura_core::ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
+        aura_core::ThreatType::Psyops => proto::ThreatType::Psyops,
+        aura_core::ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
+        aura_core::ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
     }
 }
 
@@ -2180,6 +2208,16 @@ fn event_kind_from_proto(value: i32) -> Result<CoreEventKind, String> {
         proto::EventKind::NormalConversation => Ok(CoreEventKind::NormalConversation),
         proto::EventKind::TrustedContact => Ok(CoreEventKind::TrustedContact),
         proto::EventKind::DefenseOfVictim => Ok(CoreEventKind::DefenseOfVictim),
+        proto::EventKind::PropagandaNarrative => Ok(CoreEventKind::PropagandaNarrative),
+        proto::EventKind::SuspiciousSource => Ok(CoreEventKind::SuspiciousSource),
+        proto::EventKind::PositionLeak => Ok(CoreEventKind::PositionLeak),
+        proto::EventKind::UnitInfoLeak => Ok(CoreEventKind::UnitInfoLeak),
+        proto::EventKind::EquipmentLeak => Ok(CoreEventKind::EquipmentLeak),
+        proto::EventKind::CoordinateMention => Ok(CoreEventKind::CoordinateMention),
+        proto::EventKind::PsyopsPattern => Ok(CoreEventKind::PsyopsPattern),
+        proto::EventKind::IntelGathering => Ok(CoreEventKind::IntelGathering),
+        proto::EventKind::MilitaryPhishing => Ok(CoreEventKind::MilitaryPhishing),
+        proto::EventKind::MilitaryDisinfo => Ok(CoreEventKind::MilitaryDisinfo),
         proto::EventKind::Unspecified => Err("unspecified event kind in state".to_string()),
     }
 }
@@ -2232,6 +2270,16 @@ fn proto_event_kind(value: CoreEventKind) -> proto::EventKind {
         CoreEventKind::NormalConversation => proto::EventKind::NormalConversation,
         CoreEventKind::TrustedContact => proto::EventKind::TrustedContact,
         CoreEventKind::DefenseOfVictim => proto::EventKind::DefenseOfVictim,
+        CoreEventKind::PropagandaNarrative => proto::EventKind::PropagandaNarrative,
+        CoreEventKind::SuspiciousSource => proto::EventKind::SuspiciousSource,
+        CoreEventKind::PositionLeak => proto::EventKind::PositionLeak,
+        CoreEventKind::UnitInfoLeak => proto::EventKind::UnitInfoLeak,
+        CoreEventKind::EquipmentLeak => proto::EventKind::EquipmentLeak,
+        CoreEventKind::CoordinateMention => proto::EventKind::CoordinateMention,
+        CoreEventKind::PsyopsPattern => proto::EventKind::PsyopsPattern,
+        CoreEventKind::IntelGathering => proto::EventKind::IntelGathering,
+        CoreEventKind::MilitaryPhishing => proto::EventKind::MilitaryPhishing,
+        CoreEventKind::MilitaryDisinfo => proto::EventKind::MilitaryDisinfo,
     }
 }
 
@@ -2259,6 +2307,7 @@ mod tests {
             account_holder_age: None,
             ttl_days: 30,
             timezone_offset_minutes: 0,
+            active_module: proto::AuraModule::CoreOnly as i32,
         }
     }
 

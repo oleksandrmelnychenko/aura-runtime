@@ -19,6 +19,7 @@ chrono = { version = "0.4", features = ["serde"] }
 aho-corasick = "1"
 sha2.workspace = true
 getrandom = "0.2"
+regex.workspace = true
 
 [dev-dependencies]
 aura-proto = { path = "../aura-proto" }

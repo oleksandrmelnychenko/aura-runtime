@@ -251,6 +251,72 @@ pub fn decide_action_v2(
             )
         }
 
+        ThreatType::Propaganda => {
+            let action = if score >= 0.85 {
+                Action::Warn
+            } else if score >= 0.6 {
+                Action::Mark
+            } else {
+                decide_action(score, protection_level)
+            };
+            (
+                action,
+                recommendation(
+                    AlertPriority::Medium,
+                    vec![FollowUpAction::MonitorConversation],
+                    false,
+                    ui_actions_for(threat_type, action, score, AlertPriority::Medium),
+                ),
+            )
+        }
+
+        ThreatType::OpsecViolation | ThreatType::CoordinateLeak => {
+            // OPSEC: warn before sending (user is the one leaking), never block
+            let action = if score >= 0.7 {
+                Action::Warn
+            } else if score >= 0.4 {
+                Action::Mark
+            } else {
+                decide_action(score, protection_level)
+            };
+            (
+                action,
+                recommendation(
+                    AlertPriority::High,
+                    vec![FollowUpAction::MonitorConversation],
+                    false,
+                    ui_actions_for(threat_type, action, score, AlertPriority::High),
+                ),
+            )
+        }
+
+        ThreatType::Psyops | ThreatType::MilitarySocialEng => {
+            let action = if score >= 0.8 {
+                Action::Block
+            } else if score >= 0.6 {
+                Action::Warn
+            } else {
+                decide_action(score, protection_level)
+            };
+            let parent_alert = if score >= 0.6 {
+                AlertPriority::High
+            } else {
+                AlertPriority::Medium
+            };
+            (
+                action,
+                recommendation(
+                    parent_alert,
+                    vec![
+                        FollowUpAction::BlockSuggested,
+                        FollowUpAction::ReportToAuthorities,
+                    ],
+                    false,
+                    ui_actions_for(threat_type, action, score, parent_alert),
+                ),
+            )
+        }
+
         ThreatType::None | ThreatType::Nsfw | ThreatType::HateSpeech => {
             let action = decide_action(score, protection_level);
             let parent_alert = if score >= 0.7 {
@@ -269,6 +335,87 @@ pub fn decide_action_v2(
             )
         }
     }
+}
+
+/// Determines action for propaganda detection with subtype awareness.
+///
+/// Dehumanization maps to hate-speech-like thresholds (more aggressive blocking).
+/// Whataboutism gets softer thresholds (only marking, no blocking).
+/// Compound patterns automatically warn at lower thresholds.
+pub fn propaganda_action_for_subtype(
+    score: f32,
+    protection_level: ProtectionLevel,
+    reason_code: &str,
+) -> (Action, ActionRecommendation) {
+    if reason_code.contains("dehumanization") {
+        let action = if score >= 0.85 {
+            Action::Block
+        } else if score >= 0.6 {
+            Action::Warn
+        } else if score >= 0.4 {
+            Action::Mark
+        } else {
+            decide_action(score, protection_level)
+        };
+        let parent_alert = if score >= 0.7 {
+            AlertPriority::High
+        } else {
+            AlertPriority::Medium
+        };
+        let mut follow_ups = vec![FollowUpAction::MonitorConversation];
+        if score >= 0.7 {
+            follow_ups.push(FollowUpAction::ReviewContactProfile);
+        }
+        return (
+            action,
+            recommendation(
+                parent_alert,
+                follow_ups,
+                false,
+                ui_actions_for(ThreatType::Propaganda, action, score, parent_alert),
+            ),
+        );
+    }
+
+    if reason_code.contains("whataboutism") {
+        let action = if score >= 0.75 {
+            Action::Mark
+        } else {
+            decide_action(score, protection_level)
+        };
+        return (
+            action,
+            recommendation(
+                AlertPriority::Low,
+                vec![],
+                false,
+                ui_actions_for(ThreatType::Propaganda, action, score, AlertPriority::Low),
+            ),
+        );
+    }
+
+    if reason_code.contains("compound_") || reason_code.contains("coordinated_") {
+        let action = if score >= 0.75 {
+            Action::Warn
+        } else if score >= 0.5 {
+            Action::Mark
+        } else {
+            decide_action(score, protection_level)
+        };
+        let parent_alert = AlertPriority::High;
+        let follow_ups = vec![FollowUpAction::MonitorConversation];
+        return (
+            action,
+            recommendation(
+                parent_alert,
+                follow_ups,
+                false,
+                ui_actions_for(ThreatType::Propaganda, action, score, parent_alert),
+            ),
+        );
+    }
+
+    decide_action_v2(ThreatType::Propaganda, score, protection_level)
 }
 
 /// Adjusts a recommendation's UI actions based on specific reason codes.
@@ -356,7 +503,12 @@ pub fn augment_recommendation_for_inference(
         | ThreatType::Nsfw
         | ThreatType::HateSpeech
         | ThreatType::Doxxing
-        | ThreatType::PiiLeakage => false,
+        | ThreatType::PiiLeakage
+        | ThreatType::Propaganda
+        | ThreatType::OpsecViolation
+        | ThreatType::Psyops
+        | ThreatType::MilitarySocialEng
+        | ThreatType::CoordinateLeak => false,
     } && (coercive_control >= 0.55
         || inference.risk_horizon == RiskHorizon::ShortTerm
             && inference.escalation_likelihood_24h >= 0.65)
@@ -457,6 +609,17 @@ fn ui_actions_for(
             actions.push(UiAction::RestrictUnknownContact);
             actions.push(UiAction::SuggestReport);
             actions.push(UiAction::SlowDownConversation);
+        }
+        ThreatType::Propaganda => {
+            actions.push(UiAction::ConfirmBeforeOpenLink);
+        }
+        ThreatType::OpsecViolation | ThreatType::CoordinateLeak => {
+            actions.push(UiAction::WarnBeforeSend);
+        }
+        ThreatType::Psyops | ThreatType::MilitarySocialEng => {
+            actions.push(UiAction::SuggestBlockContact);
+            actions.push(UiAction::SuggestReport);
+            actions.push(UiAction::RestrictUnknownContact);
         }
         ThreatType::None | ThreatType::Nsfw | ThreatType::HateSpeech => {}
     }

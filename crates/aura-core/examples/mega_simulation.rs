@@ -2797,6 +2797,11 @@ fn threat_name(tt: ThreatType) -> &'static str {
         ThreatType::HateSpeech => "HateSpeech",
         ThreatType::Doxxing => "Doxxing",
         ThreatType::PiiLeakage => "PiiLeakage",
+        ThreatType::Propaganda => "Propaganda",
+        ThreatType::OpsecViolation => "OpsecViolation",
+        ThreatType::Psyops => "Psyops",
+        ThreatType::MilitarySocialEng => "MilitarySocialEng",
+        ThreatType::CoordinateLeak => "CoordinateLeak",
     }
 }
 

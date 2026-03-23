@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{AccountType, ProtectionLevel};
+use crate::types::{AccountType, AuraModule, ProtectionLevel};
 
 /// Holds the runtime configuration for the AURA protection system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +30,10 @@ pub struct AuraConfig {
     /// Timezone offset in minutes from UTC (e.g. +180 for UTC+3 Ukraine).
     #[serde(default)]
     pub timezone_offset_minutes: i32,
+
+    /// Selects the active protection module. Defaults to `CoreOnly`.
+    #[serde(default)]
+    pub active_module: AuraModule,
 }
 
 fn default_ttl_days() -> u32 {
@@ -78,19 +82,68 @@ impl AuraConfig {
         }
     }
 
+    /// Returns the effective active module, applying backward-compat rules.
+    ///
+    /// When `active_module` is `CoreOnly` but `account_type` is `Child` or `Teen`,
+    /// implicitly activates the Kids module for backward compatibility.
+    pub fn effective_module(&self) -> AuraModule {
+        match self.active_module {
+            AuraModule::CoreOnly => match self.account_type {
+                AccountType::Child | AccountType::Teen => AuraModule::Kids,
+                AccountType::Adult => AuraModule::CoreOnly,
+            },
+            other => other,
+        }
+    }
+
+    /// Returns `true` if the Kids module is active (explicitly or implicitly).
+    pub fn is_kids_module(&self) -> bool {
+        self.effective_module() == AuraModule::Kids
+    }
+
+    /// Returns `true` if the Military module is active.
+    pub fn is_military_module(&self) -> bool {
+        self.effective_module() == AuraModule::Military
+    }
+
     /// Returns `true` if grooming detection is active under the current configuration.
     pub fn grooming_detection_enabled(&self) -> bool {
-        self.enabled && self.effective_protection_level() != ProtectionLevel::Off
+        self.enabled
+            && self.is_kids_module()
+            && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Returns `true` if self-harm detection is active under the current configuration.
     pub fn self_harm_detection_enabled(&self) -> bool {
-        self.enabled && self.effective_protection_level() != ProtectionLevel::Off
+        self.enabled
+            && self.is_kids_module()
+            && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Returns `true` if bullying detection is active under the current configuration.
     pub fn bullying_detection_enabled(&self) -> bool {
+        self.enabled
+            && self.is_kids_module()
+            && self.effective_protection_level() != ProtectionLevel::Off
+    }
+
+    /// Returns `true` if anti-propaganda detection is active (always on in Core).
+    pub fn propaganda_detection_enabled(&self) -> bool {
         self.enabled && self.effective_protection_level() != ProtectionLevel::Off
+    }
+
+    /// Returns `true` if OPSEC violation detection is active (Military module only).
+    pub fn opsec_detection_enabled(&self) -> bool {
+        self.enabled
+            && self.is_military_module()
+            && self.effective_protection_level() != ProtectionLevel::Off
+    }
+
+    /// Returns `true` if psyops detection is active (Military module only).
+    pub fn psyops_detection_enabled(&self) -> bool {
+        self.enabled
+            && self.is_military_module()
+            && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Validates the configuration and returns an error if any field is out of range.
@@ -125,6 +178,7 @@ impl Default for AuraConfig {
             account_holder_age: None,
             ttl_days: 30,
             timezone_offset_minutes: 0,
+            active_module: AuraModule::default(),
         }
     }
 }

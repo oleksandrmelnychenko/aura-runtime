@@ -55,11 +55,25 @@ impl UrlChecker {
     }
 
     pub fn find_suspicious_urls(&self, text: &str) -> Vec<SuspiciousUrl> {
-        Self::extract_urls(text)
-            .into_iter()
-            .filter(|url| !self.is_blocked(url))
-            .filter_map(|url| self.assess_suspicious_url(&url))
-            .collect()
+        let urls = Self::extract_urls(text);
+        let mut results: Vec<SuspiciousUrl> = Vec::new();
+
+        for url in &urls {
+            if self.is_blocked(url) {
+                continue;
+            }
+            if let Some(hit) = self.assess_suspicious_url(url) {
+                results.push(hit);
+            }
+            if let Some(hit) = self.detect_doppelganger(url) {
+                results.push(hit);
+            }
+            if let Some(hit) = self.detect_homoglyph_domain(url) {
+                results.push(hit);
+            }
+        }
+
+        results
     }
 
     fn extract_domain(url: &str) -> Option<String> {
@@ -140,6 +154,115 @@ impl UrlChecker {
             score,
             explanation: format!("Suspicious URL detected: {} ({})", url, features.join(", ")),
         })
+    }
+
+    pub fn detect_doppelganger(&self, url: &str) -> Option<SuspiciousUrl> {
+        const LEGITIMATE_MEDIA: &[&str] = &[
+            "bild", "lemonde", "spiegel", "guardian", "bbc", "reuters",
+            "washingtonpost", "nytimes", "cnn", "foxnews", "dw", "france24",
+            "euronews", "politico", "economist", "telegraph",
+        ];
+        const DOPPELGANGER_TLDS: &[&str] = &[
+            ".ltd", ".live", ".news", ".online", ".info", ".top", ".site", ".click",
+        ];
+
+        let domain = Self::extract_domain(url)?;
+        let dot_pos = domain.rfind('.')?;
+        let tld_with_dot = &domain[dot_pos..];
+        let base = &domain[..dot_pos];
+
+        let base_clean = base.rsplit('.').next().unwrap_or(base);
+
+        let is_media = LEGITIMATE_MEDIA.iter().any(|m| *m == base_clean);
+        let is_suspect_tld = DOPPELGANGER_TLDS.iter().any(|t| *t == tld_with_dot);
+
+        if is_media && is_suspect_tld {
+            Some(SuspiciousUrl {
+                url: url.to_string(),
+                score: 0.90,
+                explanation: format!(
+                    "Doppelganger campaign: domain '{}' mimics legitimate media '{}' with suspicious TLD '{}'",
+                    domain, base_clean, tld_with_dot,
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn detect_homoglyph_domain(&self, url: &str) -> Option<SuspiciousUrl> {
+        let token = trim_url_token(url);
+        let without_scheme = token
+            .strip_prefix("https://")
+            .or_else(|| token.strip_prefix("http://"))
+            .or_else(|| token.strip_prefix("www."))
+            .unwrap_or(token);
+
+        let authority = without_scheme
+            .split(['/', '?', '#'])
+            .next()?
+            .split('@')
+            .next_back()?;
+        let host = authority.split(':').next()?;
+        let host_lower: String = host.chars().flat_map(|c| c.to_lowercase()).collect();
+
+        let has_cyrillic = host_lower.chars().any(|c| matches!(c,
+            '\u{0400}'..='\u{04FF}' | '\u{0500}'..='\u{052F}'
+        ));
+        if !has_cyrillic {
+            return None;
+        }
+
+        let normalized: String = host_lower
+            .chars()
+            .map(|c| match c {
+                '\u{0430}' => 'a',  // а→a
+                '\u{0435}' => 'e',  // е→e
+                '\u{043E}' => 'o',  // о→o
+                '\u{0440}' => 'p',  // р→p
+                '\u{0441}' => 'c',  // с→c
+                '\u{0443}' => 'y',  // у→y
+                '\u{0445}' => 'x',  // х→x
+                '\u{0456}' => 'i',  // і→i
+                '\u{0457}' => 'i',  // ї→i
+                '\u{0454}' => 'e',  // є→e
+                '\u{043D}' => 'h',  // н→h (lookalike)
+                '\u{043A}' => 'k',  // к→k
+                '\u{0442}' => 't',  // т→t
+                '\u{0412}' => 'b',  // В→B (lowercased)
+                '\u{0432}' => 'b',  // в (lowercase of В)
+                '\u{041C}' => 'm',  // М→M (lowercased)
+                '\u{043C}' => 'm',  // м (lowercase of М)
+                '\u{041D}' => 'h',  // Н→H (lowercased)
+                other => other,
+            })
+            .collect();
+
+        if self.blocked_domains.contains(&normalized) {
+            return Some(SuspiciousUrl {
+                url: url.to_string(),
+                score: 0.92,
+                explanation: format!(
+                    "Homoglyph attack: domain '{}' uses mixed Cyrillic/Latin characters to mimic '{}'",
+                    host, normalized,
+                ),
+            });
+        }
+
+        for blocked in &self.blocked_domains {
+            if normalized.ends_with(&format!(".{blocked}")) {
+                return Some(SuspiciousUrl {
+                    url: url.to_string(),
+                    score: 0.92,
+                    explanation: format!(
+                        "Homoglyph attack: domain '{}' uses mixed Cyrillic/Latin characters to mimic '{}'",
+                        host, normalized,
+                    ),
+                });
+            }
+        }
+
+        None
     }
 
     pub fn blocked_count(&self) -> usize {
@@ -336,5 +459,56 @@ mod tests {
         let checker = UrlChecker::from_database(&test_db());
         let hits = checker.find_suspicious_urls("docs: https://support.apple.com/en-us/guide");
         assert!(hits.is_empty());
+    }
+
+    #[test]
+    fn test_doppelganger_detection() {
+        let checker = UrlChecker::from_database(&test_db());
+        let result = checker.detect_doppelganger("https://bild.ltd/article");
+        assert!(result.is_some());
+        let hit = result.unwrap();
+        assert!((hit.score - 0.90).abs() < f32::EPSILON);
+        assert!(hit.explanation.contains("Doppelganger"));
+    }
+
+    #[test]
+    fn test_doppelganger_legitimate_domain() {
+        let checker = UrlChecker::from_database(&test_db());
+        let result = checker.detect_doppelganger("https://bild.de/news");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_homoglyph_cyrillic_domain() {
+        let json = r#"{
+            "version": "test",
+            "updated_at": "2026-01-01",
+            "rules": [
+                {
+                    "id": "url_block_gov",
+                    "threat_type": "phishing",
+                    "kind": { "type": "url_domain", "domains": ["gov.ua"] },
+                    "score": 0.95,
+                    "languages": [],
+                    "explanation": "Government domain"
+                }
+            ]
+        }"#;
+        let db = PatternDatabase::from_json_validated(json).unwrap();
+        let checker = UrlChecker::from_database(&db);
+
+        let spoofed_url = "https://g\u{043E}v.ua/login";
+        let result = checker.detect_homoglyph_domain(spoofed_url);
+        assert!(result.is_some());
+        let hit = result.unwrap();
+        assert!((hit.score - 0.92).abs() < f32::EPSILON);
+        assert!(hit.explanation.contains("Homoglyph"));
+    }
+
+    #[test]
+    fn test_no_homoglyph_in_clean_domain() {
+        let checker = UrlChecker::from_database(&test_db());
+        let result = checker.detect_homoglyph_domain("https://google.com");
+        assert!(result.is_none());
     }
 }

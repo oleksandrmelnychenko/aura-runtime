@@ -390,6 +390,7 @@ mod tests {
                 conversation_id: "conv_1".into(),
                 kind,
                 confidence: 0.8,
+                subtype: None,
             });
         }
         timeline

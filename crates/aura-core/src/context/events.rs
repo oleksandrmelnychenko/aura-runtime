@@ -17,6 +17,55 @@ pub struct ContextEvent {
     pub kind: EventKind,
 
     pub confidence: f32,
+
+    /// Optional subtype for fine-grained classification within an EventKind.
+    ///
+    /// Used by propaganda detection to differentiate narrative types
+    /// (e.g., `"war_denial"`, `"brotherhood"`, `"dehumanization"`) and by
+    /// military phishing to differentiate subtypes (`"phishing_diia"`, `"phishing_tck"`).
+    #[serde(default)]
+    pub subtype: Option<String>,
+}
+
+impl ContextEvent {
+    /// Creates a new context event with no subtype.
+    pub fn new(
+        timestamp_ms: u64,
+        sender_id: impl Into<SenderId>,
+        conversation_id: impl Into<ConversationId>,
+        kind: EventKind,
+        confidence: f32,
+    ) -> Self {
+        Self {
+            event_id: 0,
+            timestamp_ms,
+            sender_id: sender_id.into(),
+            conversation_id: conversation_id.into(),
+            kind,
+            confidence,
+            subtype: None,
+        }
+    }
+
+    /// Creates a new context event with a subtype for fine-grained classification.
+    pub fn with_subtype(
+        timestamp_ms: u64,
+        sender_id: impl Into<SenderId>,
+        conversation_id: impl Into<ConversationId>,
+        kind: EventKind,
+        confidence: f32,
+        subtype: impl Into<String>,
+    ) -> Self {
+        Self {
+            event_id: 0,
+            timestamp_ms,
+            sender_id: sender_id.into(),
+            conversation_id: conversation_id.into(),
+            kind,
+            confidence,
+            subtype: Some(subtype.into()),
+        }
+    }
 }
 
 /// Enumerates all recognized behavioral event categories.
@@ -151,6 +200,32 @@ pub enum EventKind {
     TrustedContact,
     /// Standing up for a victim.
     DefenseOfVictim,
+
+    // --- Core module: anti-propaganda ---
+    /// Propaganda or disinformation narrative detected.
+    PropagandaNarrative,
+    /// Suspicious link from untrustworthy source.
+    SuspiciousSource,
+
+    // --- Military module: OPSEC ---
+    /// Military position or location leaked.
+    PositionLeak,
+    /// Unit or formation information leaked.
+    UnitInfoLeak,
+    /// Equipment or capability information leaked.
+    EquipmentLeak,
+    /// Geographic coordinates mentioned in military context.
+    CoordinateMention,
+
+    // --- Military module: psyops / social engineering ---
+    /// Enemy psychological operations messaging pattern detected.
+    PsyopsPattern,
+    /// Intelligence gathering or suspicious recruitment attempt.
+    IntelGathering,
+    /// Military-specific phishing attempt.
+    MilitaryPhishing,
+    /// Military disinformation spreading.
+    MilitaryDisinfo,
 }
 
 impl EventKind {
@@ -202,7 +277,17 @@ impl EventKind {
             | Self::FakeVulnerability
             | Self::NormalConversation
             | Self::TrustedContact
-            | Self::DefenseOfVictim => false,
+            | Self::DefenseOfVictim
+            | Self::PropagandaNarrative
+            | Self::SuspiciousSource
+            | Self::PositionLeak
+            | Self::UnitInfoLeak
+            | Self::EquipmentLeak
+            | Self::CoordinateMention
+            | Self::PsyopsPattern
+            | Self::IntelGathering
+            | Self::MilitaryPhishing
+            | Self::MilitaryDisinfo => false,
         }
     }
 
@@ -254,7 +339,17 @@ impl EventKind {
             | Self::ReputationThreat
             | Self::NormalConversation
             | Self::TrustedContact
-            | Self::DefenseOfVictim => false,
+            | Self::DefenseOfVictim
+            | Self::PropagandaNarrative
+            | Self::SuspiciousSource
+            | Self::PositionLeak
+            | Self::UnitInfoLeak
+            | Self::EquipmentLeak
+            | Self::CoordinateMention
+            | Self::PsyopsPattern
+            | Self::IntelGathering
+            | Self::MilitaryPhishing
+            | Self::MilitaryDisinfo => false,
         }
     }
 
@@ -306,7 +401,17 @@ impl EventKind {
             | Self::FakeVulnerability
             | Self::NormalConversation
             | Self::TrustedContact
-            | Self::DefenseOfVictim => false,
+            | Self::DefenseOfVictim
+            | Self::PropagandaNarrative
+            | Self::SuspiciousSource
+            | Self::PositionLeak
+            | Self::UnitInfoLeak
+            | Self::EquipmentLeak
+            | Self::CoordinateMention
+            | Self::PsyopsPattern
+            | Self::IntelGathering
+            | Self::MilitaryPhishing
+            | Self::MilitaryDisinfo => false,
         }
     }
 
@@ -358,7 +463,17 @@ impl EventKind {
             | Self::CasualMeetingRequest
             | Self::NormalConversation
             | Self::TrustedContact
-            | Self::DefenseOfVictim => false,
+            | Self::DefenseOfVictim
+            | Self::PropagandaNarrative
+            | Self::SuspiciousSource
+            | Self::PositionLeak
+            | Self::UnitInfoLeak
+            | Self::EquipmentLeak
+            | Self::CoordinateMention
+            | Self::PsyopsPattern
+            | Self::IntelGathering
+            | Self::MilitaryPhishing
+            | Self::MilitaryDisinfo => false,
         }
     }
 
@@ -421,6 +536,19 @@ impl EventKind {
             Self::NormalConversation => 0.0,
             Self::TrustedContact => 0.0,
             Self::DefenseOfVictim => 0.0,
+
+            Self::PropagandaNarrative => 0.6,
+            Self::SuspiciousSource => 0.7,
+            Self::MilitaryDisinfo => 0.65,
+
+            Self::CoordinateMention => 0.95,
+            Self::PositionLeak => 0.9,
+            Self::UnitInfoLeak => 0.7,
+            Self::EquipmentLeak => 0.5,
+
+            Self::PsyopsPattern => 0.7,
+            Self::IntelGathering => 0.8,
+            Self::MilitaryPhishing => 0.85,
         }
     }
 
@@ -472,7 +600,17 @@ impl EventKind {
             | Self::CasualMeetingRequest
             | Self::NormalConversation
             | Self::TrustedContact
-            | Self::DefenseOfVictim => false,
+            | Self::DefenseOfVictim
+            | Self::PositionLeak
+            | Self::UnitInfoLeak
+            | Self::EquipmentLeak
+            | Self::CoordinateMention => false,
+            Self::PropagandaNarrative
+            | Self::SuspiciousSource
+            | Self::PsyopsPattern
+            | Self::IntelGathering
+            | Self::MilitaryPhishing
+            | Self::MilitaryDisinfo => true,
         }
     }
 
@@ -524,7 +662,17 @@ impl EventKind {
             | Self::NetworkPoisoning
             | Self::FakeVulnerability
             | Self::NormalConversation
-            | Self::TrustedContact => false,
+            | Self::TrustedContact
+            | Self::PropagandaNarrative
+            | Self::SuspiciousSource
+            | Self::PositionLeak
+            | Self::UnitInfoLeak
+            | Self::EquipmentLeak
+            | Self::CoordinateMention
+            | Self::PsyopsPattern
+            | Self::IntelGathering
+            | Self::MilitaryPhishing
+            | Self::MilitaryDisinfo => false,
         }
     }
 
@@ -533,6 +681,33 @@ impl EventKind {
         self.is_grooming_indicator()
             && !self.is_manipulation_indicator()
             && !self.is_bullying_indicator()
+    }
+
+    /// Returns true if this event indicates propaganda or disinformation.
+    pub fn is_propaganda_indicator(&self) -> bool {
+        match self {
+            Self::PropagandaNarrative | Self::SuspiciousSource | Self::MilitaryDisinfo => true,
+            _ => false,
+        }
+    }
+
+    /// Returns true if this event indicates an OPSEC violation (outgoing leak).
+    pub fn is_opsec_indicator(&self) -> bool {
+        match self {
+            Self::PositionLeak
+            | Self::UnitInfoLeak
+            | Self::EquipmentLeak
+            | Self::CoordinateMention => true,
+            _ => false,
+        }
+    }
+
+    /// Returns true if this event indicates psyops or social engineering.
+    pub fn is_psyops_indicator(&self) -> bool {
+        match self {
+            Self::PsyopsPattern | Self::IntelGathering | Self::MilitaryPhishing => true,
+            _ => false,
+        }
     }
 
     /// Returns the contact rating adjustment for this event kind.
@@ -752,6 +927,16 @@ mod tests {
             EventKind::NormalConversation,
             EventKind::TrustedContact,
             EventKind::DefenseOfVictim,
+            EventKind::PropagandaNarrative,
+            EventKind::SuspiciousSource,
+            EventKind::PositionLeak,
+            EventKind::UnitInfoLeak,
+            EventKind::EquipmentLeak,
+            EventKind::CoordinateMention,
+            EventKind::PsyopsPattern,
+            EventKind::IntelGathering,
+            EventKind::MilitaryPhishing,
+            EventKind::MilitaryDisinfo,
         ];
         for kind in all_kinds {
             let sev = kind.severity();

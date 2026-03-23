@@ -1066,6 +1066,7 @@ mod tests {
             conversation_id: conv.into(),
             kind,
             confidence: 0.8,
+            subtype: None,
         }
     }
 

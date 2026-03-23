@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
-use aura_ml::{MlConfig, MlPipeline, ToxicityLabel};
+use aura_ml::{MlConfig, MlPipeline, SafetyLabel, IntentLabel, ToxicityLabel};
 use aura_patterns::{PatternDatabase, PatternMatcher, UrlChecker};
 use tracing::debug;
 
@@ -157,19 +157,16 @@ impl Analyzer {
         match config.models_path {
             Some(ref base_path) => {
                 let base = std::path::Path::new(base_path);
+                let probe = |name: &str| -> Option<String> {
+                    let p = base.join(name);
+                    p.exists().then(|| p.to_string_lossy().into_owned())
+                };
                 MlConfig {
-                    toxicity_model_path: {
-                        let p = base.join("toxicity.onnx");
-                        p.exists().then(|| p.to_string_lossy().into_owned())
-                    },
-                    sentiment_model_path: {
-                        let p = base.join("sentiment.onnx");
-                        p.exists().then(|| p.to_string_lossy().into_owned())
-                    },
-                    vocab_path: {
-                        let p = base.join("vocab.txt");
-                        p.exists().then(|| p.to_string_lossy().into_owned())
-                    },
+                    toxicity_model_path: probe("toxicity.onnx"),
+                    sentiment_model_path: probe("sentiment.onnx"),
+                    safety_model_path: probe("safety.onnx"),
+                    intent_model_path: probe("intent.onnx"),
+                    vocab_path: probe("vocab.txt"),
                     use_fallback: true,
                     language: config.language.clone(),
                     ..Default::default()
@@ -299,6 +296,7 @@ impl Analyzer {
                         conversation_id: input.conversation_id.clone(),
                         kind: event_kind,
                         confidence: m.score,
+                        subtype: None,
                     });
                 }
             }
@@ -350,6 +348,7 @@ impl Analyzer {
                 conversation_id: input.conversation_id.clone(),
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
+                subtype: None,
             });
         }
 
@@ -365,6 +364,7 @@ impl Analyzer {
                         conversation_id: input.conversation_id.clone(),
                         kind,
                         confidence: signal.score,
+                        subtype: None,
                     });
                 }
             }
@@ -390,6 +390,7 @@ impl Analyzer {
                 conversation_id: input.conversation_id.clone(),
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
+                subtype: None,
             });
         }
 
@@ -471,7 +472,12 @@ impl Analyzer {
                 | ThreatType::Nsfw
                 | ThreatType::HateSpeech
                 | ThreatType::Doxxing
-                | ThreatType::PiiLeakage => false,
+                | ThreatType::PiiLeakage
+                | ThreatType::Propaganda
+                | ThreatType::OpsecViolation
+                | ThreatType::Psyops
+                | ThreatType::MilitarySocialEng
+                | ThreatType::CoordinateLeak => false,
             } {
                 self.escalation_tracker.record(
                     &input.conversation_id,
@@ -499,7 +505,12 @@ impl Analyzer {
                     | ThreatType::Nsfw
                     | ThreatType::HateSpeech
                     | ThreatType::Doxxing
-                    | ThreatType::PiiLeakage => false,
+                    | ThreatType::PiiLeakage
+                    | ThreatType::Propaganda
+                    | ThreatType::OpsecViolation
+                    | ThreatType::Psyops
+                    | ThreatType::MilitarySocialEng
+                    | ThreatType::CoordinateLeak => false,
                 } {
                     s.score = (s.score + bonus).min(1.0);
                 }
@@ -703,6 +714,13 @@ impl Analyzer {
             ThreatType::HateSpeech | ThreatType::Doxxing | ThreatType::PiiLeakage => {
                 self.config.enabled
             }
+            ThreatType::Propaganda => self.config.propaganda_detection_enabled(),
+            ThreatType::OpsecViolation | ThreatType::CoordinateLeak => {
+                self.config.opsec_detection_enabled()
+            }
+            ThreatType::Psyops | ThreatType::MilitarySocialEng => {
+                self.config.psyops_detection_enabled()
+            }
             ThreatType::None => false,
         }
     }
@@ -857,7 +875,12 @@ impl Analyzer {
                         | ThreatType::Nsfw
                         | ThreatType::HateSpeech
                         | ThreatType::Doxxing
-                        | ThreatType::PiiLeakage => "ml.generic",
+                        | ThreatType::PiiLeakage
+                        | ThreatType::Propaganda
+                        | ThreatType::OpsecViolation
+                        | ThreatType::Psyops
+                        | ThreatType::MilitarySocialEng
+                        | ThreatType::CoordinateLeak => "ml.generic",
                     };
                     signals.push(DetectionSignal::ml(
                         threat_type,
@@ -867,6 +890,87 @@ impl Analyzer {
                         explanation,
                     ));
                 }
+            }
+        }
+
+        if let Some(ref safety) = ml_result.safety {
+            let safety_threshold = 0.5;
+            let (threat_type, score, reason_code, explanation) = match safety.primary_label {
+                Some(SafetyLabel::Grooming) if safety.grooming >= safety_threshold => (
+                    ThreatType::Grooming,
+                    safety.grooming,
+                    "ml.safety.grooming",
+                    format!("ML safety: grooming detected (score: {:.2})", safety.grooming),
+                ),
+                Some(SafetyLabel::Bullying) if safety.bullying >= safety_threshold => (
+                    ThreatType::Bullying,
+                    safety.bullying,
+                    "ml.safety.bullying",
+                    format!("ML safety: bullying detected (score: {:.2})", safety.bullying),
+                ),
+                Some(SafetyLabel::SelfHarm) if safety.self_harm >= safety_threshold => (
+                    ThreatType::SelfHarm,
+                    safety.self_harm,
+                    "ml.safety.selfharm",
+                    format!("ML safety: self-harm detected (score: {:.2})", safety.self_harm),
+                ),
+                Some(SafetyLabel::Manipulation) if safety.manipulation >= safety_threshold => (
+                    ThreatType::Manipulation,
+                    safety.manipulation,
+                    "ml.safety.manipulation",
+                    format!("ML safety: manipulation detected (score: {:.2})", safety.manipulation),
+                ),
+                _ => (ThreatType::None, 0.0, "", String::new()),
+            };
+
+            if threat_type != ThreatType::None && self.is_detection_enabled(threat_type) {
+                signals.push(DetectionSignal::ml(
+                    threat_type,
+                    score,
+                    score_to_confidence(score),
+                    reason_code,
+                    explanation,
+                ));
+            }
+        }
+
+        if let Some(ref intent) = ml_result.intent {
+            let intent_threshold = 0.5;
+            match intent.primary_intent {
+                Some(IntentLabel::RequestMeeting) if intent.request_meeting >= intent_threshold => {
+                    if self.is_detection_enabled(ThreatType::Grooming) {
+                        signals.push(DetectionSignal::ml(
+                            ThreatType::Grooming,
+                            intent.request_meeting,
+                            score_to_confidence(intent.request_meeting),
+                            "ml.intent.meeting",
+                            format!("ML intent: meeting request detected (score: {:.2})", intent.request_meeting),
+                        ));
+                    }
+                }
+                Some(IntentLabel::RequestSecret) if intent.request_secret >= intent_threshold => {
+                    if self.is_detection_enabled(ThreatType::Grooming) {
+                        signals.push(DetectionSignal::ml(
+                            ThreatType::Grooming,
+                            intent.request_secret,
+                            score_to_confidence(intent.request_secret),
+                            "ml.intent.secret",
+                            format!("ML intent: secrecy request detected (score: {:.2})", intent.request_secret),
+                        ));
+                    }
+                }
+                Some(IntentLabel::RequestMedia) if intent.request_media >= intent_threshold => {
+                    if self.is_detection_enabled(ThreatType::Grooming) {
+                        signals.push(DetectionSignal::ml(
+                            ThreatType::Grooming,
+                            intent.request_media,
+                            score_to_confidence(intent.request_media),
+                            "ml.intent.media",
+                            format!("ML intent: media request detected (score: {:.2})", intent.request_media),
+                        ));
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -917,7 +1021,12 @@ impl Analyzer {
                     | ThreatType::Nsfw
                     | ThreatType::HateSpeech
                     | ThreatType::Doxxing
-                    | ThreatType::PiiLeakage => false,
+                    | ThreatType::PiiLeakage
+                    | ThreatType::Propaganda
+                    | ThreatType::OpsecViolation
+                    | ThreatType::Psyops
+                    | ThreatType::MilitarySocialEng
+                    | ThreatType::CoordinateLeak => false,
                 } && signal.reason_code.starts_with("pattern.profanity_uk_"))
             });
             context_events.retain(|event| !match event.kind {
@@ -964,7 +1073,17 @@ impl Analyzer {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => false,
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => false,
             });
         }
 
@@ -1043,7 +1162,17 @@ impl Analyzer {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => false,
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => false,
             });
         }
 
@@ -1106,7 +1235,17 @@ impl Analyzer {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => false,
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => false,
             });
         }
 
@@ -1125,7 +1264,12 @@ impl Analyzer {
                 | ThreatType::Manipulation
                 | ThreatType::Nsfw
                 | ThreatType::Doxxing
-                | ThreatType::PiiLeakage => false,
+                | ThreatType::PiiLeakage
+                | ThreatType::Propaganda
+                | ThreatType::OpsecViolation
+                | ThreatType::Psyops
+                | ThreatType::MilitarySocialEng
+                | ThreatType::CoordinateLeak => false,
             }) && signal.score >= 0.75
             {
                 has_high_threat_or_hate = true;
@@ -1150,7 +1294,12 @@ impl Analyzer {
                     | ThreatType::Nsfw
                     | ThreatType::HateSpeech
                     | ThreatType::Doxxing
-                    | ThreatType::PiiLeakage => false,
+                    | ThreatType::PiiLeakage
+                    | ThreatType::Propaganda
+                    | ThreatType::OpsecViolation
+                    | ThreatType::Psyops
+                    | ThreatType::MilitarySocialEng
+                    | ThreatType::CoordinateLeak => false,
                 } && signal.score <= 0.60)
             });
             context_events.retain(|event| !match event.kind {
@@ -1197,7 +1346,17 @@ impl Analyzer {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => false,
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => false,
             });
         }
 
@@ -1254,7 +1413,17 @@ impl Analyzer {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => false,
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => false,
             });
         }
 
@@ -1273,7 +1442,12 @@ impl Analyzer {
                 | ThreatType::Nsfw
                 | ThreatType::HateSpeech
                 | ThreatType::Doxxing
-                | ThreatType::PiiLeakage => false,
+                | ThreatType::PiiLeakage
+                | ThreatType::Propaganda
+                | ThreatType::OpsecViolation
+                | ThreatType::Psyops
+                | ThreatType::MilitarySocialEng
+                | ThreatType::CoordinateLeak => false,
             });
             context_events.retain(|event| !match event.kind {
                 EventKind::Insult
@@ -1321,7 +1495,17 @@ impl Analyzer {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => false,
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => false,
             });
         }
     }
@@ -1381,7 +1565,12 @@ impl Analyzer {
                     | ThreatType::Nsfw
                     | ThreatType::HateSpeech
                     | ThreatType::Doxxing
-                    | ThreatType::PiiLeakage => false,
+                    | ThreatType::PiiLeakage
+                    | ThreatType::Propaganda
+                    | ThreatType::OpsecViolation
+                    | ThreatType::Psyops
+                    | ThreatType::MilitarySocialEng
+                    | ThreatType::CoordinateLeak => false,
                 };
                 !dominated
             });
@@ -1401,7 +1590,12 @@ impl Analyzer {
                     | ThreatType::Nsfw
                     | ThreatType::HateSpeech
                     | ThreatType::Doxxing
-                    | ThreatType::PiiLeakage => false,
+                    | ThreatType::PiiLeakage
+                    | ThreatType::Propaganda
+                    | ThreatType::OpsecViolation
+                    | ThreatType::Psyops
+                    | ThreatType::MilitarySocialEng
+                    | ThreatType::CoordinateLeak => false,
                 } && signal.score <= 0.60)
             });
         }
@@ -2027,7 +2221,12 @@ fn prioritize_direct_threat_signals(signals: &mut [DetectionSignal]) {
             | ThreatType::Manipulation
             | ThreatType::Nsfw
             | ThreatType::HateSpeech
-            | ThreatType::PiiLeakage => false,
+            | ThreatType::PiiLeakage
+            | ThreatType::Propaganda
+            | ThreatType::OpsecViolation
+            | ThreatType::Psyops
+            | ThreatType::MilitarySocialEng
+            | ThreatType::CoordinateLeak => false,
         }) && signal.score >= 0.75
             && (signal.reason_code.starts_with("pattern.threat_")
                 || signal.reason_code.starts_with("pattern.doxxing"))
@@ -2480,7 +2679,12 @@ fn infer_risk_horizon(
             | ThreatType::Nsfw
             | ThreatType::HateSpeech
             | ThreatType::Doxxing
-            | ThreatType::PiiLeakage => false,
+            | ThreatType::PiiLeakage
+            | ThreatType::Propaganda
+            | ThreatType::OpsecViolation
+            | ThreatType::Psyops
+            | ThreatType::MilitarySocialEng
+            | ThreatType::CoordinateLeak => false,
         }) && primary_score >= 0.8
     {
         return RiskHorizon::Immediate;
@@ -2498,7 +2702,12 @@ fn infer_risk_horizon(
         | ThreatType::Nsfw
         | ThreatType::HateSpeech
         | ThreatType::Doxxing
-        | ThreatType::PiiLeakage => false,
+        | ThreatType::PiiLeakage
+        | ThreatType::Propaganda
+        | ThreatType::OpsecViolation
+        | ThreatType::Psyops
+        | ThreatType::MilitarySocialEng
+        | ThreatType::CoordinateLeak => false,
     }) && primary_score >= 0.55
     {
         return RiskHorizon::ShortTerm;
@@ -2518,7 +2727,12 @@ fn infer_risk_horizon(
         | ThreatType::Nsfw
         | ThreatType::HateSpeech
         | ThreatType::Doxxing
-        | ThreatType::PiiLeakage => false,
+        | ThreatType::PiiLeakage
+        | ThreatType::Propaganda
+        | ThreatType::OpsecViolation
+        | ThreatType::Psyops
+        | ThreatType::MilitarySocialEng
+        | ThreatType::CoordinateLeak => false,
     }) || contact_snapshot.is_some_and(|snapshot| match snapshot.trend {
         BehavioralTrend::GradualWorsening
         | BehavioralTrend::RapidWorsening
@@ -2559,7 +2773,12 @@ fn estimate_escalation_likelihood(
         | ThreatType::Nsfw
         | ThreatType::HateSpeech
         | ThreatType::Doxxing
-        | ThreatType::PiiLeakage => false,
+        | ThreatType::PiiLeakage
+        | ThreatType::Propaganda
+        | ThreatType::OpsecViolation
+        | ThreatType::Psyops
+        | ThreatType::MilitarySocialEng
+        | ThreatType::CoordinateLeak => false,
     } {
         let mut max_selfharm_score = 0.0_f32;
         for signal in signals {
@@ -2601,7 +2820,12 @@ fn estimate_escalation_likelihood(
                 | ThreatType::Nsfw
                 | ThreatType::HateSpeech
                 | ThreatType::Doxxing
-                | ThreatType::PiiLeakage => false,
+                | ThreatType::PiiLeakage
+                | ThreatType::Propaganda
+                | ThreatType::OpsecViolation
+                | ThreatType::Psyops
+                | ThreatType::MilitarySocialEng
+                | ThreatType::CoordinateLeak => false,
             })
         {
             estimate += 0.10;
@@ -2793,6 +3017,11 @@ fn match_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKi
         ThreatType::Doxxing => Some(EventKind::DoxxingAttempt),
         ThreatType::HateSpeech => Some(EventKind::HateSpeech),
         ThreatType::PiiLeakage => Some(EventKind::PiiSelfDisclosure),
+        ThreatType::Propaganda => Some(EventKind::PropagandaNarrative),
+        ThreatType::OpsecViolation => Some(EventKind::PositionLeak),
+        ThreatType::Psyops => Some(EventKind::PsyopsPattern),
+        ThreatType::MilitarySocialEng => Some(EventKind::IntelGathering),
+        ThreatType::CoordinateLeak => Some(EventKind::CoordinateMention),
         ThreatType::Phishing
         | ThreatType::Spam
         | ThreatType::Scam
@@ -2817,7 +3046,12 @@ fn ml_signal_to_event_kind(signal: &DetectionSignal) -> Option<EventKind> {
         | ThreatType::Nsfw
         | ThreatType::HateSpeech
         | ThreatType::Doxxing
-        | ThreatType::PiiLeakage => None,
+        | ThreatType::PiiLeakage
+        | ThreatType::Propaganda
+        | ThreatType::OpsecViolation
+        | ThreatType::Psyops
+        | ThreatType::MilitarySocialEng
+        | ThreatType::CoordinateLeak => None,
     }
 }
 
@@ -2836,6 +3070,11 @@ fn parse_threat_type(s: &str) -> ThreatType {
         "hate_speech" => ThreatType::HateSpeech,
         "doxxing" => ThreatType::Doxxing,
         "pii_leakage" => ThreatType::PiiLeakage,
+        "propaganda" => ThreatType::Propaganda,
+        "opsec_violation" => ThreatType::OpsecViolation,
+        "psyops" => ThreatType::Psyops,
+        "military_social_eng" => ThreatType::MilitarySocialEng,
+        "coordinate_leak" => ThreatType::CoordinateLeak,
         _ => ThreatType::None,
     }
 }
@@ -2855,6 +3094,10 @@ fn threat_priority(tt: ThreatType) -> u8 {
         ThreatType::Phishing => 10,
         ThreatType::Scam => 11,
         ThreatType::Spam => 12,
+        ThreatType::OpsecViolation | ThreatType::CoordinateLeak => 2,
+        ThreatType::Psyops => 5,
+        ThreatType::MilitarySocialEng => 6,
+        ThreatType::Propaganda => 7,
         ThreatType::None => 13,
     }
 }
@@ -3028,7 +3271,7 @@ mod tests {
     #[test]
     fn grooming_detected_for_all_users() {
         let db = test_db();
-        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let mut analyzer = Analyzer::new(child_config(), &db);
         let result = analyzer.analyze(&default_input("Don't tell your parents about us"));
         assert!(result.is_threat());
         assert_eq!(result.threat_type, ThreatType::Grooming);
@@ -3039,6 +3282,7 @@ mod tests {
         let db = test_db();
         let config = AuraConfig {
             protection_level: ProtectionLevel::High,
+            account_type: AccountType::Child,
             ..AuraConfig::default()
         };
         let mut analyzer = Analyzer::new(config, &db);
@@ -3505,7 +3749,7 @@ mod tests {
     #[test]
     fn grooming_video_call_detected() {
         let db = test_db();
-        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let mut analyzer = Analyzer::new(child_config(), &db);
         let result = analyzer.analyze(&default_input(
             "let's video call just us, turn on your camera for me",
         ));
@@ -3518,7 +3762,7 @@ mod tests {
     #[test]
     fn grooming_body_comments_detected() {
         let db = test_db();
-        let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+        let mut analyzer = Analyzer::new(child_config(), &db);
         let result = analyzer.analyze(&default_input(
             "you must have a nice body, what do you wear to bed",
         ));
@@ -5909,7 +6153,12 @@ mod tests {
                     | ThreatType::Nsfw
                     | ThreatType::HateSpeech
                     | ThreatType::Doxxing
-                    | ThreatType::PiiLeakage => false,
+                    | ThreatType::PiiLeakage
+                    | ThreatType::Propaganda
+                    | ThreatType::OpsecViolation
+                    | ThreatType::Psyops
+                    | ThreatType::MilitarySocialEng
+                    | ThreatType::CoordinateLeak => false,
                 }) && *score >= 0.7
             }),
             "English hostile message should be detected even when config language differs: {:?}",

@@ -36,6 +36,16 @@ pub enum ThreatType {
     Doxxing,
     /// Personally identifiable information leakage.
     PiiLeakage,
+    /// Propaganda or disinformation content.
+    Propaganda,
+    /// OPSEC violation — leaking military operational information.
+    OpsecViolation,
+    /// Enemy psychological operations targeting the user.
+    Psyops,
+    /// Social engineering attempt targeting military personnel.
+    MilitarySocialEng,
+    /// Geographic coordinate or location leak in military context.
+    CoordinateLeak,
 }
 
 /// Represents the confidence level of a detection result.
@@ -91,6 +101,22 @@ pub enum AccountType {
     Teen,
     /// User aged under 13.
     Child,
+}
+
+/// Selects which AURA protection module is active for this user.
+///
+/// Core protection (anti-propaganda, suspicious links, base content moderation) is
+/// always active. The user additionally selects either the Kids or Military module.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AuraModule {
+    /// Core protection only (base module, always active).
+    #[default]
+    CoreOnly,
+    /// Core + Kids module (child safety: grooming, bullying, self-harm, manipulation).
+    Kids,
+    /// Core + Military module (OPSEC, psyops, social engineering, military phishing).
+    Military,
 }
 
 /// Represents the analysis layer that produced a detection signal.
@@ -190,6 +216,8 @@ pub struct DetectionSignal {
     pub layer: DetectionLayer,
     #[serde(default)]
     pub family: SignalFamily,
+    #[serde(default)]
+    pub threat_subtype: String,
 }
 
 impl DetectionSignal {
@@ -202,8 +230,10 @@ impl DetectionSignal {
         explanation: impl Into<String>,
     ) -> Self {
         let family = match threat_type {
-            ThreatType::Phishing => SignalFamily::Link,
-            ThreatType::Spam | ThreatType::Scam => SignalFamily::Abuse,
+            ThreatType::Phishing | ThreatType::MilitarySocialEng => SignalFamily::Link,
+            ThreatType::Spam | ThreatType::Scam | ThreatType::Psyops => SignalFamily::Abuse,
+            ThreatType::Propaganda => SignalFamily::Content,
+            ThreatType::OpsecViolation | ThreatType::CoordinateLeak => SignalFamily::Content,
             ThreatType::None
             | ThreatType::Bullying
             | ThreatType::Grooming
@@ -225,6 +255,7 @@ impl DetectionSignal {
             family,
             reason_code: reason_code.into(),
             explanation: explanation.into(),
+            threat_subtype: String::new(),
         }
     }
 
@@ -244,6 +275,7 @@ impl DetectionSignal {
             family: SignalFamily::Content,
             reason_code: reason_code.into(),
             explanation: explanation.into(),
+            threat_subtype: String::new(),
         }
     }
 
@@ -264,6 +296,7 @@ impl DetectionSignal {
             family,
             reason_code: reason_code.into(),
             explanation: explanation.into(),
+            threat_subtype: String::new(),
         }
     }
 }

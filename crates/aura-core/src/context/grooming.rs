@@ -307,7 +307,17 @@ impl GroomingDetector {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => false,
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => false,
             };
             if !is_benign {
                 has_non_benign = true;
@@ -424,7 +434,17 @@ impl GroomingDetector {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => {}
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => {}
             }
         }
         let mut reciprocal_social_reply = false;
@@ -476,7 +496,17 @@ impl GroomingDetector {
                 | EventKind::NetworkPoisoning
                 | EventKind::FakeVulnerability
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => {}
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => {}
             }
         }
         if !reciprocal_meeting && !reciprocal_social_reply {
@@ -537,7 +567,17 @@ impl GroomingDetector {
             | EventKind::ReputationThreat
             | EventKind::NormalConversation
             | EventKind::TrustedContact
-            | EventKind::DefenseOfVictim => None,
+            | EventKind::DefenseOfVictim
+            | EventKind::PropagandaNarrative
+            | EventKind::SuspiciousSource
+            | EventKind::PositionLeak
+            | EventKind::UnitInfoLeak
+            | EventKind::EquipmentLeak
+            | EventKind::CoordinateMention
+            | EventKind::PsyopsPattern
+            | EventKind::IntelGathering
+            | EventKind::MilitaryPhishing
+            | EventKind::MilitaryDisinfo => None,
         }
     }
 
@@ -588,7 +628,17 @@ impl GroomingDetector {
             | EventKind::FakeVulnerability
             | EventKind::NormalConversation
             | EventKind::TrustedContact
-            | EventKind::DefenseOfVictim => false,
+            | EventKind::DefenseOfVictim
+            | EventKind::PropagandaNarrative
+            | EventKind::SuspiciousSource
+            | EventKind::PositionLeak
+            | EventKind::UnitInfoLeak
+            | EventKind::EquipmentLeak
+            | EventKind::CoordinateMention
+            | EventKind::PsyopsPattern
+            | EventKind::IntelGathering
+            | EventKind::MilitaryPhishing
+            | EventKind::MilitaryDisinfo => false,
         }
     }
 
@@ -700,6 +750,7 @@ mod tests {
                 conversation_id: "conv_1".into(),
                 kind,
                 confidence: 0.8,
+                subtype: None,
             });
         }
         timeline
@@ -715,6 +766,7 @@ mod tests {
                 conversation_id: "conv_1".into(),
                 kind,
                 confidence: 0.8,
+                subtype: None,
             });
         }
         timeline
@@ -943,6 +995,7 @@ mod tests {
             conversation_id: "conv_1".into(),
             kind: EventKind::NormalConversation,
             confidence: 1.0,
+            subtype: None,
         });
         profiler_adult.set_inferred_age("predator", 30);
         let signals_adult = detector.analyze(&timeline, "predator", 0, &profiler_adult);
@@ -1136,6 +1189,7 @@ mod tests {
             conversation_id: "conv_1".into(),
             kind: EventKind::NormalConversation,
             confidence: 1.0,
+            subtype: None,
         });
         profiler.set_inferred_age("predator", 15);
         let signals = detector.analyze(&timeline, "predator", 0, &profiler);

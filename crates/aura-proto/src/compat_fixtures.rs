@@ -25,6 +25,7 @@ pub fn analysis_result_fixture() -> proto::AnalysisResult {
             family: proto::SignalFamily::Conversation as i32,
             reason_code: "grooming.secrecy_request".to_string(),
             explanation: "secrecy request after trust-building".to_string(),
+            threat_subtype: String::new(),
         }],
         recommended_action: Some(proto::ActionRecommendation {
             parent_alert: proto::AlertPriority::High as i32,

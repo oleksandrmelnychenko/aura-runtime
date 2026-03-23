@@ -322,6 +322,7 @@ mod tests {
                 conversation_id: "conv_1".into(),
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
+                subtype: None,
             });
         }
         timeline
@@ -445,6 +446,7 @@ mod tests {
                 conversation_id: "conv_1".into(),
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
+                subtype: None,
             });
         }
 
@@ -482,6 +484,7 @@ mod tests {
                 conversation_id: "conv_1".into(),
                 kind: EventKind::NormalConversation,
                 confidence: 1.0,
+                subtype: None,
             });
         }
 

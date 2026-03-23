@@ -197,6 +197,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::PersonalInfoRequest,
                 confidence: (probing_count as f32 * 0.3).min(1.0),
+                subtype: None,
             });
         }
 
@@ -214,6 +215,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::LoveBombing,
                 confidence: (compliment_count as f32 * 0.2).min(1.0),
+                subtype: None,
             });
         } else if compliment_count >= 1 && is_person_directed_compliment(&lower) {
             events.push(ContextEvent {
@@ -223,6 +225,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::Flattery,
                 confidence: 0.3,
+                subtype: None,
             });
         }
 
@@ -234,6 +237,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::PeerPressure,
                 confidence: (urgency_count as f32 * 0.25).min(1.0),
+                subtype: None,
             });
         }
 
@@ -251,6 +255,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::DefenseOfVictim,
                 confidence: (defense_count as f32 * 0.4).min(1.0),
+                subtype: None,
             });
         }
 
@@ -262,6 +267,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::FarewellMessage,
                 confidence: 0.7,
+                subtype: None,
             });
         }
 
@@ -273,6 +279,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::Hopelessness,
                 confidence: 0.6,
+                subtype: None,
             });
         }
 
@@ -284,6 +291,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::Exclusion,
                 confidence: 0.7,
+                subtype: None,
             });
         }
 
@@ -295,6 +303,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::MoneyOffer,
                 confidence: 0.6,
+                subtype: None,
             });
         }
 
@@ -306,6 +315,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::PiiSelfDisclosure,
                 confidence: (pii_disclosure_count as f32 * 0.4).min(1.0),
+                subtype: None,
             });
         }
 
@@ -317,6 +327,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::DareChallenge,
                 confidence: (dare_count as f32 * 0.35).min(1.0),
+                subtype: None,
             });
         }
 
@@ -328,6 +339,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::ScreenshotThreat,
                 confidence: 0.8,
+                subtype: None,
             });
         }
 
@@ -339,6 +351,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::SuicideCoercion,
                 confidence: (suicide_coercion_count as f32 * 0.5).min(1.0),
+                subtype: None,
             });
         }
 
@@ -350,6 +363,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::FalseConsensus,
                 confidence: (false_consensus_count as f32 * 0.35).min(1.0),
+                subtype: None,
             });
         }
 
@@ -361,6 +375,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::DebtCreation,
                 confidence: (debt_creation_count as f32 * 0.4).min(1.0),
+                subtype: None,
             });
         }
 
@@ -372,6 +387,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::Gaslighting,
                 confidence: (0.55 + gaslighting_count as f32 * 0.1).min(1.0),
+                subtype: None,
             });
         }
 
@@ -383,6 +399,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::ReputationThreat,
                 confidence: (reputation_threat_count as f32 * 0.45).min(1.0),
+                subtype: None,
             });
         }
 
@@ -394,6 +411,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::IdentityErosion,
                 confidence: (identity_erosion_count as f32 * 0.4).min(1.0),
+                subtype: None,
             });
         }
 
@@ -405,6 +423,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::NetworkPoisoning,
                 confidence: (network_poisoning_count as f32 * 0.4).min(1.0),
+                subtype: None,
             });
         }
 
@@ -416,6 +435,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::FakeVulnerability,
                 confidence: (fake_vulnerability_count as f32 * 0.35).min(1.0),
+                subtype: None,
             });
         }
 
@@ -427,6 +447,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::PlatformSwitch,
                 confidence: 0.7,
+                subtype: None,
             });
         }
 
@@ -438,6 +459,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::Devaluation,
                 confidence: 0.5,
+                subtype: None,
             });
         }
 
@@ -483,6 +505,7 @@ impl SignalEnricher {
                 conversation_id: conversation_id.into(),
                 kind: EventKind::PersonalInfoRequest,
                 confidence: ratio.min(1.0),
+                subtype: None,
             })
         } else {
             None

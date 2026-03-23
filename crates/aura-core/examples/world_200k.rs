@@ -1040,7 +1040,12 @@ fn main() {
                 | ThreatType::Nsfw
                 | ThreatType::HateSpeech
                 | ThreatType::Doxxing
-                | ThreatType::PiiLeakage => true,
+                | ThreatType::PiiLeakage
+                | ThreatType::Propaganda
+                | ThreatType::OpsecViolation
+                | ThreatType::Psyops
+                | ThreatType::MilitarySocialEng
+                | ThreatType::CoordinateLeak => true,
             };
             if is_threat {
                 child_threats += 1;

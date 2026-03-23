@@ -17,6 +17,13 @@ enum AccountType {
   ACCOUNT_TYPE_CHILD = 3;
 }
 
+enum AuraModule {
+  AURA_MODULE_UNSPECIFIED = 0;
+  AURA_MODULE_CORE_ONLY = 1;
+  AURA_MODULE_KIDS = 2;
+  AURA_MODULE_MILITARY = 3;
+}
+
 enum CulturalContextKind {
   CULTURAL_CONTEXT_KIND_UNSPECIFIED = 0;
   CULTURAL_CONTEXT_KIND_UKRAINIAN = 1;
@@ -46,6 +53,11 @@ enum ThreatType {
   THREAT_TYPE_HATE_SPEECH = 12;
   THREAT_TYPE_DOXXING = 13;
   THREAT_TYPE_PII_LEAKAGE = 14;
+  THREAT_TYPE_PROPAGANDA = 15;
+  THREAT_TYPE_OPSEC_VIOLATION = 16;
+  THREAT_TYPE_PSYOPS = 17;
+  THREAT_TYPE_MILITARY_SOCIAL_ENG = 18;
+  THREAT_TYPE_COORDINATE_LEAK = 19;
 }
 
 enum Confidence {
@@ -256,6 +268,16 @@ enum EventKind {
   EVENT_KIND_NORMAL_CONVERSATION = 44;
   EVENT_KIND_TRUSTED_CONTACT = 45;
   EVENT_KIND_DEFENSE_OF_VICTIM = 46;
+  EVENT_KIND_PROPAGANDA_NARRATIVE = 47;
+  EVENT_KIND_SUSPICIOUS_SOURCE = 48;
+  EVENT_KIND_POSITION_LEAK = 49;
+  EVENT_KIND_UNIT_INFO_LEAK = 50;
+  EVENT_KIND_EQUIPMENT_LEAK = 51;
+  EVENT_KIND_COORDINATE_MENTION = 52;
+  EVENT_KIND_PSYOPS_PATTERN = 53;
+  EVENT_KIND_INTEL_GATHERING = 54;
+  EVENT_KIND_MILITARY_PHISHING = 55;
+  EVENT_KIND_MILITARY_DISINFO = 56;
 }
 
 message AuraConfig {
@@ -269,6 +291,7 @@ message AuraConfig {
   optional uint32 account_holder_age = 8;
   uint32 ttl_days = 9;
   int32 timezone_offset_minutes = 10;
+  AuraModule active_module = 11;
 }
 
 message MessageInput {
@@ -300,6 +323,8 @@ message DetectionSignal {
   SignalFamily family = 5;
   string reason_code = 6;
   string explanation = 7;
+  // Fine-grained subtype within the threat category (e.g., "war_denial", "phishing_diia")
+  string threat_subtype = 8;
 }
 
 message RiskBreakdown {

@@ -401,7 +401,17 @@ impl ManipulationDetector {
             | EventKind::SuicideCoercion
             | EventKind::NormalConversation
             | EventKind::TrustedContact
-            | EventKind::DefenseOfVictim => None,
+            | EventKind::DefenseOfVictim
+            | EventKind::PropagandaNarrative
+            | EventKind::SuspiciousSource
+            | EventKind::PositionLeak
+            | EventKind::UnitInfoLeak
+            | EventKind::EquipmentLeak
+            | EventKind::CoordinateMention
+            | EventKind::PsyopsPattern
+            | EventKind::IntelGathering
+            | EventKind::MilitaryPhishing
+            | EventKind::MilitaryDisinfo => None,
         }
     }
 }
@@ -422,6 +432,7 @@ mod tests {
                 conversation_id: "conv_1".into(),
                 kind,
                 confidence: 0.8,
+                subtype: None,
             });
         }
         timeline

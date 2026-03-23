@@ -1471,6 +1471,11 @@ fn proto_threat_type(value: aura_core::ThreatType) -> proto::ThreatType {
         aura_core::ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
         aura_core::ThreatType::Doxxing => proto::ThreatType::Doxxing,
         aura_core::ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
+        aura_core::ThreatType::Propaganda => proto::ThreatType::Propaganda,
+        aura_core::ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
+        aura_core::ThreatType::Psyops => proto::ThreatType::Psyops,
+        aura_core::ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
+        aura_core::ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
     }
 }
 

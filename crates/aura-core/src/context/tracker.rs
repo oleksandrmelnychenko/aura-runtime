@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AuraError;
 use crate::ids::{ConversationId, SenderId};
-use crate::types::{ConversationType, DetectionSignal};
+use crate::types::{AuraModule, ConversationType, DetectionSignal};
 
 /// Current schema version for serialized tracker state.
 pub const TRACKER_STATE_VERSION: u32 = 2;
@@ -17,6 +17,9 @@ use crate::types::AnalysisMode;
 
 use super::grooming::GroomingDetector;
 use super::manipulation::ManipulationDetector;
+use super::opsec::OpsecDetector;
+use super::propaganda::PropagandaDetector;
+use super::psyops::PsyopsDetector;
 use super::raid::RaidDetector;
 use super::selfharm::SelfHarmDetector;
 
@@ -46,6 +49,10 @@ pub struct TrackerConfig {
     /// Used for late-night detection in TimingAnalyzer.
     #[serde(default)]
     pub timezone_offset_minutes: i32,
+
+    /// Active protection module. Controls which detectors run.
+    #[serde(default)]
+    pub active_module: AuraModule,
 }
 
 impl Default for TrackerConfig {
@@ -61,6 +68,7 @@ impl Default for TrackerConfig {
             account_holder_age: None,
             auto_cleanup_interval: 0,
             timezone_offset_minutes: 0,
+            active_module: AuraModule::default(),
         }
     }
 }
@@ -261,6 +269,9 @@ pub struct ConversationTracker {
     selfharm_detector: SelfHarmDetector,
     coercion_detector: CoercionDetector,
     raid_detector: RaidDetector,
+    propaganda_detector: PropagandaDetector,
+    opsec_detector: Option<OpsecDetector>,
+    psyops_detector: Option<PsyopsDetector>,
     contact_profiler: ContactProfiler,
     call_count: u32,
     next_event_id: u64,
@@ -288,6 +299,22 @@ impl ConversationTracker {
         let selfharm_detector = SelfHarmDetector::new();
         let coercion_detector = CoercionDetector::new();
         let raid_detector = RaidDetector::new();
+        let propaganda_mode = if config.is_child_account || config.is_teen_account {
+            AnalysisMode::Strict
+        } else {
+            AnalysisMode::Standard
+        };
+        let propaganda_detector = PropagandaDetector::new(propaganda_mode);
+        let opsec_detector = if config.active_module == AuraModule::Military {
+            Some(OpsecDetector::new())
+        } else {
+            None
+        };
+        let psyops_detector = if config.active_module == AuraModule::Military {
+            Some(PsyopsDetector::new())
+        } else {
+            None
+        };
         let contact_profiler = ContactProfiler::with_max_profiles(config.max_contact_profiles);
 
         Self {
@@ -299,6 +326,9 @@ impl ConversationTracker {
             selfharm_detector,
             coercion_detector,
             raid_detector,
+            propaganda_detector,
+            opsec_detector,
+            psyops_detector,
             contact_profiler,
             call_count: 0,
             next_event_id: 1,
@@ -415,6 +445,24 @@ impl ConversationTracker {
             .raid_detector
             .analyze(timeline, now_ms, &self.contact_profiler);
         signals.extend(raid_signals);
+
+        // Core module: propaganda detection (always active)
+        let propaganda_signals =
+            self.propaganda_detector
+                .analyze(timeline, &sender_id, now_ms, &self.contact_profiler);
+        signals.extend(propaganda_signals);
+
+        // Military module: OPSEC and psyops detection
+        if let Some(ref opsec) = self.opsec_detector {
+            let opsec_signals =
+                opsec.analyze(timeline, &sender_id, now_ms, &self.contact_profiler);
+            signals.extend(opsec_signals);
+        }
+        if let Some(ref psyops) = self.psyops_detector {
+            let psyops_signals =
+                psyops.analyze(timeline, &sender_id, now_ms, &self.contact_profiler);
+            signals.extend(psyops_signals);
+        }
 
         let age_gap_signals = self
             .contact_profiler
@@ -569,6 +617,7 @@ mod tests {
             conversation_id: conversation_id.into(),
             kind,
             confidence: 0.8,
+            subtype: None,
         }
     }
 

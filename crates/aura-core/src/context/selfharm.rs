@@ -166,7 +166,17 @@ impl SelfHarmDetector {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => {}
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => {}
             }
         }
 
@@ -252,7 +262,17 @@ impl SelfHarmDetector {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => {}
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => {}
             }
         }
 
@@ -369,7 +389,17 @@ impl SelfHarmDetector {
                 | EventKind::IdentityErosion
                 | EventKind::NetworkPoisoning
                 | EventKind::FakeVulnerability
-                | EventKind::TrustedContact => {}
+                | EventKind::TrustedContact
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => {}
             }
         }
 
@@ -448,7 +478,17 @@ impl SelfHarmDetector {
                 | EventKind::FakeVulnerability
                 | EventKind::NormalConversation
                 | EventKind::TrustedContact
-                | EventKind::DefenseOfVictim => {}
+                | EventKind::DefenseOfVictim
+                | EventKind::PropagandaNarrative
+                | EventKind::SuspiciousSource
+                | EventKind::PositionLeak
+                | EventKind::UnitInfoLeak
+                | EventKind::EquipmentLeak
+                | EventKind::CoordinateMention
+                | EventKind::PsyopsPattern
+                | EventKind::IntelGathering
+                | EventKind::MilitaryPhishing
+                | EventKind::MilitaryDisinfo => {}
             }
         }
 
@@ -550,7 +590,17 @@ impl SelfHarmDetector {
                     | EventKind::FakeVulnerability
                     | EventKind::NormalConversation
                     | EventKind::TrustedContact
-                    | EventKind::DefenseOfVictim => {}
+                    | EventKind::DefenseOfVictim
+                    | EventKind::PropagandaNarrative
+                    | EventKind::SuspiciousSource
+                    | EventKind::PositionLeak
+                    | EventKind::UnitInfoLeak
+                    | EventKind::EquipmentLeak
+                    | EventKind::CoordinateMention
+                    | EventKind::PsyopsPattern
+                    | EventKind::IntelGathering
+                    | EventKind::MilitaryPhishing
+                    | EventKind::MilitaryDisinfo => {}
                 }
             }
         }
@@ -591,6 +641,7 @@ mod tests {
                 conversation_id: "conv_1".into(),
                 kind,
                 confidence: 0.8,
+                subtype: None,
             });
         }
         timeline
