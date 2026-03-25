@@ -3,12 +3,14 @@
 //! Provides Aho-Corasick and regex-based pattern matching, text normalization,
 //! emoji analysis, and suspicious URL detection.
 
+pub mod coordinates;
 pub mod database;
 pub mod emoji;
 pub mod matcher;
 pub mod normalizer;
 pub mod url_checker;
 
+pub use coordinates::{CoordinateFormat, CoordinateMatch, validate_ukraine_coordinates};
 pub use database::{PatternDatabase, PatternLoadError};
 pub use emoji::{EmojiAnalyzer, EmojiMatchResult};
 pub use matcher::{MatchResult, PatternMatcher, PatternMatcherBuildError};

@@ -4,24 +4,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AuraError;
 use crate::ids::{ConversationId, SenderId};
-use crate::types::{AuraModule, ConversationType, DetectionSignal};
+use crate::types::{Confidence, ConversationType, DetectionSignal, SignalFamily, ThreatType};
 
 /// Current schema version for serialized tracker state.
 pub const TRACKER_STATE_VERSION: u32 = 2;
 
-use super::bullying::BullyingDetector;
 use super::coercion::CoercionDetector;
 use super::contact::{ContactProfiler, ContactProfilerWireState, DEFAULT_MAX_CONTACT_PROFILES};
 use super::events::{ContextEvent, EventKind};
 use crate::types::AnalysisMode;
 
-use super::grooming::GroomingDetector;
-use super::manipulation::ManipulationDetector;
-use super::opsec::OpsecDetector;
 use super::propaganda::PropagandaDetector;
-use super::psyops::PsyopsDetector;
 use super::raid::RaidDetector;
-use super::selfharm::SelfHarmDetector;
 
 /// Holds configuration parameters for the conversation tracker.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,9 +44,6 @@ pub struct TrackerConfig {
     #[serde(default)]
     pub timezone_offset_minutes: i32,
 
-    /// Active protection module. Controls which detectors run.
-    #[serde(default)]
-    pub active_module: AuraModule,
 }
 
 impl Default for TrackerConfig {
@@ -68,7 +59,6 @@ impl Default for TrackerConfig {
             account_holder_age: None,
             auto_cleanup_interval: 0,
             timezone_offset_minutes: 0,
-            active_module: AuraModule::default(),
         }
     }
 }
@@ -228,8 +218,7 @@ impl ConversationTimeline {
     /// - Same-tracker re-import (same event_ids)
     /// - Cross-tracker merge (different trackers may assign overlapping event_ids)
     pub fn merge_from(&mut self, other: ConversationTimeline) {
-        let mut existing: HashSet<(u64, SenderId, EventKind)> =
-            HashSet::with_capacity(self.len());
+        let mut existing: HashSet<(u64, SenderId, EventKind)> = HashSet::with_capacity(self.len());
         for e in self.visible_events() {
             existing.insert((e.timestamp_ms, e.sender_id.clone(), e.kind.clone()));
         }
@@ -269,8 +258,8 @@ impl ConversationTimeline {
         if self.start_idx == 0 {
             return;
         }
-        let should_compact =
-            self.start_idx >= self.max_events || self.start_idx.saturating_mul(2) >= self.events.len();
+        let should_compact = self.start_idx >= self.max_events
+            || self.start_idx.saturating_mul(2) >= self.events.len();
         if should_compact {
             self.events.drain(0..self.start_idx);
             self.start_idx = 0;
@@ -296,15 +285,9 @@ impl ConversationTimelineState {
 pub struct ConversationTracker {
     config: TrackerConfig,
     timelines: HashMap<ConversationId, ConversationTimeline>,
-    grooming_detector: GroomingDetector,
-    bullying_detector: BullyingDetector,
-    manipulation_detector: ManipulationDetector,
-    selfharm_detector: SelfHarmDetector,
     coercion_detector: CoercionDetector,
     raid_detector: RaidDetector,
     propaganda_detector: PropagandaDetector,
-    opsec_detector: Option<OpsecDetector>,
-    psyops_detector: Option<PsyopsDetector>,
     contact_profiler: ContactProfiler,
     call_count: u32,
     next_event_id: u64,
@@ -319,27 +302,8 @@ pub struct TrackerWireState {
 }
 
 impl ConversationTracker {
-    fn military_detectors_for(
-        config: &TrackerConfig,
-    ) -> (Option<OpsecDetector>, Option<PsyopsDetector>) {
-        if config.active_module == AuraModule::Military {
-            (Some(OpsecDetector::new()), Some(PsyopsDetector::new()))
-        } else {
-            (None, None)
-        }
-    }
-
     /// Creates a new tracker with the given configuration and initializes all sub-detectors.
     pub fn new(config: TrackerConfig) -> Self {
-        let grooming_detector =
-            GroomingDetector::new(if config.is_child_account || config.is_teen_account {
-                AnalysisMode::Strict
-            } else {
-                AnalysisMode::Standard
-            });
-        let bullying_detector = BullyingDetector::new();
-        let manipulation_detector = ManipulationDetector::new();
-        let selfharm_detector = SelfHarmDetector::new();
         let coercion_detector = CoercionDetector::new();
         let raid_detector = RaidDetector::new();
         let propaganda_mode = if config.is_child_account || config.is_teen_account {
@@ -348,21 +312,14 @@ impl ConversationTracker {
             AnalysisMode::Standard
         };
         let propaganda_detector = PropagandaDetector::new(propaganda_mode);
-        let (opsec_detector, psyops_detector) = Self::military_detectors_for(&config);
         let contact_profiler = ContactProfiler::with_max_profiles(config.max_contact_profiles);
 
         Self {
             config,
             timelines: HashMap::new(),
-            grooming_detector,
-            bullying_detector,
-            manipulation_detector,
-            selfharm_detector,
             coercion_detector,
             raid_detector,
             propaganda_detector,
-            opsec_detector,
-            psyops_detector,
             contact_profiler,
             call_count: 0,
             next_event_id: 1,
@@ -382,16 +339,24 @@ impl ConversationTracker {
         } else {
             AnalysisMode::Standard
         };
-        self.grooming_detector = GroomingDetector::new(mode);
         self.propaganda_detector = PropagandaDetector::new(mode);
-        (self.opsec_detector, self.psyops_detector) = Self::military_detectors_for(&self.config);
 
         for timeline in self.timelines.values_mut() {
             timeline.max_events = self.config.max_events_per_conversation;
+            if timeline.start_idx > 0 {
+                timeline.events.drain(0..timeline.start_idx);
+                timeline.start_idx = 0;
+            }
+            if timeline.max_events == 0 {
+                timeline.events.clear();
+                timeline.start_idx = 0;
+                continue;
+            }
             if timeline.events.len() > timeline.max_events {
                 let overflow = timeline.events.len() - timeline.max_events;
                 timeline.events.drain(0..overflow);
             }
+            timeline.start_idx = timeline.start_idx.min(timeline.events.len());
         }
 
         while self.timelines.len() > self.config.max_conversations {
@@ -414,66 +379,26 @@ impl ConversationTracker {
 
     /// Records a single event, runs all detectors, and returns any generated signals.
     pub fn record_event(&mut self, event: ContextEvent) -> Vec<DetectionSignal> {
-        let conversation_id = event.conversation_id.clone();
-        let sender_id = event.sender_id.clone();
-        let now_ms = event.timestamp_ms;
+        let (conversation_id, sender_id, now_ms) = self.append_event(event);
+        self.analyze_sender_window(&conversation_id, &sender_id, now_ms)
+    }
 
-        let mut event = event;
-        event.event_id = self.next_event_id;
-        self.next_event_id += 1;
-
-        self.contact_profiler.record_event(&event);
-
-        let timeline = self
-            .timelines
-            .entry(conversation_id.clone())
-            .or_insert_with(|| {
-                ConversationTimeline::new(
-                    conversation_id.clone(),
-                    self.config.max_events_per_conversation,
-                )
-            });
-
-        timeline.push(event);
-
-        if self.timelines.len() > self.config.max_conversations {
-            self.evict_oldest_conversation();
-        }
-
+    fn analyze_sender_window(
+        &self,
+        conversation_id: &ConversationId,
+        sender_id: &SenderId,
+        now_ms: u64,
+    ) -> Vec<DetectionSignal> {
         let window_start = now_ms.saturating_sub(self.config.analysis_window_ms);
-
         let mut signals = Vec::new();
-
-        let timeline = match self.timelines.get(&conversation_id) {
+        let timeline = match self.timelines.get(conversation_id) {
             Some(t) => t,
             None => return signals,
         };
-        let grooming_signals = self.grooming_detector.analyze(
-            timeline,
-            &sender_id,
-            window_start,
-            &self.contact_profiler,
-        );
-        signals.extend(grooming_signals);
-
-        let bullying_signals = self
-            .bullying_detector
-            .analyze(timeline, &sender_id, window_start);
-        signals.extend(bullying_signals);
-
-        let manipulation_signals =
-            self.manipulation_detector
-                .analyze(timeline, &sender_id, window_start);
-        signals.extend(manipulation_signals);
-
-        let selfharm_signals = self
-            .selfharm_detector
-            .analyze(timeline, &sender_id, window_start);
-        signals.extend(selfharm_signals);
 
         let coercion_signals = self
             .coercion_detector
-            .analyze(timeline, &sender_id, window_start);
+            .analyze(timeline, sender_id, window_start);
         signals.extend(coercion_signals);
 
         let raid_signals = self
@@ -484,33 +409,106 @@ impl ConversationTracker {
         // Core module: propaganda detection (always active)
         let propaganda_signals =
             self.propaganda_detector
-                .analyze(timeline, &sender_id, now_ms, &self.contact_profiler);
+                .analyze(timeline, sender_id, now_ms, &self.contact_profiler);
         signals.extend(propaganda_signals);
-
-        // Military module: OPSEC and psyops detection
-        if let Some(ref opsec) = self.opsec_detector {
-            let opsec_signals = opsec.analyze(timeline, &sender_id, now_ms, &self.contact_profiler);
-            signals.extend(opsec_signals);
-        }
-        if let Some(ref psyops) = self.psyops_detector {
-            let psyops_signals =
-                psyops.analyze(timeline, &sender_id, now_ms, &self.contact_profiler);
-            signals.extend(psyops_signals);
-        }
 
         let age_gap_signals = self
             .contact_profiler
-            .check_age_gap(&sender_id, self.config.account_holder_age);
+            .check_age_gap(sender_id, self.config.account_holder_age);
         signals.extend(age_gap_signals);
 
         let contact_signals = self
             .contact_profiler
-            .check_anomalies(&sender_id, self.config.is_child_account);
+            .check_anomalies(
+                sender_id,
+                self.config.is_child_account || self.config.is_teen_account,
+            );
         signals.extend(contact_signals);
 
-        let shift_signals = self.contact_profiler.check_behavioral_shift(&sender_id);
+        let shift_signals = self.contact_profiler.check_behavioral_shift(sender_id);
         signals.extend(shift_signals);
+        let inferred_event_signals = self.infer_event_pattern_signals(timeline, sender_id, window_start);
+        signals.extend(inferred_event_signals);
+        signals
+    }
 
+    fn infer_event_pattern_signals(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &SenderId,
+        window_start: u64,
+    ) -> Vec<DetectionSignal> {
+        let mut signals = Vec::with_capacity(2);
+
+        let gaslighting_count = timeline.count_events(sender_id, &EventKind::Gaslighting, window_start);
+        if gaslighting_count > 0 {
+            let score = (0.35 + gaslighting_count as f32 * 0.10).min(0.75);
+            signals.push(DetectionSignal::context(
+                ThreatType::Manipulation,
+                score,
+                Confidence::Medium,
+                SignalFamily::Abuse,
+                "context.gaslighting.pattern",
+                "Repeated gaslighting pattern in recent sender window",
+            ));
+        }
+
+        let pile_on_hostile_count = timeline.count_matching(window_start, |event| {
+            matches!(
+                event.kind,
+                EventKind::Insult
+                    | EventKind::Denigration
+                    | EventKind::Mockery
+                    | EventKind::RumorSpreading
+                    | EventKind::Exclusion
+            )
+        });
+        let hostile_senders = timeline.unique_senders_matching(window_start, |event| {
+            matches!(
+                event.kind,
+                EventKind::Insult
+                    | EventKind::Denigration
+                    | EventKind::Mockery
+                    | EventKind::RumorSpreading
+                    | EventKind::Exclusion
+            )
+        });
+        if hostile_senders.len() >= 2 && pile_on_hostile_count >= 3 {
+            let score = (0.45 + hostile_senders.len() as f32 * 0.08).min(0.75);
+            signals.push(DetectionSignal::context(
+                ThreatType::Bullying,
+                score,
+                Confidence::Medium,
+                SignalFamily::Abuse,
+                "context.group_bullying.pile_on",
+                "Group bullying pile-on detected across multiple senders",
+            ));
+        }
+
+        signals
+    }
+
+    fn append_event(&mut self, event: ContextEvent) -> (ConversationId, SenderId, u64) {
+        let conversation_id = event.conversation_id.clone();
+        let sender_id = event.sender_id.clone();
+        let now_ms = event.timestamp_ms;
+        let mut event = event;
+        event.event_id = self.next_event_id;
+        self.next_event_id += 1;
+        self.contact_profiler.record_event(&event);
+        let timeline = self
+            .timelines
+            .entry(conversation_id.clone())
+            .or_insert_with(|| {
+                ConversationTimeline::new(
+                    conversation_id.clone(),
+                    self.config.max_events_per_conversation,
+                )
+            });
+        timeline.push(event);
+        if self.timelines.len() > self.config.max_conversations {
+            self.evict_oldest_conversation();
+        }
         if self.config.auto_cleanup_interval > 0 {
             self.call_count += 1;
             if self.call_count >= self.config.auto_cleanup_interval {
@@ -518,16 +516,23 @@ impl ConversationTracker {
                 self.cleanup(now_ms);
             }
         }
-
-        signals
+        (conversation_id, sender_id, now_ms)
     }
 
     /// Records a batch of events sequentially and returns all accumulated signals.
     pub fn record_events(&mut self, events: Vec<ContextEvent>) -> Vec<DetectionSignal> {
-        let mut all_signals = Vec::new();
+        let mut latest_by_sender: HashMap<(ConversationId, SenderId), u64> = HashMap::new();
         for event in events {
-            let signals = self.record_event(event);
-            all_signals.extend(signals);
+            let (conversation_id, sender_id, now_ms) = self.append_event(event);
+            let key = (conversation_id, sender_id);
+            let entry = latest_by_sender.entry(key).or_insert(now_ms);
+            if now_ms > *entry {
+                *entry = now_ms;
+            }
+        }
+        let mut all_signals = Vec::new();
+        for ((conversation_id, sender_id), now_ms) in latest_by_sender {
+            all_signals.extend(self.analyze_sender_window(&conversation_id, &sender_id, now_ms));
         }
         all_signals
     }
@@ -1023,7 +1028,7 @@ mod tests {
     }
 
     #[test]
-    fn full_pipeline_grooming_plus_coercion() {
+    fn full_pipeline_coercion_detects_manipulation() {
         let mut tracker = ConversationTracker::new(TrackerConfig {
             is_child_account: true,
             ..Default::default()
@@ -1064,16 +1069,10 @@ mod tests {
             7000,
         ));
 
-        let has_grooming = signals
-            .iter()
-            .any(|s| s.threat_type == crate::types::ThreatType::Grooming);
         let has_manipulation = signals
             .iter()
             .any(|s| s.threat_type == crate::types::ThreatType::Manipulation);
-        assert!(
-            has_grooming || has_manipulation,
-            "Should detect grooming or manipulation in combined attack"
-        );
+        assert!(has_manipulation, "Should detect coercive manipulation patterns");
     }
 
     #[test]
@@ -1113,7 +1112,7 @@ mod tests {
     }
 
     #[test]
-    fn multiple_detectors_produce_signals() {
+    fn kids_legacy_context_detectors_do_not_run_in_core_tracker() {
         let mut tracker = ConversationTracker::new(TrackerConfig {
             is_child_account: true,
             ..Default::default()
@@ -1141,10 +1140,14 @@ mod tests {
             8000,
         ));
 
-        let threat_types: Vec<_> = signals.iter().map(|s| s.threat_type).collect();
+        let has_kids_legacy_threat = signals.iter().any(|signal| {
+            signal.threat_type == crate::types::ThreatType::Grooming
+                || signal.threat_type == crate::types::ThreatType::Bullying
+                || signal.threat_type == crate::types::ThreatType::SelfHarm
+        });
         assert!(
-            !threat_types.is_empty(),
-            "Should detect threats in bullying->selfharm pathway"
+            !has_kids_legacy_threat,
+            "Core tracker should not emit legacy kids context threats"
         );
     }
 
@@ -1159,6 +1162,59 @@ mod tests {
         tracker.record_events(events);
 
         assert_eq!(tracker.timeline("conv_1").unwrap().len(), 3);
+    }
+
+    #[test]
+    fn update_config_preserves_visible_window_after_shrink() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            max_events_per_conversation: 10,
+            ..Default::default()
+        });
+        for i in 0..12 {
+            tracker.record_event(make_event(
+                "conv_1",
+                "alice",
+                EventKind::NormalConversation,
+                1_000 + i * 1_000,
+            ));
+        }
+
+        tracker.update_config(TrackerConfig {
+            max_events_per_conversation: 5,
+            ..Default::default()
+        });
+
+        let timeline = tracker.timeline("conv_1").unwrap();
+        let events = timeline.all_events();
+        assert_eq!(events.len(), 5);
+        assert_eq!(events[0].timestamp_ms, 8_000);
+        assert_eq!(events[4].timestamp_ms, 12_000);
+    }
+
+    #[test]
+    fn record_events_matches_single_final_pass_for_same_sender() {
+        let config = TrackerConfig {
+            is_child_account: true,
+            ..Default::default()
+        };
+        let mut batch_tracker = ConversationTracker::new(config.clone());
+        let mut single_tracker = ConversationTracker::new(config);
+        let events = vec![
+            make_event("conv_1", "bully", EventKind::Insult, 1000),
+            make_event("conv_1", "bully", EventKind::Insult, 2000),
+            make_event("conv_1", "bully", EventKind::Insult, 3000),
+            make_event("conv_1", "bully", EventKind::Insult, 4000),
+            make_event("conv_1", "bully", EventKind::Insult, 5000),
+        ];
+
+        let batch_signals = batch_tracker.record_events(events.clone());
+
+        for event in events.iter().take(4) {
+            single_tracker.record_event(event.clone());
+        }
+        let single_signals = single_tracker.record_event(events[4].clone());
+
+        assert_eq!(batch_signals.len(), single_signals.len());
     }
 
     #[test]
@@ -1333,18 +1389,16 @@ mod tests {
     }
 
     #[test]
-    fn update_config_rebuilds_military_detectors() {
+    fn update_config_replaces_values() {
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
-        assert!(tracker.opsec_detector.is_none());
-        assert!(tracker.psyops_detector.is_none());
 
         tracker.update_config(TrackerConfig {
-            active_module: AuraModule::Military,
+            analysis_window_ms: 10_000,
+            timezone_offset_minutes: 180,
             ..TrackerConfig::default()
         });
 
-        assert!(tracker.opsec_detector.is_some());
-        assert!(tracker.psyops_detector.is_some());
-        assert_eq!(tracker.config.active_module, AuraModule::Military);
+        assert_eq!(tracker.config.analysis_window_ms, 10_000);
+        assert_eq!(tracker.config.timezone_offset_minutes, 180);
     }
 }

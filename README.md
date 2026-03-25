@@ -47,6 +47,20 @@ aura-proto      Protobuf contracts for messenger runtime and FFI
 aura-ffi        Protobuf-only C ABI for mobile and desktop clients
 ```
 
+```text
+AURA (central core)
+├─ AURA.KIDS      child/teen safety domain
+└─ AURA.MILITARY  OPSEC/psyops/military social-engineering domain
+```
+
+Domain modules are scaffolded as dedicated crates:
+
+```text
+crates/aura-domain     shared domain contract (traits, input/output, registry)
+crates/aura-kids       AURA.KIDS detectors/policy/hooks
+crates/aura-military   AURA.MILITARY detectors/policy/hooks
+```
+
 ### Runtime Flow
 
 ```text
@@ -291,6 +305,20 @@ Main functions:
 - `aura_free_string`
 
 Context export/import now uses native protobuf tracker/contact state end-to-end.
+
+### Domain Mode Migration (Config Compatibility)
+
+Account-level domain selection now uses `AuraConfig.domain_mode`:
+
+- `DOMAIN_MODE_NONE`: base Aura only (default)
+- `DOMAIN_MODE_KIDS`: base Aura + Kids extension
+- `DOMAIN_MODE_MILITARY`: base Aura + Military extension
+
+Runtime rules at the FFI boundary:
+
+- `domain_mode` is the only effective selector.
+- `DOMAIN_MODE_UNSPECIFIED` resolves to `DOMAIN_MODE_NONE`.
+- `active_module` has been removed from the protobuf config contract.
 
 ## Data Artifacts
 

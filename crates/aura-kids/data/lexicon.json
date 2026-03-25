@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "warn_priority": 85,
+    "critical_warn_priority": 95,
+    "guardian_escalation_priority": 92
+  },
+  "grooming": [
+    {
+      "threat_key": "grooming_secrecy_boundary",
+      "reason_code": "kids.grooming.secrecy_boundary",
+      "score": 0.86,
+      "threat_type": "grooming",
+      "severity": "high",
+      "priority": 95,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "our little secret",
+          "don't tell your parents",
+          "keep this between us",
+          "нікому не кажи",
+          "це наш секрет"
+        ],
+        [
+          "send me a photo",
+          "turn on your camera",
+          "what do you wear to bed",
+          "надішли фото",
+          "увімкни камеру"
+        ]
+      ]
+    },
+    {
+      "threat_key": "grooming_secrecy",
+      "reason_code": "kids.grooming.secrecy",
+      "score": 0.72,
+      "threat_type": "grooming",
+      "severity": "medium",
+      "priority": 70,
+      "all_of": [],
+      "any_of": [
+        "our little secret",
+        "don't tell your parents",
+        "keep this between us",
+        "нікому не кажи",
+        "це наш секрет"
+      ]
+    }
+  ],
+  "bullying": [
+    {
+      "threat_key": "bullying_harassment",
+      "reason_code": "kids.bullying.harassment",
+      "score": 0.74,
+      "threat_type": "bullying",
+      "severity": "medium",
+      "priority": 60,
+      "all_of": [],
+      "any_of": [
+        "you're worthless",
+        "nobody likes you",
+        "everyone hates you",
+        "ти нікому не потрібен",
+        "тебе всі ненавидять"
+      ]
+    }
+  ],
+  "selfharm": [
+    {
+      "threat_key": "selfharm_acute",
+      "reason_code": "kids.selfharm.acute",
+      "score": 0.96,
+      "threat_type": "self_harm",
+      "severity": "critical",
+      "priority": 100,
+      "action": "warn",
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "no reason to live",
+          "end it all",
+          "i want to disappear forever",
+          "немає сенсу жити",
+          "хочу зникнути назавжди"
+        ],
+        [
+          "goodbye forever",
+          "this is my last message",
+          "прощавайте назавжди",
+          "це моє останнє повідомлення"
+        ]
+      ]
+    },
+    {
+      "threat_key": "selfharm_ideation",
+      "reason_code": "kids.selfharm.ideation",
+      "score": 0.8,
+      "threat_type": "self_harm",
+      "severity": "high",
+      "priority": 92,
+      "all_of": [],
+      "any_of": [
+        "no reason to live",
+        "end it all",
+        "i want to disappear forever",
+        "немає сенсу жити",
+        "хочу зникнути назавжди"
+      ]
+    }
+  ],
+  "manipulation": [
+    {
+      "threat_key": "manipulation_blackmail",
+      "reason_code": "kids.manipulation.blackmail",
+      "score": 0.85,
+      "threat_type": "manipulation",
+      "severity": "high",
+      "priority": 85,
+      "all_of": [],
+      "any_of": [
+        "if you don't do this i'll share",
+        "last warning before i share",
+        "якщо не зробиш це, я всім покажу"
+      ]
+    },
+    {
+      "threat_key": "manipulation_gaslight",
+      "reason_code": "kids.manipulation.gaslight",
+      "score": 0.7,
+      "threat_type": "manipulation",
+      "severity": "medium",
+      "priority": 55,
+      "all_of": [],
+      "any_of": [
+        "you're the one who started this",
+        "you're imagining things",
+        "ти все вигадуєш"
+      ]
+    }
+  ]
+}

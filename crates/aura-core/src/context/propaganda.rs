@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::types::{AnalysisMode, Confidence, DetectionSignal, SignalFamily, ThreatType};
 
@@ -319,14 +319,23 @@ const FALSE_POSITIVE_COUNTER: &[&str] = &[
 
 impl NarrativeId {
     pub fn from_rule_id(rule_id: &str) -> Option<Self> {
+        let mut best: Option<(usize, NarrativeId)> = None;
         for spec in NARRATIVES {
             for marker in spec.rule_markers {
                 if rule_id.contains(marker) {
-                    return Some(spec.id);
+                    let marker_len = marker.len();
+                    match best {
+                        None => best = Some((marker_len, spec.id)),
+                        Some((best_len, _)) => {
+                            if marker_len > best_len {
+                                best = Some((marker_len, spec.id));
+                            }
+                        }
+                    }
                 }
             }
         }
-        None
+        best.map(|(_, id)| id)
     }
 
     pub fn tag(self) -> &'static str {
@@ -345,6 +354,17 @@ impl NarrativeId {
             }
         }
         0.5
+    }
+}
+
+fn is_propaganda_source_subtype(subtype: &str) -> bool {
+    match subtype {
+        "state_media" => true,
+        "aligned_media" => true,
+        "occupation_media" => true,
+        "disinfo_infra" => true,
+        "telegram_channel" => true,
+        _ => false,
     }
 }
 
@@ -392,7 +412,13 @@ impl SenderSnapshot {
                     }
                 }
                 EventKind::SuspiciousSource => snap.source_count += 1,
-                EventKind::MilitaryDisinfo => snap.disinfo_count += 1,
+                EventKind::MilitaryDisinfo => {
+                    snap.disinfo_count += 1;
+                    snap.timestamps.push(event.timestamp_ms);
+                    if event.timestamp_ms >= burst_start {
+                        snap.burst_count += 1;
+                    }
+                }
                 _ => {}
             }
         }
@@ -406,6 +432,14 @@ impl SenderSnapshot {
 
     fn distinct_narratives(&self) -> usize {
         self.narrative_hits.len()
+    }
+
+    fn has_narrative(&self) -> bool {
+        self.propaganda_count > 0
+    }
+
+    fn has_disinfo(&self) -> bool {
+        self.disinfo_count > 0
     }
 
     fn has(&self, id: NarrativeId) -> bool {
@@ -489,6 +523,20 @@ impl PropagandaDetector {
             return true;
         }
 
+        let mut has_quote_context = false;
+        for c in lower.chars().rev().take(40) {
+            if c == '.' || c == '!' || c == '?' || c == '\n' {
+                break;
+            }
+            if c == '\u{ab}' || c == '"' || c == '\u{201c}' {
+                has_quote_context = true;
+                break;
+            }
+        }
+        if has_quote_context {
+            return true;
+        }
+
         for phrase in FALSE_POSITIVE_NEGATIONS {
             if lower.contains(phrase) {
                 return true;
@@ -514,7 +562,10 @@ impl PropagandaDetector {
         let window_start = now_ms.saturating_sub(self.window_ms);
         let burst_start = now_ms.saturating_sub(self.burst_window_ms);
         let snap = SenderSnapshot::collect(timeline, sender_id, window_start, burst_start);
-        let is_new = contact_profiler.is_new_contact(sender_id);
+        let is_new = match contact_profiler.profile(sender_id) {
+            Some(profile) => now_ms.saturating_sub(profile.first_seen_ms) < 48 * 60 * 60 * 1000,
+            None => true,
+        };
 
         let mut signals = Vec::with_capacity(8);
 
@@ -552,15 +603,22 @@ impl PropagandaDetector {
         } else {
             Confidence::Medium
         };
+        let reason_code = if snap.has_narrative() && snap.has_disinfo() {
+            "conversation.propaganda.repeated_mixed_stream"
+        } else if snap.has_disinfo() {
+            "conversation.propaganda.repeated_disinfo"
+        } else {
+            "conversation.propaganda.repeated_narrative"
+        };
 
         signals.push(DetectionSignal::context(
             ThreatType::Propaganda,
             score,
             confidence,
             SignalFamily::Content,
-            "conversation.propaganda.repeated_narrative",
+            reason_code,
             format!(
-                "Sender pushed {} propaganda narrative(s) in conversation",
+                "Sender pushed {} propaganda/disinfo event(s) in conversation",
                 total
             ),
         ));
@@ -578,7 +636,7 @@ impl PropagandaDetector {
             SignalFamily::Content,
             "conversation.propaganda.burst",
             format!(
-                "Propaganda burst: {} messages in {} minutes",
+                "Propaganda/disinfo burst: {} messages in {} minutes",
                 snap.burst_count,
                 self.burst_window_ms / 60_000
             ),
@@ -696,14 +754,21 @@ impl PropagandaDetector {
         }
         let combined = snap.total() + snap.source_count;
         let score = (0.6 + combined as f32 * 0.05).min(0.95);
+        let reason_code = if snap.has_narrative() && snap.has_disinfo() {
+            "conversation.propaganda.mixed_with_sources"
+        } else if snap.has_disinfo() {
+            "conversation.propaganda.disinfo_with_sources"
+        } else {
+            "conversation.propaganda.narrative_with_sources"
+        };
         signals.push(DetectionSignal::context(
             ThreatType::Propaganda,
             score,
             Confidence::High,
             SignalFamily::Content,
-            "conversation.propaganda.narrative_with_sources",
+            reason_code,
             format!(
-                "Sender combines propaganda narratives ({}) with suspicious links ({})",
+                "Sender combines propaganda/disinfo events ({}) with suspicious links ({})",
                 snap.total(),
                 snap.source_count
             ),
@@ -711,7 +776,7 @@ impl PropagandaDetector {
     }
 
     fn check_velocity(&self, snap: &SenderSnapshot, signals: &mut Vec<DetectionSignal>) {
-        if snap.propaganda_count < self.min_velocity_events {
+        if snap.total() < self.min_velocity_events {
             return;
         }
         let Some(rate) = snap.velocity_per_hour() else {
@@ -720,13 +785,20 @@ impl PropagandaDetector {
         if rate < self.velocity_threshold {
             return;
         }
+        let reason_code = if snap.has_narrative() && snap.has_disinfo() {
+            "conversation.propaganda.high_velocity_mixed"
+        } else if snap.has_disinfo() {
+            "conversation.propaganda.high_velocity_disinfo"
+        } else {
+            "conversation.propaganda.high_velocity"
+        };
         signals.push(DetectionSignal::context(
             ThreatType::Propaganda,
             0.88,
             Confidence::High,
             SignalFamily::Content,
-            "conversation.propaganda.high_velocity",
-            format!("High propaganda velocity: {:.1} narratives/hour", rate),
+            reason_code,
+            format!("High propaganda/disinfo velocity: {:.1} events/hour", rate),
         ));
     }
 
@@ -853,27 +925,56 @@ impl PropagandaDetector {
             return;
         }
         let half = counts.len() / 2;
-        let early_avg: f32 = counts
-            .iter()
-            .take(half)
-            .map(|(_, c)| *c as f32)
-            .sum::<f32>()
-            / half as f32;
-        let late_avg: f32 = counts
-            .iter()
-            .skip(half)
-            .map(|(_, c)| *c as f32)
-            .sum::<f32>()
-            / (counts.len() - half) as f32;
+        let mut early_sum = 0.0f32;
+        for (_, count) in counts.iter().take(half) {
+            early_sum += *count as f32;
+        }
+        let early_avg = early_sum / half as f32;
 
-        if late_avg <= early_avg || early_avg >= late_avg * 0.8 || late_avg < 2.0 {
+        let mut late_sum = 0.0f32;
+        for (_, count) in counts.iter().skip(half) {
+            late_sum += *count as f32;
+        }
+        let late_avg = late_sum / (counts.len() - half) as f32;
+        if late_avg < 2.0 {
             return;
         }
 
-        let score = if late_avg > early_avg * 3.0 {
+        let growth_ratio = late_avg / early_avg.max(0.5);
+        let delta = late_avg - early_avg;
+        let mut positive_steps = 0usize;
+        let mut total_steps = 0usize;
+        let mut previous_count: Option<u16> = None;
+        for (_, count) in counts {
+            if let Some(previous) = previous_count {
+                total_steps += 1;
+                if *count > previous {
+                    positive_steps += 1;
+                }
+            }
+            previous_count = Some(*count);
+        }
+        let first_count = counts
+            .front()
+            .map(|(_, count)| *count as f32)
+            .unwrap_or(0.0);
+        let last_count = counts.back().map(|(_, count)| *count as f32).unwrap_or(0.0);
+        let net_growth = last_count - first_count;
+
+        let strong_growth = growth_ratio >= 1.8 && delta >= 1.5;
+        let gradual_growth = growth_ratio >= 1.35
+            && delta >= 1.0
+            && net_growth >= 2.0
+            && total_steps > 0
+            && positive_steps * 3 >= total_steps * 2;
+        if !strong_growth && !gradual_growth {
+            return;
+        }
+
+        let score = if growth_ratio > 3.0 || delta >= 3.0 {
             0.85
         } else {
-            0.70
+            0.72
         };
         signals.push(DetectionSignal::context(
             ThreatType::Propaganda,
@@ -899,33 +1000,36 @@ impl PropagandaDetector {
         }
         let half = tl.len() / 2;
 
-        let early_severity: f32 = tl
-            .iter()
-            .take(half)
-            .filter_map(|(_, nid_u8)| {
-                for spec in NARRATIVES {
-                    if spec.id as u8 == *nid_u8 {
-                        return Some(spec.severity);
-                    }
+        let mut early_sum = 0.0f32;
+        let mut early_count = 0u32;
+        for (_, nid_u8) in tl.iter().take(half) {
+            for spec in NARRATIVES {
+                if spec.id as u8 == *nid_u8 {
+                    early_sum += spec.severity;
+                    early_count += 1;
+                    break;
                 }
-                None
-            })
-            .sum::<f32>()
-            / half as f32;
+            }
+        }
 
-        let late_severity: f32 = tl
-            .iter()
-            .skip(half)
-            .filter_map(|(_, nid_u8)| {
-                for spec in NARRATIVES {
-                    if spec.id as u8 == *nid_u8 {
-                        return Some(spec.severity);
-                    }
+        let mut late_sum = 0.0f32;
+        let mut late_count = 0u32;
+        for (_, nid_u8) in tl.iter().skip(half) {
+            for spec in NARRATIVES {
+                if spec.id as u8 == *nid_u8 {
+                    late_sum += spec.severity;
+                    late_count += 1;
+                    break;
                 }
-                None
-            })
-            .sum::<f32>()
-            / (tl.len() - half) as f32;
+            }
+        }
+
+        if early_count == 0 || late_count == 0 {
+            return;
+        }
+
+        let early_severity = early_sum / early_count as f32;
+        let late_severity = late_sum / late_count as f32;
 
         if late_severity <= early_severity + 0.1 {
             return;
@@ -972,7 +1076,7 @@ impl PropagandaDetector {
                 SignalFamily::Content,
                 "conversation.propaganda.behavioral.nocturnal_posting",
                 format!(
-                    "Nocturnal propaganda posting: {:.0}% between 0-6h",
+                    "Nocturnal propaganda posting (UTC): {:.0}% between 0-6h UTC",
                     night_sum as f32 / total_f * 100.0
                 ),
             ));
@@ -1046,6 +1150,10 @@ impl PropagandaDetector {
         if total < self.min_copy_paste_events as usize {
             return;
         }
+        let hashed_coverage = total as f32 / profile.propaganda_event_count as f32;
+        if hashed_coverage < 0.6 {
+            return;
+        }
 
         let mut counts: HashMap<u64, usize> = HashMap::new();
         for hash in &profile.message_fingerprints {
@@ -1073,10 +1181,11 @@ impl PropagandaDetector {
             SignalFamily::Content,
             "conversation.propaganda.behavioral.copy_paste_reuse",
             format!(
-                "Repeated copy-paste pattern: top message repeated {}/{} times ({:.0}%)",
+                "Repeated copy-paste pattern: top message repeated {}/{} hashes ({:.0}%, coverage {:.0}%)",
                 max_repeats,
                 total,
-                ratio * 100.0
+                ratio * 100.0,
+                hashed_coverage * 100.0
             ),
         ));
     }
@@ -1089,7 +1198,7 @@ impl PropagandaDetector {
     ) -> Vec<DetectionSignal> {
         let window_start = now_ms.saturating_sub(self.window_ms);
         let mut conv_count = 0usize;
-        let mut unique_narratives: HashMap<NarrativeId, bool> = HashMap::new();
+        let mut unique_types: HashSet<String> = HashSet::new();
 
         for timeline in timelines {
             let mut has_propaganda = false;
@@ -1097,12 +1206,21 @@ impl PropagandaDetector {
                 if &*event.sender_id != sender_id {
                     continue;
                 }
-                if event.kind == EventKind::PropagandaNarrative {
-                    has_propaganda = true;
-                    if let Some(ref st) = event.subtype {
-                        if let Some(nid) = NarrativeId::from_subtype(st) {
-                            unique_narratives.insert(nid, true);
-                        }
+
+                let is_propaganda_event = match event.kind {
+                    EventKind::PropagandaNarrative | EventKind::SuspiciousSource => true,
+                    _ => false,
+                };
+                if !is_propaganda_event {
+                    continue;
+                }
+                has_propaganda = true;
+
+                if let Some(ref st) = event.subtype {
+                    if let Some(nid) = NarrativeId::from_subtype(st) {
+                        unique_types.insert(format!("narrative:{}", nid.tag()));
+                    } else if is_propaganda_source_subtype(st) {
+                        unique_types.insert(format!("source:{st}"));
                     }
                 }
             }
@@ -1120,9 +1238,9 @@ impl PropagandaDetector {
                 SignalFamily::Content,
                 "cross_conversation.propaganda.coordinated",
                 format!(
-                    "Sender pushes propaganda in {} conversations with {} narrative types",
+                    "Sender pushes propaganda in {} conversations with {} narrative/source types",
                     conv_count,
-                    unique_narratives.len()
+                    unique_types.len()
                 ),
             ));
         }
@@ -1299,6 +1417,13 @@ mod tests {
     }
 
     #[test]
+    fn false_positive_quotation_with_long_prefix() {
+        let text = "\u{0412}\u{043e}\u{0440}\u{043e}\u{0433} \u{043f}\u{0438}\u{0448}\u{0435} \u{0442}\u{0430}\u{043a}: \u{00ab}\u{0434}\u{0443}\u{0436}\u{0435} \u{0434}\u{043e}\u{0432}\u{0433}\u{0438}\u{0439} \u{0432}\u{0441}\u{0442}\u{0443}\u{043f} \u{043f}\u{0435}\u{0440}\u{0435}\u{0434} \u{0441}\u{043b}\u{043e}\u{0432}\u{043e}\u{043c} \u{0441}\u{043f}\u{0435}\u{0446}\u{043e}\u{043f}\u{0435}\u{0440}\u{0430}\u{0446}\u{0456}\u{044f}\u{00bb}";
+        let pos = text.find("\u{0441}\u{043f}\u{0435}\u{0446}\u{043e}\u{043f}\u{0435}\u{0440}\u{0430}\u{0446}\u{0456}\u{044f}").unwrap();
+        assert!(PropagandaDetector::check_false_positive_context(text, pos));
+    }
+
+    #[test]
     fn false_positive_negation_uk() {
         let text = "\u{0426}\u{0435} \u{043d}\u{0435} \u{0441}\u{043f}\u{0435}\u{0446}\u{043e}\u{043f}\u{0435}\u{0440}\u{0430}\u{0446}\u{0456}\u{044f} \u{0430} \u{043f}\u{043e}\u{0432}\u{043d}\u{043e}\u{043c}\u{0430}\u{0441}\u{0448}\u{0442}\u{0430}\u{0431}\u{043d}\u{0430} \u{0432}\u{0456}\u{0439}\u{043d}\u{0430}";
         let pos = text.find("\u{0441}\u{043f}\u{0435}\u{0446}\u{043e}\u{043f}\u{0435}\u{0440}\u{0430}\u{0446}\u{0456}\u{044f}").unwrap();
@@ -1375,6 +1500,10 @@ mod tests {
         assert_eq!(
             NarrativeId::from_rule_id("propaganda_refugee_001"),
             Some(NarrativeId::RefugeeWeaponization)
+        );
+        assert_eq!(
+            NarrativeId::from_rule_id("propaganda_nazi_dehumanize_combo_001"),
+            Some(NarrativeId::Dehumanization)
         );
         assert_eq!(NarrativeId::from_rule_id("some_unrelated_rule"), None);
     }
@@ -1603,6 +1732,97 @@ mod tests {
     }
 
     #[test]
+    fn behavioral_copy_paste_not_triggered_on_sparse_hash_coverage() {
+        let mut events = Vec::new();
+        for i in 0..24 {
+            let mut event = ContextEvent::with_subtype(
+                1_000 + i * 1_000,
+                "bot",
+                "conv_1",
+                EventKind::PropagandaNarrative,
+                0.8,
+                "war_denial",
+            );
+            if i < 12 {
+                event.content_hash = Some(if i < 8 { 777 } else { 900 + i });
+            }
+            events.push(event);
+        }
+
+        let (tl, pr) = build(events);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", 30_000, &pr);
+        assert!(!has_reason(&s, "copy_paste_reuse"));
+    }
+
+    #[test]
+    fn behavioral_nocturnal_posting_explanation_mentions_utc() {
+        let mut events = Vec::new();
+        for i in 0..12 {
+            events.push(typed_event(
+                "bot",
+                "conv_1",
+                3_600_000 + i * 24 * 3_600_000,
+                "war_denial",
+            ));
+        }
+
+        let (tl, pr) = build(events);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", 12 * 24 * 3_600_000, &pr);
+        let nocturnal = s
+            .iter()
+            .find(|x| x.reason_code.contains("nocturnal_posting"))
+            .unwrap();
+        assert!(nocturnal.explanation.contains("UTC"));
+    }
+
+    #[test]
+    fn behavioral_radicalization_detects_gradual_growth() {
+        let week_ms = 7 * 24 * 60 * 60 * 1000u64;
+        let mut events = Vec::new();
+        let weekly_counts = [1u64, 1, 2, 2, 3, 4];
+        for (week_idx, weekly_count) in weekly_counts.iter().enumerate() {
+            for i in 0..*weekly_count {
+                events.push(typed_event(
+                    "bot",
+                    "conv_1",
+                    week_idx as u64 * week_ms + i * 1_000,
+                    "war_denial",
+                ));
+            }
+        }
+
+        let (tl, pr) = build(events);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let now = week_ms * weekly_counts.len() as u64 + 10_000;
+        let s = d.analyze(&tl, "bot", now, &pr);
+        assert!(has_reason(&s, "behavioral.radicalization"));
+    }
+
+    #[test]
+    fn behavioral_radicalization_not_triggered_on_flat_activity() {
+        let week_ms = 7 * 24 * 60 * 60 * 1000u64;
+        let mut events = Vec::new();
+        for week_idx in 0..6u64 {
+            for i in 0..2u64 {
+                events.push(typed_event(
+                    "bot",
+                    "conv_1",
+                    week_idx * week_ms + i * 1_000,
+                    "war_denial",
+                ));
+            }
+        }
+
+        let (tl, pr) = build(events);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let now = week_ms * 6 + 10_000;
+        let s = d.analyze(&tl, "bot", now, &pr);
+        assert!(!has_reason(&s, "behavioral.radicalization"));
+    }
+
+    #[test]
     fn high_velocity_not_triggered_below_min_event_count() {
         let base = 100_000u64;
         let mut events = Vec::new();
@@ -1619,6 +1839,63 @@ mod tests {
         let d = PropagandaDetector::new(AnalysisMode::Standard);
         let s = d.analyze(&tl, "bot", base + 200_000, &pr);
         assert!(!has_reason(&s, "high_velocity"));
+    }
+
+    #[test]
+    fn military_disinfo_burst_detection() {
+        let base = 100_000u64;
+        let (tl, pr) = build(vec![
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, base),
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, base + 60_000),
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, base + 120_000),
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, base + 180_000),
+        ]);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", base + 200_000, &pr);
+        assert!(has_reason(&s, "burst"));
+    }
+
+    #[test]
+    fn military_disinfo_high_velocity_detection() {
+        let base = 100_000u64;
+        let mut events = Vec::new();
+        for i in 0..15 {
+            events.push(event(
+                "bot",
+                "conv_1",
+                EventKind::MilitaryDisinfo,
+                base + i * 10_000,
+            ));
+        }
+        let (tl, pr) = build(events);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", base + 200_000, &pr);
+        assert!(has_reason(&s, "high_velocity"));
+        assert!(has_reason(&s, "high_velocity_disinfo"));
+    }
+
+    #[test]
+    fn military_disinfo_repetition_reason_code_is_disinfo_specific() {
+        let (tl, pr) = build(vec![
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, 1000),
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, 2000),
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, 3000),
+        ]);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", 5000, &pr);
+        assert!(has_reason(&s, "repeated_disinfo"));
+    }
+
+    #[test]
+    fn military_disinfo_with_sources_reason_code_is_disinfo_specific() {
+        let (tl, pr) = build(vec![
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, 1000),
+            event("bot", "conv_1", EventKind::MilitaryDisinfo, 2000),
+            event("bot", "conv_1", EventKind::SuspiciousSource, 3000),
+        ]);
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze(&tl, "bot", 5000, &pr);
+        assert!(has_reason(&s, "disinfo_with_sources"));
     }
 
     #[test]
@@ -1665,8 +1942,52 @@ mod tests {
             .find(|signal| signal.reason_code.contains("cross_conversation"))
             .unwrap();
         assert!(
-            sig.explanation.contains("with 1 narrative types"),
+            sig.explanation.contains("with 1 narrative/source types"),
             "Expected unique narrative count in explanation, got: {}",
+            sig.explanation
+        );
+    }
+
+    #[test]
+    fn cross_conversation_counts_source_subtypes_in_type_diversity() {
+        let mut tl1 = ConversationTimeline::new("conv_1".into(), 500);
+        let mut tl2 = ConversationTimeline::new("conv_2".into(), 500);
+        let mut tl3 = ConversationTimeline::new("conv_3".into(), 500);
+
+        tl1.push(ContextEvent::with_subtype(
+            1_000,
+            "bot",
+            "conv_1",
+            EventKind::SuspiciousSource,
+            0.8,
+            "state_media",
+        ));
+        tl2.push(ContextEvent::with_subtype(
+            2_000,
+            "bot",
+            "conv_2",
+            EventKind::SuspiciousSource,
+            0.8,
+            "aligned_media",
+        ));
+        tl3.push(ContextEvent::with_subtype(
+            3_000,
+            "bot",
+            "conv_3",
+            EventKind::SuspiciousSource,
+            0.8,
+            "telegram_channel",
+        ));
+
+        let d = PropagandaDetector::new(AnalysisMode::Standard);
+        let s = d.analyze_cross_conversation(&[&tl1, &tl2, &tl3], "bot", 5_000);
+        let sig = s
+            .iter()
+            .find(|signal| signal.reason_code.contains("cross_conversation"))
+            .unwrap();
+        assert!(
+            sig.explanation.contains("with 3 narrative/source types"),
+            "Expected source subtype diversity in explanation, got: {}",
             sig.explanation
         );
     }

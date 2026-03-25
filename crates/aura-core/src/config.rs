@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{AccountType, AuraModule, ProtectionLevel};
+use crate::types::{AccountType, AuraDomainModule, DomainMode, ProtectionLevel};
 
 /// Holds the runtime configuration for the AURA protection system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,9 +31,9 @@ pub struct AuraConfig {
     #[serde(default)]
     pub timezone_offset_minutes: i32,
 
-    /// Selects the active protection module. Defaults to `CoreOnly`.
+    /// Selects the account-level domain mode on top of base Aura.
     #[serde(default)]
-    pub active_module: AuraModule,
+    pub domain_mode: DomainMode,
 }
 
 fn default_ttl_days() -> u32 {
@@ -82,28 +82,41 @@ impl AuraConfig {
         }
     }
 
-    /// Returns the effective active module, applying backward-compat rules.
-    ///
-    /// When `active_module` is `CoreOnly` but `account_type` is `Child` or `Teen`,
-    /// implicitly activates the Kids module for backward compatibility.
-    pub fn effective_module(&self) -> AuraModule {
-        match self.active_module {
-            AuraModule::CoreOnly => match self.account_type {
-                AccountType::Child | AccountType::Teen => AuraModule::Kids,
-                AccountType::Adult => AuraModule::CoreOnly,
+    /// Returns the effective account-level domain mode.
+    pub fn effective_domain_mode(&self) -> DomainMode {
+        match self.domain_mode {
+            DomainMode::None => match self.account_type {
+                AccountType::Child | AccountType::Teen => DomainMode::Kids,
+                AccountType::Adult => DomainMode::None,
             },
             other => other,
         }
     }
 
+    /// Returns the effective domain module for this account.
+    pub fn effective_domain_module(&self) -> Option<AuraDomainModule> {
+        self.effective_domain_mode().domain_module()
+    }
+
     /// Returns `true` if the Kids module is active (explicitly or implicitly).
     pub fn is_kids_module(&self) -> bool {
-        self.effective_module() == AuraModule::Kids
+        match self.effective_domain_module() {
+            Some(AuraDomainModule::Kids) => true,
+            Some(AuraDomainModule::Military) => false,
+            None => match self.account_type {
+                AccountType::Child | AccountType::Teen => true,
+                AccountType::Adult => false,
+            },
+        }
     }
 
     /// Returns `true` if the Military module is active.
     pub fn is_military_module(&self) -> bool {
-        self.effective_module() == AuraModule::Military
+        match self.effective_domain_module() {
+            Some(AuraDomainModule::Kids) => false,
+            Some(AuraDomainModule::Military) => true,
+            None => false,
+        }
     }
 
     /// Returns `true` if grooming detection is active under the current configuration.
@@ -178,7 +191,36 @@ impl Default for AuraConfig {
             account_holder_age: None,
             ttl_days: 30,
             timezone_offset_minutes: 0,
-            active_module: AuraModule::default(),
+            domain_mode: DomainMode::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AuraConfig;
+    use crate::types::{AccountType, AuraDomainModule, DomainMode};
+
+    #[test]
+    fn child_account_defaults_to_kids_domain_module() {
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            domain_mode: DomainMode::None,
+            ..AuraConfig::default()
+        };
+        assert_eq!(config.effective_domain_module(), Some(AuraDomainModule::Kids));
+    }
+
+    #[test]
+    fn explicit_kids_module_enables_kids_domain_module() {
+        let config = AuraConfig {
+            account_type: AccountType::Adult,
+            domain_mode: DomainMode::Kids,
+            ..AuraConfig::default()
+        };
+        assert_eq!(
+            config.effective_domain_module(),
+            Some(AuraDomainModule::Kids)
+        );
     }
 }

@@ -971,7 +971,7 @@ impl ContactProfiler {
     }
 
     /// Checks a contact for anomalous patterns such as new risky contacts or multi-conversation predators.
-    pub fn check_anomalies(&self, sender_id: &str, is_child_account: bool) -> Vec<DetectionSignal> {
+    pub fn check_anomalies(&self, sender_id: &str, is_minor_account: bool) -> Vec<DetectionSignal> {
         let mut signals = Vec::new();
 
         let profile = match self.profiles.get(sender_id) {
@@ -985,7 +985,7 @@ impl ContactProfiler {
 
         let risk = profile.risk_score();
 
-        if is_child_account && self.is_new_contact(sender_id) && risk >= 0.3 {
+        if is_minor_account && self.is_new_contact(sender_id) && risk >= 0.3 {
             let dominant_threat = profile.dominant_contact_risk_threat();
             signals.push(DetectionSignal::context(
                 dominant_threat,
@@ -1002,7 +1002,7 @@ impl ContactProfiler {
             ));
         }
 
-        if profile.conversation_count >= 5 && profile.grooming_event_count >= 3 {
+        if is_minor_account && profile.conversation_count >= 5 && profile.grooming_event_count >= 3 {
             signals.push(DetectionSignal::context(
                 ThreatType::Grooming,
                 0.8,
@@ -1144,6 +1144,8 @@ impl ContactProfiler {
             incoming.post_deserialize_fixup();
             match self.profiles.get_mut(&incoming.sender_id) {
                 Some(local) => {
+                    let incoming_average = incoming.average_severity();
+                    let incoming_severity_count = incoming.severity_count;
                     local.first_seen_ms = local.first_seen_ms.min(incoming.first_seen_ms);
                     local.last_seen_ms = local.last_seen_ms.max(incoming.last_seen_ms);
                     local.total_messages = local.total_messages.max(incoming.total_messages);
@@ -1188,10 +1190,16 @@ impl ContactProfiler {
                         }
                     }
                     local.narrative_diversity = local.narrative_hits.len() as u8;
+                    let mut known_propaganda_conversations: HashSet<ConversationId> =
+                        HashSet::with_capacity(local.propaganda_conversations.len());
+                    for conv in &local.propaganda_conversations {
+                        known_propaganda_conversations.insert(conv.clone());
+                    }
                     for conv in &incoming.propaganda_conversations {
-                        if !local.propaganda_conversations.contains(conv)
-                            && local.propaganda_conversations.len() < 50
-                        {
+                        if local.propaganda_conversations.len() >= 50 {
+                            break;
+                        }
+                        if known_propaganda_conversations.insert(conv.clone()) {
                             local.propaganda_conversations.push(conv.clone());
                         }
                     }
@@ -1283,8 +1291,13 @@ impl ContactProfiler {
                         local.weekly_propaganda_counts.push_back(entry);
                     }
 
+                    let mut known_conversations: HashSet<ConversationId> =
+                        HashSet::with_capacity(local.conversations.len());
+                    for conv in &local.conversations {
+                        known_conversations.insert(conv.clone());
+                    }
                     for conv in incoming.conversations {
-                        if !local.conversations.contains(&conv) {
+                        if known_conversations.insert(conv.clone()) {
                             local.conversations.push(conv);
                         }
                     }
@@ -1302,8 +1315,14 @@ impl ContactProfiler {
                         local.inferred_age = incoming.inferred_age;
                     }
 
-                    local.severity_sum = local.severity_sum.max(incoming.severity_sum);
-                    local.severity_count = local.severity_count.max(incoming.severity_count);
+                    let local_average = local.average_severity();
+                    let merged_average = local_average.max(incoming_average);
+                    local.severity_count = local.severity_count.max(incoming_severity_count);
+                    if local.severity_count == 0 {
+                        local.severity_sum = 0.0;
+                    } else {
+                        local.severity_sum = merged_average * local.severity_count as f32;
+                    }
                     if local.propaganda_event_count > 0 {
                         local.update_propaganda_score();
                     }
@@ -1581,6 +1600,46 @@ mod tests {
         let signals = profiler.check_anomalies("predator", true);
         assert!(!signals.is_empty());
         assert!(signals.iter().any(|s| s.score >= 0.8));
+    }
+
+    #[test]
+    fn predator_pattern_not_emitted_for_non_minor_account() {
+        let mut profiler = ContactProfiler::new();
+
+        for i in 0..5 {
+            profiler.record_event(&make_event(
+                "predator",
+                &format!("conv_{i}"),
+                EventKind::Flattery,
+                i as u64 * 1000,
+            ));
+        }
+        profiler.record_event(&make_event(
+            "predator",
+            "conv_0",
+            EventKind::SecrecyRequest,
+            6000,
+        ));
+        profiler.record_event(&make_event(
+            "predator",
+            "conv_1",
+            EventKind::PhotoRequest,
+            7000,
+        ));
+        profiler.record_event(&make_event(
+            "predator",
+            "conv_2",
+            EventKind::GiftOffer,
+            8000,
+        ));
+
+        let signals = profiler.check_anomalies("predator", false);
+        assert!(
+            !signals
+                .iter()
+                .any(|signal| signal.reason_code == "conversation.contact.multi_conversation_predator_pattern"),
+            "predator pattern should be minor-account only"
+        );
     }
 
     #[test]
@@ -4537,6 +4596,40 @@ mod tests {
             (before.propaganda_score - after.propaganda_score).abs() < 1e-6,
             "Idempotent merge should keep propaganda_score stable"
         );
+    }
+
+    #[test]
+    fn merge_import_preserves_most_cautious_average_severity() {
+        let mut local = ContactProfiler::new();
+        local.record_event(&make_event(
+            "alice",
+            "conv_1",
+            EventKind::NormalConversation,
+            1_000,
+        ));
+        {
+            let profile = local.profiles.get_mut("alice").unwrap();
+            profile.severity_sum = 2.0;
+            profile.severity_count = 10;
+        }
+
+        let mut incoming = ContactProfiler::new();
+        incoming.record_event(&make_event(
+            "alice",
+            "conv_2",
+            EventKind::NormalConversation,
+            2_000,
+        ));
+        {
+            let profile = incoming.profiles.get_mut("alice").unwrap();
+            profile.severity_sum = 8.0;
+            profile.severity_count = 4;
+        }
+
+        local.merge_import(incoming.export());
+        let profile = local.profile("alice").unwrap();
+        assert_eq!(profile.severity_count, 10);
+        assert!((profile.average_severity() - 2.0).abs() < 1e-6);
     }
 
     #[test]

@@ -1,0 +1,10 @@
+[package]
+name = "aura-kids"
+version.workspace = true
+edition.workspace = true
+description = "AURA.KIDS domain module"
+
+[dependencies]
+aura-domain = { path = "../aura-domain" }
+serde.workspace = true
+serde_json.workspace = true

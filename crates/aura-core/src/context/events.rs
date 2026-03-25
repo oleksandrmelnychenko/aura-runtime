@@ -696,25 +696,6 @@ impl EventKind {
         }
     }
 
-    /// Returns true if this event indicates an OPSEC violation (outgoing leak).
-    pub fn is_opsec_indicator(&self) -> bool {
-        match self {
-            Self::PositionLeak
-            | Self::UnitInfoLeak
-            | Self::EquipmentLeak
-            | Self::CoordinateMention => true,
-            _ => false,
-        }
-    }
-
-    /// Returns true if this event indicates psyops or social engineering.
-    pub fn is_psyops_indicator(&self) -> bool {
-        match self {
-            Self::PsyopsPattern | Self::IntelGathering | Self::MilitaryPhishing => true,
-            _ => false,
-        }
-    }
-
     /// Returns the contact rating adjustment for this event kind.
     pub fn rating_delta(&self) -> f32 {
         if self.is_hostile() {

@@ -9,6 +9,9 @@ default = []
 onnx = ["aura-ml/onnx"]
 
 [dependencies]
+aura-domain = { path = "../aura-domain" }
+aura-kids = { path = "../aura-kids" }
+aura-military = { path = "../aura-military" }
 aura-patterns = { path = "../aura-patterns" }
 aura-ml = { path = "../aura-ml" }
 serde.workspace = true

@@ -103,20 +103,38 @@ pub enum AccountType {
     Child,
 }
 
-/// Selects which AURA protection module is active for this user.
-///
-/// Core protection (anti-propaganda, suspicious links, base content moderation) is
-/// always active. The user additionally selects either the Kids or Military module.
+/// Account-level domain mode selection that runs on top of base Aura.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum AuraModule {
-    /// Core protection only (base module, always active).
+pub enum DomainMode {
+    /// Base Aura only (no domain extension).
     #[default]
-    CoreOnly,
-    /// Core + Kids module (child safety: grooming, bullying, self-harm, manipulation).
+    None,
+    /// Enables the Kids domain extension.
     Kids,
-    /// Core + Military module (OPSEC, psyops, social engineering, military phishing).
+    /// Enables the Military domain extension.
     Military,
+}
+
+/// Selects a domain extension that runs on top of the central AURA core.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuraDomainModule {
+    /// Child and teen safety extension.
+    Kids,
+    /// Military safety extension.
+    Military,
+}
+
+impl DomainMode {
+    /// Returns the domain extension selected for this mode.
+    pub fn domain_module(self) -> Option<AuraDomainModule> {
+        match self {
+            DomainMode::None => None,
+            DomainMode::Kids => Some(AuraDomainModule::Kids),
+            DomainMode::Military => Some(AuraDomainModule::Military),
+        }
+    }
 }
 
 /// Represents the analysis layer that produced a detection signal.

@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "warn_priority": 95,
+    "critical_warn_priority": 100,
+    "priority_escalation_priority": 90
+  },
+  "opsec": [
+    {
+      "threat_key": "opsec_position",
+      "reason_code": "military.opsec.position",
+      "score": 0.84,
+      "threat_type": "opsec_violation",
+      "severity": "high",
+      "priority": 96,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        ["our position", "наша позиція"],
+        ["brigade", "батальйон", "unit", "підрозділ"]
+      ]
+    },
+    {
+      "threat_key": "opsec_unit_info",
+      "reason_code": "military.opsec.unit_info",
+      "score": 0.78,
+      "threat_type": "opsec_violation",
+      "severity": "medium",
+      "priority": 88,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        ["callsign", "позивний"],
+        ["commander", "командир"]
+      ]
+    }
+  ],
+  "coordinate_leak": [
+    {
+      "threat_key": "coordinate_ukraine_dd",
+      "reason_code": "military.coordinates.ukraine_dd",
+      "score": 0.93,
+      "threat_type": "coordinate_leak",
+      "severity": "critical",
+      "priority": 100,
+      "action": "warn",
+      "all_of": ["coordinate_ukraine_dd"],
+      "any_of": []
+    }
+  ],
+  "psyops": [
+    {
+      "threat_key": "psyops_multi_vector",
+      "reason_code": "military.psyops.multi_vector",
+      "score": 0.9,
+      "threat_type": "psyops",
+      "severity": "high",
+      "priority": 90,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "your command abandoned you",
+          "nobody will evacuate you",
+          "вас кинули командири",
+          "вас ніхто не евакуює"
+        ],
+        ["volga", "lay down your weapons", "складайте зброю"]
+      ]
+    },
+    {
+      "threat_key": "psyops_pattern",
+      "reason_code": "military.psyops.pattern",
+      "score": 0.74,
+      "threat_type": "psyops",
+      "severity": "medium",
+      "priority": 72,
+      "all_of": [],
+      "any_of": [
+        "your command abandoned you",
+        "nobody will evacuate you",
+        "вас кинули командири",
+        "вас ніхто не евакуює",
+        "volga",
+        "lay down your weapons",
+        "складайте зброю"
+      ]
+    }
+  ],
+  "social_eng": [
+    {
+      "threat_key": "social_eng_phishing",
+      "reason_code": "military.social_eng.phishing",
+      "score": 0.88,
+      "threat_type": "military_social_eng",
+      "severity": "high",
+      "priority": 89,
+      "all_of": [],
+      "any_of": [
+        "diia security update",
+        "tck verification",
+        "оновлення безпеки дія",
+        "верифікація тцк"
+      ]
+    },
+    {
+      "threat_key": "social_eng_intel_probe",
+      "reason_code": "military.social_eng.intel_probe",
+      "score": 0.8,
+      "threat_type": "military_social_eng",
+      "severity": "high",
+      "priority": 83,
+      "all_of": [],
+      "any_of": [
+        "send your unit position",
+        "how many soldiers are there",
+        "скинь координати підрозділу",
+        "скільки у вас людей"
+      ]
+    }
+  ]
+}
