@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "wave_id": "wave1_top2026_eval_first",
+  "updated_at": "2026-03-24",
+  "sources": [
+    {
+      "source_family": "bluff",
+      "upstream_dataset": "BLUFF",
+      "threat_focus": [
+        "bullying",
+        "manipulation"
+      ],
+      "integration_targets": [
+        "crates/aura-core/data/external_curated_chat_cases.json",
+        "crates/aura-core/data/corpus_curated_cases.json",
+        "crates/aura-core/data/social_context_cohorts.json"
+      ],
+      "minimum_quality": {
+        "min_positive_detection_rate": 0.75,
+        "max_negative_false_positive_rate": 0.1,
+        "min_policy_scenario_pass_rate": 0.8,
+        "min_support_positive_scenarios": 2,
+        "min_support_negative_scenarios": 2
+      }
+    },
+    {
+      "source_family": "mumin",
+      "upstream_dataset": "MuMiN",
+      "threat_focus": [
+        "manipulation",
+        "self_harm"
+      ],
+      "integration_targets": [
+        "crates/aura-core/data/external_curated_chat_cases.json",
+        "crates/aura-core/data/corpus_curated_cases.json",
+        "crates/aura-core/data/social_context_cohorts.json"
+      ],
+      "minimum_quality": {
+        "min_positive_detection_rate": 0.8,
+        "max_negative_false_positive_rate": 0.08,
+        "min_policy_scenario_pass_rate": 0.8,
+        "min_support_positive_scenarios": 2,
+        "min_support_negative_scenarios": 2
+      }
+    },
+    {
+      "source_family": "ua_news",
+      "upstream_dataset": "Multilingual News About Ukraine",
+      "threat_focus": [
+        "propaganda",
+        "military_social_eng",
+        "phishing"
+      ],
+      "integration_targets": [
+        "crates/aura-core/data/external_curated_chat_cases.json",
+        "crates/aura-core/data/corpus_curated_cases.json",
+        "crates/aura-core/data/social_context_cohorts.json",
+        "crates/aura-military/data/lexicon.json"
+      ],
+      "minimum_quality": {
+        "min_positive_detection_rate": 0.75,
+        "max_negative_false_positive_rate": 0.08,
+        "min_policy_scenario_pass_rate": 0.8,
+        "min_support_positive_scenarios": 2,
+        "min_support_negative_scenarios": 2
+      }
+    },
+    {
+      "source_family": "koalaai_text_moderation_multilingual",
+      "upstream_dataset": "KoalaAI Text Moderation Multilingual",
+      "threat_focus": [
+        "bullying",
+        "hate_speech",
+        "explicit"
+      ],
+      "integration_targets": [
+        "crates/aura-ml/src/dataset_adapters.rs",
+        "crates/aura-ml/src/pipeline.rs",
+        "crates/aura-ml/src/safety.rs",
+        "crates/aura-ml/src/toxicity.rs"
+      ],
+      "minimum_quality": {
+        "min_positive_detection_rate": 0.78,
+        "max_negative_false_positive_rate": 0.07,
+        "min_policy_scenario_pass_rate": 0.8,
+        "min_support_positive_scenarios": 50,
+        "min_support_negative_scenarios": 50
+      }
+    },
+    {
+      "source_family": "sensitive_content_classification",
+      "upstream_dataset": "Sensitive Content Classification",
+      "threat_focus": [
+        "self_harm",
+        "explicit",
+        "hate_speech"
+      ],
+      "integration_targets": [
+        "crates/aura-ml/src/dataset_adapters.rs",
+        "crates/aura-ml/src/pipeline.rs",
+        "crates/aura-ml/src/safety.rs",
+        "crates/aura-ml/src/toxicity.rs"
+      ],
+      "minimum_quality": {
+        "min_positive_detection_rate": 0.8,
+        "max_negative_false_positive_rate": 0.07,
+        "min_policy_scenario_pass_rate": 0.8,
+        "min_support_positive_scenarios": 50,
+        "min_support_negative_scenarios": 50
+      }
+    }
+  ]
+}

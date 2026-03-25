@@ -4,19 +4,25 @@
       "id": "curated_en_grooming_probe",
       "language": "en",
       "primary_threat": "grooming",
-      "tracked_threats": ["grooming"],
+      "tracked_threats": [
+        "grooming"
+      ],
       "detection_threshold": 0.45,
       "onset_step": 0,
       "messages": [
         {
           "text": "hey where u live fr",
           "sender_id": "stranger_probe",
-          "observed_threats": ["grooming"]
+          "observed_threats": [
+            "grooming"
+          ]
         },
         {
           "text": "what school u go to lol",
           "sender_id": "stranger_probe",
-          "observed_threats": ["grooming"]
+          "observed_threats": [
+            "grooming"
+          ]
         }
       ]
     },
@@ -24,19 +30,25 @@
       "id": "curated_en_high_noise_selfharm",
       "language": "en",
       "primary_threat": "self_harm",
-      "tracked_threats": ["self_harm"],
+      "tracked_threats": [
+        "self_harm"
+      ],
       "detection_threshold": 0.7,
       "onset_step": 1,
       "messages": [
         {
           "text": "idk i feel so alone rn",
           "sender_id": "child_noisy",
-          "observed_threats": ["self_harm"]
+          "observed_threats": [
+            "self_harm"
+          ]
         },
         {
           "text": "i cant do this anymore i want to end it all",
           "sender_id": "child_noisy",
-          "observed_threats": ["self_harm"]
+          "observed_threats": [
+            "self_harm"
+          ]
         }
       ]
     },
@@ -44,19 +56,25 @@
       "id": "curated_en_screenshot_blackmail",
       "language": "en",
       "primary_threat": "manipulation",
-      "tracked_threats": ["manipulation"],
+      "tracked_threats": [
+        "manipulation"
+      ],
       "detection_threshold": 0.55,
       "onset_step": 1,
       "messages": [
         {
           "text": "i got screenshots of our chat",
           "sender_id": "blackmailer",
-          "observed_threats": ["manipulation"]
+          "observed_threats": [
+            "manipulation"
+          ]
         },
         {
           "text": "ill tell everyone at school and ill send this to your parents",
           "sender_id": "blackmailer",
-          "observed_threats": ["manipulation"]
+          "observed_threats": [
+            "manipulation"
+          ]
         }
       ]
     },
@@ -65,24 +83,32 @@
       "language": "uk",
       "conversation_type": "group_chat",
       "primary_threat": "bullying",
-      "tracked_threats": ["bullying"],
+      "tracked_threats": [
+        "bullying"
+      ],
       "detection_threshold": 0.6,
       "onset_step": 1,
       "messages": [
         {
           "text": "чого ти взагалі тут",
           "sender_id": "bully_one",
-          "observed_threats": ["bullying"]
+          "observed_threats": [
+            "bullying"
+          ]
         },
         {
           "text": "нікому ти тут не потрібен",
           "sender_id": "bully_two",
-          "observed_threats": ["bullying"]
+          "observed_threats": [
+            "bullying"
+          ]
         },
         {
           "text": "просто вийди з чату",
           "sender_id": "bully_three",
-          "observed_threats": ["bullying"]
+          "observed_threats": [
+            "bullying"
+          ]
         }
       ]
     },
@@ -90,21 +116,29 @@
       "id": "curated_ru_suicide_coercion",
       "language": "ru",
       "primary_threat": "manipulation",
-      "tracked_threats": ["manipulation"],
+      "tracked_threats": [
+        "manipulation"
+      ],
       "detection_threshold": 0.55,
       "onset_step": 0,
       "messages": [
         {
           "text": "если заблочишь я покончу с этим",
           "sender_id": "coercer_ru",
-          "observed_threats": ["manipulation"]
+          "observed_threats": [
+            "manipulation"
+          ]
         }
       ]
     },
     {
       "id": "curated_negative_en_peer_support",
       "language": "en",
-      "tracked_threats": ["self_harm", "grooming", "manipulation"],
+      "tracked_threats": [
+        "self_harm",
+        "grooming",
+        "manipulation"
+      ],
       "detection_threshold": 0.55,
       "messages": [
         {
@@ -120,7 +154,10 @@
     {
       "id": "curated_negative_uk_school_logistics",
       "language": "uk",
-      "tracked_threats": ["grooming", "manipulation"],
+      "tracked_threats": [
+        "grooming",
+        "manipulation"
+      ],
       "detection_threshold": 0.55,
       "messages": [
         {
@@ -137,7 +174,10 @@
       "id": "curated_negative_en_peer_banter",
       "language": "en",
       "conversation_type": "group_chat",
-      "tracked_threats": ["bullying", "manipulation"],
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
       "detection_threshold": 0.6,
       "messages": [
         {
@@ -149,6 +189,152 @@
           "sender_id": "friend_two"
         }
       ]
+    },
+    {
+      "id": "bluff_uk_group_dogpile_wave1",
+      "language": "uk",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "messages": [
+        {
+          "text": "ти тут зайвий, просто вийди з чату",
+          "sender_id": "bluff_core_1",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "ніхто тебе тут не хоче, вали звідси",
+          "sender_id": "bluff_core_2",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "всі сміються з тебе, ти нікому не потрібен",
+          "sender_id": "bluff_core_3",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bluff_uk_group_project_safe_wave1",
+      "language": "uk",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "messages": [
+        {
+          "text": "хто принесе ватман для проекту завтра",
+          "sender_id": "bluff_safe_core_1"
+        },
+        {
+          "text": "я принесу маркери і клей, зустрінемось перед уроком",
+          "sender_id": "bluff_safe_core_2"
+        }
+      ]
+    },
+    {
+      "id": "mumin_ru_suicide_coercion_wave1",
+      "language": "ru",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "messages": [
+        {
+          "text": "если ты уйдешь мне нет смысла жить",
+          "sender_id": "mumin_core_risk",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "если заблочишь я покончу с этим и это будет на тебе",
+          "sender_id": "mumin_core_risk",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mumin_ru_supportive_route_safe_wave1",
+      "language": "ru",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "messages": [
+        {
+          "text": "я рядом и не оставлю тебя одного",
+          "sender_id": "mumin_core_safe"
+        },
+        {
+          "text": "давай позовем взрослого, которому ты доверяешь, прямо сейчас",
+          "sender_id": "mumin_core_safe"
+        }
+      ]
+    },
+    {
+      "id": "ua_news_en_link_lure_wave1",
+      "language": "en",
+      "primary_threat": "phishing",
+      "tracked_threats": [
+        "phishing"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 0,
+      "messages": [
+        {
+          "text": "urgent update: verify-account now at https://secure-login.example.com/verify-account",
+          "sender_id": "ua_news_core_lure",
+          "observed_threats": [
+            "phishing"
+          ]
+        },
+        {
+          "text": "confirm identity now: https://update-password.example.com/confirm-identity",
+          "sender_id": "ua_news_core_lure",
+          "observed_threats": [
+            "phishing"
+          ]
+        }
+      ],
+      "account_type": "teen"
+    },
+    {
+      "id": "ua_news_uk_digest_safe_wave1",
+      "language": "uk",
+      "tracked_threats": [
+        "phishing",
+        "propaganda"
+      ],
+      "detection_threshold": 0.6,
+      "messages": [
+        {
+          "text": "завтра обговорюємо новини на уроці, зробиш нотатки?",
+          "sender_id": "ua_news_core_safe_1"
+        },
+        {
+          "text": "так, підготую короткий конспект і скину в групу класу",
+          "sender_id": "ua_news_core_safe_2"
+        }
+      ],
+      "account_type": "teen"
     }
   ]
 }

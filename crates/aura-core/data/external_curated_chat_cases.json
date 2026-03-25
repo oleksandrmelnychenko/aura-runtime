@@ -5,7 +5,7 @@
   "curation_status": "mixed_review_tiers",
   "maintainer": "aura_core_team",
   "created_at_ms": 1773273600000,
-  "updated_at_ms": 1773394214722,
+  "updated_at_ms": 1774406400000,
   "cases": [
     {
       "id": "external_en_child_stranger_secrecy_probe",
@@ -2090,6 +2090,189 @@
           "text": "домовились, зустрінемось біля актової зали перед репетицією",
           "sender_id": "external_uk_group_safe_8c",
           "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "external_bluff_teen_group_pile_on_wave1",
+      "source_family": "bluff",
+      "review_status": "gold_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "account_type": "teen",
+      "conversation_type": "group_chat",
+      "primary_threat": "bullying",
+      "tracked_threats": [
+        "bullying"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "group_bullying",
+      "messages": [
+        {
+          "text": "чого ти взагалі тут, ніхто тебе не хоче",
+          "sender_id": "bluff_bully_1",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "ти нікому не потрібен, вали з нашого класу",
+          "sender_id": "bluff_bully_2",
+          "observed_threats": [
+            "bullying"
+          ]
+        },
+        {
+          "text": "всі тебе ненавидять, просто зникни",
+          "sender_id": "bluff_bully_3",
+          "observed_threats": [
+            "bullying"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_bluff_teen_group_project_safe_wave1",
+      "source_family": "bluff",
+      "review_status": "seed_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "account_type": "teen",
+      "conversation_type": "group_chat",
+      "tracked_threats": [
+        "bullying",
+        "manipulation"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "скинь будь ласка фінальну версію слайдів до презентації",
+          "sender_id": "bluff_safe_1"
+        },
+        {
+          "text": "я принесу маркери, зустрінемось біля кабінету за 5 хв",
+          "sender_id": "bluff_safe_2"
+        }
+      ]
+    },
+    {
+      "id": "external_mumin_teen_suicide_coercion_wave1",
+      "source_family": "mumin",
+      "review_status": "gold_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "primary_threat": "manipulation",
+      "tracked_threats": [
+        "manipulation"
+      ],
+      "detection_threshold": 0.7,
+      "onset_step": 1,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "suicide_coercion",
+      "messages": [
+        {
+          "text": "если ты уйдешь мне нет смысла жить",
+          "sender_id": "mumin_risk_1",
+          "observed_threats": [
+            "manipulation"
+          ]
+        },
+        {
+          "text": "если заблочишь я покончу с этим и это будет на тебе",
+          "sender_id": "mumin_risk_1",
+          "observed_threats": [
+            "manipulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_mumin_teen_supportive_route_safe_wave1",
+      "source_family": "mumin",
+      "review_status": "seed_reviewed",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "account_type": "teen",
+      "tracked_threats": [
+        "self_harm",
+        "manipulation"
+      ],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "я рядом и не оставлю тебя одного сегодня",
+          "sender_id": "mumin_safe_1"
+        },
+        {
+          "text": "давай вместе напишем маме или школьному психологу прямо сейчас",
+          "sender_id": "mumin_safe_1"
+        }
+      ]
+    },
+    {
+      "id": "external_ua_news_link_lure_wave1",
+      "source_family": "ua_news",
+      "review_status": "gold_reviewed",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "stranger",
+      "account_type": "teen",
+      "primary_threat": "phishing",
+      "tracked_threats": [
+        "phishing"
+      ],
+      "detection_threshold": 0.6,
+      "onset_step": 1,
+      "step_interval_ms": 300000,
+      "policy_expectation_case": "phishing_link",
+      "messages": [
+        {
+          "text": "urgent school bulletin just dropped, check this first: https://example.com",
+          "sender_id": "ua_news_lure_1"
+        },
+        {
+          "text": "use secure-login update-password now: https://secure-login.example.com/verify",
+          "sender_id": "ua_news_lure_1",
+          "observed_threats": [
+            "phishing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_ua_news_digest_safe_wave1",
+      "source_family": "ua_news",
+      "review_status": "seed_reviewed",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "account_type": "teen",
+      "tracked_threats": [
+        "phishing",
+        "propaganda"
+      ],
+      "detection_threshold": 0.6,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "false_positive_friends",
+      "messages": [
+        {
+          "text": "бачив новини? вчитель просив принести тези до дискусії",
+          "sender_id": "ua_news_safe_1"
+        },
+        {
+          "text": "ок, я зроблю короткий конспект і скину в класний чат",
+          "sender_id": "ua_news_safe_2"
         }
       ]
     }

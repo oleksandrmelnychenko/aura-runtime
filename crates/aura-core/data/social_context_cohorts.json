@@ -8,13 +8,17 @@
         "mixed_language_grooming",
         "curated_en_grooming_probe"
       ],
-      "account_types": ["child"],
-      "conversation_types": ["direct"],
+      "account_types": [
+        "child"
+      ],
+      "conversation_types": [
+        "direct"
+      ],
       "gates": {
         "max_brier_score": 0.36,
         "max_expected_calibration_error": 0.45,
         "min_positive_detection_rate": 0.85,
-        "max_negative_false_positive_rate": 0.10,
+        "max_negative_false_positive_rate": 0.1,
         "min_pre_onset_detection_rate": 0.25,
         "per_threat": [
           {
@@ -34,14 +38,18 @@
         "negative_control_trusted_adult",
         "curated_negative_uk_school_logistics"
       ],
-      "account_types": ["child"],
-      "conversation_types": ["direct"],
+      "account_types": [
+        "child"
+      ],
+      "conversation_types": [
+        "direct"
+      ],
       "gates": {
         "max_brier_score": 0.24,
         "max_expected_calibration_error": 0.28,
-        "min_positive_detection_rate": 0.60,
-        "max_negative_false_positive_rate": 0.10,
-        "min_pre_onset_detection_rate": 0.20,
+        "min_positive_detection_rate": 0.6,
+        "max_negative_false_positive_rate": 0.1,
+        "min_pre_onset_detection_rate": 0.2,
         "per_threat": [
           {
             "threat_type": "grooming",
@@ -63,20 +71,22 @@
         "false_positive_friends",
         "curated_negative_en_peer_support",
         "curated_negative_en_peer_banter",
-        "curated_en_screenshot_blackmail"
+        "curated_en_screenshot_blackmail",
+        "mumin_ru_suicide_coercion_wave1",
+        "mumin_ru_supportive_route_safe_wave1"
       ],
       "gates": {
         "max_brier_score": 0.28,
-        "max_expected_calibration_error": 0.30,
-        "min_positive_detection_rate": 0.70,
-        "max_negative_false_positive_rate": 0.10,
-        "min_pre_onset_detection_rate": 0.20,
+        "max_expected_calibration_error": 0.3,
+        "min_positive_detection_rate": 0.7,
+        "max_negative_false_positive_rate": 0.1,
+        "min_pre_onset_detection_rate": 0.2,
         "per_threat": [
           {
             "threat_type": "manipulation",
             "min_example_count": 10,
             "max_brier_score": 0.28,
-            "max_expected_calibration_error": 0.30
+            "max_expected_calibration_error": 0.3
           }
         ]
       }
@@ -90,14 +100,19 @@
         "curated_uk_group_bullying",
         "bystander_rescue",
         "curated_negative_en_peer_banter",
-        "negative_control_multilingual_peer_chat"
+        "negative_control_multilingual_peer_chat",
+        "bluff_uk_group_dogpile_wave1",
+        "bluff_uk_group_project_safe_wave1"
       ],
-      "conversation_types": ["group_chat", "group"],
+      "conversation_types": [
+        "group_chat",
+        "group"
+      ],
       "gates": {
         "max_brier_score": 0.24,
         "max_expected_calibration_error": 0.28,
         "min_positive_detection_rate": 0.75,
-        "max_negative_false_positive_rate": 0.10,
+        "max_negative_false_positive_rate": 0.1,
         "min_pre_onset_detection_rate": 0.25,
         "per_threat": [
           {
@@ -119,13 +134,15 @@
         "curated_negative_en_peer_support",
         "negative_control_multilingual_support"
       ],
-      "conversation_types": ["direct"],
+      "conversation_types": [
+        "direct"
+      ],
       "gates": {
         "max_brier_score": 0.24,
         "max_expected_calibration_error": 0.28,
         "min_positive_detection_rate": 0.75,
-        "max_negative_false_positive_rate": 0.10,
-        "min_pre_onset_detection_rate": 0.50,
+        "max_negative_false_positive_rate": 0.1,
+        "min_pre_onset_detection_rate": 0.5,
         "per_threat": [
           {
             "threat_type": "self_harm",
@@ -145,12 +162,14 @@
         "mixed_language_image_blackmail",
         "curated_en_screenshot_blackmail"
       ],
-      "conversation_types": ["direct"],
+      "conversation_types": [
+        "direct"
+      ],
       "gates": {
         "max_brier_score": 0.26,
         "max_expected_calibration_error": 0.28,
         "min_positive_detection_rate": 0.85,
-        "max_negative_false_positive_rate": 0.10,
+        "max_negative_false_positive_rate": 0.1,
         "min_pre_onset_detection_rate": 0.25,
         "per_threat": [
           {
@@ -158,6 +177,39 @@
             "min_example_count": 8,
             "max_brier_score": 0.24,
             "max_expected_calibration_error": 0.26
+          }
+        ]
+      }
+    },
+    {
+      "id": "ua_news_digest_boundary",
+      "description": "UA-news style digest and update links should catch phishing-like lures while keeping normal school-news discussion clean.",
+      "base_case_names": [
+        "ua_news_en_link_lure_wave1",
+        "ua_news_uk_digest_safe_wave1"
+      ],
+      "account_types": [
+        "teen"
+      ],
+      "conversation_types": [
+        "direct"
+      ],
+      "languages": [
+        "en",
+        "uk"
+      ],
+      "gates": {
+        "max_brier_score": 0.3,
+        "max_expected_calibration_error": 0.34,
+        "min_positive_detection_rate": 0.7,
+        "max_negative_false_positive_rate": 0.1,
+        "min_pre_onset_detection_rate": 0.0,
+        "per_threat": [
+          {
+            "threat_type": "phishing",
+            "min_example_count": 2,
+            "max_brier_score": 0.3,
+            "max_expected_calibration_error": 0.34
           }
         ]
       }
