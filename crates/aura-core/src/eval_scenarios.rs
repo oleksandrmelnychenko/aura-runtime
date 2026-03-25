@@ -566,7 +566,11 @@ fn propaganda_source_seeding_case() -> ScenarioCase {
         steps: vec![
             ScenarioStep {
                 timestamp_ms: 0,
-                input: group_msg("Look at this, real truth: rt.com/article/12345", "seeder", "seed_1"),
+                input: group_msg(
+                    "Look at this, real truth: rt.com/article/12345",
+                    "seeder",
+                    "seed_1",
+                ),
                 observed_threats: vec![ThreatType::Propaganda],
             },
             ScenarioStep {
@@ -576,7 +580,11 @@ fn propaganda_source_seeding_case() -> ScenarioCase {
             },
             ScenarioStep {
                 timestamp_ms: 2 * hour,
-                input: group_msg("Real journalism: sputniknews.com/politics", "seeder", "seed_1"),
+                input: group_msg(
+                    "Real journalism: sputniknews.com/politics",
+                    "seeder",
+                    "seed_1",
+                ),
                 observed_threats: vec![ThreatType::Propaganda],
             },
         ],
@@ -751,17 +759,29 @@ fn negative_control_political_discussion_case() -> ScenarioCase {
         steps: vec![
             ScenarioStep {
                 timestamp_ms: 0,
-                input: group_msg("What do you guys think about the election?", "student_1", "class_chat"),
+                input: group_msg(
+                    "What do you guys think about the election?",
+                    "student_1",
+                    "class_chat",
+                ),
                 observed_threats: vec![],
             },
             ScenarioStep {
                 timestamp_ms: hour,
-                input: group_msg("I think we should vote for whoever has the best economic plan", "student_2", "class_chat"),
+                input: group_msg(
+                    "I think we should vote for whoever has the best economic plan",
+                    "student_2",
+                    "class_chat",
+                ),
                 observed_threats: vec![],
             },
             ScenarioStep {
                 timestamp_ms: 2 * hour,
-                input: group_msg("Yeah, but foreign policy matters too. Peace is important.", "student_3", "class_chat"),
+                input: group_msg(
+                    "Yeah, but foreign policy matters too. Peace is important.",
+                    "student_3",
+                    "class_chat",
+                ),
                 observed_threats: vec![],
             },
         ],
@@ -812,17 +832,29 @@ fn negative_control_news_sharing_case() -> ScenarioCase {
         steps: vec![
             ScenarioStep {
                 timestamp_ms: 0,
-                input: group_msg("Did you see the news today? The president gave a speech about peace talks.", "friend_1", "friends_chat"),
+                input: group_msg(
+                    "Did you see the news today? The president gave a speech about peace talks.",
+                    "friend_1",
+                    "friends_chat",
+                ),
                 observed_threats: vec![],
             },
             ScenarioStep {
                 timestamp_ms: hour,
-                input: group_msg("Yeah, I hope they can find a solution. War is terrible for everyone.", "friend_2", "friends_chat"),
+                input: group_msg(
+                    "Yeah, I hope they can find a solution. War is terrible for everyone.",
+                    "friend_2",
+                    "friends_chat",
+                ),
                 observed_threats: vec![],
             },
             ScenarioStep {
                 timestamp_ms: 2 * hour,
-                input: group_msg("My cousin is serving, I just want him to come home safe.", "friend_1", "friends_chat"),
+                input: group_msg(
+                    "My cousin is serving, I just want him to come home safe.",
+                    "friend_1",
+                    "friends_chat",
+                ),
                 observed_threats: vec![],
             },
         ],
@@ -2492,8 +2524,14 @@ mod tests {
         let pack = canonical_propaganda_scenarios();
         let positive_count = pack.iter().filter(|c| c.primary_threat.is_some()).count();
         let negative_count = pack.iter().filter(|c| c.primary_threat.is_none()).count();
-        assert_eq!(positive_count, 15, "should have 15 positive propaganda scenarios");
-        assert_eq!(negative_count, 3, "should have 3 negative control scenarios");
+        assert_eq!(
+            positive_count, 15,
+            "should have 15 positive propaganda scenarios"
+        );
+        assert_eq!(
+            negative_count, 3,
+            "should have 3 negative control scenarios"
+        );
     }
 
     #[test]
@@ -2698,7 +2736,8 @@ mod tests {
             assert!(
                 peak < 0.55,
                 "{} should not trigger propaganda, peak={}",
-                case.name, peak
+                case.name,
+                peak
             );
         }
     }

@@ -394,7 +394,10 @@ pub fn propaganda_action_for_subtype(
         );
     }
 
-    if reason_code.contains("compound_") || reason_code.contains("coordinated_") {
+    let is_compound = reason_code.contains("compound_");
+    let is_coordinated =
+        reason_code.contains("coordinated_") || reason_code.ends_with(".coordinated");
+    if is_compound || is_coordinated {
         let action = if score >= 0.75 {
             Action::Warn
         } else if score >= 0.5 {
@@ -1070,5 +1073,17 @@ mod tests {
 
         assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
         assert!(rec.ui_actions.contains(&UiAction::SlowDownConversation));
+    }
+
+    #[test]
+    fn propaganda_cross_conversation_coordinated_uses_coordinated_thresholds() {
+        let (action, rec) = propaganda_action_for_subtype(
+            0.78,
+            ProtectionLevel::Medium,
+            "cross_conversation.propaganda.coordinated",
+        );
+
+        assert_eq!(action, Action::Warn);
+        assert_eq!(rec.parent_alert, AlertPriority::High);
     }
 }

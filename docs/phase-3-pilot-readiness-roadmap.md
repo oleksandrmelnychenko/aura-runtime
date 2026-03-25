@@ -269,6 +269,8 @@ Current status: implementation-complete at the repo level. The delivered Phase
   matches plus duplicate generic/specific coordinate signal suppression
 - strengthened `threat_subtype` propagation for heuristic URL detections and
   military/psyops rule families used in pilot-facing surfaces
+- domain-module rearchitecture scaffold: central `AURA` with dedicated
+  `AURA.KIDS` and `AURA.MILITARY` crates plus shared domain contract
 
 What remains after this document is no longer build-out work inside the repo.
 What remains is live pilot execution with real operator signoffs and real

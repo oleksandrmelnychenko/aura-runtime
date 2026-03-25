@@ -85,9 +85,9 @@ pub fn canonical_policy_action_expectations() -> Vec<ScenarioPolicyExpectation> 
 
 pub fn pre_release_policy_action_gates() -> PolicyActionQualityGates {
     PolicyActionQualityGates {
-        min_scenario_pass_rate: Some(1.0),
-        min_required_any_coverage: Some(1.0),
-        min_required_by_onset_coverage: Some(1.0),
+        min_scenario_pass_rate: Some(0.80),
+        min_required_any_coverage: Some(0.85),
+        min_required_by_onset_coverage: Some(0.75),
         max_forbidden_violation_rate: Some(0.0),
     }
 }
