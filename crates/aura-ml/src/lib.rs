@@ -40,7 +40,7 @@ pub use pipeline::MlPipeline;
 pub use tokenizer::WordPieceTokenizer;
 pub use tokenizer_sp::{AnyTokenizer, SentencePieceTokenizer, Tokenizer};
 pub use types::{
-    CascadeTier, IntentLabel, IntentPrediction, MlConfig, MlResult, MultiHeadPrediction,
-    SafetyLabel, SafetyPrediction, SentimentLabel, SentimentPrediction, ToxicityLabel,
-    ToxicityPrediction,
+    CascadeTier, IntentLabel, IntentPrediction, MlConfig, MlResult, MlUncertaintyLevel,
+    MultiHeadPrediction, OnDeviceProfile, SafetyLabel, SafetyPrediction, SentimentLabel,
+    SentimentPrediction, ToxicityLabel, ToxicityPrediction,
 };

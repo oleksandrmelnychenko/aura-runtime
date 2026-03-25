@@ -18,6 +18,18 @@ pub struct ModelEntry {
     pub filename: String,
     pub sha256: String,
     #[serde(default)]
+    pub data_filename: Option<String>,
+    #[serde(default)]
+    pub data_sha256: Option<String>,
+    #[serde(default)]
+    pub quantized_filename: Option<String>,
+    #[serde(default)]
+    pub quantized_sha256: Option<String>,
+    #[serde(default)]
+    pub quantized_data_filename: Option<String>,
+    #[serde(default)]
+    pub quantized_data_sha256: Option<String>,
+    #[serde(default)]
     pub num_outputs: Option<usize>,
     #[serde(default)]
     pub max_seq_length: Option<usize>,
@@ -39,6 +51,9 @@ pub enum ManifestError {
 
     #[error("failed to read model file '{0}': {1}")]
     FileReadFailed(String, String),
+
+    #[error("invalid manifest entry '{0}': {1}")]
+    InvalidEntry(String, String),
 }
 
 impl ModelManifest {
@@ -87,9 +102,55 @@ pub fn validate_models_from_manifest(manifest_path: &str) -> Result<(), Manifest
             tracing::warn!("Model validation failed for '{name}': {e}");
             e
         })?;
+
+        validate_optional_artifact(
+            name,
+            manifest_dir,
+            entry.data_filename.as_deref(),
+            entry.data_sha256.as_deref(),
+            "data",
+        )?;
+        validate_optional_artifact(
+            name,
+            manifest_dir,
+            entry.quantized_filename.as_deref(),
+            entry.quantized_sha256.as_deref(),
+            "quantized",
+        )?;
+        validate_optional_artifact(
+            name,
+            manifest_dir,
+            entry.quantized_data_filename.as_deref(),
+            entry.quantized_data_sha256.as_deref(),
+            "quantized_data",
+        )?;
     }
 
     Ok(())
+}
+
+fn validate_optional_artifact(
+    model_name: &str,
+    manifest_dir: &Path,
+    filename: Option<&str>,
+    sha256: Option<&str>,
+    artifact_label: &str,
+) -> Result<(), ManifestError> {
+    match (filename, sha256) {
+        (Some(file), Some(hash)) => {
+            let path = manifest_dir.join(file);
+            validate_file_hash(&path, hash)
+        }
+        (None, None) => Ok(()),
+        (Some(_), None) => Err(ManifestError::InvalidEntry(
+            model_name.to_string(),
+            format!("{artifact_label} filename is present but sha256 is missing"),
+        )),
+        (None, Some(_)) => Err(ManifestError::InvalidEntry(
+            model_name.to_string(),
+            format!("{artifact_label} sha256 is present but filename is missing"),
+        )),
+    }
 }
 
 #[cfg(test)]

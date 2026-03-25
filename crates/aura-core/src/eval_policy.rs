@@ -28,6 +28,8 @@ pub struct ScenarioPolicyRecord {
     pub missing_required_any: Vec<UiAction>,
     pub missing_required_by_onset: Vec<UiAction>,
     pub forbidden_actions_present: Vec<UiAction>,
+    pub expected_guardian_escalation: bool,
+    pub guardian_escalation_present: bool,
     pub passed: bool,
 }
 
@@ -40,6 +42,7 @@ pub struct PolicyActionSummary {
     pub required_any_coverage: f32,
     pub required_by_onset_coverage: f32,
     pub forbidden_violation_rate: f32,
+    pub guardian_escalation_coverage: f32,
     pub scenarios: Vec<ScenarioPolicyRecord>,
 }
 
@@ -49,6 +52,7 @@ pub struct PolicyActionQualityGates {
     pub min_required_any_coverage: Option<f32>,
     pub min_required_by_onset_coverage: Option<f32>,
     pub max_forbidden_violation_rate: Option<f32>,
+    pub min_guardian_escalation_coverage: Option<f32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -93,15 +97,17 @@ pub fn wave1_transitional_policy_action_gates() -> PolicyActionQualityGates {
         min_required_any_coverage: Some(0.85),
         min_required_by_onset_coverage: Some(0.75),
         max_forbidden_violation_rate: Some(0.0),
+        min_guardian_escalation_coverage: Some(0.80),
     }
 }
 
 pub fn wave1_target_policy_action_gates() -> PolicyActionQualityGates {
     PolicyActionQualityGates {
-        min_scenario_pass_rate: Some(0.90),
-        min_required_any_coverage: Some(0.92),
-        min_required_by_onset_coverage: Some(0.85),
+        min_scenario_pass_rate: Some(0.92),
+        min_required_any_coverage: Some(0.94),
+        min_required_by_onset_coverage: Some(0.88),
         max_forbidden_violation_rate: Some(0.0),
+        min_guardian_escalation_coverage: Some(0.90),
     }
 }
 
@@ -136,6 +142,8 @@ pub fn summarize_policy_actions_with_expectation_names(
     let mut required_by_onset_hits = 0usize;
     let mut forbidden_checks = 0usize;
     let mut forbidden_violations = 0usize;
+    let mut guardian_expected = 0usize;
+    let mut guardian_hits = 0usize;
 
     for (run, expectation_name) in runs.iter().zip(expectation_names.iter()) {
         let expectation = expectation_map
@@ -197,6 +205,18 @@ pub fn summarize_policy_actions_with_expectation_names(
             }
         }
 
+        let expected_guardian_escalation = expectation.required_any.contains(&UiAction::EscalateToGuardian)
+            || expectation
+                .required_by_onset
+                .contains(&UiAction::EscalateToGuardian);
+        let guardian_escalation_present = all_actions.contains(&UiAction::EscalateToGuardian);
+        if expected_guardian_escalation {
+            guardian_expected += 1;
+            if guardian_escalation_present {
+                guardian_hits += 1;
+            }
+        }
+
         let passed = missing_required_any.is_empty()
             && missing_required_by_onset.is_empty()
             && forbidden_actions_present.is_empty();
@@ -209,6 +229,8 @@ pub fn summarize_policy_actions_with_expectation_names(
             missing_required_any,
             missing_required_by_onset,
             forbidden_actions_present,
+            expected_guardian_escalation,
+            guardian_escalation_present,
             passed,
         });
     }
@@ -224,6 +246,7 @@ pub fn summarize_policy_actions_with_expectation_names(
         required_any_coverage: rate(required_any_hits, required_any_expectations),
         required_by_onset_coverage: rate(required_by_onset_hits, required_by_onset_expectations),
         forbidden_violation_rate: violation_rate(forbidden_violations, forbidden_checks),
+        guardian_escalation_coverage: rate(guardian_hits, guardian_expected),
         scenarios: records,
     }
 }
@@ -261,6 +284,13 @@ pub fn evaluate_policy_action_gates(
         GateComparison::AtMost,
         summary.forbidden_violation_rate,
         gates.max_forbidden_violation_rate,
+    );
+    evaluate_gate(
+        &mut checks,
+        "policy.guardian_escalation_coverage",
+        GateComparison::AtLeast,
+        summary.guardian_escalation_coverage,
+        gates.min_guardian_escalation_coverage,
     );
 
     ScenarioGateReport {
@@ -513,6 +543,10 @@ mod tests {
         assert_eq!(
             target.max_forbidden_violation_rate,
             transitional.max_forbidden_violation_rate
+        );
+        assert!(
+            target.min_guardian_escalation_coverage.unwrap()
+                > transitional.min_guardian_escalation_coverage.unwrap()
         );
     }
 }

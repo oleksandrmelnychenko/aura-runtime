@@ -3,7 +3,7 @@
 This folder holds the planning and operating documents that turn AURA Core from
 an evaluation-heavy prototype into a production-grade safety runtime.
 
-Status: synchronized with runtime and policy behavior on March 23, 2026.
+Status: synchronized with runtime and policy behavior on March 25, 2026.
 
 ## Active Operating Set
 
@@ -16,6 +16,11 @@ Status: synchronized with runtime and policy behavior on March 23, 2026.
 - [Privacy and Audit Policy](./privacy-audit-policy.md)
 - [Dataset Governance](./dataset-governance.md)
 - [Incidents and Rollbacks](./incidents-and-rollbacks.md)
+- [Wave 1 Release Hardening](./wave1-release-hardening.md)
+- [On-Device Production Readiness](./on-device-prod-readiness.md)
+- [Safety 5-Label Training](./safety-5label-training.md)
+- [Verification Commands](./verification-commands.md)
+- [Continuation Handoff](./continuation-handoff.md)
 
 ## Product and Scenario Docs
 
@@ -38,6 +43,9 @@ Status: synchronized with runtime and policy behavior on March 23, 2026.
   and is now populated for heuristic URL detections (`doppelganger`,
   `homoglyph`, `heuristic`) and broader military/psyops subtype paths.
 - Current `patterns_mvp.json` size is 322 rules.
+- `aura-ml` ONNX safety/intent integration tests are opt-in via
+  `AURA_RUN_SAFETY_INTENT_ONNX=1`; default runs keep core ONNX coverage but
+  skip these heavy load checks on platforms where they can hang.
 
 ## How To Use These Docs
 

@@ -3,16 +3,16 @@
   "policy": {
     "warn_priority": 95,
     "critical_warn_priority": 100,
-    "priority_escalation_priority": 90
+    "priority_escalation_priority": 88
   },
   "opsec": [
     {
       "threat_key": "opsec_position",
       "reason_code": "military.opsec.position",
-      "score": 0.84,
+      "score": 0.88,
       "threat_type": "opsec_violation",
       "severity": "high",
-      "priority": 96,
+      "priority": 97,
       "all_of": [],
       "any_of": [],
       "any_groups": [
@@ -31,10 +31,10 @@
     {
       "threat_key": "opsec_unit_info",
       "reason_code": "military.opsec.unit_info",
-      "score": 0.78,
+      "score": 0.83,
       "threat_type": "opsec_violation",
       "severity": "medium",
-      "priority": 88,
+      "priority": 92,
       "all_of": [],
       "any_of": [],
       "any_groups": [
@@ -47,13 +47,37 @@
           "командир"
         ]
       ]
+    },
+    {
+      "threat_key": "opsec_live_movement",
+      "reason_code": "military.opsec.live_movement",
+      "score": 0.91,
+      "threat_type": "opsec_violation",
+      "severity": "high",
+      "priority": 98,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "moving now",
+          "departing in 10 minutes",
+          "виїжджаємо зараз",
+          "виходимо через 10 хв"
+        ],
+        [
+          "grid",
+          "точка збору",
+          "route",
+          "маршрут"
+        ]
+      ]
     }
   ],
   "coordinate_leak": [
     {
       "threat_key": "coordinate_ukraine_dd",
       "reason_code": "military.coordinates.ukraine_dd",
-      "score": 0.93,
+      "score": 0.96,
       "threat_type": "coordinate_leak",
       "severity": "critical",
       "priority": 100,
@@ -68,10 +92,10 @@
     {
       "threat_key": "psyops_multi_vector",
       "reason_code": "military.psyops.multi_vector",
-      "score": 0.9,
+      "score": 0.93,
       "threat_type": "psyops",
       "severity": "high",
-      "priority": 90,
+      "priority": 94,
       "all_of": [],
       "any_of": [],
       "any_groups": [
@@ -91,10 +115,10 @@
     {
       "threat_key": "psyops_pattern",
       "reason_code": "military.psyops.pattern",
-      "score": 0.74,
+      "score": 0.8,
       "threat_type": "psyops",
       "severity": "medium",
-      "priority": 72,
+      "priority": 82,
       "all_of": [],
       "any_of": [
         "your command abandoned you",
@@ -105,16 +129,31 @@
         "lay down your weapons",
         "складайте зброю"
       ]
+    },
+    {
+      "threat_key": "psyops_family_pressure",
+      "reason_code": "military.psyops.family_pressure",
+      "score": 0.89,
+      "threat_type": "psyops",
+      "severity": "high",
+      "priority": 92,
+      "all_of": [],
+      "any_of": [
+        "your family is in danger because of command",
+        "we know where your family lives",
+        "твоя сім'я в небезпеці через командування",
+        "ми знаємо де живе твоя сім'я"
+      ]
     }
   ],
   "social_eng": [
     {
       "threat_key": "social_eng_phishing",
       "reason_code": "military.social_eng.phishing",
-      "score": 0.88,
+      "score": 0.9,
       "threat_type": "military_social_eng",
       "severity": "high",
-      "priority": 89,
+      "priority": 92,
       "all_of": [],
       "any_of": [
         "diia security update",
@@ -126,10 +165,10 @@
     {
       "threat_key": "social_eng_intel_probe",
       "reason_code": "military.social_eng.intel_probe",
-      "score": 0.8,
+      "score": 0.84,
       "threat_type": "military_social_eng",
       "severity": "high",
-      "priority": 83,
+      "priority": 88,
       "all_of": [],
       "any_of": [
         "send your unit position",
@@ -141,10 +180,10 @@
     {
       "threat_key": "social_eng_ua_news_update_lure",
       "reason_code": "military.social_eng.ua_news_update_lure",
-      "score": 0.86,
+      "score": 0.9,
       "threat_type": "military_social_eng",
       "severity": "high",
-      "priority": 90,
+      "priority": 93,
       "all_of": [],
       "any_of": [],
       "any_groups": [
@@ -158,6 +197,30 @@
           "verify account",
           "update-password",
           "підтвердіть акаунт"
+        ]
+      ]
+    },
+    {
+      "threat_key": "social_eng_command_spoof",
+      "reason_code": "military.social_eng.command_spoof",
+      "score": 0.92,
+      "threat_type": "military_social_eng",
+      "severity": "high",
+      "priority": 95,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "urgent order from command",
+          "priority directive",
+          "терміновий наказ від командування",
+          "пріоритетне розпорядження"
+        ],
+        [
+          "confirm credentials",
+          "send one-time code",
+          "підтвердіть облікові дані",
+          "надішліть одноразовий код"
         ]
       ]
     }

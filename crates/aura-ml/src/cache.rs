@@ -140,7 +140,7 @@ pub fn text_hash(text: &str) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{CascadeTier, MlResult};
+    use crate::types::{CascadeTier, MlResult, MlUncertaintyLevel};
 
     fn dummy_result() -> MlResult {
         MlResult {
@@ -148,6 +148,8 @@ mod tests {
             sentiment: None,
             safety: None,
             intent: None,
+            uncertainty: MlUncertaintyLevel::Medium,
+            abstain_to_guardian: false,
             inference_time_us: 42,
             tier: CascadeTier::Deep,
             cache_hit: false,

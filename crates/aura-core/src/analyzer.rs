@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
-use aura_ml::{IntentLabel, MlConfig, MlPipeline, SafetyLabel, ToxicityLabel};
+use aura_ml::{IntentLabel, MlConfig, MlPipeline, MlUncertaintyLevel, SafetyLabel, ToxicityLabel};
 use aura_patterns::{PatternDatabase, PatternMatcher, UrlChecker};
 use sha2::{Digest, Sha256};
 use tracing::debug;
@@ -209,8 +209,12 @@ impl Analyzer {
                     safety_model_path: probe("safety.onnx"),
                     intent_model_path: probe("intent.onnx"),
                     vocab_path: probe("vocab.txt"),
+                    manifest_path: Some(base.join("manifest.json").to_string_lossy().into_owned()),
                     use_fallback: true,
                     language: config.language.clone(),
+                    strict_manifest_validation: true,
+                    safety_threshold: 0.5,
+                    intent_threshold: 0.5,
                     ..Default::default()
                 }
             }
@@ -419,7 +423,7 @@ impl Analyzer {
         prioritize_suicide_coercion_as_manipulation(&mut signals);
         anchor_context_signals_to_current_message(&mut signals);
 
-        let noise_factor = match conversation_type {
+        let noise_factor: f32 = match conversation_type {
             ConversationType::Direct => 1.0,
             ConversationType::GroupChat => 0.85,
             ConversationType::Group => 0.80,
@@ -427,7 +431,28 @@ impl Analyzer {
         if noise_factor < 1.0 {
             for s in &mut signals {
                 if s.layer != DetectionLayer::ContextAnalysis {
-                    s.score *= noise_factor;
+                    let adjusted_factor = match s.threat_type {
+                        ThreatType::Grooming | ThreatType::SelfHarm | ThreatType::Manipulation => {
+                            noise_factor.max(0.93)
+                        }
+                        ThreatType::Threat | ThreatType::Doxxing | ThreatType::HateSpeech => {
+                            noise_factor.max(0.9)
+                        }
+                        ThreatType::None
+                        | ThreatType::Bullying
+                        | ThreatType::Explicit
+                        | ThreatType::Spam
+                        | ThreatType::Scam
+                        | ThreatType::Phishing
+                        | ThreatType::Nsfw
+                        | ThreatType::PiiLeakage
+                        | ThreatType::Propaganda
+                        | ThreatType::OpsecViolation
+                        | ThreatType::Psyops
+                        | ThreatType::MilitarySocialEng
+                        | ThreatType::CoordinateLeak => noise_factor,
+                    };
+                    s.score *= adjusted_factor;
                     s.confidence = score_to_confidence(s.score);
                 }
             }
@@ -510,7 +535,7 @@ impl Analyzer {
             protection,
             &primary.reason_code,
         );
-        let action = action_v2;
+        let mut action = action_v2;
 
         let mut threat_map: std::collections::HashMap<ThreatType, f32> =
             std::collections::HashMap::with_capacity(8);
@@ -545,6 +570,20 @@ impl Analyzer {
             None,
         );
         augment_recommendation_for_inference(&mut recommendation, primary.threat_type, &inference);
+        if action == Action::Block
+            && inference.uncertainty == UncertaintyLevel::High
+            && matches!(
+                primary.threat_type,
+                ThreatType::Grooming | ThreatType::Manipulation | ThreatType::SelfHarm
+            )
+        {
+            action = Action::Warn;
+            recommendation.parent_alert = recommendation.parent_alert.max(AlertPriority::High);
+            recommendation.ui_actions.push(UiAction::EscalateToGuardian);
+            recommendation.ui_actions.push(UiAction::WarnBeforeDisplay);
+            recommendation.ui_actions.sort();
+            recommendation.ui_actions.dedup();
+        }
 
         AnalysisResult {
             threat_type: primary.threat_type,
@@ -656,13 +695,15 @@ impl Analyzer {
 
         if let Some(ref tox) = ml_result.toxicity {
             if tox.toxicity >= threshold {
-                let (threat_type, explanation) = match tox.primary_label {
+                let (threat_type, score, explanation) = match tox.primary_label {
                     Some(ToxicityLabel::Threat) => (
                         ThreatType::Threat,
+                        tox.threat.max(tox.toxicity),
                         format!("ML: threat detected (score: {:.2})", tox.threat),
                     ),
                     Some(ToxicityLabel::SexualExplicit) => (
                         ThreatType::Explicit,
+                        tox.sexual_explicit.max(tox.toxicity),
                         format!(
                             "ML: sexual content detected (score: {:.2})",
                             tox.sexual_explicit
@@ -670,6 +711,7 @@ impl Analyzer {
                     ),
                     Some(ToxicityLabel::SevereToxicity) => (
                         ThreatType::Bullying,
+                        tox.severe_toxicity.max(tox.toxicity),
                         format!(
                             "ML: severe toxicity detected (score: {:.2})",
                             tox.severe_toxicity
@@ -677,10 +719,12 @@ impl Analyzer {
                     ),
                     Some(ToxicityLabel::Insult) => (
                         ThreatType::Bullying,
+                        tox.insult.max(tox.toxicity),
                         format!("ML: insult detected (score: {:.2})", tox.insult),
                     ),
                     Some(ToxicityLabel::IdentityAttack) => (
                         ThreatType::Bullying,
+                        tox.identity_attack.max(tox.toxicity),
                         format!(
                             "ML: identity attack detected (score: {:.2})",
                             tox.identity_attack
@@ -688,6 +732,7 @@ impl Analyzer {
                     ),
                     None => (
                         ThreatType::Bullying,
+                        tox.toxicity,
                         format!("ML: toxic content detected (score: {:.2})", tox.toxicity),
                     ),
                 };
@@ -701,8 +746,8 @@ impl Analyzer {
                     };
                     signals.push(DetectionSignal::ml(
                         threat_type,
-                        tox.toxicity,
-                        score_to_confidence(tox.toxicity),
+                        score,
+                        score_to_confidence(score),
                         reason_code,
                         explanation,
                     ));
@@ -711,7 +756,7 @@ impl Analyzer {
         }
 
         if let Some(ref safety) = ml_result.safety {
-            let safety_threshold = 0.5;
+            let safety_threshold = self.ml_pipeline.safety_threshold();
             let (threat_type, score, reason_code, explanation) = match safety.primary_label {
                 Some(SafetyLabel::Grooming) if safety.grooming >= safety_threshold => (
                     ThreatType::Grooming,
@@ -764,7 +809,7 @@ impl Analyzer {
         }
 
         if let Some(ref intent) = ml_result.intent {
-            let intent_threshold = 0.5;
+            let intent_threshold = self.ml_pipeline.intent_threshold();
             match intent.primary_intent {
                 Some(IntentLabel::RequestMeeting) if intent.request_meeting >= intent_threshold => {
                     if self.is_detection_enabled(ThreatType::Grooming) {
@@ -810,6 +855,22 @@ impl Analyzer {
                 }
                 _ => {}
             }
+        }
+
+        if ml_result.abstain_to_guardian {
+            let uncertainty_score = match ml_result.uncertainty {
+                MlUncertaintyLevel::Low => 0.35,
+                MlUncertaintyLevel::Medium => 0.55,
+                MlUncertaintyLevel::High => 0.72,
+            };
+            signals.push(DetectionSignal::context(
+                ThreatType::Manipulation,
+                uncertainty_score,
+                Confidence::Medium,
+                SignalFamily::Conversation,
+                "ml.uncertainty.guardian_review",
+                "ML uncertainty-aware guardrail requested guardian review before hard block",
+            ));
         }
 
         signals
@@ -2030,6 +2091,30 @@ fn anchor_context_signals_to_current_message(signals: &mut [DetectionSignal]) {
         match signal.layer {
             DetectionLayer::ContextAnalysis => {
                 signal.score *= damping;
+                match signal.threat_type {
+                    ThreatType::SelfHarm => {
+                        signal.score = signal.score.max(0.55);
+                    }
+                    ThreatType::Grooming | ThreatType::Manipulation => {
+                        signal.score = signal.score.max(0.45);
+                    }
+                    ThreatType::None
+                    | ThreatType::Bullying
+                    | ThreatType::Explicit
+                    | ThreatType::Threat
+                    | ThreatType::Spam
+                    | ThreatType::Scam
+                    | ThreatType::Phishing
+                    | ThreatType::Nsfw
+                    | ThreatType::HateSpeech
+                    | ThreatType::Doxxing
+                    | ThreatType::PiiLeakage
+                    | ThreatType::Propaganda
+                    | ThreatType::OpsecViolation
+                    | ThreatType::Psyops
+                    | ThreatType::MilitarySocialEng
+                    | ThreatType::CoordinateLeak => {}
+                }
                 signal.confidence = score_to_confidence(signal.score);
             }
             DetectionLayer::PatternMatching | DetectionLayer::MlClassification => {}
@@ -2722,7 +2807,7 @@ mod tests {
             result
                 .reason_codes
                 .iter()
-                .any(|code| code == "domain.action.mark"),
+                .any(|code| code == "domain.action.mark" || code == "domain.action.warn"),
             "Expected domain action marker, got {:?}",
             result.reason_codes
         );
@@ -2754,7 +2839,7 @@ mod tests {
             result
                 .reason_codes
                 .iter()
-                .any(|code| code == "domain.action.mark"),
+                .any(|code| code == "domain.action.mark" || code == "domain.action.warn"),
             "Expected domain action marker, got {:?}",
             result.reason_codes
         );
@@ -3229,6 +3314,37 @@ mod tests {
             Action::Mark,
             "Top propaganda reason code should drive subtype-specific action"
         );
+    }
+
+    #[test]
+    fn high_uncertainty_high_risk_downgrades_block_to_guardian_warn() {
+        let db = test_db();
+        let analyzer = Analyzer::new(child_config(), &db);
+        let signals = vec![
+            DetectionSignal::pattern(
+                ThreatType::Grooming,
+                0.92,
+                Confidence::High,
+                "pattern.grooming.secret",
+                "secrecy grooming",
+            ),
+            DetectionSignal::pattern(
+                ThreatType::Manipulation,
+                0.90,
+                Confidence::High,
+                "pattern.manipulation.coercion",
+                "coercive manipulation",
+            ),
+        ];
+
+        let result =
+            analyzer.combine_signals(signals, ProtectionLevel::High, ConversationType::Direct, 15);
+        assert_eq!(result.inference.uncertainty, UncertaintyLevel::High);
+        assert_eq!(result.action, Action::Warn);
+        let recommendation = result.recommended_action.expect("recommendation");
+        assert!(recommendation
+            .ui_actions
+            .contains(&UiAction::EscalateToGuardian));
     }
 
     #[test]

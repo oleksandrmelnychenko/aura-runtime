@@ -7,6 +7,7 @@ use crate::tokenizer::WordPieceTokenizer;
 #[cfg(feature = "onnx")]
 use crate::toxicity::MlError;
 use crate::types::IntentPrediction;
+use crate::types::OnDeviceProfile;
 
 #[derive(Clone, Copy)]
 enum IntentCategory {
@@ -70,6 +71,10 @@ impl IntentClassifier {
             fallback_matcher: Some(build_fallback_matcher()),
             threshold: 0.4,
         }
+    }
+
+    pub fn set_threshold(&mut self, threshold: f32) {
+        self.threshold = threshold.clamp(0.0, 1.0);
     }
 
     pub fn predict(&mut self, text: &str) -> Option<IntentPrediction> {
@@ -267,6 +272,47 @@ fn build_fallback_matcher() -> IntentFallbackMatcher {
 pub trait IntentBackend: Send {
     fn predict(&mut self, text: &str) -> Option<IntentPrediction>;
     fn name(&self) -> &str;
+}
+
+#[derive(Clone, Copy)]
+pub struct IntentCalibration {
+    pub request_meeting: f32,
+    pub request_secret: f32,
+    pub request_media: f32,
+}
+
+pub fn intent_calibration_for(language: &str, profile: OnDeviceProfile) -> IntentCalibration {
+    let language = language.to_ascii_lowercase();
+    let mut calibration = if language.starts_with("uk") {
+        IntentCalibration {
+            request_meeting: 1.03,
+            request_secret: 1.06,
+            request_media: 1.01,
+        }
+    } else if language.starts_with("ru") {
+        IntentCalibration {
+            request_meeting: 1.02,
+            request_secret: 1.05,
+            request_media: 1.00,
+        }
+    } else {
+        IntentCalibration {
+            request_meeting: 1.00,
+            request_secret: 1.00,
+            request_media: 1.00,
+        }
+    };
+
+    match profile {
+        OnDeviceProfile::Lite => {
+            calibration.request_secret *= 0.98;
+        }
+        OnDeviceProfile::Balanced => {}
+        OnDeviceProfile::HighRecall => {
+            calibration.request_secret *= 1.03;
+        }
+    }
+    calibration
 }
 
 impl IntentBackend for IntentClassifier {

@@ -42,6 +42,40 @@
           ],
           "support_impact": "increase",
           "review_ticket": "phase2-production"
+        },
+        {
+          "change_id": "2026-03-25-bigbang-kids-critical-hardening",
+          "changed_at_ms": 1774377600000,
+          "author": "aura_core_team",
+          "change_kind": "policy_recalibration",
+          "summary": "Raised quality floors and added kids critical curated source family for production hardening.",
+          "affected_slices": [
+            "relationship:stranger",
+            "relationship:trusted_adult",
+            "age_band:child",
+            "threat_focus:grooming",
+            "threat_focus:self_harm",
+            "threat_focus:manipulation",
+            "threat_focus:bullying"
+          ],
+          "support_impact": "increase",
+          "review_ticket": "bigbang-prod"
+        },
+        {
+          "change_id": "2026-03-25-bigbang-military-propaganda-hardening",
+          "changed_at_ms": 1774377900000,
+          "author": "aura_core_team",
+          "change_kind": "policy_recalibration",
+          "summary": "Added military psyops curated source family and tightened drift/support thresholds for release gating.",
+          "affected_slices": [
+            "source_family:ua_news",
+            "source_family:military_psyops_curated",
+            "threat_focus:psyops",
+            "threat_focus:military_social_eng",
+            "threat_focus:propaganda"
+          ],
+          "support_impact": "increase",
+          "review_ticket": "bigbang-prod"
         }
       ]
     }

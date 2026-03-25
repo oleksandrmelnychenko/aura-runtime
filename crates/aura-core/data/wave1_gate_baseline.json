@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "wave_id": "wave1_top2026_eval_first",
-  "captured_at": "2026-03-24",
+  "wave_id": "wave1_bigbang_prod_hardening",
+  "captured_at": "2026-03-25",
   "policy_action": {
     "transitional": {
       "min_scenario_pass_rate": 0.8,
@@ -10,9 +10,9 @@
       "max_forbidden_violation_rate": 0.0
     },
     "target": {
-      "min_scenario_pass_rate": 0.9,
-      "min_required_any_coverage": 0.92,
-      "min_required_by_onset_coverage": 0.85,
+      "min_scenario_pass_rate": 0.92,
+      "min_required_any_coverage": 0.94,
+      "min_required_by_onset_coverage": 0.88,
       "max_forbidden_violation_rate": 0.0
     }
   },
@@ -25,11 +25,11 @@
       "min_pre_onset_detection_rate": 0.2
     },
     "target": {
-      "max_brier_score": 0.28,
-      "max_expected_calibration_error": 0.3,
-      "min_positive_detection_rate": 0.82,
-      "max_negative_false_positive_rate": 0.04,
-      "min_pre_onset_detection_rate": 0.25
+      "max_brier_score": 0.26,
+      "max_expected_calibration_error": 0.28,
+      "min_positive_detection_rate": 0.85,
+      "max_negative_false_positive_rate": 0.035,
+      "min_pre_onset_detection_rate": 0.3
     }
   }
 }

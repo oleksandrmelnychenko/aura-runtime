@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Wave1DatasetSource {
     KoalaAiTextModerationMultilingual,
@@ -52,10 +52,12 @@ pub struct Wave1AdapterComparison {
 pub fn parse_koalaai_adapter_records(json: &str) -> Result<Vec<Wave1TrainingExample>, String> {
     let records = serde_json::from_str::<Vec<KoalaAiRecord>>(json)
         .map_err(|err| format!("invalid koalaai adapter payload: {err}"))?;
-    records
+    let rows = records
         .into_iter()
         .map(convert_koalaai_record)
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_reproducible_examples(&rows)?;
+    Ok(rows)
 }
 
 pub fn parse_sensitive_content_adapter_records(
@@ -63,10 +65,12 @@ pub fn parse_sensitive_content_adapter_records(
 ) -> Result<Vec<Wave1TrainingExample>, String> {
     let records = serde_json::from_str::<Vec<SensitiveContentRecord>>(json)
         .map_err(|err| format!("invalid sensitive-content adapter payload: {err}"))?;
-    records
+    let rows = records
         .into_iter()
         .map(convert_sensitive_content_record)
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_reproducible_examples(&rows)?;
+    Ok(rows)
 }
 
 pub fn compare_rule_only_vs_rule_plus_ml(
@@ -106,10 +110,13 @@ fn convert_koalaai_record(record: KoalaAiRecord) -> Result<Wave1TrainingExample,
         return Err("koalaai record language must not be empty".to_string());
     }
 
-    let has_label = |label: &str| record.labels.iter().any(|value| value == label);
+    let normalized_text = normalize_text_field(&record.text);
+    let normalized_language = normalize_language_field(&record.language);
+    let normalized_labels = normalize_koala_labels(&record.labels)?;
+    let has_label = |label: &str| normalized_labels.iter().any(|value| value == label);
     Ok(Wave1TrainingExample {
-        text: record.text,
-        language: record.language,
+        text: normalized_text,
+        language: normalized_language,
         source: Wave1DatasetSource::KoalaAiTextModerationMultilingual,
         bullying: f32::from(has_label("bullying")),
         hate_speech: f32::from(has_label("hate_speech")),
@@ -129,14 +136,67 @@ fn convert_sensitive_content_record(
     }
 
     Ok(Wave1TrainingExample {
-        text: record.text,
-        language: record.language,
+        text: normalize_text_field(&record.text),
+        language: normalize_language_field(&record.language),
         source: Wave1DatasetSource::SensitiveContentClassification,
         bullying: record.bullying_score.unwrap_or(0.0).clamp(0.0, 1.0),
         hate_speech: record.hate_score.unwrap_or(0.0).clamp(0.0, 1.0),
         explicit: record.explicit_score.unwrap_or(0.0).clamp(0.0, 1.0),
         self_harm: record.self_harm_score.unwrap_or(0.0).clamp(0.0, 1.0),
     })
+}
+
+fn normalize_text_field(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn normalize_language_field(language: &str) -> String {
+    language.trim().to_ascii_lowercase()
+}
+
+fn normalize_koala_labels(labels: &[String]) -> Result<Vec<String>, String> {
+    const ALLOWED: [&str; 4] = ["bullying", "hate_speech", "explicit", "self_harm"];
+    let mut normalized = Vec::new();
+    for label in labels {
+        let key = label.trim().to_ascii_lowercase();
+        if key.is_empty() {
+            continue;
+        }
+        if !ALLOWED.contains(&key.as_str()) {
+            return Err(format!("koalaai adapter contains unsupported label: {key}"));
+        }
+        normalized.push(key);
+    }
+    normalized.sort();
+    normalized.dedup();
+    Ok(normalized)
+}
+
+fn validate_reproducible_examples(rows: &[Wave1TrainingExample]) -> Result<(), String> {
+    use std::collections::HashSet;
+
+    let mut seen_pairs = HashSet::with_capacity(rows.len());
+    for row in rows {
+        if row.text.trim().is_empty() {
+            return Err("adapter row has empty normalized text".to_string());
+        }
+        if row.language.trim().is_empty() {
+            return Err("adapter row has empty normalized language".to_string());
+        }
+        for score in [row.bullying, row.hate_speech, row.explicit, row.self_harm] {
+            if !score.is_finite() {
+                return Err("adapter row contains non-finite score".to_string());
+            }
+            if !(0.0..=1.0).contains(&score) {
+                return Err(format!("adapter row score out of range: {score}"));
+            }
+        }
+        let key = (row.source.clone(), row.language.clone(), row.text.clone());
+        if !seen_pairs.insert(key) {
+            return Err("adapter rows must be unique by source/language/text".to_string());
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -159,6 +219,17 @@ mod tests {
     }
 
     #[test]
+    fn koalaai_adapter_rejects_unknown_labels() {
+        let payload = r#"
+        [
+          {"text":"you are fake", "language":"en", "labels":["toxicity"]}
+        ]
+        "#;
+        let error = parse_koalaai_adapter_records(payload).expect_err("invalid label");
+        assert!(error.contains("unsupported label"));
+    }
+
+    #[test]
     fn sensitive_content_adapter_preserves_probabilities() {
         let payload = r#"
         [
@@ -176,6 +247,19 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert!(rows[0].explicit > 0.9);
         assert!(rows[0].bullying < 0.1);
+    }
+
+    #[test]
+    fn adapters_require_unique_rows_per_source_language_text() {
+        let payload = r#"
+        [
+          {"text":"send nudes now", "language":"EN", "explicit_score":0.95},
+          {"text":"send   nudes now", "language":"en", "explicit_score":0.95}
+        ]
+        "#;
+        let error =
+            parse_sensitive_content_adapter_records(payload).expect_err("duplicate rows rejected");
+        assert!(error.contains("must be unique"));
     }
 
     #[test]

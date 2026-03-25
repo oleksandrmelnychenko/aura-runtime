@@ -1,0 +1,55 @@
+# On-Device Production Readiness
+
+Date: 2026-03-25
+
+## Current Model Set
+
+- `models/safety.onnx`
+  - Source model: `aura-native-5label-bert-base-multilingual-cased-wave1`
+  - Mapping: native 5-label (no remap)
+  - Output shape: `(1, 5)`
+- `models/intent.onnx`
+  - Source model: `Unggi/intent_search_dialog_counseling_v1`
+  - Output shape: `(1, 4)`
+- `models/vocab.txt`
+- `models/manifest.json` updated with SHA256 hashes.
+
+## Validation Performed
+
+- ONNX runtime load check:
+  - `safety.onnx` inputs: `input_ids`, `attention_mask`, `token_type_ids`
+  - `intent.onnx` inputs: `input_ids`, `attention_mask`, `token_type_ids`
+  - Output names: `logits`
+- Tensor shape smoke checks:
+  - `safety.onnx` -> `(1, 5)`
+  - `intent.onnx` -> `(1, 4)`
+- Rust ONNX smoke:
+  - `cargo test -p aura-ml --features onnx pipeline_onnx_initializes`
+  - Optional safety/intent ONNX integration check:
+    - `AURA_RUN_SAFETY_INTENT_ONNX=1 cargo test -p aura-ml --features onnx --test onnx_integration`
+  - `cargo test -p aura-core --features onnx analyzer::tests::high_uncertainty_high_risk_downgrades_block_to_guardian_warn`
+- Pre-release and pilot gates:
+  - `cargo run --quiet --example release_report -p aura-core -- --require-pass`
+  - `cargo run --quiet --example pilot_regression -p aura-core -- --require-pass`
+
+## Production Notes
+
+- Intent model is native 4-label (no truncation path used).
+- Safety model is now native 5-label (grooming, bullying, self_harm, manipulation, safe).
+- `download_models.py` supports a production path for prebuilt native safety ONNX via `--safety-onnx-path`.
+- Current production manifest stores:
+  - `models.safety.source_model_id = aura-native-5label-bert-base-multilingual-cased-wave1`
+- Safety/intent ONNX load tests are gated behind `AURA_RUN_SAFETY_INTENT_ONNX=1` to prevent platform-specific hangs during default CI/local runs.
+
+## Latest Gate Snapshot
+
+- `release_report`: **Pass**.
+- `pilot_regression`: **Pass**.
+- Rollout decision: native safety model is eligible for production promotion under current Wave1 gates.
+
+## Next Hardening Steps
+
+- Run focused regression slices for:
+  - `self_harm`, `grooming`, `manipulation` recall
+  - safe-cohort false-positive budget
+- Keep `high_recall` profile for KIDS/TEEN rollout and monitor guardian-review rate.

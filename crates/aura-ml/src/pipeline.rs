@@ -8,17 +8,17 @@ use crate::cascade::{CascadeDecision, CascadePolicy};
 use crate::dataset_adapters::{compare_rule_only_vs_rule_plus_ml, Wave1AdapterComparison};
 use crate::gate::LexiconGate;
 use crate::integrity;
-use crate::intent::IntentClassifier;
+use crate::intent::{intent_calibration_for, IntentClassifier};
 #[cfg(feature = "onnx")]
 use crate::manifest;
 use crate::normalize::normalize_for_ml;
-use crate::safety::SafetyClassifier;
+use crate::safety::{safety_calibration_for, SafetyClassifier};
 use crate::sentiment::SentimentAnalyzer;
 use crate::telemetry::InferenceTelemetry;
 #[cfg(feature = "onnx")]
 use crate::tokenizer::WordPieceTokenizer;
 use crate::toxicity::ToxicityClassifier;
-use crate::types::{CascadeTier, MlConfig, MlResult};
+use crate::types::{CascadeTier, MlConfig, MlResult, MlUncertaintyLevel, OnDeviceProfile};
 
 pub struct MlPipeline {
     toxicity: Box<dyn ToxicityBackend>,
@@ -34,12 +34,24 @@ pub struct MlPipeline {
 
 impl MlPipeline {
     pub fn new(config: MlConfig) -> Self {
+        let config = Self::normalize_config_for_on_device_profile(config);
         #[cfg(feature = "onnx")]
         if config.validate_hashes {
+            if config.strict_manifest_validation
+                && config.manifest_path.is_none()
+                && Self::has_any_onnx_model_configured(&config)
+            {
+                panic!("strict manifest validation requires manifest_path when ONNX models are configured");
+            }
             if let Some(ref manifest_path) = config.manifest_path {
                 match manifest::validate_models_from_manifest(manifest_path) {
                     Ok(()) => info!("Model manifest validation passed"),
-                    Err(e) => tracing::warn!("Model manifest validation failed: {e}"),
+                    Err(e) => {
+                        if config.strict_manifest_validation {
+                            panic!("Model manifest validation failed in strict mode: {e}");
+                        }
+                        tracing::warn!("Model manifest validation failed: {e}");
+                    }
                 }
             }
         }
@@ -75,7 +87,7 @@ impl MlPipeline {
             telemetry,
         };
 
-        if pipeline.has_onnx_backend() && pipeline.config.warmup_on_init {
+        if Self::has_any_onnx_model_configured(&pipeline.config) && pipeline.config.warmup_on_init {
             pipeline.warmup();
         }
 
@@ -108,14 +120,15 @@ impl MlPipeline {
         let gate_score = self.gate.gate_score(&text);
         let decision = self.cascade.decide(gate_score);
 
-        let result = if decision.run_deep {
+        let mut result = if decision.run_deep {
             self.run_deep_inference(&text, decision)
         } else {
             self.run_gate_only(&text, decision)
         };
+        self.apply_calibration(&mut result);
+        self.apply_uncertainty_decision(&mut result);
 
         let elapsed_us = start.elapsed().as_micros() as u64;
-        let mut result = result;
         result.inference_time_us = elapsed_us;
 
         self.cache.insert(text_hash, result.clone());
@@ -169,6 +182,8 @@ impl MlPipeline {
             sentiment,
             safety,
             intent,
+            uncertainty: MlUncertaintyLevel::Medium,
+            abstain_to_guardian: false,
             inference_time_us: 0,
             tier: decision.tier,
             cache_hit: false,
@@ -181,6 +196,8 @@ impl MlPipeline {
             sentiment: None,
             safety: None,
             intent: None,
+            uncertainty: MlUncertaintyLevel::High,
+            abstain_to_guardian: false,
             inference_time_us: 0,
             tier: decision.tier,
             cache_hit: false,
@@ -241,14 +258,108 @@ impl MlPipeline {
         self.config.toxicity_threshold
     }
 
+    pub fn safety_threshold(&self) -> f32 {
+        self.config.safety_threshold
+    }
+
+    pub fn intent_threshold(&self) -> f32 {
+        self.config.intent_threshold
+    }
+
+    pub fn on_device_profile(&self) -> OnDeviceProfile {
+        self.config.on_device_profile
+    }
+
     pub fn is_active(&self) -> bool {
         self.config.use_fallback
             || self.config.toxicity_model_path.is_some()
             || self.config.sentiment_model_path.is_some()
+            || self.config.safety_model_path.is_some()
+            || self.config.intent_model_path.is_some()
     }
 
-    fn has_onnx_backend(&self) -> bool {
-        self.toxicity.name().contains("onnx") || self.sentiment.name().contains("onnx")
+    fn has_any_onnx_model_configured(config: &MlConfig) -> bool {
+        config.toxicity_model_path.is_some()
+            || config.sentiment_model_path.is_some()
+            || config.safety_model_path.is_some()
+            || config.intent_model_path.is_some()
+    }
+
+    fn normalize_config_for_on_device_profile(mut config: MlConfig) -> MlConfig {
+        match config.on_device_profile {
+            OnDeviceProfile::Lite => {
+                config.max_seq_length = config.max_seq_length.min(96);
+                config.cascade_gate_threshold = config.cascade_gate_threshold.max(0.35);
+                config.safety_threshold = config.safety_threshold.max(0.55);
+                config.intent_threshold = config.intent_threshold.max(0.55);
+                config.uncertainty_abstain_score_floor =
+                    config.uncertainty_abstain_score_floor.max(0.70);
+            }
+            OnDeviceProfile::Balanced => {}
+            OnDeviceProfile::HighRecall => {
+                config.max_seq_length = config.max_seq_length.max(128);
+                config.cascade_gate_threshold = config.cascade_gate_threshold.min(0.24);
+                config.safety_threshold = config.safety_threshold.min(0.45);
+                config.intent_threshold = config.intent_threshold.min(0.46);
+                config.uncertainty_abstain_score_floor =
+                    config.uncertainty_abstain_score_floor.min(0.62);
+            }
+        }
+        config
+    }
+
+    fn apply_calibration(&self, result: &mut MlResult) {
+        let safety_calibration =
+            safety_calibration_for(&self.config.language, self.config.on_device_profile);
+        let intent_calibration =
+            intent_calibration_for(&self.config.language, self.config.on_device_profile);
+
+        if let Some(ref mut safety) = result.safety {
+            safety.grooming = (safety.grooming * safety_calibration.grooming).clamp(0.0, 1.0);
+            safety.bullying = (safety.bullying * safety_calibration.bullying).clamp(0.0, 1.0);
+            safety.self_harm = (safety.self_harm * safety_calibration.self_harm).clamp(0.0, 1.0);
+            safety.manipulation =
+                (safety.manipulation * safety_calibration.manipulation).clamp(0.0, 1.0);
+            safety.primary_label = safety.compute_primary_label(self.config.safety_threshold);
+        }
+
+        if let Some(ref mut intent) = result.intent {
+            intent.request_meeting = (intent.request_meeting * intent_calibration.request_meeting)
+                .clamp(0.0, 1.0);
+            intent.request_secret =
+                (intent.request_secret * intent_calibration.request_secret).clamp(0.0, 1.0);
+            intent.request_media =
+                (intent.request_media * intent_calibration.request_media).clamp(0.0, 1.0);
+            intent.primary_intent = intent.compute_primary_intent(self.config.intent_threshold);
+        }
+    }
+
+    fn apply_uncertainty_decision(&self, result: &mut MlResult) {
+        let safety_gap = result.safety.as_ref().map_or(0.0, |s| s.top_two_gap());
+        let safety_max = result.safety.as_ref().map_or(0.0, |s| s.max_risk());
+        let intent_gap = result.intent.as_ref().map_or(0.0, |i| i.top_two_gap());
+        let intent_max = result.intent.as_ref().map_or(0.0, |i| i.max_risk_intent());
+
+        let strongest = safety_max.max(intent_max);
+        let min_gap = match (result.safety.is_some(), result.intent.is_some()) {
+            (true, true) => safety_gap.min(intent_gap),
+            (true, false) => safety_gap,
+            (false, true) => intent_gap,
+            (false, false) => 1.0,
+        };
+
+        result.uncertainty = if strongest >= 0.75 && min_gap >= 0.20 {
+            MlUncertaintyLevel::Low
+        } else if strongest >= self.config.uncertainty_abstain_score_floor
+            && min_gap < self.config.uncertainty_abstain_margin_threshold
+        {
+            MlUncertaintyLevel::High
+        } else {
+            MlUncertaintyLevel::Medium
+        };
+
+        result.abstain_to_guardian = matches!(result.uncertainty, MlUncertaintyLevel::High)
+            && strongest >= self.config.uncertainty_abstain_score_floor;
     }
 
     fn warmup(&mut self) {
@@ -336,7 +447,10 @@ impl MlPipeline {
                             tokenizer,
                             config.intra_threads,
                         ) {
-                            Ok(classifier) => return classifier,
+                            Ok(mut classifier) => {
+                                classifier.set_threshold(config.safety_threshold);
+                                return classifier;
+                            }
                             Err(e) => {
                                 tracing::warn!("Failed to load safety ONNX model: {e}");
                             }
@@ -349,7 +463,9 @@ impl MlPipeline {
             }
         }
 
-        SafetyClassifier::fallback_only()
+        let mut classifier = SafetyClassifier::fallback_only();
+        classifier.set_threshold(config.safety_threshold);
+        classifier
     }
 
     #[allow(unused_variables)]
@@ -364,7 +480,10 @@ impl MlPipeline {
                             tokenizer,
                             config.intra_threads,
                         ) {
-                            Ok(classifier) => return classifier,
+                            Ok(mut classifier) => {
+                                classifier.set_threshold(config.intent_threshold);
+                                return classifier;
+                            }
                             Err(e) => {
                                 tracing::warn!("Failed to load intent ONNX model: {e}");
                             }
@@ -377,9 +496,12 @@ impl MlPipeline {
             }
         }
 
-        IntentClassifier::fallback_only()
+        let mut classifier = IntentClassifier::fallback_only();
+        classifier.set_threshold(config.intent_threshold);
+        classifier
     }
 }
+
 
 fn timestamp_ms_now() -> u64 {
     std::time::SystemTime::now()
@@ -391,7 +513,9 @@ fn timestamp_ms_now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{SafetyLabel, SentimentLabel, ToxicityLabel};
+    use crate::types::{
+        MlUncertaintyLevel, OnDeviceProfile, SafetyLabel, SentimentLabel, ToxicityLabel,
+    };
 
     #[test]
     fn pipeline_fallback_works() {
@@ -665,5 +789,73 @@ mod tests {
 
         assert_eq!(report.sample_count, 2);
         assert!(report.average_rule_plus_ml_score >= report.average_rule_only_score);
+    }
+
+    #[test]
+    fn on_device_profile_changes_runtime_thresholds() {
+        let lite = MlPipeline::new(MlConfig {
+            on_device_profile: OnDeviceProfile::Lite,
+            warmup_on_init: false,
+            ..Default::default()
+        });
+        let high_recall = MlPipeline::new(MlConfig {
+            on_device_profile: OnDeviceProfile::HighRecall,
+            warmup_on_init: false,
+            ..Default::default()
+        });
+
+        assert!(lite.safety_threshold() >= high_recall.safety_threshold());
+        assert!(lite.intent_threshold() >= high_recall.intent_threshold());
+        assert_eq!(lite.on_device_profile(), OnDeviceProfile::Lite);
+        assert_eq!(high_recall.on_device_profile(), OnDeviceProfile::HighRecall);
+    }
+
+    #[test]
+    fn high_recall_profile_applies_uk_calibration() {
+        let mut balanced = MlPipeline::new(MlConfig {
+            on_device_profile: OnDeviceProfile::Balanced,
+            language: "uk".to_string(),
+            warmup_on_init: false,
+            cascade_enabled: false,
+            ..Default::default()
+        });
+        let mut high_recall = MlPipeline::new(MlConfig {
+            on_device_profile: OnDeviceProfile::HighRecall,
+            language: "uk".to_string(),
+            warmup_on_init: false,
+            cascade_enabled: false,
+            ..Default::default()
+        });
+
+        let text = "не хочу жити, хочу померти";
+        let balanced_result = balanced.analyze_text(text);
+        let high_recall_result = high_recall.analyze_text(text);
+
+        let balanced_self_harm = balanced_result.safety.expect("balanced safety").self_harm;
+        let high_recall_self_harm = high_recall_result.safety.expect("high-recall safety").self_harm;
+        assert!(high_recall_self_harm >= balanced_self_harm);
+    }
+
+    #[test]
+    fn uncertainty_helper_routes_ambiguous_high_risk_to_guardian() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            on_device_profile: OnDeviceProfile::HighRecall,
+            warmup_on_init: false,
+            cascade_enabled: false,
+            uncertainty_abstain_score_floor: 0.55,
+            uncertainty_abstain_margin_threshold: 0.18,
+            ..Default::default()
+        });
+
+        let result = pipeline.analyze_text(
+            "don't tell your parents, let's meet in secret and send me a photo",
+        );
+        assert!(matches!(
+            result.uncertainty,
+            MlUncertaintyLevel::High | MlUncertaintyLevel::Medium
+        ));
+        if result.uncertainty == MlUncertaintyLevel::High {
+            assert!(result.abstain_to_guardian);
+        }
     }
 }

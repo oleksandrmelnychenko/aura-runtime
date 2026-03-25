@@ -7,6 +7,7 @@ use crate::tokenizer::WordPieceTokenizer;
 #[cfg(feature = "onnx")]
 use crate::toxicity::MlError;
 use crate::types::SafetyPrediction;
+use crate::types::OnDeviceProfile;
 
 #[derive(Clone, Copy)]
 enum SafetyCategory {
@@ -71,6 +72,10 @@ impl SafetyClassifier {
             fallback_matcher: Some(build_fallback_matcher()),
             threshold: 0.4,
         }
+    }
+
+    pub fn set_threshold(&mut self, threshold: f32) {
+        self.threshold = threshold.clamp(0.0, 1.0);
     }
 
     pub fn predict(&mut self, text: &str) -> Option<SafetyPrediction> {
@@ -294,6 +299,53 @@ fn build_fallback_matcher() -> SafetyFallbackMatcher {
 pub trait SafetyBackend: Send {
     fn predict(&mut self, text: &str) -> Option<SafetyPrediction>;
     fn name(&self) -> &str;
+}
+
+#[derive(Clone, Copy)]
+pub struct SafetyCalibration {
+    pub grooming: f32,
+    pub bullying: f32,
+    pub self_harm: f32,
+    pub manipulation: f32,
+}
+
+pub fn safety_calibration_for(language: &str, profile: OnDeviceProfile) -> SafetyCalibration {
+    let language = language.to_ascii_lowercase();
+    let mut calibration = if language.starts_with("uk") {
+        SafetyCalibration {
+            grooming: 1.04,
+            bullying: 1.00,
+            self_harm: 1.07,
+            manipulation: 1.05,
+        }
+    } else if language.starts_with("ru") {
+        SafetyCalibration {
+            grooming: 1.03,
+            bullying: 1.00,
+            self_harm: 1.06,
+            manipulation: 1.04,
+        }
+    } else {
+        SafetyCalibration {
+            grooming: 1.00,
+            bullying: 1.00,
+            self_harm: 1.00,
+            manipulation: 1.00,
+        }
+    };
+
+    match profile {
+        OnDeviceProfile::Lite => {
+            calibration.self_harm *= 0.97;
+        }
+        OnDeviceProfile::Balanced => {}
+        OnDeviceProfile::HighRecall => {
+            calibration.grooming *= 1.03;
+            calibration.self_harm *= 1.04;
+            calibration.manipulation *= 1.03;
+        }
+    }
+    calibration
 }
 
 impl SafetyBackend for SafetyClassifier {

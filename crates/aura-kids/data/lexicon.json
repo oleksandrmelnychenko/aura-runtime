@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
   "policy": {
-    "warn_priority": 85,
-    "critical_warn_priority": 95,
-    "guardian_escalation_priority": 92
+    "warn_priority": 82,
+    "critical_warn_priority": 94,
+    "guardian_escalation_priority": 90
   },
   "grooming": [
     {
       "threat_key": "grooming_secrecy_boundary",
       "reason_code": "kids.grooming.secrecy_boundary",
-      "score": 0.86,
+      "score": 0.9,
       "threat_type": "grooming",
       "severity": "high",
-      "priority": 95,
+      "priority": 97,
       "all_of": [],
       "any_of": [],
       "any_groups": [
@@ -35,10 +35,10 @@
     {
       "threat_key": "grooming_secrecy",
       "reason_code": "kids.grooming.secrecy",
-      "score": 0.72,
+      "score": 0.78,
       "threat_type": "grooming",
       "severity": "medium",
-      "priority": 70,
+      "priority": 80,
       "all_of": [],
       "any_of": [
         "our little secret",
@@ -47,16 +47,66 @@
         "нікому не кажи",
         "це наш секрет"
       ]
+    },
+    {
+      "threat_key": "grooming_trust_isolation",
+      "reason_code": "kids.grooming.trust_isolation",
+      "score": 0.84,
+      "threat_type": "grooming",
+      "severity": "high",
+      "priority": 91,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "you can only trust me",
+          "your friends are fake",
+          "only i understand you",
+          "довіряй тільки мені",
+          "твої друзі фейкові"
+        ],
+        [
+          "don't talk to others",
+          "stop talking to your friends",
+          "не спілкуйся з ними",
+          "перестань писати друзям"
+        ]
+      ]
+    },
+    {
+      "threat_key": "grooming_offplatform_meet",
+      "reason_code": "kids.grooming.offplatform_meet",
+      "score": 0.86,
+      "threat_type": "grooming",
+      "severity": "high",
+      "priority": 93,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "download telegram",
+          "move to private chat",
+          "switch to another app",
+          "переходь у телеграм",
+          "перейдемо в інший чат"
+        ],
+        [
+          "come alone",
+          "meet me tonight",
+          "нікому не кажи і приходь",
+          "зустрінемось сьогодні"
+        ]
+      ]
     }
   ],
   "bullying": [
     {
       "threat_key": "bullying_harassment",
       "reason_code": "kids.bullying.harassment",
-      "score": 0.74,
+      "score": 0.77,
       "threat_type": "bullying",
       "severity": "medium",
-      "priority": 60,
+      "priority": 72,
       "all_of": [],
       "any_of": [
         "you're worthless",
@@ -65,13 +115,45 @@
         "ти нікому не потрібен",
         "тебе всі ненавидять"
       ]
+    },
+    {
+      "threat_key": "bullying_group_pile_on",
+      "reason_code": "kids.bullying.group_pile_on",
+      "score": 0.84,
+      "threat_type": "bullying",
+      "severity": "high",
+      "priority": 90,
+      "all_of": [],
+      "any_of": [
+        "everyone is against you",
+        "all of us hate you",
+        "go away from this class",
+        "весь клас проти тебе",
+        "вали з нашого класу",
+        "ніхто тебе тут не хоче"
+      ]
+    },
+    {
+      "threat_key": "bullying_public_humiliation",
+      "reason_code": "kids.bullying.public_humiliation",
+      "score": 0.82,
+      "threat_type": "bullying",
+      "severity": "high",
+      "priority": 88,
+      "all_of": [],
+      "any_of": [
+        "we'll post this everywhere",
+        "everyone will laugh at you",
+        "викладемо це всюди",
+        "всі будуть сміятися з тебе"
+      ]
     }
   ],
   "selfharm": [
     {
       "threat_key": "selfharm_acute",
       "reason_code": "kids.selfharm.acute",
-      "score": 0.96,
+      "score": 0.98,
       "threat_type": "self_harm",
       "severity": "critical",
       "priority": 100,
@@ -97,7 +179,7 @@
     {
       "threat_key": "selfharm_ideation",
       "reason_code": "kids.selfharm.ideation",
-      "score": 0.8,
+      "score": 0.84,
       "threat_type": "self_harm",
       "severity": "high",
       "priority": 92,
@@ -109,44 +191,73 @@
         "немає сенсу жити",
         "хочу зникнути назавжди"
       ]
+    },
+    {
+      "threat_key": "selfharm_planning_window",
+      "reason_code": "kids.selfharm.planning_window",
+      "score": 0.95,
+      "threat_type": "self_harm",
+      "severity": "critical",
+      "priority": 99,
+      "action": "warn",
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "this is my last message",
+          "goodbye forever",
+          "це моє останнє повідомлення",
+          "прощавайте назавжди"
+        ],
+        [
+          "tonight",
+          "right now",
+          "сьогодні вночі",
+          "прямо зараз"
+        ]
+      ]
     }
   ],
   "manipulation": [
     {
       "threat_key": "manipulation_blackmail",
       "reason_code": "kids.manipulation.blackmail",
-      "score": 0.85,
+      "score": 0.88,
       "threat_type": "manipulation",
       "severity": "high",
-      "priority": 85,
+      "priority": 90,
       "all_of": [],
       "any_of": [
         "if you don't do this i'll share",
         "last warning before i share",
-        "якщо не зробиш це, я всім покажу"
+        "якщо не зробиш це, я всім покажу",
+        "i will send your photos to everyone",
+        "я розішлю це всім у школі"
       ]
     },
     {
       "threat_key": "manipulation_gaslight",
       "reason_code": "kids.manipulation.gaslight",
-      "score": 0.7,
+      "score": 0.76,
       "threat_type": "manipulation",
       "severity": "medium",
-      "priority": 55,
+      "priority": 68,
       "all_of": [],
       "any_of": [
         "you're the one who started this",
         "you're imagining things",
-        "ти все вигадуєш"
+        "ти все вигадуєш",
+        "it's all in your head",
+        "це все в твоїй голові"
       ]
     },
     {
-      "threat_key": "manipulation_mumin_suicide_coercion",
-      "reason_code": "kids.manipulation.mumin_suicide_coercion",
-      "score": 0.9,
+      "threat_key": "manipulation_suicide_coercion",
+      "reason_code": "kids.manipulation.suicide_coercion",
+      "score": 0.93,
       "threat_type": "manipulation",
       "severity": "high",
-      "priority": 94,
+      "priority": 96,
       "all_of": [],
       "any_of": [],
       "any_groups": [
@@ -163,17 +274,18 @@
       ]
     },
     {
-      "threat_key": "bullying_bluff_group_rejection",
-      "reason_code": "kids.bullying.bluff_group_rejection",
+      "threat_key": "manipulation_deadline_compliance",
+      "reason_code": "kids.manipulation.deadline_compliance",
       "score": 0.82,
-      "threat_type": "bullying",
+      "threat_type": "manipulation",
       "severity": "high",
-      "priority": 88,
+      "priority": 87,
       "all_of": [],
       "any_of": [
-        "чого ти взагалі тут",
-        "вали з нашого класу",
-        "ніхто тебе тут не хоче"
+        "you have 10 minutes to do it",
+        "do it now or i post everything",
+        "у тебе 10 хвилин",
+        "зроби це зараз або я викладу все"
       ]
     }
   ]

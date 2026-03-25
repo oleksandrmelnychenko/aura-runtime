@@ -1,0 +1,26 @@
+{
+  "models": {
+    "intent": {
+      "data_filename": "intent.onnx.data",
+      "data_sha256": "7ce6d80abe3a812907654416be468a5d0a8822507900ffa5e4fb0b13ef6c6b29",
+      "filename": "intent.onnx",
+      "max_seq_length": 128,
+      "num_outputs": 4,
+      "sha256": "ea2c3ecb399e0233a05ef8accaf241bdbe42211e825a04b8752823d4c8ce3b44"
+    },
+    "safety": {
+      "data_filename": "safety.onnx.data",
+      "data_sha256": "c6b639ba22a4ee67f898b0dec876bbadbdd664c5fd55ff9d8541a1683e2dcc7e",
+      "filename": "safety.onnx",
+      "max_seq_length": 128,
+      "num_outputs": 5,
+      "sha256": "7679ece25798d2648dc881d2bc6719f04e3d903833e31e962940206acf067bcf",
+      "source_model_id": "aura-native-5label-bert-base-multilingual-cased-wave1"
+    },
+    "vocab": {
+      "filename": "vocab.txt",
+      "sha256": "c6149e12b5bee96260c78f51a28f2c2fa029307c404ce7b3238f9d43e24e39cb"
+    }
+  },
+  "version": 1
+}

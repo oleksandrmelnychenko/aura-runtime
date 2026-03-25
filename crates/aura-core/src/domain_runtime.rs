@@ -70,6 +70,57 @@ fn domain_module_id_for_mode(domain_mode: DomainMode) -> Option<DomainModuleId> 
 }
 
 pub fn map_domain_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
+    if rule_id.contains("kids.grooming.secrecy") || rule_id.contains("kids.grooming.offplatform") {
+        return Some(EventKind::SecrecyRequest);
+    }
+    if rule_id.contains("kids.grooming.trust_isolation")
+        || rule_id.contains("kids.grooming.controlled_secrecy_compound")
+    {
+        return Some(EventKind::Exclusion);
+    }
+    if rule_id.contains("kids.bullying.group_pile_on") || rule_id.contains("kids.bullying.harassment")
+    {
+        return Some(EventKind::Insult);
+    }
+    if rule_id.contains("kids.bullying.public_humiliation") {
+        return Some(EventKind::ReputationThreat);
+    }
+    if rule_id.contains("kids.selfharm.acute")
+        || rule_id.contains("kids.selfharm.ideation")
+        || rule_id.contains("kids.selfharm.planning_window")
+    {
+        return Some(EventKind::SuicidalIdeation);
+    }
+    if rule_id.contains("kids.manipulation.blackmail") {
+        return Some(EventKind::EmotionalBlackmail);
+    }
+    if rule_id.contains("kids.manipulation.gaslight") {
+        return Some(EventKind::Gaslighting);
+    }
+    if rule_id.contains("kids.manipulation.suicide_coercion") {
+        return Some(EventKind::SuicideCoercion);
+    }
+    if rule_id.contains("kids.manipulation.deadline_compliance") {
+        return Some(EventKind::PeerPressure);
+    }
+    if rule_id.contains("kids.bullying.selfharm_compound") {
+        return Some(EventKind::SuicidalIdeation);
+    }
+    if rule_id.contains("kids.selfharm.coercion_compound") {
+        return Some(EventKind::SuicideCoercion);
+    }
+    if rule_id.contains("military.opsec.coordinate_compound") {
+        return Some(EventKind::CoordinateMention);
+    }
+    if rule_id.contains("military.psyops.social_eng_compound")
+        || rule_id.contains("military.psyops.family_pressure")
+    {
+        return Some(EventKind::MilitaryDisinfo);
+    }
+    if rule_id.contains("military.social_eng.command_spoof") {
+        return Some(EventKind::MilitaryPhishing);
+    }
+
     if rule_id.contains("encourage_harm") {
         return Some(EventKind::HarmEncouragement);
     }
@@ -217,6 +268,17 @@ pub fn map_domain_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
         || rule_id.starts_with("propaganda_telegram_channel_")
     {
         return Some(EventKind::SuspiciousSource);
+    }
+    if rule_id.contains("conversation.propaganda.suspicious_source")
+        || rule_id.contains("conversation.propaganda.disinfo_source_blend")
+    {
+        return Some(EventKind::SuspiciousSource);
+    }
+    if rule_id.contains("conversation.propaganda.high_velocity")
+        || rule_id.contains("conversation.propaganda.coordinated")
+        || rule_id.contains("cross_conversation.propaganda.")
+    {
+        return Some(EventKind::PropagandaNarrative);
     }
     if rule_id.starts_with("opsec_coordinates_") {
         return Some(EventKind::CoordinateMention);
@@ -654,7 +716,14 @@ pub fn build_domain_context_events(
 ) -> Vec<ContextEvent> {
     let mut events = Vec::with_capacity(domain_signals.len());
     for signal in domain_signals {
-        let Some(kind) = map_domain_signal_to_event_kind(signal.threat_type) else {
+        let kind_from_reason = map_domain_rule_to_event_kind(&signal.reason_code);
+        let kind_from_subtype = map_domain_rule_to_event_kind(&signal.threat_subtype);
+        let kind = match (kind_from_reason, kind_from_subtype) {
+            (Some(kind), _) => Some(kind),
+            (None, Some(kind)) => Some(kind),
+            (None, None) => map_domain_signal_to_event_kind(signal.threat_type),
+        };
+        let Some(kind) = kind else {
             continue;
         };
         events.push(ContextEvent {

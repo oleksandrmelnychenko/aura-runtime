@@ -252,20 +252,25 @@ pub fn decide_action_v2(
         }
 
         ThreatType::Propaganda => {
-            let action = if score >= 0.85 {
+            let action = if score >= 0.8 {
                 Action::Warn
-            } else if score >= 0.6 {
+            } else if score >= 0.5 {
                 Action::Mark
             } else {
                 decide_action(score, protection_level)
             };
+            let parent_alert = if score >= 0.75 {
+                AlertPriority::High
+            } else {
+                AlertPriority::Medium
+            };
             (
                 action,
                 recommendation(
-                    AlertPriority::Medium,
+                    parent_alert,
                     vec![FollowUpAction::MonitorConversation],
                     false,
-                    ui_actions_for(threat_type, action, score, AlertPriority::Medium),
+                    ui_actions_for(threat_type, action, score, parent_alert),
                 ),
             )
         }
@@ -347,7 +352,9 @@ pub fn propaganda_action_for_subtype(
     protection_level: ProtectionLevel,
     reason_code: &str,
 ) -> (Action, ActionRecommendation) {
-    if reason_code.contains("dehumanization") || reason_code.contains("dehumanize") {
+    let reason_code_lower = reason_code.to_ascii_lowercase();
+
+    if reason_code_lower.contains("dehumanization") || reason_code_lower.contains("dehumanize") {
         let action = if score >= 0.85 {
             Action::Block
         } else if score >= 0.6 {
@@ -377,7 +384,7 @@ pub fn propaganda_action_for_subtype(
         );
     }
 
-    if reason_code.contains("whataboutism") {
+    if reason_code_lower.contains("whataboutism") {
         let action = if score >= 0.75 {
             Action::Mark
         } else {
@@ -394,10 +401,13 @@ pub fn propaganda_action_for_subtype(
         );
     }
 
-    let is_compound = reason_code.contains("compound_");
-    let is_coordinated =
-        reason_code.contains("coordinated_") || reason_code.ends_with(".coordinated");
-    if is_compound || is_coordinated {
+    let is_compound = reason_code_lower.contains("compound_");
+    let is_coordinated = reason_code_lower.contains("coordinated_")
+        || reason_code_lower.ends_with(".coordinated")
+        || reason_code_lower.contains("cross_conversation.");
+    let is_behavioral_high_risk = is_behavioral_high_risk(&reason_code_lower);
+    let is_cross_conversation = reason_code_lower.contains("cross_conversation.");
+    if is_compound || is_coordinated || is_behavioral_high_risk || is_cross_conversation {
         let action = if score >= 0.75 {
             Action::Warn
         } else if score >= 0.5 {
@@ -405,8 +415,19 @@ pub fn propaganda_action_for_subtype(
         } else {
             decide_action(score, protection_level)
         };
-        let parent_alert = AlertPriority::High;
-        let follow_ups = vec![FollowUpAction::MonitorConversation];
+        let parent_alert = if is_behavioral_high_risk || is_cross_conversation {
+            AlertPriority::Urgent
+        } else {
+            AlertPriority::High
+        };
+        let follow_ups = if is_behavioral_high_risk || is_cross_conversation {
+            vec![
+                FollowUpAction::MonitorConversation,
+                FollowUpAction::ReviewContactProfile,
+            ]
+        } else {
+            vec![FollowUpAction::MonitorConversation]
+        };
         return (
             action,
             recommendation(
@@ -419,6 +440,17 @@ pub fn propaganda_action_for_subtype(
     }
 
     decide_action_v2(ThreatType::Propaganda, score, protection_level)
+}
+
+fn is_behavioral_high_risk(reason_code_lower: &str) -> bool {
+    if !reason_code_lower.contains(".behavioral.") {
+        return false;
+    }
+    reason_code_lower.contains("radicalization")
+        || reason_code_lower.contains("narrative_escalation")
+        || reason_code_lower.contains("multi_chat_spreader")
+        || reason_code_lower.contains("copy_paste_reuse")
+        || reason_code_lower.contains("persistent_hammering")
 }
 
 /// Adjusts a recommendation's UI actions based on specific reason codes.
@@ -1084,6 +1116,9 @@ mod tests {
         );
 
         assert_eq!(action, Action::Warn);
-        assert_eq!(rec.parent_alert, AlertPriority::High);
+        assert!(
+            rec.parent_alert >= AlertPriority::High,
+            "coordinated propaganda should not down-rank parent alert"
+        );
     }
 }

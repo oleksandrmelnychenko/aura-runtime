@@ -218,10 +218,7 @@ impl Analyzer {
 
         let mut escalation_match_found = false;
         for s in &signals {
-            let is_escalation_threat = s.threat_type == ThreatType::Bullying
-                || s.threat_type == ThreatType::Threat
-                || s.threat_type == ThreatType::Explicit;
-            if is_escalation_threat {
+            if is_escalation_bonus_threat(s.threat_type) {
                 escalation_match_found = true;
                 break;
             }
@@ -236,10 +233,7 @@ impl Analyzer {
             .check_bonus(&input.conversation_id, timestamp_ms);
         if bonus > 0.0 {
             for s in &mut signals {
-                let is_escalation_threat = s.threat_type == ThreatType::Bullying
-                    || s.threat_type == ThreatType::Threat
-                    || s.threat_type == ThreatType::Explicit;
-                if is_escalation_threat {
+                if is_escalation_bonus_threat(s.threat_type) {
                     s.score = (s.score + bonus).min(1.0);
                 }
             }
@@ -283,4 +277,18 @@ impl Analyzer {
         }
         result
     }
+}
+
+fn is_escalation_bonus_threat(threat_type: ThreatType) -> bool {
+    threat_type == ThreatType::Bullying
+        || threat_type == ThreatType::Threat
+        || threat_type == ThreatType::Explicit
+        || threat_type == ThreatType::Grooming
+        || threat_type == ThreatType::Manipulation
+        || threat_type == ThreatType::SelfHarm
+        || threat_type == ThreatType::Doxxing
+        || threat_type == ThreatType::HateSpeech
+        || threat_type == ThreatType::Propaganda
+        || threat_type == ThreatType::Psyops
+        || threat_type == ThreatType::MilitarySocialEng
 }

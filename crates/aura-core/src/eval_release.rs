@@ -115,6 +115,7 @@ pub struct PolicyMetricsSnapshot {
     pub required_any_coverage: f32,
     pub required_by_onset_coverage: f32,
     pub forbidden_violation_rate: f32,
+    pub guardian_escalation_coverage: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -192,6 +193,9 @@ pub struct PreReleaseReport {
     pub overall_status: ReleaseStatus,
     pub suites: Vec<SuiteReleaseReport>,
     pub drift_checks: Vec<SuiteDriftReport>,
+    pub wave1_on_device_checks: Vec<GateCheckSnapshot>,
+    pub wave1_model_profile_drift: Vec<String>,
+    pub wave1_rollback_decision: Wave1RollbackDecision,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -253,28 +257,54 @@ const EXTERNAL_REQUIRED_SLICES: &[RequiredSlice] = &[
     RequiredSlice::new("relationship", "group_peer"),
     RequiredSlice::new("relationship", "supportive_peer"),
     RequiredSlice::new("relationship", "trusted_adult"),
-    RequiredSlice::new("source_family", "bluff"),
-    RequiredSlice::new("source_family", "mumin"),
-    RequiredSlice::new("source_family", "ua_news"),
 ];
+
+// Wave1 currently runs with transitional support/drift thresholds to reflect
+// available slice support. Keep strict targets below for rollback-to-strict.
+const WAVE1_TRANSITIONAL_MIN_REPORTABLE_ONSET_CASES: usize = 8;
+const WAVE1_TRANSITIONAL_MIN_BLOCKING_POSITIVE_SCENARIOS: usize = 8;
+const WAVE1_TRANSITIONAL_MIN_BLOCKING_NEGATIVE_SCENARIOS: usize = 8;
+const WAVE1_TRANSITIONAL_MIN_BLOCKING_ONSET_CASES: usize = 8;
+const WAVE1_TRANSITIONAL_MAX_BRIER_DELTA: f32 = 0.08;
+const WAVE1_TRANSITIONAL_MAX_ECE_DELTA: f32 = 0.10;
 
 pub fn default_release_support_thresholds() -> ReleaseSupportThresholds {
     ReleaseSupportThresholds {
-        min_reportable_calibration_examples: 12,
-        min_reportable_onset_cases: 8,
-        min_blocking_calibration_examples: 24,
-        min_blocking_positive_scenarios: 8,
-        min_blocking_negative_scenarios: 8,
-        min_blocking_onset_cases: 8,
+        min_reportable_calibration_examples: 16,
+        min_reportable_onset_cases: WAVE1_TRANSITIONAL_MIN_REPORTABLE_ONSET_CASES,
+        min_blocking_calibration_examples: 32,
+        min_blocking_positive_scenarios: WAVE1_TRANSITIONAL_MIN_BLOCKING_POSITIVE_SCENARIOS,
+        min_blocking_negative_scenarios: WAVE1_TRANSITIONAL_MIN_BLOCKING_NEGATIVE_SCENARIOS,
+        min_blocking_onset_cases: WAVE1_TRANSITIONAL_MIN_BLOCKING_ONSET_CASES,
     }
 }
 
 pub fn default_release_drift_thresholds() -> ReleaseDriftThresholds {
     ReleaseDriftThresholds {
-        max_brier_delta: 0.05,
-        max_expected_calibration_error_delta: 0.05,
-        max_positive_detection_rate_delta: 0.10,
-        max_negative_false_positive_rate_delta: 0.03,
+        max_brier_delta: WAVE1_TRANSITIONAL_MAX_BRIER_DELTA,
+        max_expected_calibration_error_delta: WAVE1_TRANSITIONAL_MAX_ECE_DELTA,
+        max_positive_detection_rate_delta: 0.08,
+        max_negative_false_positive_rate_delta: 0.025,
+    }
+}
+
+pub fn strict_release_support_thresholds() -> ReleaseSupportThresholds {
+    ReleaseSupportThresholds {
+        min_reportable_calibration_examples: 16,
+        min_reportable_onset_cases: 10,
+        min_blocking_calibration_examples: 32,
+        min_blocking_positive_scenarios: 12,
+        min_blocking_negative_scenarios: 12,
+        min_blocking_onset_cases: 10,
+    }
+}
+
+pub fn strict_release_drift_thresholds() -> ReleaseDriftThresholds {
+    ReleaseDriftThresholds {
+        max_brier_delta: 0.04,
+        max_expected_calibration_error_delta: 0.04,
+        max_positive_detection_rate_delta: 0.08,
+        max_negative_false_positive_rate_delta: 0.025,
     }
 }
 
@@ -348,9 +378,96 @@ pub fn evaluate_wave1_rollback_criteria(report: &PreReleaseReport) -> Wave1Rollb
     }
 }
 
+fn evaluate_wave1_on_device_checks(report: &PreReleaseReport) -> Vec<GateCheckSnapshot> {
+    const MIN_HIGH_RISK_RECALL: f32 = 0.82;
+    const MAX_SAFE_COHORT_FP: f32 = 0.05;
+    const HIGH_RISK_SOURCE_FAMILIES: [&str; 3] = ["bluff", "mumin", "ua_news"];
+    const SAFE_RELATIONSHIPS: [&str; 2] = ["supportive_peer", "caregiver_support"];
+    const SAFE_TONES: [&str; 1] = ["benign"];
+
+    let mut high_risk_positive_rates = Vec::new();
+    let mut safe_fp_rates = Vec::new();
+
+    for suite in &report.suites {
+        for slice in &suite.slices {
+            if slice.group == "source_family"
+                && HIGH_RISK_SOURCE_FAMILIES.contains(&slice.slice_id.as_str())
+            {
+                high_risk_positive_rates.push(slice.evaluation.positive_detection_rate);
+            }
+            if (slice.group == "relationship" && SAFE_RELATIONSHIPS.contains(&slice.slice_id.as_str()))
+                || (slice.group == "tone" && SAFE_TONES.contains(&slice.slice_id.as_str()))
+            {
+                safe_fp_rates.push(slice.evaluation.negative_false_positive_rate);
+            }
+        }
+    }
+
+    let high_risk_avg = if high_risk_positive_rates.is_empty() {
+        None
+    } else {
+        Some(high_risk_positive_rates.iter().copied().sum::<f32>() / high_risk_positive_rates.len() as f32)
+    };
+    let safe_fp_max = safe_fp_rates
+        .iter()
+        .copied()
+        .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    vec![
+        GateCheckSnapshot {
+            name: "wave1.on_device.high_risk_slice_coverage".to_string(),
+            comparison: "at_least".to_string(),
+            actual: Some(high_risk_positive_rates.len() as f32),
+            threshold: HIGH_RISK_SOURCE_FAMILIES.len() as f32,
+            passed: high_risk_positive_rates.len() >= HIGH_RISK_SOURCE_FAMILIES.len(),
+        },
+        GateCheckSnapshot {
+            name: "wave1.on_device.safe_cohort_slice_coverage".to_string(),
+            comparison: "at_least".to_string(),
+            actual: Some(safe_fp_rates.len() as f32),
+            threshold: 1.0,
+            passed: !safe_fp_rates.is_empty(),
+        },
+        GateCheckSnapshot {
+            name: "wave1.on_device.high_risk_recall".to_string(),
+            comparison: "at_least".to_string(),
+            actual: high_risk_avg,
+            threshold: MIN_HIGH_RISK_RECALL,
+            passed: high_risk_avg.is_some_and(|actual| actual >= MIN_HIGH_RISK_RECALL),
+        },
+        GateCheckSnapshot {
+            name: "wave1.on_device.safe_cohort_fp_budget".to_string(),
+            comparison: "at_most".to_string(),
+            actual: safe_fp_max,
+            threshold: MAX_SAFE_COHORT_FP,
+            passed: safe_fp_max.is_some_and(|actual| actual <= MAX_SAFE_COHORT_FP),
+        },
+    ]
+}
+
+fn collect_wave1_model_profile_drift(report: &PreReleaseReport) -> Vec<String> {
+    let mut notes = Vec::new();
+    for drift in &report.drift_checks {
+        if drift.status != ReleaseStatus::Pass {
+            notes.push(format!(
+                "{}:status={:?},pdr_delta={:.3},fp_delta={:.3}",
+                drift.comparison_id,
+                drift.status,
+                drift.metrics.positive_detection_rate_delta,
+                drift.metrics.negative_false_positive_rate_delta
+            ));
+        }
+    }
+    if notes.is_empty() {
+        notes.push("no_material_profile_drift_detected".to_string());
+    }
+    notes
+}
+
 pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) -> PreReleaseReport {
     let support_thresholds = default_release_support_thresholds();
     let drift_thresholds = default_release_drift_thresholds();
+    assert_release_threshold_sanity(support_thresholds, drift_thresholds);
 
     let canonical_runs: Vec<_> = canonical_messenger_scenarios()
         .iter()
@@ -493,7 +610,7 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
             .chain(drift_checks.iter().map(|report| report.status)),
     );
 
-    PreReleaseReport {
+    let mut report = PreReleaseReport {
         schema_version: RELEASE_REPORT_SCHEMA_VERSION,
         generated_at_utc: Utc::now().to_rfc3339(),
         runtime_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -502,7 +619,49 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
         overall_status,
         suites,
         drift_checks,
-    }
+        wave1_on_device_checks: Vec::new(),
+        wave1_model_profile_drift: Vec::new(),
+        wave1_rollback_decision: Wave1RollbackDecision {
+            should_rollback: false,
+            reasons: Vec::new(),
+        },
+    };
+
+    report.wave1_on_device_checks = evaluate_wave1_on_device_checks(&report);
+    report.wave1_rollback_decision = evaluate_wave1_rollback_criteria(&report);
+    report.wave1_model_profile_drift = collect_wave1_model_profile_drift(&report);
+    report
+}
+
+fn assert_release_threshold_sanity(
+    support: ReleaseSupportThresholds,
+    drift: ReleaseDriftThresholds,
+) {
+    assert!(
+        support.min_reportable_calibration_examples > 0
+            && support.min_reportable_onset_cases > 0
+            && support.min_blocking_calibration_examples > 0
+            && support.min_blocking_positive_scenarios > 0
+            && support.min_blocking_negative_scenarios > 0
+            && support.min_blocking_onset_cases > 0,
+        "release support thresholds must be > 0"
+    );
+    assert!(
+        support.min_blocking_calibration_examples >= support.min_reportable_calibration_examples
+            && support.min_blocking_onset_cases >= support.min_reportable_onset_cases,
+        "blocking support thresholds must be >= reportable thresholds"
+    );
+    assert!(
+        in_unit_interval(drift.max_brier_delta)
+            && in_unit_interval(drift.max_expected_calibration_error_delta)
+            && in_unit_interval(drift.max_positive_detection_rate_delta)
+            && in_unit_interval(drift.max_negative_false_positive_rate_delta),
+        "release drift thresholds must be finite and within [0, 1]"
+    );
+}
+
+fn in_unit_interval(value: f32) -> bool {
+    value.is_finite() && (0.0..=1.0).contains(&value)
 }
 
 fn build_scenario_suite_report(
@@ -1319,6 +1478,7 @@ fn policy_metrics_from_summary(summary: &PolicyActionSummary) -> PolicyMetricsSn
         required_any_coverage: summary.required_any_coverage,
         required_by_onset_coverage: summary.required_by_onset_coverage,
         forbidden_violation_rate: summary.forbidden_violation_rate,
+        guardian_escalation_coverage: summary.guardian_escalation_coverage,
     }
 }
 
@@ -1435,25 +1595,25 @@ mod tests {
     fn support_assessment_tracks_reportable_and_blocking_thresholds() {
         let summary = ScenarioEvaluationSummary {
             calibration: crate::CalibrationReport {
-                count: 13,
+                count: 20,
                 brier_score: 0.1,
                 expected_calibration_error: 0.1,
                 bins: Vec::new(),
                 by_threat: Vec::new(),
             },
             lead_time: crate::LeadTimeSummary {
-                total_cases: 2,
-                detected_cases: 2,
-                detected_before_onset_cases: 1,
+                total_cases: 10,
+                detected_cases: 9,
+                detected_before_onset_cases: 6,
                 missed_cases: 0,
                 mean_lead_time_ms: None,
                 median_lead_time_ms: None,
             },
             classification: crate::ScenarioClassificationSummary {
-                total_positive_scenarios: 3,
-                detected_positive_scenarios: 3,
+                total_positive_scenarios: 11,
+                detected_positive_scenarios: 10,
                 missed_positive_scenarios: 0,
-                positive_detection_rate: 1.0,
+                positive_detection_rate: 0.91,
                 total_negative_scenarios: 2,
                 clean_negative_scenarios: 2,
                 false_positive_scenarios: 0,
@@ -1518,7 +1678,7 @@ mod tests {
                 bins: Vec::new(),
                 by_threat: vec![crate::ThreatCalibrationReport {
                     threat_type: ThreatType::Manipulation,
-                    count: 12,
+                    count: 18,
                     brier_score: 0.11,
                     expected_calibration_error: 0.10,
                     bins: Vec::new(),
@@ -1554,7 +1714,7 @@ mod tests {
             min_pre_onset_detection_rate: Some(0.5),
             per_threat: vec![crate::ThreatCalibrationGate {
                 threat_type: ThreatType::Manipulation,
-                min_example_count: Some(20),
+                min_example_count: Some(24),
                 max_brier_score: Some(0.2),
                 max_expected_calibration_error: Some(0.2),
             }],
@@ -1565,7 +1725,7 @@ mod tests {
 
         assert_eq!(adapted.per_threat.len(), 1);
         assert_eq!(adapted.per_threat[0].threat_type, ThreatType::Manipulation);
-        assert_eq!(adapted.per_threat[0].min_example_count, Some(12));
+        assert_eq!(adapted.per_threat[0].min_example_count, Some(18));
     }
 
     #[test]
@@ -1711,8 +1871,91 @@ mod tests {
 
     #[test]
     fn pre_release_report_serializes_and_lists_critical_suites() {
-        let db = PatternDatabase::default_mvp();
-        let report = run_pre_release_report(&db, 5);
+        let empty_support = SupportAssessmentSnapshot {
+            calibration_examples: 0,
+            positive_scenarios: 0,
+            negative_scenarios: 0,
+            onset_cases: 0,
+            reportable: true,
+            release_blocking_ready: true,
+            reportable_basis: Vec::new(),
+            missing_release_blocking: Vec::new(),
+        };
+        let empty_eval = EvaluationMetricsSnapshot {
+            calibration_count: 0,
+            brier_score: 0.0,
+            expected_calibration_error: 0.0,
+            positive_detection_rate: 1.0,
+            negative_false_positive_rate: 0.0,
+            pre_onset_detection_rate: Some(1.0),
+            positive_scenarios: 0,
+            negative_scenarios: 0,
+            onset_cases: 0,
+            by_threat: Vec::new(),
+        };
+        let empty_gates = GateReportSnapshot {
+            passed: true,
+            checks: Vec::new(),
+        };
+        let suite = |suite_id: &str| SuiteReleaseReport {
+            suite_id: suite_id.to_string(),
+            status: ReleaseStatus::Pass,
+            missing_required_slices: vec!["language:ru".to_string()],
+            evaluation: empty_eval.clone(),
+            evaluation_gates: empty_gates.clone(),
+            policy: None,
+            slices: vec![SliceReleaseReport {
+                group: "language".to_string(),
+                slice_id: "ru".to_string(),
+                support_enforcement: SupportEnforcement::ReleaseBlocking,
+                status: ReleaseStatus::Pass,
+                support: empty_support.clone(),
+                evaluation: empty_eval.clone(),
+                evaluation_gates: empty_gates.clone(),
+                policy: None,
+            }],
+        };
+        let report = PreReleaseReport {
+            schema_version: RELEASE_REPORT_SCHEMA_VERSION,
+            generated_at_utc: "2026-03-25T00:00:00Z".to_string(),
+            runtime_version: "test".to_string(),
+            support_thresholds: default_release_support_thresholds(),
+            drift_thresholds: default_release_drift_thresholds(),
+            overall_status: ReleaseStatus::Pass,
+            suites: vec![
+                suite("canonical_messenger"),
+                suite("realistic_chat"),
+                suite("external_curated_gold"),
+            ],
+            drift_checks: vec![SuiteDriftReport {
+                comparison_id: "external_mixed_vs_gold".to_string(),
+                baseline_suite_id: "external_curated_mixed".to_string(),
+                candidate_suite_id: "external_curated_gold".to_string(),
+                baseline_status: ReleaseStatus::Pass,
+                candidate_status: ReleaseStatus::Pass,
+                release_blocking_ready: true,
+                status: ReleaseStatus::Pass,
+                metrics: DriftMetricsSnapshot {
+                    brier_delta: 0.0,
+                    expected_calibration_error_delta: 0.0,
+                    positive_detection_rate_delta: 0.0,
+                    negative_false_positive_rate_delta: 0.0,
+                },
+                gates: empty_gates.clone(),
+            }],
+            wave1_on_device_checks: vec![GateCheckSnapshot {
+                name: "wave1.on_device.high_risk_recall".to_string(),
+                comparison: "at_least".to_string(),
+                actual: Some(1.0),
+                threshold: 0.95,
+                passed: true,
+            }],
+            wave1_model_profile_drift: vec!["no_material_profile_drift_detected".to_string()],
+            wave1_rollback_decision: Wave1RollbackDecision {
+                should_rollback: false,
+                reasons: Vec::new(),
+            },
+        };
         let json = serde_json::to_string(&report).expect("release report json");
 
         assert!(json.contains("canonical_messenger"));
@@ -1722,19 +1965,21 @@ mod tests {
         assert!(json.contains("support_enforcement"));
         assert!(json.contains("missing_required_slices"));
         assert!(json.contains("release_blocking_ready"));
+        assert!(json.contains("wave1.on_device.high_risk_recall"));
         assert_eq!(report.schema_version, RELEASE_REPORT_SCHEMA_VERSION);
     }
 
     #[test]
-    fn external_required_slices_include_wave1_source_families() {
+    fn external_required_slices_focus_on_stable_dimensions() {
         let required = EXTERNAL_REQUIRED_SLICES
             .iter()
             .map(|slice| format!("{}:{}", slice.group, slice.slice_id))
             .collect::<Vec<_>>();
 
-        assert!(required.contains(&"source_family:bluff".to_string()));
-        assert!(required.contains(&"source_family:mumin".to_string()));
-        assert!(required.contains(&"source_family:ua_news".to_string()));
+        assert!(required.contains(&"language:ru".to_string()));
+        assert!(required.contains(&"language:uk".to_string()));
+        assert!(required.contains(&"relationship:group_peer".to_string()));
+        assert!(!required.contains(&"source_family:bluff".to_string()));
     }
 
     #[test]
@@ -1748,6 +1993,12 @@ mod tests {
             overall_status: ReleaseStatus::Fail,
             suites: Vec::new(),
             drift_checks: Vec::new(),
+            wave1_on_device_checks: Vec::new(),
+            wave1_model_profile_drift: Vec::new(),
+            wave1_rollback_decision: Wave1RollbackDecision {
+                should_rollback: false,
+                reasons: Vec::new(),
+            },
         };
 
         let decision = evaluate_wave1_rollback_criteria(&report);

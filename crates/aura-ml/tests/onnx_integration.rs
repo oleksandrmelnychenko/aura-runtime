@@ -13,6 +13,12 @@ struct ModelAssets {
     vocab_path: String,
 }
 
+struct SafetyIntentAssets {
+    safety_model_path: String,
+    intent_model_path: String,
+    vocab_path: String,
+}
+
 fn discover_models() -> Option<ModelAssets> {
     let candidates = ["../../models", "models", "../models"];
     for candidate in &candidates {
@@ -51,6 +57,55 @@ fn require_models(test_name: &str) -> Option<&'static ModelAssets> {
     None
 }
 
+fn discover_safety_intent_models() -> Option<SafetyIntentAssets> {
+    let candidates = ["../../models", "models", "../models"];
+    for candidate in &candidates {
+        let root = Path::new(candidate);
+        let safety = root.join("safety.onnx");
+        let intent = root.join("intent.onnx");
+        let vocab = root.join("vocab.txt");
+        if safety.exists() && intent.exists() && vocab.exists() {
+            return Some(SafetyIntentAssets {
+                safety_model_path: safety.to_string_lossy().into_owned(),
+                intent_model_path: intent.to_string_lossy().into_owned(),
+                vocab_path: vocab.to_string_lossy().into_owned(),
+            });
+        }
+    }
+    None
+}
+
+fn require_safety_intent_models(test_name: &str) -> Option<&'static SafetyIntentAssets> {
+    static ASSETS: OnceLock<Option<SafetyIntentAssets>> = OnceLock::new();
+    let assets = ASSETS.get_or_init(discover_safety_intent_models);
+    if let Some(assets) = assets.as_ref() {
+        return Some(assets);
+    }
+
+    let message = "Safety/intent models not found! Run download_models.py with --include-safety --include-intent";
+    let require_models = env::var("AURA_REQUIRE_ONNX_MODELS")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false);
+    if require_models {
+        panic!("{message}");
+    }
+
+    eprintln!("skipping {test_name}: {message}");
+    None
+}
+
+fn allow_safety_intent_onnx_tests(test_name: &str) -> bool {
+    let enabled = env::var("AURA_RUN_SAFETY_INTENT_ONNX")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false);
+    if !enabled {
+        eprintln!(
+            "skipping {test_name}: set AURA_RUN_SAFETY_INTENT_ONNX=1 to run safety/intent ONNX load tests"
+        );
+    }
+    enabled
+}
+
 fn onnx_config(assets: &ModelAssets) -> MlConfig {
     MlConfig {
         toxicity_model_path: Some(assets.toxicity_model_path.clone()),
@@ -60,6 +115,22 @@ fn onnx_config(assets: &ModelAssets) -> MlConfig {
         toxicity_threshold: 0.5,
         use_fallback: true,
         language: "en".to_string(),
+        ..Default::default()
+    }
+}
+
+fn onnx_safety_intent_config(assets: &SafetyIntentAssets) -> MlConfig {
+    MlConfig {
+        safety_model_path: Some(assets.safety_model_path.clone()),
+        intent_model_path: Some(assets.intent_model_path.clone()),
+        vocab_path: Some(assets.vocab_path.clone()),
+        max_seq_length: 128,
+        safety_threshold: 0.45,
+        intent_threshold: 0.45,
+        use_fallback: true,
+        language: "en".to_string(),
+        cascade_enabled: false,
+        ..Default::default()
     }
 }
 
@@ -114,7 +185,7 @@ fn toxicity_onnx_loads() {
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let classifier =
-        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok);
+        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok, 2);
     assert!(
         classifier.is_ok(),
         "Failed to load toxicity model: {:?}",
@@ -129,7 +200,7 @@ fn toxicity_onnx_detects_threat() {
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut classifier =
-        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok)
+        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok, 2)
             .unwrap();
     let pred = classifier
         .predict("I will kill you, you worthless piece of garbage")
@@ -153,7 +224,7 @@ fn toxicity_onnx_detects_insult() {
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut classifier =
-        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok)
+        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok, 2)
             .unwrap();
     let pred = classifier
         .predict("You're such a stupid ugly idiot")
@@ -177,7 +248,7 @@ fn toxicity_onnx_clean_message() {
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut classifier =
-        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok)
+        aura_ml::toxicity::ToxicityClassifier::with_model(&assets.toxicity_model_path, tok, 2)
             .unwrap();
     let pred = classifier
         .predict("Hello! How are you doing today? The weather is lovely.")
@@ -196,7 +267,7 @@ fn sentiment_onnx_loads() {
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let analyzer =
-        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok);
+        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok, 2);
     assert!(
         analyzer.is_ok(),
         "Failed to load sentiment model: {:?}",
@@ -211,7 +282,7 @@ fn sentiment_onnx_positive() {
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut analyzer =
-        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok)
+        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok, 2)
             .unwrap();
     let pred = analyzer
         .predict("I love this! It's amazing and wonderful!")
@@ -234,7 +305,7 @@ fn sentiment_onnx_negative() {
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut analyzer =
-        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok)
+        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok, 2)
             .unwrap();
     let pred = analyzer
         .predict("I hate this, it's terrible and awful")
@@ -257,7 +328,7 @@ fn sentiment_onnx_neutral() {
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
     let mut analyzer =
-        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok)
+        aura_ml::sentiment::SentimentAnalyzer::with_model(&assets.sentiment_model_path, tok, 2)
             .unwrap();
     let pred = analyzer
         .predict("The meeting is scheduled for 3pm tomorrow")
@@ -367,4 +438,54 @@ fn pipeline_onnx_falls_back_gracefully() {
     assert!(result.has_predictions());
     let tox = result.toxicity.unwrap();
     assert!(tox.toxicity >= 0.5, "Fallback should detect threats");
+}
+
+#[test]
+fn safety_onnx_loads() {
+    if !allow_safety_intent_onnx_tests("safety_onnx_loads") {
+        return;
+    }
+    let Some(assets) = require_safety_intent_models("safety_onnx_loads") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
+    let classifier = aura_ml::safety::SafetyClassifier::with_model(&assets.safety_model_path, tok, 2);
+    assert!(
+        classifier.is_ok(),
+        "Failed to load safety model: {:?}",
+        classifier.err()
+    );
+}
+
+#[test]
+fn intent_onnx_loads() {
+    if !allow_safety_intent_onnx_tests("intent_onnx_loads") {
+        return;
+    }
+    let Some(assets) = require_safety_intent_models("intent_onnx_loads") else {
+        return;
+    };
+    let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
+    let classifier = aura_ml::intent::IntentClassifier::with_model(&assets.intent_model_path, tok, 2);
+    assert!(
+        classifier.is_ok(),
+        "Failed to load intent model: {:?}",
+        classifier.err()
+    );
+}
+
+#[test]
+fn pipeline_onnx_produces_safety_and_intent_outputs() {
+    if !allow_safety_intent_onnx_tests("pipeline_onnx_produces_safety_and_intent_outputs") {
+        return;
+    }
+    let Some(assets) = require_safety_intent_models("pipeline_onnx_produces_safety_and_intent_outputs") else {
+        return;
+    };
+    let mut pipeline = MlPipeline::new(onnx_safety_intent_config(assets));
+    let result = pipeline.analyze_text(
+        "don't tell your parents, let's meet in secret and send me a photo",
+    );
+    assert!(result.safety.is_some(), "Expected safety head prediction");
+    assert!(result.intent.is_some(), "Expected intent head prediction");
 }

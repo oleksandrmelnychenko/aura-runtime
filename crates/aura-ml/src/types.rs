@@ -6,6 +6,10 @@ pub struct MlResult {
     pub sentiment: Option<SentimentPrediction>,
     pub safety: Option<SafetyPrediction>,
     pub intent: Option<IntentPrediction>,
+    #[serde(default)]
+    pub uncertainty: MlUncertaintyLevel,
+    #[serde(default)]
+    pub abstain_to_guardian: bool,
     pub inference_time_us: u64,
     pub tier: CascadeTier,
     pub cache_hit: bool,
@@ -18,6 +22,8 @@ impl MlResult {
             sentiment: None,
             safety: None,
             intent: None,
+            uncertainty: MlUncertaintyLevel::Medium,
+            abstain_to_guardian: false,
             inference_time_us: 0,
             tier: CascadeTier::Gate,
             cache_hit: false,
@@ -160,6 +166,26 @@ impl SafetyPrediction {
             .max(self.self_harm)
             .max(self.manipulation)
     }
+
+    pub fn top_two_gap(&self) -> f32 {
+        let mut scores = [self.grooming, self.bullying, self.self_harm, self.manipulation];
+        scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        scores[0] - scores[1]
+    }
+
+    pub fn compute_primary_label(&self, threshold: f32) -> Option<SafetyLabel> {
+        let scores = [
+            (self.grooming, SafetyLabel::Grooming),
+            (self.bullying, SafetyLabel::Bullying),
+            (self.self_harm, SafetyLabel::SelfHarm),
+            (self.manipulation, SafetyLabel::Manipulation),
+        ];
+        scores
+            .iter()
+            .filter(|(s, _)| *s >= threshold)
+            .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(_, label)| *label)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -208,6 +234,31 @@ impl IntentPrediction {
             primary_intent,
         }
     }
+
+    pub fn max_risk_intent(&self) -> f32 {
+        self.request_meeting
+            .max(self.request_secret)
+            .max(self.request_media)
+    }
+
+    pub fn top_two_gap(&self) -> f32 {
+        let mut scores = [self.request_meeting, self.request_secret, self.request_media];
+        scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        scores[0] - scores[1]
+    }
+
+    pub fn compute_primary_intent(&self, threshold: f32) -> Option<IntentLabel> {
+        let intents = [
+            (self.request_meeting, IntentLabel::RequestMeeting),
+            (self.request_secret, IntentLabel::RequestSecret),
+            (self.request_media, IntentLabel::RequestMedia),
+        ];
+        intents
+            .iter()
+            .filter(|(s, _)| *s >= threshold)
+            .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(_, label)| *label)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -253,6 +304,24 @@ pub enum InferencePriority {
     Low = 3,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OnDeviceProfile {
+    Lite,
+    #[default]
+    Balanced,
+    HighRecall,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MlUncertaintyLevel {
+    Low,
+    #[default]
+    Medium,
+    High,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MlConfig {
     pub toxicity_model_path: Option<String>,
@@ -262,8 +331,14 @@ pub struct MlConfig {
     pub vocab_path: Option<String>,
     pub max_seq_length: usize,
     pub toxicity_threshold: f32,
+    #[serde(default = "default_safety_threshold")]
+    pub safety_threshold: f32,
+    #[serde(default = "default_intent_threshold")]
+    pub intent_threshold: f32,
     pub use_fallback: bool,
     pub language: String,
+    #[serde(default)]
+    pub on_device_profile: OnDeviceProfile,
 
     #[serde(default = "default_intra_threads")]
     pub intra_threads: usize,
@@ -273,6 +348,8 @@ pub struct MlConfig {
 
     #[serde(default = "default_true")]
     pub validate_hashes: bool,
+    #[serde(default)]
+    pub strict_manifest_validation: bool,
 
     #[serde(default)]
     pub manifest_path: Option<String>,
@@ -288,6 +365,10 @@ pub struct MlConfig {
 
     #[serde(default = "default_cascade_threshold")]
     pub cascade_gate_threshold: f32,
+    #[serde(default = "default_abstain_score_floor")]
+    pub uncertainty_abstain_score_floor: f32,
+    #[serde(default = "default_abstain_margin_threshold")]
+    pub uncertainty_abstain_margin_threshold: f32,
 }
 
 fn default_intra_threads() -> usize {
@@ -310,6 +391,22 @@ fn default_cascade_threshold() -> f32 {
     0.3
 }
 
+fn default_abstain_score_floor() -> f32 {
+    0.65
+}
+
+fn default_abstain_margin_threshold() -> f32 {
+    0.12
+}
+
+fn default_safety_threshold() -> f32 {
+    0.5
+}
+
+fn default_intent_threshold() -> f32 {
+    0.5
+}
+
 impl Default for MlConfig {
     fn default() -> Self {
         Self {
@@ -320,16 +417,22 @@ impl Default for MlConfig {
             vocab_path: None,
             max_seq_length: 128,
             toxicity_threshold: 0.5,
+            safety_threshold: default_safety_threshold(),
+            intent_threshold: default_intent_threshold(),
             use_fallback: true,
             language: "uk".to_string(),
+            on_device_profile: OnDeviceProfile::Balanced,
             intra_threads: default_intra_threads(),
             warmup_on_init: true,
             validate_hashes: true,
+            strict_manifest_validation: false,
             manifest_path: None,
             cache_size: default_cache_size(),
             cache_ttl_secs: default_cache_ttl_secs(),
             cascade_enabled: true,
             cascade_gate_threshold: default_cascade_threshold(),
+            uncertainty_abstain_score_floor: default_abstain_score_floor(),
+            uncertainty_abstain_margin_threshold: default_abstain_margin_threshold(),
         }
     }
 }

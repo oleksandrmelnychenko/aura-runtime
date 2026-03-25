@@ -496,11 +496,11 @@ impl PropagandaDetector {
             min_events: if strict { 1 } else { 2 },
             window_ms: 7 * 24 * 60 * 60 * 1000,
             burst_window_ms: 30 * 60 * 1000,
-            burst_threshold: if strict { 2 } else { 3 },
+            burst_threshold: if strict { 2 } else { 2 },
             hammering_threshold: 5,
-            velocity_threshold: 10.0,
-            min_velocity_events: if strict { 5 } else { 6 },
-            min_radicalization_events: if strict { 8 } else { 12 },
+            velocity_threshold: 9.0,
+            min_velocity_events: if strict { 5 } else { 5 },
+            min_radicalization_events: if strict { 8 } else { 10 },
             min_copy_paste_events: if strict { 10 } else { 12 },
         }
     }
@@ -746,6 +746,20 @@ impl PropagandaDetector {
                 snap.source_count
             ),
         ));
+
+        if snap.has_disinfo() && snap.source_count >= 2 {
+            signals.push(DetectionSignal::context(
+                ThreatType::Propaganda,
+                0.86,
+                Confidence::High,
+                SignalFamily::Link,
+                "conversation.propaganda.disinfo_source_blend",
+                format!(
+                    "Sender blends military disinfo with {} suspicious source links",
+                    snap.source_count
+                ),
+            ));
+        }
     }
 
     fn check_combined(&self, snap: &SenderSnapshot, signals: &mut Vec<DetectionSignal>) {
@@ -1826,7 +1840,7 @@ mod tests {
     fn high_velocity_not_triggered_below_min_event_count() {
         let base = 100_000u64;
         let mut events = Vec::new();
-        for i in 0..5 {
+        for i in 0..4 {
             events.push(typed_event(
                 "bot",
                 "conv_1",

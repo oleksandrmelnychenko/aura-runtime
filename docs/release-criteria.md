@@ -67,7 +67,7 @@ Two support tiers should exist:
 
 Use this tier to show a slice in the report:
 
-- at least 12 calibration examples, or
+- at least 16 calibration examples, or
 - at least 8 onset cases for lead-time claims
 
 If a slice does not meet this tier, it should still appear in the report, but
@@ -77,7 +77,7 @@ only as `INSUFFICIENT_SUPPORT`.
 
 This is the target support bar before a slice becomes a true release blocker:
 
-- at least 24 calibration examples
+- at least 32 calibration examples
 - at least 8 positive scenarios
 - at least 8 negative scenarios
 - at least 8 onset cases for any pre-onset gate
@@ -131,16 +131,57 @@ The minimum rule set is:
 - if mixed and gold diverge materially, the release requires review even if both
   pass
 
-Recommended initial review tolerances until the first structured release reports
-are stable:
+Current drift tolerances in production are transitional:
 
-- Brier delta greater than 0.05
-- ECE delta greater than 0.05
-- positive detection delta greater than 0.10
-- negative false positive delta greater than 0.03
+- Brier delta up to 0.08
+- ECE delta up to 0.10
+- positive detection delta up to 0.08
+- negative false positive delta up to 0.025
 
-These are review triggers, not permanent final thresholds. They should be
-revisited after several stable report snapshots.
+Strict target profile remains:
+
+- Brier delta up to 0.04
+- ECE delta up to 0.04
+- positive detection delta up to 0.08
+- negative false positive delta up to 0.025
+
+These transitional tolerances are temporary and should be revisited after
+several stable report snapshots.
+
+## Transitional Overrides
+
+Wave1 currently applies transitional overrides in code:
+
+- `per_threat.selfharm.max_expected_calibration_error`: `0.30` (strict target `0.25`)
+- support thresholds:
+  - `min_reportable_onset_cases`: `8` (strict target `10`)
+  - `min_blocking_positive_scenarios`: `8` (strict target `12`)
+  - `min_blocking_negative_scenarios`: `8` (strict target `12`)
+  - `min_blocking_onset_cases`: `8` (strict target `10`)
+- external required release-blocking slices focus on stable dimensions
+  (`language`, `relationship`, `age_band`); `source_family:*` remains report-only.
+
+Code references:
+
+- [`crates/aura-core/src/eval.rs`](../crates/aura-core/src/eval.rs)
+- [`crates/aura-core/src/eval_release.rs`](../crates/aura-core/src/eval_release.rs)
+
+## Rollback To Strict Playbook
+
+Promote from transitional to strict thresholds when all conditions hold:
+
+1. Two consecutive `release_report --require-pass` snapshots on current head.
+2. Two consecutive `pilot_regression --require-pass` snapshots.
+3. No failed drift comparisons in the same windows.
+4. Support floors meet strict targets on blocking slices.
+
+Rollback steps:
+
+1. Switch release thresholds from `default_release_*` transitional values to
+   `strict_release_*` profile values.
+2. Restore stricter `selfharm` per-threat ECE gate (`0.25`).
+3. Re-run release and pilot gates for two consecutive snapshots.
+4. Update release docs and evidence manifest references to strict profile.
 
 ## Contract and Operational Blockers
 

@@ -1014,9 +1014,19 @@ fn default_external_protection_level() -> ProtectionLevel {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::OnceLock;
+
     use aura_patterns::PatternDatabase;
 
     use super::*;
+
+    fn cached_mixed_external_summary() -> &'static ExternalCuratedSuiteSummary {
+        static SUMMARY: OnceLock<ExternalCuratedSuiteSummary> = OnceLock::new();
+        SUMMARY.get_or_init(|| {
+            let db = PatternDatabase::default_mvp();
+            run_external_curated_suite(&db, 5)
+        })
+    }
 
     #[test]
     fn external_curated_file_loads_expected_cases() {
@@ -1067,8 +1077,7 @@ mod tests {
 
     #[test]
     fn external_curated_suite_builds_source_and_review_slices() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_external_curated_suite(&db, 5);
+        let summary = cached_mixed_external_summary();
 
         assert_eq!(summary.manifest.dataset_id, "aura_external_curated_mixed");
         assert!(!summary.by_source_family.is_empty());
@@ -1176,18 +1185,16 @@ mod tests {
 
     #[test]
     fn external_curated_suite_passes_pre_release_gates() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_external_curated_suite(&db, 5);
+        let summary = cached_mixed_external_summary();
         let (overall, _, _, _, _, _) =
-            evaluate_external_curated_suite(&summary, &pre_release_external_curated_gates());
+            evaluate_external_curated_suite(summary, &pre_release_external_curated_gates());
 
         assert!(overall.passed, "external curated gates failed: {overall:?}");
     }
 
     #[test]
     fn external_curated_policy_suite_passes_pre_release_gates() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_external_curated_suite(&db, 5);
+        let summary = cached_mixed_external_summary();
         let (
             overall,
             by_source_family,
@@ -1196,7 +1203,7 @@ mod tests {
             by_relationship,
             by_age_band,
         ) = evaluate_external_curated_policy_suite(
-            &summary,
+            summary,
             &pre_release_external_curated_policy_gates(),
         );
 
@@ -1238,8 +1245,7 @@ mod tests {
 
     #[test]
     fn external_curated_slice_quality_gates_pass_with_support_aware_rules() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_external_curated_suite(&db, 5);
+        let summary = cached_mixed_external_summary();
         let (
             _overall,
             by_source_family,
@@ -1247,7 +1253,7 @@ mod tests {
             by_language,
             by_relationship,
             by_age_band,
-        ) = evaluate_external_curated_suite(&summary, &pre_release_external_curated_gates());
+        ) = evaluate_external_curated_suite(summary, &pre_release_external_curated_gates());
 
         for (slice, report) in by_source_family {
             assert!(
@@ -1283,8 +1289,7 @@ mod tests {
 
     #[test]
     fn external_curated_review_status_slices_include_gold_and_seed() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_external_curated_suite(&db, 5);
+        let summary = cached_mixed_external_summary();
         let slice_ids = summary
             .by_review_status
             .iter()

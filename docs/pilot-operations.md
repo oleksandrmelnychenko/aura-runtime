@@ -3,7 +3,7 @@
 This document defines the operator-facing process for running AURA in shadow
 mode or controlled pilot rollout.
 
-Status: synchronized with current pilot/runtime behavior on March 23, 2026.
+Status: synchronized with current pilot/runtime behavior on March 25, 2026.
 
 ## Pilot-Ready Contract
 
@@ -118,3 +118,23 @@ python ci/run_promotion_rehearsal.py \
 
 CI and `Promotion Gate` also understand optional pilot gate artifacts if a real
 signoff file is present at the configured path.
+
+## ONNX Test Mode Notes
+
+For pilot/release verification on Windows, keep default ONNX checks lightweight
+and deterministic:
+
+- baseline ONNX coverage is included in default `cargo test` runs
+- safety/intent ONNX load tests are opt-in because some environments may hold
+  file locks and stall those binaries
+- enable explicitly when needed:
+
+```bash
+AURA_RUN_SAFETY_INTENT_ONNX=1 cargo test -p aura-ml --features onnx --test onnx_integration
+```
+
+If you need missing-model behavior to fail hard, set:
+
+```bash
+AURA_REQUIRE_ONNX_MODELS=1
+```

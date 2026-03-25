@@ -557,7 +557,22 @@ fn validate_probability_threshold(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::OnceLock;
+
     use super::*;
+
+    fn cached_social_context_summary() -> &'static SocialContextSuiteSummary {
+        static SUMMARY: OnceLock<SocialContextSuiteSummary> = OnceLock::new();
+        SUMMARY.get_or_init(|| {
+            let db = PatternDatabase::default_mvp();
+            run_social_context_suite(
+                &db,
+                &canonical_social_context_seed_scenarios(),
+                &default_social_context_profiles(),
+                6,
+            )
+        })
+    }
 
     #[test]
     fn social_context_file_loads_expected_cohorts() {
@@ -577,13 +592,7 @@ mod tests {
 
     #[test]
     fn social_context_suite_builds_all_defined_cohorts() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_social_context_suite(
-            &db,
-            &canonical_social_context_seed_scenarios(),
-            &default_social_context_profiles(),
-            6,
-        );
+        let summary = cached_social_context_summary();
         let built = summary
             .cohorts
             .iter()
@@ -601,13 +610,7 @@ mod tests {
 
     #[test]
     fn trusted_adult_boundary_contains_safe_and_risky_cases() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_social_context_suite(
-            &db,
-            &canonical_social_context_seed_scenarios(),
-            &default_social_context_profiles(),
-            6,
-        );
+        let summary = cached_social_context_summary();
         let cohort = summary
             .cohorts
             .iter()
@@ -627,30 +630,17 @@ mod tests {
 
     #[test]
     fn social_context_suite_returns_reports_for_each_cohort() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_social_context_suite(
-            &db,
-            &canonical_social_context_seed_scenarios(),
-            &default_social_context_profiles(),
-            6,
-        );
-        let (_, reports) =
-            evaluate_social_context_suite(&summary, &pre_release_social_context_gates());
+        let summary = cached_social_context_summary();
+        let (_, reports) = evaluate_social_context_suite(summary, &pre_release_social_context_gates());
 
         assert_eq!(reports.len(), summary.cohorts.len());
     }
 
     #[test]
     fn social_context_policy_suite_returns_reports_for_each_cohort() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_social_context_suite(
-            &db,
-            &canonical_social_context_seed_scenarios(),
-            &default_social_context_profiles(),
-            6,
-        );
+        let summary = cached_social_context_summary();
         let (_, reports) = evaluate_social_context_policy_suite(
-            &summary,
+            summary,
             &pre_release_social_context_policy_gates(),
         );
 
@@ -659,15 +649,8 @@ mod tests {
 
     #[test]
     fn social_context_pre_release_gates_pass() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_social_context_suite(
-            &db,
-            &canonical_social_context_seed_scenarios(),
-            &default_social_context_profiles(),
-            6,
-        );
-        let (overall, cohorts) =
-            evaluate_social_context_suite(&summary, &pre_release_social_context_gates());
+        let summary = cached_social_context_summary();
+        let (overall, cohorts) = evaluate_social_context_suite(summary, &pre_release_social_context_gates());
 
         assert!(
             overall.passed,
@@ -680,15 +663,9 @@ mod tests {
 
     #[test]
     fn social_context_policy_gates_pass() {
-        let db = PatternDatabase::default_mvp();
-        let summary = run_social_context_suite(
-            &db,
-            &canonical_social_context_seed_scenarios(),
-            &default_social_context_profiles(),
-            6,
-        );
+        let summary = cached_social_context_summary();
         let (overall, cohorts) = evaluate_social_context_policy_suite(
-            &summary,
+            summary,
             &pre_release_social_context_policy_gates(),
         );
 
