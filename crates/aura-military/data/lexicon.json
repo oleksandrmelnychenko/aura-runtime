@@ -16,8 +16,16 @@
       "all_of": [],
       "any_of": [],
       "any_groups": [
-        ["our position", "наша позиція"],
-        ["brigade", "батальйон", "unit", "підрозділ"]
+        [
+          "our position",
+          "наша позиція"
+        ],
+        [
+          "brigade",
+          "батальйон",
+          "unit",
+          "підрозділ"
+        ]
       ]
     },
     {
@@ -30,8 +38,14 @@
       "all_of": [],
       "any_of": [],
       "any_groups": [
-        ["callsign", "позивний"],
-        ["commander", "командир"]
+        [
+          "callsign",
+          "позивний"
+        ],
+        [
+          "commander",
+          "командир"
+        ]
       ]
     }
   ],
@@ -44,7 +58,9 @@
       "severity": "critical",
       "priority": 100,
       "action": "warn",
-      "all_of": ["coordinate_ukraine_dd"],
+      "all_of": [
+        "coordinate_ukraine_dd"
+      ],
       "any_of": []
     }
   ],
@@ -65,7 +81,11 @@
           "вас кинули командири",
           "вас ніхто не евакуює"
         ],
-        ["volga", "lay down your weapons", "складайте зброю"]
+        [
+          "volga",
+          "lay down your weapons",
+          "складайте зброю"
+        ]
       ]
     },
     {
@@ -116,6 +136,29 @@
         "how many soldiers are there",
         "скинь координати підрозділу",
         "скільки у вас людей"
+      ]
+    },
+    {
+      "threat_key": "social_eng_ua_news_update_lure",
+      "reason_code": "military.social_eng.ua_news_update_lure",
+      "score": 0.86,
+      "threat_type": "military_social_eng",
+      "severity": "high",
+      "priority": 90,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "urgent school bulletin",
+          "official update channel",
+          "термінове оновлення"
+        ],
+        [
+          "secure-login",
+          "verify account",
+          "update-password",
+          "підтвердіть акаунт"
+        ]
       ]
     }
   ]

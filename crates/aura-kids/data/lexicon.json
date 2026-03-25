@@ -139,6 +139,42 @@
         "you're imagining things",
         "ти все вигадуєш"
       ]
+    },
+    {
+      "threat_key": "manipulation_mumin_suicide_coercion",
+      "reason_code": "kids.manipulation.mumin_suicide_coercion",
+      "score": 0.9,
+      "threat_type": "manipulation",
+      "severity": "high",
+      "priority": 94,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "if u block me ill end it",
+          "если заблочишь я покончу с этим",
+          "якщо заблочиш я закінчу це все"
+        ],
+        [
+          "if you leave me",
+          "если ты уйдешь",
+          "якщо ти підеш"
+        ]
+      ]
+    },
+    {
+      "threat_key": "bullying_bluff_group_rejection",
+      "reason_code": "kids.bullying.bluff_group_rejection",
+      "score": 0.82,
+      "threat_type": "bullying",
+      "severity": "high",
+      "priority": 88,
+      "all_of": [],
+      "any_of": [
+        "чого ти взагалі тут",
+        "вали з нашого класу",
+        "ніхто тебе тут не хоче"
+      ]
     }
   ]
 }

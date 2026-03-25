@@ -143,12 +143,27 @@ pub fn parse_realistic_chat_bundle(json: &str) -> Result<RealisticChatBundle, St
 }
 
 pub fn pre_release_realistic_chat_gates() -> ScenarioQualityGates {
+    wave1_transitional_realistic_chat_gates()
+}
+
+pub fn wave1_transitional_realistic_chat_gates() -> ScenarioQualityGates {
     ScenarioQualityGates {
         max_brier_score: Some(0.32),
         max_expected_calibration_error: Some(0.36),
         min_positive_detection_rate: Some(0.75),
         max_negative_false_positive_rate: Some(0.05),
         min_pre_onset_detection_rate: Some(0.20),
+        per_threat: Vec::new(),
+    }
+}
+
+pub fn wave1_target_realistic_chat_gates() -> ScenarioQualityGates {
+    ScenarioQualityGates {
+        max_brier_score: Some(0.28),
+        max_expected_calibration_error: Some(0.30),
+        min_positive_detection_rate: Some(0.82),
+        max_negative_false_positive_rate: Some(0.04),
+        min_pre_onset_detection_rate: Some(0.25),
         per_threat: Vec::new(),
     }
 }
@@ -771,5 +786,29 @@ mod tests {
                 "age-band eval slice {slice} failed: {report:?}"
             );
         }
+    }
+
+    #[test]
+    fn wave1_target_realistic_gates_are_stricter_than_transitional() {
+        let transitional = wave1_transitional_realistic_chat_gates();
+        let target = wave1_target_realistic_chat_gates();
+
+        assert!(target.max_brier_score.unwrap() < transitional.max_brier_score.unwrap());
+        assert!(
+            target.max_expected_calibration_error.unwrap()
+                < transitional.max_expected_calibration_error.unwrap()
+        );
+        assert!(
+            target.min_positive_detection_rate.unwrap()
+                > transitional.min_positive_detection_rate.unwrap()
+        );
+        assert!(
+            target.max_negative_false_positive_rate.unwrap()
+                < transitional.max_negative_false_positive_rate.unwrap()
+        );
+        assert!(
+            target.min_pre_onset_detection_rate.unwrap()
+                > transitional.min_pre_onset_detection_rate.unwrap()
+        );
     }
 }

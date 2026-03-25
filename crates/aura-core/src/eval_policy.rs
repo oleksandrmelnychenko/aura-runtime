@@ -84,10 +84,23 @@ pub fn canonical_policy_action_expectations() -> Vec<ScenarioPolicyExpectation> 
 }
 
 pub fn pre_release_policy_action_gates() -> PolicyActionQualityGates {
+    wave1_transitional_policy_action_gates()
+}
+
+pub fn wave1_transitional_policy_action_gates() -> PolicyActionQualityGates {
     PolicyActionQualityGates {
         min_scenario_pass_rate: Some(0.80),
         min_required_any_coverage: Some(0.85),
         min_required_by_onset_coverage: Some(0.75),
+        max_forbidden_violation_rate: Some(0.0),
+    }
+}
+
+pub fn wave1_target_policy_action_gates() -> PolicyActionQualityGates {
+    PolicyActionQualityGates {
+        min_scenario_pass_rate: Some(0.90),
+        min_required_any_coverage: Some(0.92),
+        min_required_by_onset_coverage: Some(0.85),
         max_forbidden_violation_rate: Some(0.0),
     }
 }
@@ -478,6 +491,28 @@ mod tests {
                 .filter(|scenario| !scenario.passed)
                 .collect::<Vec<_>>(),
             report.checks
+        );
+    }
+
+    #[test]
+    fn wave1_target_policy_gates_are_stricter_than_transitional() {
+        let transitional = wave1_transitional_policy_action_gates();
+        let target = wave1_target_policy_action_gates();
+
+        assert!(
+            target.min_scenario_pass_rate.unwrap() > transitional.min_scenario_pass_rate.unwrap()
+        );
+        assert!(
+            target.min_required_any_coverage.unwrap()
+                > transitional.min_required_any_coverage.unwrap()
+        );
+        assert!(
+            target.min_required_by_onset_coverage.unwrap()
+                > transitional.min_required_by_onset_coverage.unwrap()
+        );
+        assert_eq!(
+            target.max_forbidden_violation_rate,
+            transitional.max_forbidden_violation_rate
         );
     }
 }

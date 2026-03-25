@@ -15,6 +15,7 @@ pub mod batch;
 pub mod boundary;
 pub mod cache;
 pub mod cascade;
+pub mod dataset_adapters;
 pub mod gate;
 pub mod integrity;
 pub mod intent;
@@ -30,6 +31,11 @@ pub mod toxicity;
 pub mod types;
 
 pub use backend::{GateModel, SentimentBackend, ToxicityBackend};
+pub use dataset_adapters::{
+    compare_rule_only_vs_rule_plus_ml, parse_koalaai_adapter_records,
+    parse_sensitive_content_adapter_records, Wave1AdapterComparison, Wave1DatasetSource,
+    Wave1TrainingExample,
+};
 pub use pipeline::MlPipeline;
 pub use tokenizer::WordPieceTokenizer;
 pub use tokenizer_sp::{AnyTokenizer, SentencePieceTokenizer, Tokenizer};

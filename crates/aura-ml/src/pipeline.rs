@@ -5,6 +5,7 @@ use tracing::{debug, info};
 use crate::backend::{GateModel, SentimentBackend, ToxicityBackend};
 use crate::cache::{self, InferenceCache};
 use crate::cascade::{CascadeDecision, CascadePolicy};
+use crate::dataset_adapters::{compare_rule_only_vs_rule_plus_ml, Wave1AdapterComparison};
 use crate::gate::LexiconGate;
 use crate::integrity;
 use crate::intent::IntentClassifier;
@@ -211,6 +212,29 @@ impl MlPipeline {
 
     pub fn cache_hit_rate(&self) -> f32 {
         self.cache.hit_rate()
+    }
+
+    pub fn compare_rule_only_vs_rule_plus_ml_opt_in(
+        &mut self,
+        texts: &[&str],
+        rule_only_scores: &[f32],
+    ) -> Result<Wave1AdapterComparison, String> {
+        if texts.len() != rule_only_scores.len() {
+            return Err(format!(
+                "texts and rule_only_scores length mismatch: {} vs {}",
+                texts.len(),
+                rule_only_scores.len()
+            ));
+        }
+
+        let mut combined_scores = Vec::with_capacity(texts.len());
+        for (text, rule_score) in texts.iter().zip(rule_only_scores.iter().copied()) {
+            let result = self.analyze_text(text);
+            let ml_score = result.safety.as_ref().map_or(0.0, |safety| safety.max_risk());
+            combined_scores.push(rule_score.max(ml_score));
+        }
+
+        compare_rule_only_vs_rule_plus_ml(rule_only_scores, &combined_scores)
     }
 
     pub fn toxicity_threshold(&self) -> f32 {
@@ -623,5 +647,23 @@ mod tests {
         let safety = result.safety.unwrap();
         assert!(safety.self_harm >= 0.7);
         assert_eq!(safety.primary_label, Some(SafetyLabel::SelfHarm));
+    }
+
+    #[test]
+    fn wave1_opt_in_comparison_reports_delta() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            cascade_gate_threshold: 0.3,
+            ..Default::default()
+        });
+        let texts = ["I will kill you", "let's meet after school"];
+        let report = pipeline
+            .compare_rule_only_vs_rule_plus_ml_opt_in(&texts, &[0.35, 0.20])
+            .expect("wave1 comparison");
+
+        assert_eq!(report.sample_count, 2);
+        assert!(report.average_rule_plus_ml_score >= report.average_rule_only_score);
     }
 }

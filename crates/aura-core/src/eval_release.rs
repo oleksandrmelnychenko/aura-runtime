@@ -253,6 +253,9 @@ const EXTERNAL_REQUIRED_SLICES: &[RequiredSlice] = &[
     RequiredSlice::new("relationship", "group_peer"),
     RequiredSlice::new("relationship", "supportive_peer"),
     RequiredSlice::new("relationship", "trusted_adult"),
+    RequiredSlice::new("source_family", "bluff"),
+    RequiredSlice::new("source_family", "mumin"),
+    RequiredSlice::new("source_family", "ua_news"),
 ];
 
 pub fn default_release_support_thresholds() -> ReleaseSupportThresholds {
@@ -293,6 +296,55 @@ fn external_slice_policy() -> SuiteSliceSupportPolicy {
     SuiteSliceSupportPolicy {
         default_enforcement: SupportEnforcement::ReportOnly,
         required_slices: EXTERNAL_REQUIRED_SLICES,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Wave1RollbackDecision {
+    pub should_rollback: bool,
+    pub reasons: Vec<String>,
+}
+
+pub fn evaluate_wave1_rollback_criteria(report: &PreReleaseReport) -> Wave1RollbackDecision {
+    let mut reasons = Vec::new();
+
+    if report.overall_status != ReleaseStatus::Pass {
+        reasons.push("overall_release_status_not_pass".to_string());
+    }
+
+    for suite in &report.suites {
+        if suite.status != ReleaseStatus::Pass {
+            reasons.push(format!("suite_failed:{}", suite.suite_id));
+        }
+        if !suite.missing_required_slices.is_empty() {
+            reasons.push(format!(
+                "missing_required_slices:{}:{}",
+                suite.suite_id,
+                suite.missing_required_slices.join(",")
+            ));
+        }
+
+        for slice in &suite.slices {
+            if slice.support_enforcement == SupportEnforcement::ReleaseBlocking
+                && slice.status != ReleaseStatus::Pass
+            {
+                reasons.push(format!(
+                    "blocking_slice_failed:{}:{}:{}",
+                    suite.suite_id, slice.group, slice.slice_id
+                ));
+            }
+        }
+    }
+
+    for drift in &report.drift_checks {
+        if drift.status != ReleaseStatus::Pass {
+            reasons.push(format!("drift_failed:{}", drift.comparison_id));
+        }
+    }
+
+    Wave1RollbackDecision {
+        should_rollback: !reasons.is_empty(),
+        reasons,
     }
 }
 
@@ -1671,5 +1723,38 @@ mod tests {
         assert!(json.contains("missing_required_slices"));
         assert!(json.contains("release_blocking_ready"));
         assert_eq!(report.schema_version, RELEASE_REPORT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn external_required_slices_include_wave1_source_families() {
+        let required = EXTERNAL_REQUIRED_SLICES
+            .iter()
+            .map(|slice| format!("{}:{}", slice.group, slice.slice_id))
+            .collect::<Vec<_>>();
+
+        assert!(required.contains(&"source_family:bluff".to_string()));
+        assert!(required.contains(&"source_family:mumin".to_string()));
+        assert!(required.contains(&"source_family:ua_news".to_string()));
+    }
+
+    #[test]
+    fn wave1_rollback_criteria_flags_failed_report() {
+        let report = PreReleaseReport {
+            schema_version: RELEASE_REPORT_SCHEMA_VERSION,
+            generated_at_utc: "2026-03-24T00:00:00Z".to_string(),
+            runtime_version: "test".to_string(),
+            support_thresholds: default_release_support_thresholds(),
+            drift_thresholds: default_release_drift_thresholds(),
+            overall_status: ReleaseStatus::Fail,
+            suites: Vec::new(),
+            drift_checks: Vec::new(),
+        };
+
+        let decision = evaluate_wave1_rollback_criteria(&report);
+        assert!(decision.should_rollback);
+        assert!(decision
+            .reasons
+            .iter()
+            .any(|reason| reason == "overall_release_status_not_pass"));
     }
 }
