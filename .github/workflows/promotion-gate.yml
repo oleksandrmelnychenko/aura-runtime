@@ -40,6 +40,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Lint Domain Lexicons
+      run: python3 ci/lint_lexicons.py
     - name: Resolve Promotion Target
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then

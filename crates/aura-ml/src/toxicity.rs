@@ -36,6 +36,7 @@ pub struct ToxicityClassifier {
     tokenizer: Option<WordPieceTokenizer>,
     fallback_enabled: bool,
     fallback_matcher: Option<FallbackMatcher>,
+    primary_label_threshold: f32,
 }
 
 impl ToxicityClassifier {
@@ -59,6 +60,7 @@ impl ToxicityClassifier {
             tokenizer: Some(tokenizer),
             fallback_enabled: true,
             fallback_matcher: Some(Self::build_fallback_matcher()),
+            primary_label_threshold: 0.5,
         })
     }
 
@@ -71,7 +73,12 @@ impl ToxicityClassifier {
             tokenizer: None,
             fallback_enabled: true,
             fallback_matcher: Some(Self::build_fallback_matcher()),
+            primary_label_threshold: 0.5,
         }
+    }
+
+    pub fn set_primary_label_threshold(&mut self, threshold: f32) {
+        self.primary_label_threshold = threshold.clamp(0.0, 1.0);
     }
 
     pub fn predict(&mut self, text: &str) -> Option<ToxicityPrediction> {
@@ -159,7 +166,7 @@ impl ToxicityClassifier {
 
                 primary_label: None,
             };
-            pred.primary_label = pred.compute_primary_label(0.5);
+            pred.primary_label = pred.compute_primary_label(self.primary_label_threshold);
             Ok(pred)
         } else {
             Err(MlError::InferenceFailed(format!(
@@ -582,7 +589,7 @@ impl ToxicityClassifier {
             threat,
             primary_label: None,
         };
-        pred.primary_label = pred.compute_primary_label(0.4);
+        pred.primary_label = pred.compute_primary_label(self.primary_label_threshold);
         pred
     }
 }
@@ -626,6 +633,14 @@ mod tests {
             .unwrap();
         assert!(pred.toxicity >= 0.4);
         assert!(pred.insult >= 0.4);
+    }
+
+    #[test]
+    fn fallback_primary_label_respects_configured_threshold() {
+        let mut classifier = ToxicityClassifier::fallback_only();
+        classifier.set_primary_label_threshold(0.6);
+        let pred = classifier.predict("idiot").unwrap();
+        assert_eq!(pred.primary_label, None);
     }
 
     #[test]

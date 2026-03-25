@@ -17,11 +17,14 @@ enum AccountType {
   ACCOUNT_TYPE_CHILD = 3;
 }
 
-enum AuraModule {
-  AURA_MODULE_UNSPECIFIED = 0;
-  AURA_MODULE_CORE_ONLY = 1;
-  AURA_MODULE_KIDS = 2;
-  AURA_MODULE_MILITARY = 3;
+enum DomainMode {
+  DOMAIN_MODE_UNSPECIFIED = 0;
+  // Base Aura only (no domain extension).
+  DOMAIN_MODE_NONE = 1;
+  // Base Aura + Kids domain extension.
+  DOMAIN_MODE_KIDS = 2;
+  // Base Aura + Military domain extension.
+  DOMAIN_MODE_MILITARY = 3;
 }
 
 enum CulturalContextKind {
@@ -291,7 +294,8 @@ message AuraConfig {
   optional uint32 account_holder_age = 8;
   uint32 ttl_days = 9;
   int32 timezone_offset_minutes = 10;
-  AuraModule active_module = 11;
+  // Account-level domain mode and the only effective domain selector.
+  DomainMode domain_mode = 11;
 }
 
 message MessageInput {

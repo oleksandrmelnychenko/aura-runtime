@@ -1,8 +1,10 @@
 use aho_corasick::AhoCorasick;
+#[cfg(feature = "onnx")]
 use tracing::debug;
 
 #[cfg(feature = "onnx")]
 use crate::tokenizer::WordPieceTokenizer;
+#[cfg(feature = "onnx")]
 use crate::toxicity::MlError;
 use crate::types::SafetyPrediction;
 
@@ -196,6 +198,7 @@ impl SafetyClassifier {
     }
 }
 
+#[cfg(feature = "onnx")]
 fn sigmoid(x: f32) -> f32 {
     1.0 / (1.0 + (-x).exp())
 }

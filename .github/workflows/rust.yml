@@ -29,6 +29,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Lint Domain Lexicons
+      run: python3 ci/lint_lexicons.py
     - name: Build
       run: cargo build --workspace --all-features --all-targets --verbose
     - name: Run tests

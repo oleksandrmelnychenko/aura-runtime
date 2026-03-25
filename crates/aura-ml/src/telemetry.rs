@@ -12,23 +12,23 @@ const RING_SIZE: usize = 1024;
 /// A single inference telemetry event.
 #[derive(Debug, Clone, Copy)]
 struct InferenceEvent {
-    timestamp_ms: u64,
-    latency_us: u32,
-    tier: CascadeTier,
-    cache_hit: bool,
-    toxicity_score: f32,
-    safety_score: f32,
+    _timestamp_ms: u64,
+    _latency_us: u32,
+    _tier: CascadeTier,
+    _cache_hit: bool,
+    _toxicity_score: f32,
+    _safety_score: f32,
 }
 
 impl Default for InferenceEvent {
     fn default() -> Self {
         Self {
-            timestamp_ms: 0,
-            latency_us: 0,
-            tier: CascadeTier::Gate,
-            cache_hit: false,
-            toxicity_score: 0.0,
-            safety_score: 0.0,
+            _timestamp_ms: 0,
+            _latency_us: 0,
+            _tier: CascadeTier::Gate,
+            _cache_hit: false,
+            _toxicity_score: 0.0,
+            _safety_score: 0.0,
         }
     }
 }
@@ -75,12 +75,12 @@ impl InferenceTelemetry {
         safety_score: f32,
     ) {
         self.ring[self.write_pos] = InferenceEvent {
-            timestamp_ms,
-            latency_us,
-            tier,
-            cache_hit,
-            toxicity_score,
-            safety_score,
+            _timestamp_ms: timestamp_ms,
+            _latency_us: latency_us,
+            _tier: tier,
+            _cache_hit: cache_hit,
+            _toxicity_score: toxicity_score,
+            _safety_score: safety_score,
         };
         self.write_pos = (self.write_pos + 1) % RING_SIZE;
         self.total_events += 1;
@@ -139,7 +139,7 @@ fn histogram_bucket(latency_us: u32) -> usize {
 }
 
 fn percentile_from_histogram(histogram: &[u64; 13], total: u64, percentile: f64) -> u32 {
-    let target = (total as f64 * percentile) as u64;
+    let target = ((total as f64 * percentile).ceil() as u64).max(1);
     let mut cumulative = 0u64;
     for (i, &count) in histogram.iter().enumerate() {
         cumulative += count;
@@ -242,5 +242,13 @@ mod tests {
         assert_eq!(summary.total_inferences, 2000);
         // Summary should be based on last 1024 events
         assert!(summary.p50_latency_us >= 1000);
+    }
+
+    #[test]
+    fn percentile_uses_single_event_bucket() {
+        let mut telemetry = InferenceTelemetry::new();
+        telemetry.record(0, 5_000, CascadeTier::Deep, false, 0.0, 0.0);
+        let summary = telemetry.summary();
+        assert!(summary.p50_latency_us >= 5_000);
     }
 }

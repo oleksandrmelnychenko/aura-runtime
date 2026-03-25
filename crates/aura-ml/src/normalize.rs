@@ -26,11 +26,6 @@ fn strip_zero_width(text: &str) -> String {
         .collect()
 }
 
-fn is_cyrillic(c: char) -> bool {
-    let cp = c as u32;
-    (0x0400..=0x04FF).contains(&cp) || (0x0500..=0x052F).contains(&cp)
-}
-
 fn is_latin(c: char) -> bool {
     c.is_ascii_alphabetic() || (c as u32 >= 0x00C0 && c as u32 <= 0x024F)
 }

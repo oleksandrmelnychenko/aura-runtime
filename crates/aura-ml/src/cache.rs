@@ -41,19 +41,23 @@ impl InferenceCache {
     /// Looks up a cached result by text hash.
     pub fn get(&mut self, text_hash: u64) -> Option<&MlResult> {
         let now = Instant::now();
-        let Some(entry) = self.entries.get_mut(&text_hash) else {
+        let Some(existing) = self.entries.get(&text_hash) else {
             self.misses += 1;
             return None;
         };
-        if now.duration_since(entry.inserted_at) > self.ttl {
+        if now.duration_since(existing.inserted_at) > self.ttl {
             self.entries.remove(&text_hash);
             self.misses += 1;
             return None;
         }
+        let Some(entry) = self.entries.get_mut(&text_hash) else {
+            self.misses += 1;
+            return None;
+        };
         entry.access_order = self.next_order;
         self.next_order += 1;
         self.hits += 1;
-        Some(&self.entries[&text_hash].result)
+        Some(&entry.result)
     }
 
     /// Inserts a result into the cache, evicting the LRU entry if at capacity.

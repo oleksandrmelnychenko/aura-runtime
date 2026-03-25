@@ -92,7 +92,8 @@ impl MlPipeline {
 
     pub fn analyze_text(&mut self, text: &str) -> MlResult {
         let start = Instant::now();
-        let text_hash = cache::text_hash(text);
+        let text = normalize_for_ml(text);
+        let text_hash = cache::text_hash(&text);
 
         if let Some(cached) = self.cache.get(text_hash) {
             let mut result = cached.clone();
@@ -102,7 +103,6 @@ impl MlPipeline {
             self.record_telemetry(&result, true);
             return result;
         }
-        let text = normalize_for_ml(text);
 
         let gate_score = self.gate.gate_score(&text);
         let decision = self.cascade.decide(gate_score);
@@ -251,7 +251,10 @@ impl MlPipeline {
                             tokenizer,
                             config.intra_threads,
                         ) {
-                            Ok(classifier) => return Box::new(classifier),
+                            Ok(mut classifier) => {
+                                classifier.set_primary_label_threshold(config.toxicity_threshold);
+                                return Box::new(classifier);
+                            }
                             Err(e) => {
                                 tracing::warn!("Failed to load toxicity ONNX model: {e}");
                             }
@@ -264,7 +267,9 @@ impl MlPipeline {
             }
         }
 
-        Box::new(ToxicityClassifier::fallback_only())
+        let mut classifier = ToxicityClassifier::fallback_only();
+        classifier.set_primary_label_threshold(config.toxicity_threshold);
+        Box::new(classifier)
     }
 
     #[allow(unused_variables)]
@@ -534,8 +539,9 @@ mod tests {
             cascade_gate_threshold: 0.3,
             ..Default::default()
         });
-        let result =
-            pipeline.analyze_text("d\u{200B}on't tell your parents, l\u{200B}et's m\u{200B}e\u{200B}et in secret");
+        let result = pipeline.analyze_text(
+            "d\u{200B}on't tell your parents, l\u{200B}et's m\u{200B}e\u{200B}et in secret",
+        );
 
         assert_eq!(result.tier, CascadeTier::Deep);
         let safety = result.safety.unwrap();
@@ -568,6 +574,21 @@ mod tests {
         let r1 = pipeline.analyze_text("I will kill you");
         assert!(!r1.cache_hit);
         let r2 = pipeline.analyze_text("I will kill you");
+        assert!(r2.cache_hit);
+        assert_eq!(r2.tier, CascadeTier::Cached);
+    }
+
+    #[test]
+    fn cache_uses_normalized_text_key() {
+        let mut pipeline = MlPipeline::new(MlConfig {
+            use_fallback: true,
+            warmup_on_init: false,
+            cascade_enabled: true,
+            ..Default::default()
+        });
+        let r1 = pipeline.analyze_text("I will kill you");
+        assert!(!r1.cache_hit);
+        let r2 = pipeline.analyze_text("I w\u{200B}ill k\u{200B}ill you");
         assert!(r2.cache_hit);
         assert_eq!(r2.tier, CascadeTier::Cached);
     }
