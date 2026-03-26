@@ -12,6 +12,7 @@ just verify-full
 just verify-onnx
 just kids-memory-health
 just kids-preprod-dry-run
+just kids-memory-health-strict
 ```
 
 ## Core Release Gates
@@ -109,4 +110,10 @@ python ci/kids_preprod_dry_run_matrix.py \
   --realistic-cases crates/aura-core/data/realistic_chat_cases.json \
   --kids-memory-health artifacts/kids-memory-health.json \
   --output artifacts/kids-preprod-dry-run-matrix.json
+```
+
+End-to-end strict stress rehearsal (recommended before promotion windows):
+
+```bash
+just kids-memory-health-strict
 ```

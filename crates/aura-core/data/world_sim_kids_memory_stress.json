@@ -1,0 +1,110 @@
+{
+  "label": "kids_memory_strict_stress_pack",
+  "description": "Targeted strict-profile stress simulation to emit all mandatory kids.memory.* escalation reasons.",
+  "owner": {
+    "id": "child_owner",
+    "display_name": "Child Owner",
+    "age": 13
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "en",
+    "timezone_offset_minutes": 0,
+    "account_holder_age": 13
+  },
+  "actors": [
+    {
+      "id": "child_owner",
+      "display_name": "Child Owner"
+    },
+    {
+      "id": "victim_a",
+      "display_name": "Victim A"
+    },
+    {
+      "id": "attacker_repeat",
+      "display_name": "Attacker Repeat"
+    },
+    {
+      "id": "bully_1",
+      "display_name": "Bully 1"
+    },
+    {
+      "id": "bully_2",
+      "display_name": "Bully 2"
+    },
+    {
+      "id": "victim_b",
+      "display_name": "Victim B"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "conv_victim_target",
+      "display_name": "Victim Target Direct",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "conv_repeat_second",
+      "display_name": "Repeat Offender Direct",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "conv_bullying_cascade",
+      "display_name": "Bullying Cascade Group",
+      "conversation_type": "group",
+      "member_count": 6
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-03-26T09:00:00Z",
+      "sender_id": "victim_a",
+      "conversation_id": "conv_victim_target",
+      "text": "there is no reason to live anymore."
+    },
+    {
+      "at": "2026-03-26T09:01:00Z",
+      "sender_id": "attacker_repeat",
+      "conversation_id": "conv_victim_target",
+      "text": "our little secret. if u dont do this ill share."
+    },
+    {
+      "at": "2026-03-26T09:02:00Z",
+      "sender_id": "attacker_repeat",
+      "conversation_id": "conv_victim_target",
+      "text": "dont tell anyone. if u dont do this ill share."
+    },
+    {
+      "at": "2026-03-26T09:03:00Z",
+      "sender_id": "attacker_repeat",
+      "conversation_id": "conv_repeat_second",
+      "text": "don't tell your parents. i have your photo."
+    },
+    {
+      "at": "2026-03-26T09:10:00Z",
+      "sender_id": "bully_1",
+      "conversation_id": "conv_bullying_cascade",
+      "conversation_type": "group",
+      "member_count": 6,
+      "text": "you're worthless. nobody likes you."
+    },
+    {
+      "at": "2026-03-26T09:11:00Z",
+      "sender_id": "bully_2",
+      "conversation_id": "conv_bullying_cascade",
+      "conversation_type": "group",
+      "member_count": 6,
+      "text": "everyone hates you. all of us hate you."
+    },
+    {
+      "at": "2026-03-26T09:12:00Z",
+      "sender_id": "victim_b",
+      "conversation_id": "conv_bullying_cascade",
+      "conversation_type": "group",
+      "member_count": 6,
+      "text": "there is no reason to live anymore."
+    }
+  ]
+}

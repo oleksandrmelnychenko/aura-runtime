@@ -13,7 +13,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
+  AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_kids_memory_stress.json
   AURA_PILOT_SHADOW_BUNDLE_PATH_A: artifacts/pilot-shadow-run-a.json
   AURA_PILOT_SHADOW_BUNDLE_PATH_B: artifacts/pilot-shadow-run-b.json
   AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
