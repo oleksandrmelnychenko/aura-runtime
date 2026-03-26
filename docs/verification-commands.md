@@ -89,3 +89,8 @@ Run the scheduled CI workflow manually (strict mode):
 ```bash
 gh workflow run kids-memory-health.yml -f require_mandatory_reasons=true
 ```
+
+Reference strict readiness contracts:
+
+- `docs/kids-strict-scenario-matrix.md`
+- `docs/kids-memory-operational-targets.md`

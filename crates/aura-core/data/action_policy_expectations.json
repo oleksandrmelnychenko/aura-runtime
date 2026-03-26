@@ -53,6 +53,24 @@
       "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
     },
     {
+      "scenario_name": "sustained_sextortion_progression",
+      "required_any": ["suggest_block_contact", "suggest_report"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "bullying_selfharm_cascade",
+      "required_any": ["show_crisis_support", "escalate_to_guardian"],
+      "required_by_onset": ["show_crisis_support"],
+      "forbidden_any": ["confirm_before_open_link"]
+    },
+    {
+      "scenario_name": "noisy_shorthand_grooming",
+      "required_any": ["suggest_block_contact", "restrict_unknown_contact"],
+      "required_by_onset": ["suggest_block_contact"],
+      "forbidden_any": ["show_crisis_support", "confirm_before_open_link"]
+    },
+    {
       "scenario_name": "mixed_language_grooming",
       "required_any": ["suggest_block_contact", "restrict_unknown_contact"],
       "required_by_onset": ["suggest_block_contact"],

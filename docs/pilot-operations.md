@@ -37,7 +37,10 @@ Every pilot gate requires one latest signoff for each area:
 - `self_harm_boundary_cases`
 - `trusted_adult_scenarios`
 - `reputation_image_abuse`
-- `military_propaganda_opsec_psyops`
+
+`pilot_gate` enforces these four areas. Military/propaganda/opsec/psyops review
+remains required as a parallel operator checklist, but it is not part of the
+current `pilot_gate` enum contract.
 
 Statuses:
 
@@ -88,6 +91,7 @@ Recommended cadence:
 - daily for the first 7 pilot days
 - every 3 days after stability is established
 - immediate re-review after any regression, rollback, or policy retune
+- weekly strict KIDS memory trend review before promotion windows
 
 Minimum owners:
 
@@ -116,6 +120,11 @@ gh workflow run kids-memory-health.yml -f require_mandatory_reasons=true
 
 If strict mode is not enabled, missing mandatory reason codes are reported as
 `warn` in the health snapshot and the job still completes.
+
+Strict baseline and rollback thresholds:
+
+- [KIDS Strict Scenario Matrix](./kids-strict-scenario-matrix.md)
+- [KIDS Memory Operational Targets](./kids-memory-operational-targets.md)
 
 ## Rollback Triggers
 

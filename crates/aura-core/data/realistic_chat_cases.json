@@ -4,7 +4,7 @@
   "dataset_label": "AURA Realistic Chat Corpus",
   "maintainer": "aura_core_team",
   "created_at_ms": 1773100800000,
-  "updated_at_ms": 1773492300000,
+  "updated_at_ms": 1773583200000,
   "cases": [
     {
       "id": "realistic_en_stranger_secret_platform_switch",
@@ -1883,6 +1883,99 @@
         {
           "text": "im not in danger tonight, i just need rest and support",
           "sender_id": "self_safe_6"
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_sustained_sextortion_progression",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "stranger",
+      "primary_threat": "manipulation",
+      "tracked_threats": ["manipulation", "grooming"],
+      "detection_threshold": 0.60,
+      "onset_step": 1,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "sustained_sextortion_progression",
+      "messages": [
+        {
+          "text": "our little secret. if u dont do this ill share.",
+          "sender_id": "sx_repeat_1",
+          "observed_threats": ["manipulation", "grooming"]
+        },
+        {
+          "text": "dont tell anyone. if u dont do this ill share.",
+          "sender_id": "sx_repeat_1",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "last warning before i share this with your class.",
+          "sender_id": "sx_repeat_1",
+          "observed_threats": ["manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_group_bullying_selfharm_cascade",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group_chat",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["bullying", "self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 3,
+      "step_interval_ms": 60000,
+      "policy_expectation_case": "bullying_selfharm_cascade",
+      "messages": [
+        {
+          "text": "ти тут зайвий, ніхто тебе не хоче в цьому чаті",
+          "sender_id": "bully_mix_1",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "всі тебе ненавидять, просто зникни",
+          "sender_id": "bully_mix_2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "після школи тобі кінець, ніхто не допоможе",
+          "sender_id": "bully_mix_3",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "я більше не можу, немає сенсу жити далі",
+          "sender_id": "victim_mix_1",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_obfuscated_grooming_evasion",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 2,
+      "step_interval_ms": 3600000,
+      "policy_expectation_case": "noisy_shorthand_grooming",
+      "messages": [
+        {
+          "text": "ur so mature for ur age, not like other kids fr",
+          "sender_id": "noisy_stranger_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "wh4t schoooool u go to? where u live??",
+          "sender_id": "noisy_stranger_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "msg me on in$ta rn, delete this ch4t",
+          "sender_id": "noisy_stranger_1",
+          "observed_threats": ["grooming"]
         }
       ]
     }

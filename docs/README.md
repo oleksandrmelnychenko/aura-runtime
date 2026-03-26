@@ -23,6 +23,8 @@ Status: synchronized with runtime and policy behavior on March 25, 2026.
 - [Continuation Handoff](./continuation-handoff.md)
 - [KIDS Memory Escalation Matrix](./kids-memory-escalation-matrix.md)
 - [KIDS Memory Incident Runbook](./kids-memory-incident-runbook.md)
+- [KIDS Strict Scenario Matrix](./kids-strict-scenario-matrix.md)
+- [KIDS Memory Operational Targets](./kids-memory-operational-targets.md)
 
 ## Product and Scenario Docs
 

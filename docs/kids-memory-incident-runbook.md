@@ -60,6 +60,8 @@ Each incident record must include:
 - commit SHA
 - release report and pilot regression report identifiers
 - affected reason codes and frequency table
+- `kids-memory-health` strict result (`overall_status`, `total_memory_hits`,
+  `missing_mandatory_reason_codes`)
 - conversation type split (`direct` vs `group`)
 - sender repeat/conversation-repeat metrics
 - decision outcome (`rollback`, `forward_fix`, `threshold_tune`)
@@ -68,6 +70,8 @@ Each incident record must include:
 
 - Add or update one regression test per root-cause pattern.
 - Update `docs/kids-memory-escalation-matrix.md` if semantics changed.
+- Re-check strict operational thresholds in:
+  - `docs/kids-memory-operational-targets.md`
 - Re-run KIDS gate checks before promotion:
   - `cargo test -p aura-kids`
   - `cargo run --quiet --example release_report -p aura-core -- --require-pass`

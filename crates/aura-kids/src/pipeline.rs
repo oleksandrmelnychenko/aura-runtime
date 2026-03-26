@@ -175,6 +175,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
             || has_reason_fragment(signals, "sextortion"),
     };
     let sender = input.sender_id.clone();
+    let sender_present = sender.is_some();
     let settings = profile_settings(input.risk_profile, input.conversation_type);
 
     let mut repeated_sender_grooming = 0usize;
@@ -200,7 +201,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
     }
 
     for (entry_sender, snapshot) in &memory.entries {
-        if *entry_sender == sender {
+        if sender_present && *entry_sender == sender {
             sender_message_count += 1;
             if snapshot.has_grooming {
                 repeated_sender_grooming += 1;
@@ -224,13 +225,14 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
             conversation_has_grooming = true;
         }
     }
-    let sender_is_new = sender_message_count <= settings.new_sender_message_max;
+    let sender_is_new = sender_present && sender_message_count <= settings.new_sender_message_max;
     let sender_risk_min = if sender_is_new {
         settings.sender_risk_min - settings.sender_risk_new_sender_delta
     } else {
         settings.sender_risk_min + settings.sender_risk_known_sender_delta
     };
-    if repeated_sender_grooming >= settings.grooming_progression_min
+    if sender_present
+        && repeated_sender_grooming >= settings.grooming_progression_min
         && current.has_manipulation
         && should_emit_memory_signal(memory, "grooming_progression", now_index, settings.cooldown_messages)
     {
@@ -246,7 +248,8 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
 
-    if repeated_sender_blackmail >= settings.sustained_sextortion_min
+    if sender_present
+        && repeated_sender_blackmail >= settings.sustained_sextortion_min
         && conversation_has_grooming
         && should_emit_memory_signal(memory, "sustained_sextortion", now_index, settings.cooldown_messages)
     {
@@ -283,7 +286,8 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
 
-    if sender_risk_score >= sender_risk_min
+    if sender_present
+        && sender_risk_score >= sender_risk_min
         && (current.has_grooming || current.has_manipulation || current.has_blackmail_or_sextortion)
         && should_emit_memory_signal(
             memory,
@@ -326,7 +330,8 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
 
-    if conversation_has_self_harm
+    if sender_present
+        && conversation_has_self_harm
         && (current.has_grooming || current.has_manipulation || current.has_blackmail_or_sextortion)
         && sender_risk_score >= settings.victim_targeting_sender_risk_min
         && should_emit_memory_signal(
@@ -616,6 +621,15 @@ mod tests {
         }
     }
 
+    fn has_reason(output: &aura_domain::DomainOutput, reason: &str) -> bool {
+        for signal in &output.signals {
+            if signal.reason_code == reason {
+                return true;
+            }
+        }
+        false
+    }
+
     #[test]
     fn pipeline_returns_multiple_grooming_hits_for_same_message() {
         let _guard = test_lock();
@@ -635,6 +649,66 @@ mod tests {
             }
         }
         assert!(grooming_hits >= 2);
+    }
+
+    #[test]
+    fn pipeline_does_not_emit_sender_memory_signals_without_sender_id() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let first = DomainInput {
+            text: Some("our little secret. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: None,
+            conversation_id: Some("conv_no_sender".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let second = DomainInput {
+            text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: None,
+            conversation_id: Some("conv_no_sender".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let _ = run_kids_pipeline(&first);
+        let output = run_kids_pipeline(&second);
+        assert!(!has_reason(&output, "kids.memory.grooming_progression"));
+        assert!(!has_reason(&output, "kids.memory.sustained_sextortion"));
+        assert!(!has_reason(&output, "kids.memory.sender_risk_accumulation"));
+        assert!(!has_reason(&output, "kids.memory.new_sender_fast_escalation"));
+        assert!(!has_reason(&output, "kids.memory.victim_vulnerability_targeting"));
+    }
+
+    #[test]
+    fn pipeline_does_not_emit_memory_signals_without_conversation_id() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let first = DomainInput {
+            text: Some("our little secret. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: Some("s1".to_string()),
+            conversation_id: None,
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let second = DomainInput {
+            text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: Some("s1".to_string()),
+            conversation_id: None,
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let _ = run_kids_pipeline(&first);
+        let output = run_kids_pipeline(&second);
+        for signal in &output.signals {
+            assert!(
+                !signal.reason_code.starts_with("kids.memory."),
+                "Expected no memory reason codes without conversation id, got {}",
+                signal.reason_code
+            );
+        }
     }
 
     #[test]
@@ -679,6 +753,38 @@ mod tests {
         let mut has_memory_signal = false;
         for signal in &output.signals {
             if signal.reason_code == "kids.memory.grooming_progression" {
+                has_memory_signal = true;
+            }
+        }
+        assert!(has_memory_signal);
+        assert_eq!(output.action, Some(DomainAction::Warn));
+    }
+
+    #[test]
+    fn pipeline_escalates_on_memory_sustained_sextortion() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let first = DomainInput {
+            text: Some("our little secret. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: Some("sx1".to_string()),
+            conversation_id: Some("conv_mem_sx".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let second = DomainInput {
+            text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: Some("sx1".to_string()),
+            conversation_id: Some("conv_mem_sx".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let _ = run_kids_pipeline(&first);
+        let output = run_kids_pipeline(&second);
+        let mut has_memory_signal = false;
+        for signal in &output.signals {
+            if signal.reason_code == "kids.memory.sustained_sextortion" {
                 has_memory_signal = true;
             }
         }

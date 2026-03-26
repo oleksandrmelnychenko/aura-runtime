@@ -13,3 +13,34 @@ pub fn detect_all(input: &DomainInput) -> Vec<DomainSignal> {
     };
     match_all_lexical_rules(text, lexicon::bullying_rules())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{detect, detect_all};
+    use aura_domain::{DomainConversationType, DomainInput, DomainRiskProfile};
+
+    fn input(text: &str) -> DomainInput {
+        DomainInput {
+            text: Some(text.to_string()),
+            language: Some("en".to_string()),
+            sender_id: Some("s1".to_string()),
+            conversation_id: Some("c1".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Group,
+        }
+    }
+
+    #[test]
+    fn detect_matches_bullying_phrase() {
+        let signal = detect(&input("nobody likes you"));
+        assert!(signal.is_some());
+    }
+
+    #[test]
+    fn detect_all_returns_multiple_bullying_hits() {
+        let signals = detect_all(&input(
+            "everyone hates you. we'll post this everywhere right now.",
+        ));
+        assert!(signals.len() >= 2);
+    }
+}

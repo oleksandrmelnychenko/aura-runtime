@@ -7,7 +7,9 @@ impl Analyzer {
         let start = Instant::now();
         let protection = self.config.effective_protection_level();
         let domain_mode = self.config.effective_domain_mode();
-        let domain_output = self.domain_runtime.analyze_for_mode(domain_mode, input);
+        let domain_output = self
+            .domain_runtime
+            .analyze_for_mode_with_protection(domain_mode, protection, input);
         let domain_signals = build_domain_detection_signals(domain_output.as_ref());
 
         if protection == ProtectionLevel::Off {
@@ -56,7 +58,9 @@ impl Analyzer {
         let start = Instant::now();
         let protection = self.config.effective_protection_level();
         let domain_mode = self.config.effective_domain_mode();
-        let domain_output = self.domain_runtime.analyze_for_mode(domain_mode, input);
+        let domain_output = self
+            .domain_runtime
+            .analyze_for_mode_with_protection(domain_mode, protection, input);
         let domain_signals = build_domain_detection_signals(domain_output.as_ref());
 
         if protection == ProtectionLevel::Off {

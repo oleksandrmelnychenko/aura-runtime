@@ -2757,6 +2757,15 @@ mod tests {
         }
     }
 
+    fn teen_kids_config() -> AuraConfig {
+        AuraConfig {
+            account_type: AccountType::Teen,
+            protection_level: ProtectionLevel::Medium,
+            domain_mode: DomainMode::Kids,
+            ..AuraConfig::default()
+        }
+    }
+
     fn military_config() -> AuraConfig {
         AuraConfig {
             account_type: AccountType::Adult,
@@ -2859,6 +2868,45 @@ mod tests {
                 .any(|code| code == "domain.kids.grooming.secrecy"),
             "Expected kids secrecy heuristic reason code, got {:?}",
             result.reason_codes
+        );
+    }
+
+    #[test]
+    fn kids_strict_runtime_profile_enables_memory_progression_in_analyzer() {
+        let db = test_db();
+        let seed = child_input(
+            "our little secret. don't tell your parents.",
+            "strict_sender",
+            "strict_conv",
+        );
+        let followup = child_input(
+            "you can only trust me. do it now or i post everything.",
+            "strict_sender",
+            "strict_conv",
+        );
+
+        let mut strict_analyzer = Analyzer::new(child_config(), &db);
+        let _ = strict_analyzer.analyze(&seed);
+        let strict_result = strict_analyzer.analyze(&followup);
+        assert!(
+            strict_result
+                .reason_codes
+                .iter()
+                .any(|code| code == "domain.kids.memory.grooming_progression"),
+            "Expected strict profile to emit memory progression reason code, got {:?}",
+            strict_result.reason_codes
+        );
+
+        let mut normal_analyzer = Analyzer::new(teen_kids_config(), &db);
+        let _ = normal_analyzer.analyze(&seed);
+        let normal_result = normal_analyzer.analyze(&followup);
+        assert!(
+            !normal_result
+                .reason_codes
+                .iter()
+                .any(|code| code == "domain.kids.memory.grooming_progression"),
+            "Expected normal profile to withhold memory progression on second message, got {:?}",
+            normal_result.reason_codes
         );
     }
 

@@ -95,6 +95,16 @@ mod tests {
     }
 
     #[test]
+    fn escalates_on_sustained_sextortion_reason_even_without_priority_or_critical() {
+        let signals = vec![signal(
+            Some(10),
+            Some("low"),
+            "kids.memory.sustained_sextortion",
+        )];
+        assert!(needs_guardian_escalation_with_priority(&signals, 92));
+    }
+
+    #[test]
     fn mandatory_reason_catalog_is_not_empty() {
         assert!(!mandatory_guardian_reason_codes().is_empty());
     }

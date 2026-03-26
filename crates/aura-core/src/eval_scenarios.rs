@@ -9,9 +9,12 @@ pub fn canonical_messenger_scenarios() -> Vec<ScenarioCase> {
         trusted_adult_grooming_case(),
         acute_selfharm_case(),
         group_bullying_case(),
+        bullying_selfharm_cascade_case(),
         coercive_control_password_pressure_case(),
         screenshot_blackmail_case(),
+        sustained_sextortion_progression_case(),
         image_based_abuse_escalation_case(),
+        noisy_shorthand_grooming_case(),
         phishing_link_case(),
         bystander_rescue_case(),
         negative_control_trusted_adult_case(),
@@ -1064,6 +1067,56 @@ pub fn group_bullying_case() -> ScenarioCase {
     }
 }
 
+pub fn bullying_selfharm_cascade_case() -> ScenarioCase {
+    let minute = 60_000_u64;
+    ScenarioCase {
+        name: "bullying_selfharm_cascade".to_string(),
+        config: child_config(),
+        primary_threat: Some(ThreatType::SelfHarm),
+        onset_step: Some(3),
+        detection_threshold: 0.70,
+        tracked_threats: vec![ThreatType::Bullying, ThreatType::SelfHarm],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: group_msg(
+                    "Nobody wants you in this chat. You're pathetic.",
+                    "bully_a",
+                    "class_8a",
+                ),
+                observed_threats: vec![ThreatType::Bullying],
+            },
+            ScenarioStep {
+                timestamp_ms: minute,
+                input: group_msg(
+                    "Everyone hates you. Just disappear already.",
+                    "bully_b",
+                    "class_8a",
+                ),
+                observed_threats: vec![ThreatType::Bullying],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * minute,
+                input: group_msg(
+                    "After school we will beat you, nobody will help.",
+                    "bully_c",
+                    "class_8a",
+                ),
+                observed_threats: vec![ThreatType::Bullying],
+            },
+            ScenarioStep {
+                timestamp_ms: 3 * minute,
+                input: group_msg(
+                    "I can't do this anymore, there is no reason to live.",
+                    "victim_8a",
+                    "class_8a",
+                ),
+                observed_threats: vec![ThreatType::SelfHarm],
+            },
+        ],
+    }
+}
+
 pub fn coercive_control_password_pressure_case() -> ScenarioCase {
     let hour = 3_600_000_u64;
     ScenarioCase {
@@ -1271,6 +1324,47 @@ pub fn screenshot_blackmail_case() -> ScenarioCase {
                     "I have screenshots and everyone will see this unless you listen.",
                     "blackmailer",
                     "blackmail_1",
+                ),
+                observed_threats: vec![ThreatType::Manipulation],
+            },
+        ],
+    }
+}
+
+pub fn sustained_sextortion_progression_case() -> ScenarioCase {
+    let hour = 3_600_000_u64;
+    ScenarioCase {
+        name: "sustained_sextortion_progression".to_string(),
+        config: child_config(),
+        primary_threat: Some(ThreatType::Manipulation),
+        onset_step: Some(1),
+        detection_threshold: 0.60,
+        tracked_threats: vec![ThreatType::Manipulation, ThreatType::Grooming],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: direct_msg(
+                    "our little secret. if u dont do this ill share.",
+                    "blackmailer_repeat",
+                    "sextortion_1",
+                ),
+                observed_threats: vec![ThreatType::Manipulation, ThreatType::Grooming],
+            },
+            ScenarioStep {
+                timestamp_ms: hour,
+                input: direct_msg(
+                    "dont tell anyone. if u dont do this ill share.",
+                    "blackmailer_repeat",
+                    "sextortion_1",
+                ),
+                observed_threats: vec![ThreatType::Manipulation],
+            },
+            ScenarioStep {
+                timestamp_ms: 2 * hour,
+                input: direct_msg(
+                    "last warning before i share this with your class.",
+                    "blackmailer_repeat",
+                    "sextortion_1",
                 ),
                 observed_threats: vec![ThreatType::Manipulation],
             },
