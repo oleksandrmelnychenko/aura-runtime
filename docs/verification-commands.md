@@ -83,3 +83,9 @@ python ci/kids_memory_health_snapshot.py \
   --output artifacts/kids-memory-health.json \
   --require-mandatory-reasons
 ```
+
+Run the scheduled CI workflow manually (strict mode):
+
+```bash
+gh workflow run kids-memory-health.yml -f require_mandatory_reasons=true
+```

@@ -1,0 +1,102 @@
+name: KIDS Memory Health
+
+on:
+  schedule:
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+    inputs:
+      require_mandatory_reasons:
+        description: Fail when mandatory kids.memory.* reasons are missing
+        required: false
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
+  AURA_PILOT_SHADOW_BUNDLE_PATH_A: artifacts/pilot-shadow-run-a.json
+  AURA_PILOT_SHADOW_BUNDLE_PATH_B: artifacts/pilot-shadow-run-b.json
+  AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
+  AURA_KIDS_MEMORY_HEALTH_PATH: artifacts/kids-memory-health.json
+
+jobs:
+  kids-memory-health:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 35
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build pilot shadow bundle A
+      run: |
+        cargo run --quiet --example world_sim -p aura-core -- \
+          --input "$AURA_PILOT_SHADOW_INPUT" \
+          --summary-only \
+          --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH_A" \
+          --require-clean
+    - name: Build pilot shadow bundle B
+      run: |
+        cargo run --quiet --example world_sim -p aura-core -- \
+          --input "$AURA_PILOT_SHADOW_INPUT" \
+          --summary-only \
+          --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH_B" \
+          --require-clean
+    - name: Build pilot regression report
+      run: |
+        cargo run --quiet --example pilot_regression -p aura-core -- \
+          --output "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          --require-pass
+    - name: Build KIDS memory health snapshot
+      run: |
+        STRICT_ARGS=""
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.require_mandatory_reasons }}" = "true" ]; then
+          STRICT_ARGS="--require-mandatory-reasons"
+        fi
+
+        python3 ci/kids_memory_health_snapshot.py \
+          --input "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          --input "$AURA_PILOT_SHADOW_BUNDLE_PATH_A" \
+          --input "$AURA_PILOT_SHADOW_BUNDLE_PATH_B" \
+          --output "$AURA_KIDS_MEMORY_HEALTH_PATH" \
+          $STRICT_ARGS
+    - name: Summarize KIDS memory health
+      if: ${{ always() }}
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        import pathlib
+
+        report_path = pathlib.Path(os.environ["AURA_KIDS_MEMORY_HEALTH_PATH"])
+        if not report_path.exists():
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+                summary.write("## KIDS Memory Health\n\n")
+                summary.write("- status: `missing`\n")
+                summary.write("- report: missing\n")
+            raise SystemExit(0)
+
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+            summary.write("## KIDS Memory Health\n\n")
+            summary.write(f"- overall_status: `{report.get('overall_status', 'missing')}`\n")
+            summary.write(f"- total_memory_hits: `{report.get('total_memory_hits', 0)}`\n")
+            summary.write(f"- input_count: `{len(report.get('inputs', []))}`\n")
+            missing = report.get("missing_mandatory_reason_codes", [])
+            summary.write(f"- missing_mandatory_reason_codes: `{len(missing)}`\n")
+            if missing:
+                summary.write("- missing_reason_list:\n")
+                for code in missing:
+                    summary.write(f"  - `{code}`\n")
+        PY
+    - name: Upload KIDS memory health artifacts
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-kids-memory-health
+        path: |
+          ${{ env.AURA_KIDS_MEMORY_HEALTH_PATH }}
+          ${{ env.AURA_PILOT_REGRESSION_REPORT_PATH }}
+          ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH_A }}
+          ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH_B }}
+        if-no-files-found: warn

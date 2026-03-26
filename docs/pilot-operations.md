@@ -95,6 +95,28 @@ Minimum owners:
 - one safety/product reviewer
 - one runtime/operator owner
 
+## Daily KIDS Memory Health Automation
+
+Daily monitoring is automated in GitHub Actions via:
+
+- `.github/workflows/kids-memory-health.yml`
+
+What it produces:
+
+- `artifacts/kids-memory-health.json`
+- `artifacts/pilot-regression-report.json`
+- `artifacts/pilot-shadow-run-a.json`
+- `artifacts/pilot-shadow-run-b.json`
+
+Manual run (with strict fail if mandatory reason codes are missing):
+
+```bash
+gh workflow run kids-memory-health.yml -f require_mandatory_reasons=true
+```
+
+If strict mode is not enabled, missing mandatory reason codes are reported as
+`warn` in the health snapshot and the job still completes.
+
 ## Rollback Triggers
 
 Current pilot rollback triggers are encoded in:
