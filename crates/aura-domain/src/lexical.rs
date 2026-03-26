@@ -96,13 +96,23 @@ pub fn contains_any(text: &str, phrases: &[&str]) -> bool {
 }
 
 pub fn match_lexical_rules(text: &str, rules: &[LexicalRuleRecord]) -> Option<DomainSignal> {
-    if text.is_empty() {
+    let hits = match_all_lexical_rules(text, rules);
+    if hits.is_empty() {
         return None;
     }
+    Some(hits[0].clone())
+}
+
+pub fn match_all_lexical_rules(text: &str, rules: &[LexicalRuleRecord]) -> Vec<DomainSignal> {
+    if text.is_empty() {
+        return Vec::new();
+    }
     let text = text.to_lowercase();
+    let compact_text = compact_for_lexical_match(&text);
+    let mut hits = Vec::new();
     for rule in rules {
-        if lexical_rule_matches(rule, &text) {
-            return Some(DomainSignal {
+        if lexical_rule_matches(rule, &text, &compact_text) {
+            hits.push(DomainSignal {
                 threat_key: rule.threat_key.clone(),
                 score: rule.score,
                 reason_code: rule.reason_code.clone(),
@@ -113,19 +123,19 @@ pub fn match_lexical_rules(text: &str, rules: &[LexicalRuleRecord]) -> Option<Do
             });
         }
     }
-    None
+    hits
 }
 
-fn lexical_rule_matches(rule: &LexicalRuleRecord, text: &str) -> bool {
+fn lexical_rule_matches(rule: &LexicalRuleRecord, text: &str, compact_text: &str) -> bool {
     for needle in &rule.all_of {
-        if !text.contains(needle) {
+        if !contains_needle(text, compact_text, needle) {
             return false;
         }
     }
     for group in &rule.any_groups {
         let mut group_matched = false;
         for needle in group {
-            if text.contains(needle) {
+            if contains_needle(text, compact_text, needle) {
                 group_matched = true;
                 break;
             }
@@ -138,11 +148,45 @@ fn lexical_rule_matches(rule: &LexicalRuleRecord, text: &str) -> bool {
         return true;
     }
     for needle in &rule.any_of {
-        if text.contains(needle) {
+        if contains_needle(text, compact_text, needle) {
             return true;
         }
     }
     false
+}
+
+fn contains_needle(text: &str, compact_text: &str, needle: &str) -> bool {
+    let needle = needle.to_lowercase();
+    if text.contains(&needle) {
+        return true;
+    }
+    let compact_needle = compact_for_lexical_match(&needle);
+    if compact_needle.is_empty() {
+        return false;
+    }
+    compact_text.contains(&compact_needle)
+}
+
+fn compact_for_lexical_match(text: &str) -> String {
+    let mut compact = String::new();
+    for ch in text.chars() {
+        let mapped = match ch {
+            '0' => 'o',
+            '1' => 'i',
+            '3' => 'e',
+            '4' => 'a',
+            '5' => 's',
+            '7' => 't',
+            '8' => 'b',
+            '@' => 'a',
+            '$' => 's',
+            _ => ch,
+        };
+        if mapped.is_alphanumeric() {
+            compact.push(mapped);
+        }
+    }
+    compact
 }
 
 pub fn validate_lexical_rules(rules: &[LexicalRuleRecord]) -> Result<(), String> {
@@ -270,7 +314,8 @@ fn parse_action_hint(action: Option<&str>) -> Option<DomainAction> {
 #[cfg(test)]
 mod tests {
     use super::{
-        match_lexical_rules, validate_lexical_rules, validate_schema_version, LexicalRuleRecord,
+        match_all_lexical_rules, match_lexical_rules, validate_lexical_rules, validate_schema_version,
+        LexicalRuleRecord,
     };
 
     #[test]
@@ -313,6 +358,79 @@ mod tests {
         }];
         let hit = match_lexical_rules("hi there", &rules);
         assert!(hit.is_none());
+    }
+
+    #[test]
+    fn matches_obfuscated_spacing_and_symbols() {
+        let rules = vec![LexicalRuleRecord {
+            threat_key: "x".to_string(),
+            reason_code: "x.reason".to_string(),
+            score: 0.8,
+            threat_type: Some("grooming".to_string()),
+            severity: Some("high".to_string()),
+            priority: Some(90),
+            action: None,
+            all_of: vec![],
+            any_of: vec!["dont tell your parents".to_string()],
+            any_groups: vec![],
+        }];
+        let hit = match_lexical_rules("d.o.n.t t3ll your parents", &rules);
+        assert!(hit.is_some());
+    }
+
+    #[test]
+    fn matches_obfuscated_group_requirement() {
+        let rules = vec![LexicalRuleRecord {
+            threat_key: "x".to_string(),
+            reason_code: "x.reason".to_string(),
+            score: 0.8,
+            threat_type: Some("manipulation".to_string()),
+            severity: Some("high".to_string()),
+            priority: Some(90),
+            action: None,
+            all_of: vec![],
+            any_of: vec![],
+            any_groups: vec![
+                vec!["i have your photo".to_string()],
+                vec!["do what i say or i post it".to_string()],
+            ],
+        }];
+        let hit = match_lexical_rules("i h@ve your ph0to. d o w h a t i s a y or i p0st it", &rules);
+        assert!(hit.is_some());
+    }
+
+    #[test]
+    fn returns_all_matching_rules_in_order() {
+        let rules = vec![
+            LexicalRuleRecord {
+                threat_key: "first".to_string(),
+                reason_code: "x.first".to_string(),
+                score: 0.8,
+                threat_type: Some("grooming".to_string()),
+                severity: Some("high".to_string()),
+                priority: Some(90),
+                action: None,
+                all_of: vec![],
+                any_of: vec!["hello".to_string()],
+                any_groups: vec![],
+            },
+            LexicalRuleRecord {
+                threat_key: "second".to_string(),
+                reason_code: "x.second".to_string(),
+                score: 0.7,
+                threat_type: Some("grooming".to_string()),
+                severity: Some("medium".to_string()),
+                priority: Some(70),
+                action: None,
+                all_of: vec![],
+                any_of: vec!["world".to_string()],
+                any_groups: vec![],
+            },
+        ];
+        let hits = match_all_lexical_rules("hello world", &rules);
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].reason_code, "x.first");
+        assert_eq!(hits[1].reason_code, "x.second");
     }
 
     #[test]

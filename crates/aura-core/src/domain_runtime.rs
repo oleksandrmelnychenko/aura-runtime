@@ -94,6 +94,11 @@ pub fn map_domain_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
     if rule_id.contains("kids.manipulation.blackmail") {
         return Some(EventKind::EmotionalBlackmail);
     }
+    if rule_id.contains("kids.manipulation.image_sextortion")
+        || rule_id.contains("kids.memory.sustained_sextortion")
+    {
+        return Some(EventKind::ScreenshotThreat);
+    }
     if rule_id.contains("kids.manipulation.gaslight") {
         return Some(EventKind::Gaslighting);
     }
@@ -108,6 +113,12 @@ pub fn map_domain_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
     }
     if rule_id.contains("kids.selfharm.coercion_compound") {
         return Some(EventKind::SuicideCoercion);
+    }
+    if rule_id.contains("kids.memory.grooming_progression") {
+        return Some(EventKind::SecrecyRequest);
+    }
+    if rule_id.contains("kids.memory.bullying_cascade_selfharm") {
+        return Some(EventKind::SuicidalIdeation);
     }
     if rule_id.contains("military.opsec.coordinate_compound") {
         return Some(EventKind::CoordinateMention);
@@ -1022,6 +1033,18 @@ mod tests {
         assert_eq!(
             map_domain_rule_to_event_kind("coercion_suicide_001"),
             Some(EventKind::SuicideCoercion)
+        );
+        assert_eq!(
+            map_domain_rule_to_event_kind("kids.manipulation.image_sextortion"),
+            Some(EventKind::ScreenshotThreat)
+        );
+        assert_eq!(
+            map_domain_rule_to_event_kind("kids.memory.grooming_progression"),
+            Some(EventKind::SecrecyRequest)
+        );
+        assert_eq!(
+            map_domain_rule_to_event_kind("kids.memory.bullying_cascade_selfharm"),
+            Some(EventKind::SuicidalIdeation)
         );
         assert_eq!(
             map_domain_rule_to_event_kind("identity_erosion_001"),

@@ -18,14 +18,22 @@
       "any_groups": [
         [
           "our little secret",
+          "our l1ttle secret",
           "don't tell your parents",
+          "dont tell your parents",
+          "d0n't tell your parents",
           "keep this between us",
+          "keep this btwn us",
           "нікому не кажи",
-          "це наш секрет"
+          "це наш секрет",
+          "не кажи батькам"
         ],
         [
           "send me a photo",
+          "send me pic",
+          "s3nd me a photo",
           "turn on your camera",
+          "turn ur camera on",
           "what do you wear to bed",
           "надішли фото",
           "увімкни камеру"
@@ -42,10 +50,13 @@
       "all_of": [],
       "any_of": [
         "our little secret",
+        "our l1ttle secret",
         "don't tell your parents",
+        "dont tell your parents",
         "keep this between us",
         "нікому не кажи",
-        "це наш секрет"
+        "це наш секрет",
+        "не кажи батькам"
       ]
     },
     {
@@ -60,13 +71,16 @@
       "any_groups": [
         [
           "you can only trust me",
+          "you can trust only me",
           "your friends are fake",
           "only i understand you",
           "довіряй тільки мені",
-          "твої друзі фейкові"
+          "твої друзі фейкові",
+          "лише я тебе розумію"
         ],
         [
           "don't talk to others",
+          "dont talk to others",
           "stop talking to your friends",
           "не спілкуйся з ними",
           "перестань писати друзям"
@@ -85,7 +99,9 @@
       "any_groups": [
         [
           "download telegram",
+          "d0wnload telegram",
           "move to private chat",
+          "move to priv chat",
           "switch to another app",
           "переходь у телеграм",
           "перейдемо в інший чат"
@@ -95,6 +111,35 @@
           "meet me tonight",
           "нікому не кажи і приходь",
           "зустрінемось сьогодні"
+        ]
+      ]
+    },
+    {
+      "threat_key": "grooming_age_gap_secret_relationship",
+      "reason_code": "kids.grooming.age_gap_secret_relationship",
+      "score": 0.91,
+      "threat_type": "grooming",
+      "severity": "high",
+      "priority": 98,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "i am 24",
+          "i am 25",
+          "i'm 24",
+          "i'm 25",
+          "мені 24",
+          "мені 25",
+          "я набагато старший"
+        ],
+        [
+          "age is just a number",
+          "don't tell anyone we're together",
+          "our relationship is private",
+          "вік це просто число",
+          "нікому не кажи що ми разом",
+          "це тільки між нами"
         ]
       ]
     }
@@ -110,7 +155,9 @@
       "all_of": [],
       "any_of": [
         "you're worthless",
+        "ur worthless",
         "nobody likes you",
+        "n0body likes you",
         "everyone hates you",
         "ти нікому не потрібен",
         "тебе всі ненавидять"
@@ -128,6 +175,7 @@
         "everyone is against you",
         "all of us hate you",
         "go away from this class",
+        "get out of this class",
         "весь клас проти тебе",
         "вали з нашого класу",
         "ніхто тебе тут не хоче"
@@ -146,6 +194,49 @@
         "everyone will laugh at you",
         "викладемо це всюди",
         "всі будуть сміятися з тебе"
+      ]
+    },
+    {
+      "threat_key": "bullying_threatened_violence",
+      "reason_code": "kids.bullying.threatened_violence",
+      "score": 0.9,
+      "threat_type": "bullying",
+      "severity": "high",
+      "priority": 95,
+      "all_of": [],
+      "any_of": [
+        "we will beat you after school",
+        "we'll beat you after school",
+        "wait after school we will deal with you",
+        "wait after school we'll deal with you",
+        "після школи тебе поб'ємо",
+        "чекай після уроків тобі кінець",
+        "ти отримаєш за це в школі"
+      ]
+    },
+    {
+      "threat_key": "bullying_shame_campaign",
+      "reason_code": "kids.bullying.shame_campaign",
+      "score": 0.86,
+      "threat_type": "bullying",
+      "severity": "high",
+      "priority": 92,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "everyone will see this about you",
+          "everyone gonna see this about you",
+          "we made a group to laugh at you",
+          "весь клас це побачить",
+          "ми створили групу щоб ржати з тебе"
+        ],
+        [
+          "tonight",
+          "right now",
+          "сьогодні ввечері",
+          "прямо зараз"
+        ]
       ]
     }
   ],
@@ -229,10 +320,15 @@
       "all_of": [],
       "any_of": [
         "if you don't do this i'll share",
+        "if u dont do this ill share",
+        "if you dont do this ill share",
         "last warning before i share",
+        "last warning b4 i share",
         "якщо не зробиш це, я всім покажу",
         "i will send your photos to everyone",
-        "я розішлю це всім у школі"
+        "i'll send your photos to everyone",
+        "я розішлю це всім у школі",
+        "я зіллю твої фото всім"
       ]
     },
     {
@@ -263,6 +359,7 @@
       "any_groups": [
         [
           "if u block me ill end it",
+          "if you block me i'll end it",
           "если заблочишь я покончу с этим",
           "якщо заблочиш я закінчу це все"
         ],
@@ -283,9 +380,38 @@
       "all_of": [],
       "any_of": [
         "you have 10 minutes to do it",
+        "you got 10 min to do it",
         "do it now or i post everything",
+        "do it now or i leak everything",
         "у тебе 10 хвилин",
         "зроби це зараз або я викладу все"
+      ]
+    },
+    {
+      "threat_key": "manipulation_image_sextortion",
+      "reason_code": "kids.manipulation.image_sextortion",
+      "score": 0.95,
+      "threat_type": "manipulation",
+      "severity": "high",
+      "priority": 99,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "i have your photo",
+          "i got your photo",
+          "i saved your private photo",
+          "у мене є твоє фото",
+          "я зберіг твоє приватне фото"
+        ],
+        [
+          "send more now",
+          "send more pics now",
+          "do what i say or i post it",
+          "do what i say or i leak it",
+          "надсилай ще зараз",
+          "роби що кажу або викладу це"
+        ]
       ]
     }
   ]
