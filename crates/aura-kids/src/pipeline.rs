@@ -77,6 +77,7 @@ struct KidsProfileSettings {
     sender_risk_new_sender_delta: f32,
     sender_risk_known_sender_delta: f32,
     cross_conversation_repeat_min: usize,
+    victim_targeting_sender_risk_min: f32,
 }
 
 const MAX_TRACKED_CONVERSATIONS: usize = 2000;
@@ -324,6 +325,28 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
             action: Some(DomainAction::Warn),
         });
     }
+
+    if conversation_has_self_harm
+        && (current.has_grooming || current.has_manipulation || current.has_blackmail_or_sextortion)
+        && sender_risk_score >= settings.victim_targeting_sender_risk_min
+        && should_emit_memory_signal(
+            memory,
+            "victim_vulnerability_targeting",
+            now_index,
+            settings.cooldown_messages,
+        )
+    {
+        mark_memory_signal_emitted(memory, "victim_vulnerability_targeting", now_index);
+        signals.push(DomainSignal {
+            threat_key: "kids_memory_victim_vulnerability_targeting".to_string(),
+            reason_code: "kids.memory.victim_vulnerability_targeting".to_string(),
+            score: 0.98,
+            threat_type: Some("self_harm".to_string()),
+            severity: Some("critical".to_string()),
+            priority: Some(100),
+            action: Some(DomainAction::Warn),
+        });
+    }
     drop(guard);
     apply_cross_conversation_sender_amplifier(input, &settings, &current, signals);
 }
@@ -490,6 +513,7 @@ fn profile_settings(
             sender_risk_new_sender_delta: 0.2,
             sender_risk_known_sender_delta: 0.2,
             cross_conversation_repeat_min: 2,
+            victim_targeting_sender_risk_min: 1.5,
         },
         (DomainRiskProfile::Strict, DomainConversationType::Group) => KidsProfileSettings {
             memory_window_messages: 18,
@@ -502,6 +526,7 @@ fn profile_settings(
             sender_risk_new_sender_delta: 0.2,
             sender_risk_known_sender_delta: 0.2,
             cross_conversation_repeat_min: 2,
+            victim_targeting_sender_risk_min: 1.2,
         },
         (DomainRiskProfile::Normal, DomainConversationType::Direct) => KidsProfileSettings {
             memory_window_messages: 12,
@@ -514,6 +539,7 @@ fn profile_settings(
             sender_risk_new_sender_delta: 0.2,
             sender_risk_known_sender_delta: 0.2,
             cross_conversation_repeat_min: 3,
+            victim_targeting_sender_risk_min: 2.0,
         },
         (DomainRiskProfile::Normal, DomainConversationType::Group) => KidsProfileSettings {
             memory_window_messages: 14,
@@ -526,6 +552,7 @@ fn profile_settings(
             sender_risk_new_sender_delta: 0.2,
             sender_risk_known_sender_delta: 0.2,
             cross_conversation_repeat_min: 2,
+            victim_targeting_sender_risk_min: 1.7,
         },
     }
 }
@@ -568,6 +595,15 @@ mod tests {
     };
     use aura_domain::{DomainAction, DomainConversationType, DomainInput, DomainRiskProfile};
     use std::collections::HashMap;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    fn test_lock() -> MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        let Ok(guard) = LOCK.get_or_init(|| Mutex::new(())).lock() else {
+            panic!("test lock poisoned");
+        };
+        guard
+    }
 
     fn input(text: &str) -> DomainInput {
         DomainInput {
@@ -582,6 +618,7 @@ mod tests {
 
     #[test]
     fn pipeline_returns_multiple_grooming_hits_for_same_message() {
+        let _guard = test_lock();
         clear_conversation_memory_for_tests();
         let output = run_kids_pipeline(&input(
             "our little secret. don't tell your parents. move to private chat. meet me tonight.",
@@ -602,6 +639,7 @@ mod tests {
 
     #[test]
     fn pipeline_escalates_grooming_and_blackmail_compound_to_warn() {
+        let _guard = test_lock();
         clear_conversation_memory_for_tests();
         let output = run_kids_pipeline(&input(
             "our little secret. i have your photo. do what i say or i post it.",
@@ -618,6 +656,7 @@ mod tests {
 
     #[test]
     fn pipeline_escalates_on_memory_grooming_progression() {
+        let _guard = test_lock();
         clear_conversation_memory_for_tests();
         let seed = DomainInput {
             text: Some("our little secret. don't tell your parents.".to_string()),
@@ -649,6 +688,7 @@ mod tests {
 
     #[test]
     fn pipeline_normal_profile_requires_more_grooming_history() {
+        let _guard = test_lock();
         clear_conversation_memory_for_tests();
         let seed = DomainInput {
             text: Some("our little secret. don't tell your parents.".to_string()),
@@ -679,6 +719,7 @@ mod tests {
 
     #[test]
     fn pipeline_escalates_on_memory_bullying_cascade_with_selfharm() {
+        let _guard = test_lock();
         clear_conversation_memory_for_tests();
         let message_a = DomainInput {
             text: Some("you're worthless. nobody likes you.".to_string()),
@@ -728,6 +769,7 @@ mod tests {
 
     #[test]
     fn pipeline_memory_sender_risk_uses_cooldown() {
+        let _guard = test_lock();
         clear_conversation_memory_for_tests();
         let msg1 = DomainInput {
             text: Some("our little secret. don't tell your parents.".to_string()),
@@ -791,6 +833,7 @@ mod tests {
 
     #[test]
     fn pipeline_group_profile_accelerates_bullying_cascade_signal() {
+        let _guard = test_lock();
         clear_conversation_memory_for_tests();
         let bullying_a = DomainInput {
             text: Some("you're worthless. nobody likes you.".to_string()),
@@ -852,6 +895,7 @@ mod tests {
 
     #[test]
     fn trim_conversation_memory_keeps_current_conversation() {
+        let _guard = test_lock();
         let mut map = HashMap::new();
         for idx in 0..=MAX_TRACKED_CONVERSATIONS {
             map.insert(format!("conv_{idx}"), ConversationRiskMemory::default());
@@ -865,6 +909,7 @@ mod tests {
 
     #[test]
     fn pipeline_cross_conversation_repeat_offender_triggers() {
+        let _guard = test_lock();
         clear_conversation_memory_for_tests();
         let first = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
@@ -891,6 +936,38 @@ mod tests {
             }
         }
         assert!(has_cross_signal);
+        assert_eq!(output.action, Some(DomainAction::Warn));
+    }
+
+    #[test]
+    fn pipeline_victim_vulnerability_targeting_escalates() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let vulnerable = DomainInput {
+            text: Some("there is no reason to live anymore.".to_string()),
+            language: None,
+            sender_id: Some("victim".to_string()),
+            conversation_id: Some("conv_victim_target".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let attacker = DomainInput {
+            text: Some("our little secret. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: Some("attacker".to_string()),
+            conversation_id: Some("conv_victim_target".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let _ = run_kids_pipeline(&vulnerable);
+        let output = run_kids_pipeline(&attacker);
+        let mut has_victim_signal = false;
+        for signal in &output.signals {
+            if signal.reason_code == "kids.memory.victim_vulnerability_targeting" {
+                has_victim_signal = true;
+            }
+        }
+        assert!(has_victim_signal);
         assert_eq!(output.action, Some(DomainAction::Warn));
     }
 }
