@@ -62,10 +62,8 @@ pub fn validate_ukraine_coordinates(text: &str) -> Vec<CoordinateMatch> {
             Err(_) => continue,
         };
 
-        if lat >= UKRAINE_LAT_MIN
-            && lat <= UKRAINE_LAT_MAX
-            && lon >= UKRAINE_LON_MIN
-            && lon <= UKRAINE_LON_MAX
+        if (UKRAINE_LAT_MIN..=UKRAINE_LAT_MAX).contains(&lat)
+            && (UKRAINE_LON_MIN..=UKRAINE_LON_MAX).contains(&lon)
         {
             results.push(CoordinateMatch {
                 lat,

@@ -206,28 +206,28 @@ pub fn validate_lexical_rules(rules: &[LexicalRuleRecord]) -> Result<(), String>
         let Some(ref threat_type) = rule.threat_type else {
             return Err(format!("rule[{idx}] must define threat_type"));
         };
-        let valid_threat_type = match threat_type.as_str() {
+        let valid_threat_type = matches!(
+            threat_type.as_str(),
             "none"
-            | "bullying"
-            | "grooming"
-            | "explicit"
-            | "threat"
-            | "self_harm"
-            | "spam"
-            | "scam"
-            | "phishing"
-            | "manipulation"
-            | "nsfw"
-            | "hate_speech"
-            | "doxxing"
-            | "pii_leakage"
-            | "propaganda"
-            | "opsec_violation"
-            | "psyops"
-            | "military_social_eng"
-            | "coordinate_leak" => true,
-            _ => false,
-        };
+                | "bullying"
+                | "grooming"
+                | "explicit"
+                | "threat"
+                | "self_harm"
+                | "spam"
+                | "scam"
+                | "phishing"
+                | "manipulation"
+                | "nsfw"
+                | "hate_speech"
+                | "doxxing"
+                | "pii_leakage"
+                | "propaganda"
+                | "opsec_violation"
+                | "psyops"
+                | "military_social_eng"
+                | "coordinate_leak"
+        );
         if !valid_threat_type {
             return Err(format!("rule[{idx}] has invalid threat_type `{threat_type}`"));
         }
@@ -235,10 +235,7 @@ pub fn validate_lexical_rules(rules: &[LexicalRuleRecord]) -> Result<(), String>
         let Some(ref severity) = rule.severity else {
             return Err(format!("rule[{idx}] must define severity"));
         };
-        let valid_severity = match severity.as_str() {
-            "low" | "medium" | "high" | "critical" => true,
-            _ => false,
-        };
+        let valid_severity = matches!(severity.as_str(), "low" | "medium" | "high" | "critical");
         if !valid_severity {
             return Err(format!("rule[{idx}] has invalid severity `{severity}`"));
         }
@@ -250,10 +247,7 @@ pub fn validate_lexical_rules(rules: &[LexicalRuleRecord]) -> Result<(), String>
             return Err(format!("rule[{idx}] priority must be >= 1"));
         }
         if let Some(ref action) = rule.action {
-            let valid_action = match action.as_str() {
-                "allow" | "mark" | "warn" | "block" => true,
-                _ => false,
-            };
+            let valid_action = matches!(action.as_str(), "allow" | "mark" | "warn" | "block");
             if !valid_action {
                 return Err(format!("rule[{idx}] has invalid action `{action}`"));
             }
