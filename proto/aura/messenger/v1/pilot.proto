@@ -34,6 +34,7 @@ message AuditRecord {
   string request_id = 17;
   ProtectedIdentifier sender_token = 18;
   ProtectedIdentifier conversation_token = 19;
+  KidsMemoryExplainability kids_memory = 20;
 }
 
 message ShadowModePrivacy {
@@ -50,6 +51,7 @@ message ShadowModeSummary {
   map<string, uint64> threat_counts = 5;
   map<string, uint64> alert_counts = 6;
   uint64 finding_count = 7;
+  map<string, uint64> kids_memory_reason_counts = 8;
 }
 
 message ShadowModeExpectation {
@@ -92,6 +94,7 @@ message ShadowModeDecision {
   ShadowModeContactSummary contact = 13;
   ShadowModeMirror mirror = 14;
   ProductDecisionSurface product_surface = 15;
+  KidsMemoryExplainability kids_memory = 16;
 }
 
 message ShadowModeFinding {

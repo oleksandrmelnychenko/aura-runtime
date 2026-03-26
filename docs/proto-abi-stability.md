@@ -1,6 +1,6 @@
 # Proto and ABI Stability
 
-Status: synchronized with current wire and state schema on March 23, 2026.
+Status: synchronized with current wire and state schema on March 26, 2026.
 
 ## Purpose
 
@@ -66,6 +66,10 @@ As of the current release-hardening track:
 Notable additive fields currently in active use:
 
 - `DetectionSignal.threat_subtype`
+- `AnalysisResult.kids_memory`
+- `AuditRecord.kids_memory`
+- `ShadowModeDecision.kids_memory`
+- `ShadowModeSummary.kids_memory_reason_counts`
 - `ContextEvent.content_hash`
 - expanded propaganda state fields under `ContactProfileState` and
   `BehavioralSnapshotState.propaganda_count`

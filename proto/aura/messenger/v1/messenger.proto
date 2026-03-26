@@ -373,6 +373,15 @@ message InferenceSummary {
   repeated LatentStateEvidence latent_states = 5;
 }
 
+message KidsMemoryExplainability {
+  // Normalized KIDS memory reason codes observed in this decision
+  // (without the optional "domain." prefix).
+  repeated string reason_codes = 1;
+  // True when at least one observed reason is part of the mandatory
+  // guardian-escalation KIDS memory contract.
+  bool mandatory_guardian_escalation = 2;
+}
+
 message ProductChildSurface {
   ProductDeliveryMode delivery_mode = 1;
   bool visible = 2;
@@ -424,6 +433,8 @@ message AnalysisResult {
   uint64 analysis_time_us = 12;
   InferenceSummary inference = 13;
   ProductDecisionSurface product_surface = 14;
+  // Optional explainability helper for KIDS memory escalations.
+  KidsMemoryExplainability kids_memory = 15;
 }
 
 message ContactProfileRequest {

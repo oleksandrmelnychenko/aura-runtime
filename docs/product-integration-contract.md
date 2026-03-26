@@ -3,7 +3,7 @@
 This document is the stable product-facing contract for messenger clients that
 integrate AURA Core through protobuf and FFI.
 
-Status: synchronized with runtime payload behavior on March 23, 2026.
+Status: synchronized with runtime payload behavior on March 26, 2026.
 
 The rule is strict:
 
@@ -21,6 +21,7 @@ The canonical integration payload is:
 - `AnalysisResult.inference`
 - `AnalysisResult.reason_codes`
 - `AnalysisResult.signals[].threat_subtype`
+- `AnalysisResult.kids_memory`
 
 ## Threat Subtype Guidance
 
@@ -45,6 +46,22 @@ Client rule:
 
 - treat unknown/new subtype values as non-breaking additive values and fall back
   to threat-type-level handling.
+
+## KIDS Memory Explainability Guidance
+
+`AnalysisResult.kids_memory` is an additive helper for strict KIDS integrations.
+
+Fields:
+
+- `reason_codes`: normalized `kids.memory.*` reasons (without `domain.` prefix)
+- `mandatory_guardian_escalation`: whether any reason belongs to the mandatory
+  guardian-escalation set
+
+Client rule:
+
+- do not recompute this from raw reason codes when the field is present
+- treat missing `kids_memory` as "no KIDS memory reasons observed"
+- treat unknown/new `kids.memory.*` strings as non-breaking additive values
 
 For Swift/iOS, the intended path is generated `SwiftProtobuf` models from:
 

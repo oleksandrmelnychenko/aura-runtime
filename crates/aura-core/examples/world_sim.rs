@@ -1102,6 +1102,7 @@ fn write_shadow_bundle_proto(bundle: &ShadowModeBundle, output_path: &Path) {
 }
 
 fn shadow_mode_bundle_to_proto(bundle: &ShadowModeBundle) -> proto::ShadowModeBundle {
+    let kids_memory_reason_counts = kids_memory_reason_counts_from_events(&bundle.events);
     proto::ShadowModeBundle {
         schema_version: bundle.schema_version.clone(),
         generated_at_utc: bundle.generated_at_utc.clone(),
@@ -1114,7 +1115,10 @@ fn shadow_mode_bundle_to_proto(bundle: &ShadowModeBundle) -> proto::ShadowModeBu
         state_schema_version: bundle.state_schema_version,
         protection_level: proto_protection_level(bundle.protection_level) as i32,
         privacy: Some(shadow_mode_privacy_to_proto(&bundle.privacy)),
-        summary: Some(shadow_mode_summary_to_proto(&bundle.summary)),
+        summary: Some(shadow_mode_summary_to_proto(
+            &bundle.summary,
+            kids_memory_reason_counts,
+        )),
         findings: bundle
             .findings
             .iter()
@@ -1126,6 +1130,73 @@ fn shadow_mode_bundle_to_proto(bundle: &ShadowModeBundle) -> proto::ShadowModeBu
             .map(shadow_mode_event_to_proto)
             .collect(),
     }
+}
+
+const MANDATORY_KIDS_MEMORY_REASON_CODES: &[&str] = &[
+    "kids.memory.grooming_progression",
+    "kids.memory.sustained_sextortion",
+    "kids.memory.bullying_cascade_selfharm",
+    "kids.memory.sender_risk_accumulation",
+    "kids.memory.new_sender_fast_escalation",
+    "kids.memory.cross_conversation_repeat_offender",
+    "kids.memory.victim_vulnerability_targeting",
+];
+
+fn normalized_reason_code(reason_code: &str) -> &str {
+    reason_code.strip_prefix("domain.").unwrap_or(reason_code)
+}
+
+fn kids_memory_reason_codes(reason_codes: &[String]) -> Vec<String> {
+    let mut filtered = Vec::new();
+    for reason_code in reason_codes {
+        let reason_code = normalized_reason_code(reason_code);
+        if !reason_code.starts_with("kids.memory.") {
+            continue;
+        }
+        if filtered.iter().any(|existing| existing == reason_code) {
+            continue;
+        }
+        filtered.push(reason_code.to_string());
+    }
+    filtered
+}
+
+fn has_mandatory_kids_memory_reason(reason_codes: &[String]) -> bool {
+    for reason_code in reason_codes {
+        for mandatory in MANDATORY_KIDS_MEMORY_REASON_CODES {
+            if reason_code == mandatory {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn kids_memory_explainability_to_proto(
+    reason_codes: &[String],
+) -> Option<proto::KidsMemoryExplainability> {
+    let reason_codes = kids_memory_reason_codes(reason_codes);
+    if reason_codes.is_empty() {
+        return None;
+    }
+    Some(proto::KidsMemoryExplainability {
+        reason_codes: reason_codes.clone(),
+        mandatory_guardian_escalation: has_mandatory_kids_memory_reason(&reason_codes),
+    })
+}
+
+fn kids_memory_reason_counts_from_events(
+    events: &[aura_core::ShadowModeEvent],
+) -> std::collections::HashMap<String, u64> {
+    let mut counts = std::collections::HashMap::new();
+    for event in events {
+        let reason_codes = kids_memory_reason_codes(&event.decision.reason_codes);
+        for reason_code in reason_codes {
+            let entry = counts.entry(reason_code).or_insert(0u64);
+            *entry = (*entry).saturating_add(1);
+        }
+    }
+    counts
 }
 
 fn protected_identifier_to_proto(
@@ -1189,6 +1260,7 @@ fn audit_record_to_proto(record: &aura_core::AuditRecord) -> proto::AuditRecord 
             .conversation_token
             .as_ref()
             .map(protected_identifier_to_proto),
+        kids_memory: kids_memory_explainability_to_proto(&record.reason_codes),
     }
 }
 
@@ -1204,6 +1276,7 @@ fn shadow_mode_privacy_to_proto(
 
 fn shadow_mode_summary_to_proto(
     summary: &aura_core::ShadowModeSummary,
+    kids_memory_reason_counts: std::collections::HashMap<String, u64>,
 ) -> proto::ShadowModeSummary {
     proto::ShadowModeSummary {
         total_events: summary.total_events as u64,
@@ -1225,6 +1298,7 @@ fn shadow_mode_summary_to_proto(
             .map(|(key, value)| (key.clone(), *value as u64))
             .collect(),
         finding_count: summary.finding_count as u64,
+        kids_memory_reason_counts,
     }
 }
 
@@ -1305,6 +1379,7 @@ fn shadow_mode_decision_to_proto(
             .map(shadow_mode_contact_summary_to_proto),
         mirror: Some(shadow_mode_mirror_to_proto(&decision.mirror)),
         product_surface: Some(product_decision_surface_to_proto(&decision.product_surface)),
+        kids_memory: kids_memory_explainability_to_proto(&decision.reason_codes),
     }
 }
 

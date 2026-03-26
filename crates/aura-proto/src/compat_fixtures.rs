@@ -91,6 +91,7 @@ pub fn analysis_result_fixture() -> proto::AnalysisResult {
                 },
             ],
         }),
+        kids_memory: None,
         product_surface: Some(proto::ProductDecisionSurface {
             schema_version: "aura.product_decision_surface.v1".to_string(),
             rollout_mode: proto::ProductRolloutMode::GuardianEnabled as i32,
@@ -278,6 +279,7 @@ pub fn batch_analyze_response_fixture() -> proto::BatchAnalyzeResponse {
                     protective_factor_strength: 0.0,
                     latent_states: Vec::new(),
                 }),
+                kids_memory: None,
                 product_surface: Some(proto::ProductDecisionSurface {
                     schema_version: "aura.product_decision_surface.v1".to_string(),
                     rollout_mode: proto::ProductRolloutMode::GuardianEnabled as i32,
