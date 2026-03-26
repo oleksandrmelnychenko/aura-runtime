@@ -12,3 +12,6 @@ verify-onnx:
 
 kids-memory-health:
     python ci/kids_memory_health_snapshot.py --input artifacts/pilot-regression-report.json --input artifacts/pilot-shadow-run-a.json --input artifacts/pilot-shadow-run-b.json --output artifacts/kids-memory-health.json
+
+pilot-gate-strict:
+    cargo run --example pilot_gate -p aura-core -- --release-report artifacts/release-report.json --pilot-regression-report artifacts/pilot-regression-report.json --shadow-bundle artifacts/pilot-shadow-run-a.json --shadow-bundle artifacts/pilot-shadow-run-b.json --review-signoffs docs/pilot-review-signoffs.json --kids-memory-health-report artifacts/kids-memory-health.json --output artifacts/pilot-gate-report.json --require-kids-memory-pass --require-pass

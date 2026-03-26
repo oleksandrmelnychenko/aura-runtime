@@ -12,6 +12,7 @@ A pilot is considered ready only when all of the following are true:
 - Phase 2 `release_report` is `pass`
 - `pilot_regression_report` is `pass`
 - at least two clean shadow bundles are available
+- strict `kids-memory-health` snapshot is `pass` with zero missing mandatory reasons
 - shadow bundles contain no plaintext and no findings
 - required human signoffs are present and approved
 - rollback triggers are known before rollout starts
@@ -25,7 +26,9 @@ cargo run --example pilot_gate -p aura-core -- \
   --shadow-bundle artifacts/pilot-shadow-run-a.json \
   --shadow-bundle artifacts/pilot-shadow-run-b.json \
   --review-signoffs docs/pilot-review-signoffs.json \
+  --kids-memory-health-report artifacts/kids-memory-health.json \
   --output artifacts/pilot-gate-report.json \
+  --require-kids-memory-pass \
   --require-pass
 ```
 
@@ -151,6 +154,10 @@ python ci/run_promotion_rehearsal.py \
 
 CI and `Promotion Gate` also understand optional pilot gate artifacts if a real
 signoff file is present at the configured path.
+
+When pilot gate runs with `--require-kids-memory-pass`, missing mandatory
+`kids.memory.*` reasons are treated as a blocking/failing condition instead of a
+report-only warning.
 
 ## ONNX Test Mode Notes
 

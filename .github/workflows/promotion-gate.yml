@@ -26,6 +26,7 @@ env:
   AURA_PILOT_SHADOW_BUNDLE_PATH: artifacts/pilot-shadow-bundle.json
   AURA_PILOT_SHADOW_BUNDLE_PATH_2: artifacts/pilot-shadow-bundle-2.json
   AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
+  AURA_KIDS_MEMORY_HEALTH_PATH: artifacts/kids-memory-health.json
   AURA_PILOT_GATE_REPORT_PATH: artifacts/pilot-gate-report.json
   AURA_PILOT_REVIEW_SIGNOFFS_PATH: docs/pilot-review-signoffs.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
@@ -95,13 +96,22 @@ jobs:
           --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
           --require-clean
 
+        python3 ci/kids_memory_health_snapshot.py \
+          --input "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          --input "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
+          --input "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
+          --output "$AURA_KIDS_MEMORY_HEALTH_PATH" \
+          --require-mandatory-reasons
+
         cargo run --quiet --example pilot_gate -p aura-core -- \
           --release-report "$AURA_RELEASE_REPORT_PATH" \
           --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
           --review-signoffs "$AURA_PILOT_REVIEW_SIGNOFFS_PATH" \
+          --kids-memory-health-report "$AURA_KIDS_MEMORY_HEALTH_PATH" \
           --output "$AURA_PILOT_GATE_REPORT_PATH" \
+          --require-kids-memory-pass \
           --require-pass
     - name: Compile FFI Header Smoke
       if: ${{ always() }}
@@ -231,6 +241,7 @@ jobs:
           ${{ env.AURA_AUDIT_EVIDENCE_PATH }}
           ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH }}
           ${{ env.AURA_PILOT_REGRESSION_REPORT_PATH }}
+          ${{ env.AURA_KIDS_MEMORY_HEALTH_PATH }}
           ${{ env.AURA_PILOT_GATE_REPORT_PATH }}
           ${{ env.AURA_FFI_SMOKE_EVIDENCE_PATH }}
           ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}

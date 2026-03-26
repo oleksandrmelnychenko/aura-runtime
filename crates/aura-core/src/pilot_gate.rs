@@ -44,6 +44,7 @@ pub struct PilotGateConfig {
     pub min_shadow_total_events: usize,
     pub require_release_pass: bool,
     pub require_pilot_regression_pass: bool,
+    pub require_kids_memory_pass: bool,
     pub required_review_areas: Vec<PilotReviewArea>,
 }
 
@@ -54,6 +55,7 @@ impl Default for PilotGateConfig {
             min_shadow_total_events: 500,
             require_release_pass: true,
             require_pilot_regression_pass: true,
+            require_kids_memory_pass: false,
             required_review_areas: vec![
                 PilotReviewArea::FalsePositiveHotspots,
                 PilotReviewArea::SelfHarmBoundaryCases,
@@ -102,6 +104,14 @@ pub struct PilotReviewSignoff {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KidsMemoryHealthSnapshot {
+    pub schema_version: Option<String>,
+    pub overall_status: String,
+    pub total_memory_hits: usize,
+    pub missing_mandatory_reason_codes: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PilotGateCheck {
     pub check_id: String,
     pub status: PilotGateStatus,
@@ -124,6 +134,7 @@ pub struct PilotGateReport {
     pub release: PilotReleaseSnapshot,
     pub pilot_regression: PilotRegressionSnapshot,
     pub shadow_runs: Vec<PilotShadowSnapshot>,
+    pub kids_memory_health: Option<KidsMemoryHealthSnapshot>,
     pub signoffs: Vec<PilotReviewSignoff>,
     pub checks: Vec<PilotGateCheck>,
     pub rollback_triggers: Vec<PilotRollbackTrigger>,
@@ -194,11 +205,50 @@ pub fn parse_pilot_review_signoffs(json: &str) -> Result<Vec<PilotReviewSignoff>
     serde_json::from_str(json).map_err(|err| format!("invalid pilot review signoffs json: {err}"))
 }
 
+pub fn parse_kids_memory_health_snapshot(json: &str) -> Result<KidsMemoryHealthSnapshot, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(json).map_err(|err| format!("invalid kids memory health json: {err}"))?;
+    let overall_status = value
+        .get("overall_status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| "kids memory health report missing overall_status".to_string())?;
+    let total_memory_hits = value
+        .get("total_memory_hits")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| "kids memory health report missing total_memory_hits".to_string())?;
+    let missing_mandatory_reason_codes = value
+        .get("missing_mandatory_reason_codes")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            "kids memory health report missing missing_mandatory_reason_codes".to_string()
+        })?;
+    let mut missing = Vec::new();
+    for reason in missing_mandatory_reason_codes {
+        let Some(reason) = reason.as_str() else {
+            return Err(
+                "kids memory health report has non-string missing_mandatory_reason_codes"
+                    .to_string(),
+            );
+        };
+        missing.push(reason.to_string());
+    }
+    Ok(KidsMemoryHealthSnapshot {
+        schema_version: value
+            .get("schema_version")
+            .and_then(|value| value.as_str())
+            .map(ToOwned::to_owned),
+        overall_status: overall_status.to_string(),
+        total_memory_hits: total_memory_hits as usize,
+        missing_mandatory_reason_codes: missing,
+    })
+}
+
 pub fn run_pilot_gate(
     config: PilotGateConfig,
     release: PilotReleaseSnapshot,
     pilot_regression: PilotRegressionSnapshot,
     shadow_runs: Vec<PilotShadowSnapshot>,
+    kids_memory_health: Option<KidsMemoryHealthSnapshot>,
     signoffs: Vec<PilotReviewSignoff>,
 ) -> PilotGateReport {
     let mut checks = Vec::new();
@@ -225,6 +275,38 @@ pub fn run_pilot_gate(
                     pilot_regression.overall_status
                 ),
             )
+        });
+    }
+
+    if config.require_kids_memory_pass {
+        let kids_memory_health = kids_memory_health.as_ref();
+        checks.push(match kids_memory_health {
+            Some(report)
+                if report.overall_status == "pass"
+                    && report.total_memory_hits > 0
+                    && report.missing_mandatory_reason_codes.is_empty() =>
+            {
+                pass_check(
+                    "kids_memory_health",
+                    format!(
+                        "kids memory health passed (total_hits={})",
+                        report.total_memory_hits
+                    ),
+                )
+            }
+            Some(report) => fail_check(
+                "kids_memory_health",
+                format!(
+                    "kids memory health failed (overall_status={}, total_hits={}, missing_mandatory={})",
+                    report.overall_status,
+                    report.total_memory_hits,
+                    report.missing_mandatory_reason_codes.len()
+                ),
+            ),
+            None => blocked_check(
+                "kids_memory_health",
+                "kids memory health report is required but missing".to_string(),
+            ),
         });
     }
 
@@ -370,6 +452,7 @@ pub fn run_pilot_gate(
         release,
         pilot_regression,
         shadow_runs,
+        kids_memory_health,
         signoffs,
         checks,
         rollback_triggers: default_pilot_rollback_triggers(),
@@ -524,6 +607,15 @@ mod tests {
         ]
     }
 
+    fn healthy_kids_memory_snapshot() -> KidsMemoryHealthSnapshot {
+        KidsMemoryHealthSnapshot {
+            schema_version: Some("aura.kids_memory_health_snapshot.v1".to_string()),
+            overall_status: "pass".to_string(),
+            total_memory_hits: 6,
+            missing_mandatory_reason_codes: Vec::new(),
+        }
+    }
+
     #[test]
     fn pilot_gate_passes_with_repeated_clean_runs_and_signoffs() {
         let report = run_pilot_gate(
@@ -531,6 +623,7 @@ mod tests {
             release_snapshot(),
             regression_snapshot(),
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            None,
             approved_signoffs(),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Pass);
@@ -543,6 +636,7 @@ mod tests {
             release_snapshot(),
             regression_snapshot(),
             vec![shadow_snapshot("run_a")],
+            None,
             approved_signoffs(),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Blocked);
@@ -562,8 +656,33 @@ mod tests {
             release_snapshot(),
             regression_snapshot(),
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            None,
             signoffs,
         );
         assert_eq!(report.overall_status, PilotGateStatus::Fail);
+    }
+
+    #[test]
+    fn pilot_gate_fails_when_kids_memory_health_is_required_but_not_pass() {
+        let mut config = PilotGateConfig::default();
+        config.require_kids_memory_pass = true;
+        let mut kids_memory = healthy_kids_memory_snapshot();
+        kids_memory.overall_status = "warn".to_string();
+        kids_memory.missing_mandatory_reason_codes =
+            vec!["kids.memory.sustained_sextortion".to_string()];
+        let report = run_pilot_gate(
+            config,
+            release_snapshot(),
+            regression_snapshot(),
+            vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            Some(kids_memory),
+            approved_signoffs(),
+        );
+        assert_eq!(report.overall_status, PilotGateStatus::Fail);
+        assert!(report
+            .checks
+            .iter()
+            .any(|check| check.check_id == "kids_memory_health"
+                && check.status == PilotGateStatus::Fail));
     }
 }

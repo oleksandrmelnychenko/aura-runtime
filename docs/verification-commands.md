@@ -57,7 +57,9 @@ cargo run --example pilot_gate -p aura-core -- \
   --shadow-bundle artifacts/pilot-shadow-run-a.json \
   --shadow-bundle artifacts/pilot-shadow-run-b.json \
   --review-signoffs docs/pilot-review-signoffs.json \
+  --kids-memory-health-report artifacts/kids-memory-health.json \
   --output artifacts/pilot-gate-report.json \
+  --require-kids-memory-pass \
   --require-pass
 ```
 
