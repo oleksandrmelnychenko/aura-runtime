@@ -184,6 +184,7 @@ def main() -> int:
         "pilot_shadow_bundle_2": output_dir / "pilot-shadow-bundle-2.json",
         "pilot_regression_report": output_dir / "pilot-regression-report.json",
         "kids_memory_health": output_dir / "kids-memory-health.json",
+        "kids_preprod_dry_run": output_dir / "kids-preprod-dry-run-matrix.json",
         "pilot_gate_report": output_dir / "pilot-gate-report.json",
         "ffi_soak": output_dir / "ffi-state-sync-soak.json",
         "ffi_smoke": output_dir / "ffi-header-smoke.json",
@@ -309,21 +310,6 @@ def main() -> int:
         if args.pilot_review_signoffs:
             record_and_require(
                 [
-                    sys.executable,
-                    "ci/kids_memory_health_snapshot.py",
-                    "--input",
-                    paths["pilot_regression_report"].as_posix(),
-                    "--input",
-                    paths["pilot_shadow_bundle"].as_posix(),
-                    "--input",
-                    paths["pilot_shadow_bundle_2"].as_posix(),
-                    "--output",
-                    paths["kids_memory_health"].as_posix(),
-                    "--require-mandatory-reasons",
-                ]
-            )
-            record_and_require(
-                [
                     "cargo",
                     "run",
                     "--quiet",
@@ -356,6 +342,35 @@ def main() -> int:
             ]
         )
         if args.pilot_review_signoffs:
+            record_and_require(
+                [
+                    sys.executable,
+                    "ci/kids_memory_health_snapshot.py",
+                    "--input",
+                    paths["pilot_regression_report"].as_posix(),
+                    "--input",
+                    paths["pilot_shadow_bundle"].as_posix(),
+                    "--input",
+                    paths["pilot_shadow_bundle_2"].as_posix(),
+                    "--output",
+                    paths["kids_memory_health"].as_posix(),
+                    "--require-mandatory-reasons",
+                ]
+            )
+            record_and_require(
+                [
+                    sys.executable,
+                    "ci/kids_preprod_dry_run_matrix.py",
+                    "--policy-expectations",
+                    "crates/aura-core/data/action_policy_expectations.json",
+                    "--realistic-cases",
+                    "crates/aura-core/data/realistic_chat_cases.json",
+                    "--kids-memory-health",
+                    paths["kids_memory_health"].as_posix(),
+                    "--output",
+                    paths["kids_preprod_dry_run"].as_posix(),
+                ]
+            )
             record_and_require(
                 [
                     "cargo",
@@ -428,6 +443,14 @@ def main() -> int:
                 paths["pilot_regression_report"].as_posix(),
                 *(
                     ["--pilot-gate-report", paths["pilot_gate_report"].as_posix()]
+                    if args.pilot_review_signoffs
+                    else []
+                ),
+                *(
+                    [
+                        "--kids-preprod-dry-run-report",
+                        paths["kids_preprod_dry_run"].as_posix(),
+                    ]
                     if args.pilot_review_signoffs
                     else []
                 ),

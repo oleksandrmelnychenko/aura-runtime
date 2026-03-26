@@ -50,6 +50,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to pilot gate report JSON.",
     )
+    parser.add_argument(
+        "--kids-preprod-dry-run-report",
+        default=None,
+        help="Optional path to KIDS pre-prod dry-run matrix report JSON.",
+    )
     return parser.parse_args()
 
 
@@ -147,6 +152,12 @@ def pilot_gate_status(payload: dict | None) -> str | None:
     return payload.get("overall_status")
 
 
+def kids_preprod_dry_run_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    return payload.get("overall_status")
+
+
 def evidence_status(artifacts: dict, summary: dict) -> str:
     if any(meta["required"] and not meta["exists"] for meta in artifacts.values()):
         return "blocked"
@@ -170,6 +181,8 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["pilot_gate_status"] not in (None, "pass"):
         return "fail"
+    if summary["kids_preprod_dry_run_status"] not in (None, "pass"):
+        return "fail"
     return "pass"
 
 
@@ -184,6 +197,7 @@ def attach_payload_details(
     pilot_shadow_payload: dict | None,
     pilot_regression_payload: dict | None,
     pilot_gate_payload: dict | None,
+    kids_preprod_dry_run_payload: dict | None,
 ) -> None:
     if release_payload is not None:
         artifacts["release_report"]["observed_status"] = release_payload.get("overall_status")
@@ -265,6 +279,24 @@ def attach_payload_details(
         artifacts["pilot_gate_report"]["check_count"] = len(
             pilot_gate_payload.get("checks", [])
         )
+    if kids_preprod_dry_run_payload is not None:
+        artifacts["kids_preprod_dry_run_report"][
+            "observed_status"
+        ] = kids_preprod_dry_run_status(kids_preprod_dry_run_payload)
+        artifacts["kids_preprod_dry_run_report"][
+            "schema_version"
+        ] = kids_preprod_dry_run_payload.get("schema_version")
+        checks = kids_preprod_dry_run_payload.get("checks", {})
+        if isinstance(checks, dict):
+            artifacts["kids_preprod_dry_run_report"]["checks_failed"] = len(
+                [value for value in checks.values() if value is False]
+            )
+            artifacts["kids_preprod_dry_run_report"]["checks_passed"] = len(
+                [value for value in checks.values() if value is True]
+            )
+        else:
+            artifacts["kids_preprod_dry_run_report"]["checks_failed"] = None
+            artifacts["kids_preprod_dry_run_report"]["checks_passed"] = None
 
 
 def main() -> int:
@@ -284,6 +316,10 @@ def main() -> int:
     pilot_gate_payload, pilot_gate_artifact = load_json_artifact(
         args.pilot_gate_report, required=args.pilot_gate_report is not None
     ) if args.pilot_gate_report else (None, None)
+    kids_preprod_dry_run_payload, kids_preprod_dry_run_artifact = load_json_artifact(
+        args.kids_preprod_dry_run_report,
+        required=args.kids_preprod_dry_run_report is not None,
+    ) if args.kids_preprod_dry_run_report else (None, None)
     smoke_payload, smoke_artifact = load_json_artifact(
         args.ffi_smoke, required=args.ffi_smoke is not None
     ) if args.ffi_smoke else (None, None)
@@ -301,6 +337,8 @@ def main() -> int:
         artifacts["pilot_regression_report"] = pilot_regression_artifact
     if pilot_gate_artifact is not None:
         artifacts["pilot_gate_report"] = pilot_gate_artifact
+    if kids_preprod_dry_run_artifact is not None:
+        artifacts["kids_preprod_dry_run_report"] = kids_preprod_dry_run_artifact
     if smoke_artifact is not None:
         artifacts["ffi_smoke"] = smoke_artifact
 
@@ -315,6 +353,7 @@ def main() -> int:
         pilot_shadow_payload=pilot_shadow_payload,
         pilot_regression_payload=pilot_regression_payload,
         pilot_gate_payload=pilot_gate_payload,
+        kids_preprod_dry_run_payload=kids_preprod_dry_run_payload,
     )
 
     request_limits = (
@@ -422,6 +461,26 @@ def main() -> int:
         "pilot_gate_check_count": (
             len(pilot_gate_payload.get("checks", []))
             if pilot_gate_payload
+            else None
+        ),
+        "kids_preprod_dry_run_status": kids_preprod_dry_run_status(
+            kids_preprod_dry_run_payload
+        ),
+        "kids_preprod_dry_run_schema_version": (
+            kids_preprod_dry_run_payload.get("schema_version")
+            if kids_preprod_dry_run_payload
+            else None
+        ),
+        "kids_preprod_dry_run_checks_failed": (
+            len(
+                [
+                    value
+                    for value in kids_preprod_dry_run_payload.get("checks", {}).values()
+                    if value is False
+                ]
+            )
+            if kids_preprod_dry_run_payload
+            and isinstance(kids_preprod_dry_run_payload.get("checks"), dict)
             else None
         ),
         "ffi_export_count": (

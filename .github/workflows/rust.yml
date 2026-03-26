@@ -18,6 +18,7 @@ env:
   AURA_PILOT_SHADOW_BUNDLE_PATH_2: artifacts/pilot-shadow-bundle-2.json
   AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
   AURA_KIDS_MEMORY_HEALTH_PATH: artifacts/kids-memory-health.json
+  AURA_KIDS_PREPROD_DRY_RUN_PATH: artifacts/kids-preprod-dry-run-matrix.json
   AURA_PILOT_GATE_REPORT_PATH: artifacts/pilot-gate-report.json
   AURA_PILOT_REVIEW_SIGNOFFS_PATH: docs/pilot-review-signoffs.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
@@ -85,6 +86,12 @@ jobs:
           --output "$AURA_KIDS_MEMORY_HEALTH_PATH" \
           --require-mandatory-reasons
 
+        python3 ci/kids_preprod_dry_run_matrix.py \
+          --policy-expectations crates/aura-core/data/action_policy_expectations.json \
+          --realistic-cases crates/aura-core/data/realistic_chat_cases.json \
+          --kids-memory-health "$AURA_KIDS_MEMORY_HEALTH_PATH" \
+          --output "$AURA_KIDS_PREPROD_DRY_RUN_PATH"
+
         cargo run --quiet --example pilot_gate -p aura-core -- \
           --release-report "$AURA_RELEASE_REPORT_PATH" \
           --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
@@ -127,6 +134,10 @@ jobs:
         if [ -f "$AURA_PILOT_GATE_REPORT_PATH" ]; then
           PILOT_GATE_ARGS="--pilot-gate-report $AURA_PILOT_GATE_REPORT_PATH"
         fi
+        KIDS_PREPROD_ARGS=""
+        if [ -f "$AURA_KIDS_PREPROD_DRY_RUN_PATH" ]; then
+          KIDS_PREPROD_ARGS="--kids-preprod-dry-run-report $AURA_KIDS_PREPROD_DRY_RUN_PATH"
+        fi
 
         python3 ci/generate_evidence_manifest.py \
           --output "$AURA_EVIDENCE_MANIFEST_PATH" \
@@ -139,6 +150,7 @@ jobs:
           --pilot-shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           $PILOT_GATE_ARGS \
+          $KIDS_PREPROD_ARGS \
           --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
     - name: Summarize Rust CI
       if: ${{ always() }}
@@ -192,6 +204,8 @@ jobs:
             summary.write(f"- pilot_regression_scenarios: `{summary_data['pilot_regression_scenario_count']}`\n")
             summary.write(f"- pilot_gate: `{summary_data.get('pilot_gate_status', 'missing')}`\n")
             summary.write(f"- pilot_gate_shadow_runs: `{summary_data.get('pilot_gate_shadow_run_count', 'missing')}`\n")
+            summary.write(f"- kids_preprod_dry_run: `{summary_data.get('kids_preprod_dry_run_status', 'missing')}`\n")
+            summary.write(f"- kids_preprod_dry_run_checks_failed: `{summary_data.get('kids_preprod_dry_run_checks_failed', 'missing')}`\n")
             summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
             summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
             summary.write(f"- ffi_state_sync_attempts: `{summary_data['ffi_soak_attempts_run']}`\n")
