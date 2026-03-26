@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use aura_domain::{DomainAction, DomainInput, DomainModuleId, DomainOutput, DomainRegistry};
+use aura_domain::{DomainAction, DomainInput, DomainModuleId, DomainOutput, DomainRegistry, DomainRiskProfile};
 use aura_kids::KidsModule;
 use aura_military::MilitaryModule;
 use aura_patterns::{validate_ukraine_coordinates, BlockedUrlMatch};
@@ -42,7 +42,11 @@ impl AuraDomainRuntime {
     }
 
     pub fn analyze(&self, config: &AuraConfig, input: &MessageInput) -> Option<DomainOutput> {
-        self.analyze_for_mode(config.effective_domain_mode(), input)
+        self.analyze_for_mode_with_protection(
+            config.effective_domain_mode(),
+            config.effective_protection_level(),
+            input,
+        )
     }
 
     pub fn analyze_for_mode(
@@ -50,12 +54,23 @@ impl AuraDomainRuntime {
         domain_mode: DomainMode,
         input: &MessageInput,
     ) -> Option<DomainOutput> {
+        self.analyze_for_mode_with_protection(domain_mode, ProtectionLevel::Medium, input)
+    }
+
+    pub fn analyze_for_mode_with_protection(
+        &self,
+        domain_mode: DomainMode,
+        protection_level: ProtectionLevel,
+        input: &MessageInput,
+    ) -> Option<DomainOutput> {
         let module_id = domain_module_id_for_mode(domain_mode)?;
+        let risk_profile = domain_risk_profile_for_mode(domain_mode, protection_level);
         let domain_input = DomainInput {
             text: input.text.clone(),
             language: input.language.clone(),
             sender_id: Some(input.sender_id.0.clone()),
             conversation_id: Some(input.conversation_id.0.clone()),
+            risk_profile,
         };
         self.registry.run(module_id, &domain_input)
     }
@@ -66,6 +81,24 @@ fn domain_module_id_for_mode(domain_mode: DomainMode) -> Option<DomainModuleId> 
         Some(AuraDomainModule::Kids) => Some(DomainModuleId::Kids),
         Some(AuraDomainModule::Military) => Some(DomainModuleId::Military),
         None => None,
+    }
+}
+
+fn domain_risk_profile_for_mode(
+    domain_mode: DomainMode,
+    protection_level: ProtectionLevel,
+) -> DomainRiskProfile {
+    let is_kids = match domain_mode.domain_module() {
+        Some(AuraDomainModule::Kids) => true,
+        Some(AuraDomainModule::Military) => false,
+        None => false,
+    };
+    if !is_kids {
+        return DomainRiskProfile::Normal;
+    }
+    match protection_level {
+        ProtectionLevel::High => DomainRiskProfile::Strict,
+        ProtectionLevel::Off | ProtectionLevel::Low | ProtectionLevel::Medium => DomainRiskProfile::Normal,
     }
 }
 
@@ -983,7 +1016,8 @@ mod tests {
     use super::{
         build_blocked_url_signal, build_domain_context_events, build_domain_detection_signals,
         core_action_from_domain_action, detection_enabled_for_threat, domain_action_reason_marker,
-        domain_signal_confidence, domain_signal_threat_type, domain_threat_priority,
+        domain_risk_profile_for_mode, domain_signal_confidence, domain_signal_threat_type,
+        domain_threat_priority,
         decide_action_with_domain_overrides, is_domain_threat, is_link_family_threat,
         is_propaganda_threat, map_domain_rule_to_event_kind, map_domain_signal_to_event_kind,
         map_domain_threat_subtype, map_domain_threat_to_event_kind, map_ml_signal_to_event_kind,
@@ -1277,6 +1311,22 @@ mod tests {
                 .any(|signal| signal.reason_code.contains("military")),
             "Expected military domain signal, got {:?}",
             output.signals
+        );
+    }
+
+    #[test]
+    fn kids_domain_uses_strict_profile_on_high_protection() {
+        assert_eq!(
+            domain_risk_profile_for_mode(DomainMode::Kids, ProtectionLevel::High),
+            aura_domain::DomainRiskProfile::Strict
+        );
+        assert_eq!(
+            domain_risk_profile_for_mode(DomainMode::Kids, ProtectionLevel::Medium),
+            aura_domain::DomainRiskProfile::Normal
+        );
+        assert_eq!(
+            domain_risk_profile_for_mode(DomainMode::Military, ProtectionLevel::High),
+            aura_domain::DomainRiskProfile::Normal
         );
     }
 }

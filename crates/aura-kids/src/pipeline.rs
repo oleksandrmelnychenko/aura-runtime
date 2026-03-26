@@ -1,7 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, OnceLock};
 
-use aura_domain::{promote_action_to_warn, DomainAction, DomainInput, DomainOutput, DomainSignal};
+use aura_domain::{
+    promote_action_to_warn, DomainAction, DomainInput, DomainOutput, DomainRiskProfile, DomainSignal,
+};
 
 use crate::detectors::{bullying, grooming, manipulation, selfharm};
 use crate::lexicon;
@@ -63,8 +65,14 @@ struct ConversationRiskMemory {
     last_emitted: HashMap<&'static str, u64>,
 }
 
-const MEMORY_WINDOW_MESSAGES: usize = 12;
-const MEMORY_SIGNAL_COOLDOWN_MESSAGES: u64 = 3;
+struct KidsProfileSettings {
+    memory_window_messages: usize,
+    cooldown_messages: u64,
+    grooming_progression_min: usize,
+    sustained_sextortion_min: usize,
+    bullying_cascade_min: usize,
+    sender_risk_min: f32,
+}
 
 static KIDS_CONVERSATION_MEMORY: OnceLock<Mutex<HashMap<String, ConversationRiskMemory>>> =
     OnceLock::new();
@@ -145,6 +153,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
             || has_reason_fragment(signals, "sextortion"),
     };
     let sender = input.sender_id.clone();
+    let settings = profile_settings(input.risk_profile);
 
     let mut repeated_sender_grooming = 0usize;
     let mut repeated_sender_blackmail = 0usize;
@@ -162,7 +171,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
     memory.message_index = memory.message_index.saturating_add(1);
     let now_index = memory.message_index;
     memory.entries.push_back((sender.clone(), current));
-    while memory.entries.len() > MEMORY_WINDOW_MESSAGES {
+    while memory.entries.len() > settings.memory_window_messages {
         memory.entries.pop_front();
     }
 
@@ -190,9 +199,9 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
             conversation_has_grooming = true;
         }
     }
-    if repeated_sender_grooming >= 1
+    if repeated_sender_grooming >= settings.grooming_progression_min
         && current.has_manipulation
-        && should_emit_memory_signal(memory, "grooming_progression", now_index)
+        && should_emit_memory_signal(memory, "grooming_progression", now_index, settings.cooldown_messages)
     {
         mark_memory_signal_emitted(memory, "grooming_progression", now_index);
         signals.push(DomainSignal {
@@ -206,9 +215,9 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
 
-    if repeated_sender_blackmail >= 2
+    if repeated_sender_blackmail >= settings.sustained_sextortion_min
         && conversation_has_grooming
-        && should_emit_memory_signal(memory, "sustained_sextortion", now_index)
+        && should_emit_memory_signal(memory, "sustained_sextortion", now_index, settings.cooldown_messages)
     {
         mark_memory_signal_emitted(memory, "sustained_sextortion", now_index);
         signals.push(DomainSignal {
@@ -222,9 +231,14 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
 
-    if repeated_conversation_bullying >= 3
+    if repeated_conversation_bullying >= settings.bullying_cascade_min
         && conversation_has_self_harm
-        && should_emit_memory_signal(memory, "bullying_cascade_selfharm", now_index)
+        && should_emit_memory_signal(
+            memory,
+            "bullying_cascade_selfharm",
+            now_index,
+            settings.cooldown_messages,
+        )
     {
         mark_memory_signal_emitted(memory, "bullying_cascade_selfharm", now_index);
         signals.push(DomainSignal {
@@ -238,9 +252,14 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
 
-    if sender_risk_score >= 3.0
+    if sender_risk_score >= settings.sender_risk_min
         && (current.has_grooming || current.has_manipulation || current.has_blackmail_or_sextortion)
-        && should_emit_memory_signal(memory, "sender_risk_accumulation", now_index)
+        && should_emit_memory_signal(
+            memory,
+            "sender_risk_accumulation",
+            now_index,
+            settings.cooldown_messages,
+        )
     {
         mark_memory_signal_emitted(memory, "sender_risk_accumulation", now_index);
         signals.push(DomainSignal {
@@ -268,15 +287,37 @@ fn should_emit_memory_signal(
     memory: &ConversationRiskMemory,
     key: &'static str,
     now_index: u64,
+    cooldown_messages: u64,
 ) -> bool {
     let Some(previous) = memory.last_emitted.get(key) else {
         return true;
     };
-    now_index.saturating_sub(*previous) >= MEMORY_SIGNAL_COOLDOWN_MESSAGES
+    now_index.saturating_sub(*previous) >= cooldown_messages
 }
 
 fn mark_memory_signal_emitted(memory: &mut ConversationRiskMemory, key: &'static str, now_index: u64) {
     memory.last_emitted.insert(key, now_index);
+}
+
+fn profile_settings(profile: DomainRiskProfile) -> KidsProfileSettings {
+    match profile {
+        DomainRiskProfile::Strict => KidsProfileSettings {
+            memory_window_messages: 16,
+            cooldown_messages: 2,
+            grooming_progression_min: 1,
+            sustained_sextortion_min: 2,
+            bullying_cascade_min: 2,
+            sender_risk_min: 2.8,
+        },
+        DomainRiskProfile::Normal => KidsProfileSettings {
+            memory_window_messages: 12,
+            cooldown_messages: 3,
+            grooming_progression_min: 2,
+            sustained_sextortion_min: 2,
+            bullying_cascade_min: 3,
+            sender_risk_min: 3.5,
+        },
+    }
 }
 
 fn has_threat_type(signals: &[DomainSignal], threat_type: &str) -> bool {
@@ -312,7 +353,7 @@ fn action_rank(action: DomainAction) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::{clear_conversation_memory_for_tests, run_kids_pipeline};
-    use aura_domain::{DomainAction, DomainInput};
+    use aura_domain::{DomainAction, DomainInput, DomainRiskProfile};
 
     fn input(text: &str) -> DomainInput {
         DomainInput {
@@ -320,6 +361,7 @@ mod tests {
             language: None,
             sender_id: None,
             conversation_id: Some("conv_test".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
         }
     }
 
@@ -367,12 +409,14 @@ mod tests {
             language: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
         };
         let followup = DomainInput {
             text: Some("you can only trust me. do it now or i post everything.".to_string()),
             language: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
         };
         let _ = run_kids_pipeline(&seed);
         let output = run_kids_pipeline(&followup);
@@ -387,6 +431,34 @@ mod tests {
     }
 
     #[test]
+    fn pipeline_normal_profile_requires_more_grooming_history() {
+        clear_conversation_memory_for_tests();
+        let seed = DomainInput {
+            text: Some("our little secret. don't tell your parents.".to_string()),
+            language: None,
+            sender_id: Some("s1".to_string()),
+            conversation_id: Some("conv_mem_gp_normal".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
+        };
+        let followup = DomainInput {
+            text: Some("you can only trust me. do it now or i post everything.".to_string()),
+            language: None,
+            sender_id: Some("s1".to_string()),
+            conversation_id: Some("conv_mem_gp_normal".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
+        };
+        let _ = run_kids_pipeline(&seed);
+        let output = run_kids_pipeline(&followup);
+        let mut has_memory_signal = false;
+        for signal in &output.signals {
+            if signal.reason_code == "kids.memory.grooming_progression" {
+                has_memory_signal = true;
+            }
+        }
+        assert!(!has_memory_signal);
+    }
+
+    #[test]
     fn pipeline_escalates_on_memory_bullying_cascade_with_selfharm() {
         clear_conversation_memory_for_tests();
         let message_a = DomainInput {
@@ -394,24 +466,28 @@ mod tests {
             language: None,
             sender_id: Some("b1".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
         };
         let message_b = DomainInput {
             text: Some("everyone hates you. all of us hate you.".to_string()),
             language: None,
             sender_id: Some("b2".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
         };
         let message_c = DomainInput {
             text: Some("we will beat you after school.".to_string()),
             language: None,
             sender_id: Some("b3".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
         };
         let message_d = DomainInput {
             text: Some("there is no reason to live anymore.".to_string()),
             language: None,
             sender_id: Some("victim".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
         };
         let _ = run_kids_pipeline(&message_a);
         let _ = run_kids_pipeline(&message_b);
@@ -435,24 +511,28 @@ mod tests {
             language: None,
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
         };
         let msg2 = DomainInput {
             text: Some("i have your photo. do what i say or i post it.".to_string()),
             language: None,
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
         };
         let msg3 = DomainInput {
             text: Some("you can only trust me.".to_string()),
             language: None,
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
         };
         let msg4 = DomainInput {
             text: Some("move to private chat.".to_string()),
             language: None,
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
         };
         let _ = run_kids_pipeline(&msg1);
         let second = run_kids_pipeline(&msg2);
