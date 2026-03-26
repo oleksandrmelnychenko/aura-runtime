@@ -118,3 +118,13 @@ runtime, contract, privacy, and dataset posture of a candidate build.
 4. Decide whether to roll back the whole runtime or only a dependent artifact.
 5. Record the root cause and the missing gate that should be added.
 6. Add regression coverage before re-promoting the fix.
+
+## KIDS Memory Incidents
+
+For incidents tied to `kids.memory.*` reason codes, follow:
+
+- [KIDS Memory Incident Runbook](./kids-memory-incident-runbook.md)
+
+Do not downgrade mandatory guardian-memory reasons during triage. Containment
+must use rollback or threshold/profile tuning without removing the mandatory
+guardian contract.

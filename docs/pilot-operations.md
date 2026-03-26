@@ -146,6 +146,7 @@ AURA_REQUIRE_ONNX_MODELS=1
 For KIDS-domain pilot review, use the mandatory reason-code matrix:
 
 - [KIDS Memory Escalation Matrix](./kids-memory-escalation-matrix.md)
+- [KIDS Memory Incident Runbook](./kids-memory-incident-runbook.md)
 
 This matrix is the required explainability baseline when evaluating guardian
 escalations originating from memory-level KIDS signals.
