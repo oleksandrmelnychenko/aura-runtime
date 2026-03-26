@@ -9,3 +9,6 @@ verify-full:
 
 verify-onnx:
     $env:AURA_RUN_SAFETY_INTENT_ONNX="1"; cargo test -p aura-ml --features onnx --test onnx_integration
+
+kids-memory-health:
+    python ci/kids_memory_health_snapshot.py --input artifacts/pilot-regression-report.json --input artifacts/pilot-shadow-run-a.json --input artifacts/pilot-shadow-run-b.json --output artifacts/kids-memory-health.json

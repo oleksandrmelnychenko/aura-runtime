@@ -10,6 +10,7 @@ Single place for the most used verification commands during release and pilot wo
 just verify
 just verify-full
 just verify-onnx
+just kids-memory-health
 ```
 
 ## Core Release Gates
@@ -58,4 +59,27 @@ cargo run --example pilot_gate -p aura-core -- \
   --review-signoffs docs/pilot-review-signoffs.json \
   --output artifacts/pilot-gate-report.json \
   --require-pass
+```
+
+## KIDS Memory Daily Health Snapshot
+
+Build a compact daily snapshot for `kids.memory.*` incidents from existing artifacts:
+
+```bash
+python ci/kids_memory_health_snapshot.py \
+  --input artifacts/pilot-regression-report.json \
+  --input artifacts/pilot-shadow-run-a.json \
+  --input artifacts/pilot-shadow-run-b.json \
+  --output artifacts/kids-memory-health.json
+```
+
+Fail the command when not all mandatory `kids.memory.*` reasons are observed:
+
+```bash
+python ci/kids_memory_health_snapshot.py \
+  --input artifacts/pilot-regression-report.json \
+  --input artifacts/pilot-shadow-run-a.json \
+  --input artifacts/pilot-shadow-run-b.json \
+  --output artifacts/kids-memory-health.json \
+  --require-mandatory-reasons
 ```
