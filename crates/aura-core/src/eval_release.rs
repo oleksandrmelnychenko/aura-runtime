@@ -1597,6 +1597,7 @@ mod tests {
             calibration: crate::CalibrationReport {
                 count: 20,
                 brier_score: 0.1,
+                weighted_brier_score: 0.0,
                 expected_calibration_error: 0.1,
                 bins: Vec::new(),
                 by_threat: Vec::new(),
@@ -1674,6 +1675,7 @@ mod tests {
             calibration: crate::CalibrationReport {
                 count: 18,
                 brier_score: 0.09,
+                weighted_brier_score: 0.0,
                 expected_calibration_error: 0.08,
                 bins: Vec::new(),
                 by_threat: vec![crate::ThreatCalibrationReport {

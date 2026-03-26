@@ -4079,4 +4079,83 @@ mod tests {
             aura_free(handle);
         }
     }
+
+    #[test]
+    fn stress_rapid_init_analyze_free_cycle() {
+        for _ in 0..20 {
+            unsafe {
+                let handle = init_handle(proto_config(proto::AccountType::Child, true));
+                let mut out = AuraBuffer::empty();
+                let msg = proto_message("hello world", "user_x", "conv_x");
+                let request = encode_proto(&msg);
+                assert!(aura_analyze(
+                    handle,
+                    request.as_ptr(),
+                    request.len(),
+                    &mut out,
+                ));
+                aura_free_buffer(out);
+                aura_free(handle);
+            }
+        }
+    }
+
+    #[test]
+    fn stress_buffer_lifecycle_no_leak() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            for i in 0..100 {
+                let mut out = AuraBuffer::empty();
+                let text = format!("message number {i} with some content");
+                let msg = proto_message(&text, "sender", "conv");
+                let request = encode_proto(&msg);
+                assert!(aura_analyze(
+                    handle,
+                    request.as_ptr(),
+                    request.len(),
+                    &mut out,
+                ));
+                assert!(!out.ptr.is_null());
+                assert!(out.len > 0);
+                aura_free_buffer(out);
+            }
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn stress_export_import_roundtrip_stability() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+
+            for i in 0..10 {
+                let msg = proto_message(
+                    "don't tell your parents, it's our secret",
+                    &format!("sender_{i}"),
+                    "conv_1",
+                );
+                let _ = analyze_context_result(handle, msg, 1000 + i * 1000);
+            }
+
+            let mut export_buf = AuraBuffer::empty();
+            assert!(aura_export_context(handle, &mut export_buf));
+            let exported = std::slice::from_raw_parts(export_buf.ptr, export_buf.len).to_vec();
+
+            for _ in 0..5 {
+                assert!(aura_import_context(
+                    handle,
+                    exported.as_ptr(),
+                    exported.len(),
+                ));
+            }
+
+            let mut export_buf2 = AuraBuffer::empty();
+            assert!(aura_export_context(handle, &mut export_buf2));
+            assert!(export_buf2.len > 0);
+
+            aura_free_buffer(export_buf);
+            aura_free_buffer(export_buf2);
+            aura_free(handle);
+        }
+    }
 }

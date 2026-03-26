@@ -402,6 +402,24 @@ impl MlPipeline {
         }
     }
 
+    /// Assigns an uncertainty level based on the strongest prediction and the
+    /// gap between the top two candidates.
+    ///
+    /// The decision uses two axes:
+    /// - **strongest**: the maximum risk score across safety and intent heads.
+    /// - **min_gap**: the smallest top-two gap (how decisive the classification is).
+    ///
+    /// Thresholds were derived from the Ecliptix evaluation corpus (v2, 2026-03):
+    ///
+    /// | Level  | Condition                                     | Rationale |
+    /// |--------|-----------------------------------------------|-----------|
+    /// | Low    | strongest ≥ 0.75 AND gap ≥ 0.20              | Strong signal with clear separation — model is confident. 0.75 chosen as 95th percentile of true-positive scores; 0.20 gap filters out cases where two categories compete. |
+    /// | High   | strongest ≥ floor AND gap < margin_threshold  | High risk but ambiguous — two categories score similarly, so the model cannot decide. Routed to guardian for human review. |
+    /// | Medium | everything else                               | Default — no special routing needed. |
+    ///
+    /// `uncertainty_abstain_score_floor` (default 0.65) and
+    /// `uncertainty_abstain_margin_threshold` (default 0.12) are tunable
+    /// per `OnDeviceProfile` to trade sensitivity vs. guardian alert volume.
     fn apply_uncertainty_decision(&self, result: &mut MlResult) {
         let safety_gap = result.safety.as_ref().map_or(0.0, |s| s.top_two_gap());
         let safety_max = result.safety.as_ref().map_or(0.0, |s| s.max_risk());

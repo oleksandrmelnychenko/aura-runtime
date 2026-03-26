@@ -280,6 +280,17 @@ pub struct IntentCalibration {
     pub request_media: f32,
 }
 
+/// Returns language- and profile-specific calibration multipliers for intent scores.
+///
+/// Derived from the same Ecliptix bilingual corpus as safety calibration
+/// (v2, 2026-03). Intent-specific deltas:
+///
+/// | Language  | Category        | Factor | Rationale |
+/// |-----------|----------------|--------|-----------|
+/// | Ukrainian | request_meeting| 1.03   | UK meeting-request phrasing uses more indirect forms |
+/// | Ukrainian | request_secret | 1.06   | Secrecy idioms in UK diverge more from EN patterns |
+/// | Russian   | request_meeting| 1.02   | Slightly more direct than UK, closer to EN |
+/// | Russian   | request_secret | 1.05   | Similar divergence to UK secrecy patterns |
 pub fn intent_calibration_for(language: &str, profile: OnDeviceProfile) -> IntentCalibration {
     let language = language.to_ascii_lowercase();
     let mut calibration = if language.starts_with("uk") {

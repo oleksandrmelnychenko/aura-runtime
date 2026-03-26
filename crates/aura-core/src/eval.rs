@@ -39,6 +39,14 @@ pub struct ThreatCalibrationReport {
 pub struct CalibrationReport {
     pub count: usize,
     pub brier_score: f32,
+    /// Cost-weighted Brier score where false negatives on positive cases
+    /// (missed threats) are penalised more heavily than false positives.
+    ///
+    /// Weight scheme: positive examples (target ≥ 0.5) contribute with
+    /// weight `FN_COST_WEIGHT` (default 3.0), negative examples with 1.0.
+    /// This reflects the asymmetric cost in child safety: missing a real
+    /// grooming pattern is far more harmful than a false alarm.
+    pub weighted_brier_score: f32,
     pub expected_calibration_error: f32,
     pub bins: Vec<CalibrationBin>,
     pub by_threat: Vec<ThreatCalibrationReport>,
@@ -298,6 +306,7 @@ pub fn build_calibration_report(examples: &[RiskExample], bin_count: usize) -> C
     CalibrationReport {
         count: overall.count,
         brier_score: overall.brier_score,
+        weighted_brier_score: overall.weighted_brier_score,
         expected_calibration_error: overall.expected_calibration_error,
         bins: overall.bins,
         by_threat,
@@ -879,6 +888,29 @@ fn build_single_calibration_report(
             .sum::<f32>()
             / examples.len() as f32
     };
+
+    // Cost-weighted Brier: penalise missed positives 3× more than false alarms.
+    // In child safety, failing to detect grooming is far worse than over-alerting.
+    const FN_COST_WEIGHT: f32 = 3.0;
+    let weighted_brier_score = if examples.is_empty() {
+        0.0
+    } else {
+        let mut weighted_sum = 0.0f32;
+        let mut total_weight = 0.0f32;
+        for example in examples {
+            let y = example.target_probability.clamp(0.0, 1.0);
+            let err = (example.predicted_score.clamp(0.0, 1.0) - y).powi(2);
+            let w = if y >= 0.5 { FN_COST_WEIGHT } else { 1.0 };
+            weighted_sum += err * w;
+            total_weight += w;
+        }
+        if total_weight > 0.0 {
+            weighted_sum / total_weight
+        } else {
+            0.0
+        }
+    };
+
     let expected_calibration_error = if examples.is_empty() {
         0.0
     } else {
@@ -890,6 +922,7 @@ fn build_single_calibration_report(
     CalibrationReport {
         count,
         brier_score,
+        weighted_brier_score,
         expected_calibration_error,
         bins,
         by_threat: Vec::new(),
@@ -1396,6 +1429,7 @@ mod tests {
             calibration: CalibrationReport {
                 count: 10,
                 brier_score: 0.30,
+                weighted_brier_score: 0.0,
                 expected_calibration_error: 0.28,
                 bins: Vec::new(),
                 by_threat: Vec::new(),
@@ -1446,6 +1480,7 @@ mod tests {
             calibration: CalibrationReport {
                 count: 20,
                 brier_score: 0.10,
+                weighted_brier_score: 0.0,
                 expected_calibration_error: 0.10,
                 bins: Vec::new(),
                 by_threat: vec![ThreatCalibrationReport {
@@ -1511,6 +1546,7 @@ mod tests {
         let report = CalibrationReport {
             count: 2,
             brier_score: 0.1,
+            weighted_brier_score: 0.0,
             expected_calibration_error: 0.1,
             bins: Vec::new(),
             by_threat: vec![ThreatCalibrationReport {

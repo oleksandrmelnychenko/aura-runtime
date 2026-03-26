@@ -6,15 +6,28 @@ impl Analyzer {
     pub(super) fn analyze_staged(&mut self, input: &MessageInput) -> AnalysisResult {
         let start = Instant::now();
         let protection = self.config.effective_protection_level();
+
+        if protection == ProtectionLevel::Off {
+            return AnalysisResult::clean(0);
+        }
+
+        // Rate-limit: skip expensive pipeline for senders that exceed
+        // 60 messages/minute. The message is still counted (total_messages
+        // increments) but pattern/ML/context analysis is skipped.
+        // Uses wall-clock millis since MessageInput has no timestamp field.
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        if !self.rate_limiter.check(&input.sender_id, now_ms) {
+            return AnalysisResult::rate_limited(start.elapsed().as_micros() as u64);
+        }
+
         let domain_mode = self.config.effective_domain_mode();
         let domain_output = self
             .domain_runtime
             .analyze_for_mode_with_protection(domain_mode, protection, input);
         let domain_signals = build_domain_detection_signals(domain_output.as_ref());
-
-        if protection == ProtectionLevel::Off {
-            return AnalysisResult::clean(0);
-        }
 
         let mut signals = Vec::with_capacity(8);
 

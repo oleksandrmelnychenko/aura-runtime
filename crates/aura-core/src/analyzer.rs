@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use aura_ml::{IntentLabel, MlConfig, MlPipeline, MlUncertaintyLevel, SafetyLabel, ToxicityLabel};
 use aura_patterns::{PatternDatabase, PatternMatcher, UrlChecker};
@@ -26,6 +26,70 @@ use crate::ids::{ConversationId, SenderId};
 use crate::types::*;
 
 mod stages;
+
+/// Per-sender sliding-window rate limiter.
+///
+/// Prevents a single sender from overwhelming the analysis pipeline
+/// (e.g. spam bots sending hundreds of messages per minute). When the
+/// limit is exceeded, `check` returns `false` and the caller should
+/// skip full analysis for that message (still count it, but skip the
+/// expensive pattern/ML/context pipeline).
+struct SenderRateLimiter {
+    /// sender → ring of recent timestamps (newest last).
+    windows: HashMap<SenderId, VecDeque<u64>>,
+    /// Maximum messages per sender within the window.
+    max_per_window: u32,
+    /// Sliding window duration in milliseconds.
+    window_ms: u64,
+}
+
+impl SenderRateLimiter {
+    fn new(max_per_window: u32, window_ms: u64) -> Self {
+        Self {
+            windows: HashMap::new(),
+            max_per_window,
+            window_ms,
+        }
+    }
+
+    /// Records a message and returns `true` if the sender is within limits.
+    fn check(&mut self, sender_id: &str, timestamp_ms: u64) -> bool {
+        let cutoff = timestamp_ms.saturating_sub(self.window_ms);
+        let ring = self
+            .windows
+            .entry(SenderId::from(sender_id))
+            .or_default();
+
+        // Evict expired entries from the front.
+        while let Some(&oldest) = ring.front() {
+            if oldest < cutoff {
+                ring.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        if ring.len() as u32 >= self.max_per_window {
+            return false;
+        }
+        ring.push_back(timestamp_ms);
+        true
+    }
+
+    fn cleanup(&mut self, now_ms: u64) {
+        let cutoff = now_ms.saturating_sub(self.window_ms);
+        self.windows.retain(|_, ring: &mut VecDeque<u64>| {
+            while let Some(&oldest) = ring.front() {
+                if oldest < cutoff {
+                    ring.pop_front();
+                } else {
+                    break;
+                }
+            }
+            !ring.is_empty()
+        });
+    }
+}
 
 struct EscalationTracker {
     recent_events: HashMap<ConversationId, Vec<(u64, SenderId)>>,
@@ -140,6 +204,7 @@ pub struct Analyzer {
     timing_analyzer: TimingAnalyzer,
     ml_pipeline: MlPipeline,
     escalation_tracker: EscalationTracker,
+    rate_limiter: SenderRateLimiter,
     domain_runtime: AuraDomainRuntime,
 }
 
@@ -175,6 +240,9 @@ impl Analyzer {
             timing_analyzer,
             ml_pipeline,
             escalation_tracker: EscalationTracker::new(),
+            // 60 messages per 60 seconds per sender. Burst-friendly for
+            // legitimate chat-sync scenarios but blocks sustained floods.
+            rate_limiter: SenderRateLimiter::new(60, 60_000),
             domain_runtime: AuraDomainRuntime::new(),
         }
     }
@@ -639,6 +707,7 @@ impl Analyzer {
     pub fn cleanup_context(&mut self, now_ms: u64) {
         self.context_tracker.cleanup(now_ms);
         self.escalation_tracker.cleanup(now_ms);
+        self.rate_limiter.cleanup(now_ms);
     }
 
     /// Marks a contact as trusted, reducing future risk scores for that sender.
@@ -665,6 +734,14 @@ impl Analyzer {
     }
 
     /// Reloads pattern matchers and URL checker from an updated pattern database.
+    ///
+    /// **Important:** reload replaces the rule set used for *future* messages
+    /// only. Events already recorded in conversation timelines retain their
+    /// original `EventKind` mappings. This is intentional — re-classifying
+    /// historical events would invalidate behavioral trend baselines and
+    /// could cause false detection resets mid-conversation. If a rule
+    /// rename changes the semantics of an `EventKind`, perform a full
+    /// context export → clear → re-import cycle instead.
     pub fn reload_patterns(&mut self, pattern_db: &PatternDatabase) {
         self.pattern_db = pattern_db.clone();
         self.supported_pattern_languages = collect_supported_pattern_languages(pattern_db);
