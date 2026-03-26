@@ -76,15 +76,30 @@ struct KidsProfileSettings {
     new_sender_message_max: usize,
     sender_risk_new_sender_delta: f32,
     sender_risk_known_sender_delta: f32,
+    cross_conversation_repeat_min: usize,
 }
 
 const MAX_TRACKED_CONVERSATIONS: usize = 2000;
+const MAX_TRACKED_SENDERS: usize = 4000;
+const SENDER_RISK_CONVERSATION_WINDOW: usize = 12;
 
 static KIDS_CONVERSATION_MEMORY: OnceLock<Mutex<HashMap<String, ConversationRiskMemory>>> =
     OnceLock::new();
+static KIDS_SENDER_MEMORY: OnceLock<Mutex<HashMap<String, SenderRiskMemory>>> = OnceLock::new();
 
 fn conversation_memory() -> &'static Mutex<HashMap<String, ConversationRiskMemory>> {
     KIDS_CONVERSATION_MEMORY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[derive(Default)]
+struct SenderRiskMemory {
+    event_index: u64,
+    recent_high_risk_conversations: VecDeque<String>,
+    last_emitted: HashMap<&'static str, u64>,
+}
+
+fn sender_memory() -> &'static Mutex<HashMap<String, SenderRiskMemory>> {
+    KIDS_SENDER_MEMORY.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn apply_kids_risk_amplifiers(signals: &mut Vec<DomainSignal>) {
@@ -310,6 +325,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
     drop(guard);
+    apply_cross_conversation_sender_amplifier(input, &settings, &current, signals);
 }
 
 #[cfg(test)]
@@ -318,6 +334,75 @@ fn clear_conversation_memory_for_tests() {
         return;
     };
     guard.clear();
+    let Ok(mut guard) = sender_memory().lock() else {
+        return;
+    };
+    guard.clear();
+}
+
+fn apply_cross_conversation_sender_amplifier(
+    input: &DomainInput,
+    settings: &KidsProfileSettings,
+    current: &MessageRiskSnapshot,
+    signals: &mut Vec<DomainSignal>,
+) {
+    let Some(sender_id) = input.sender_id.as_deref() else {
+        return;
+    };
+    let Some(conversation_id) = input.conversation_id.as_deref() else {
+        return;
+    };
+
+    let sender_has_high_risk = current.has_grooming
+        || current.has_manipulation
+        || current.has_blackmail_or_sextortion
+        || (current.has_bullying && current.has_self_harm);
+    if !sender_has_high_risk {
+        return;
+    }
+
+    let Ok(mut guard) = sender_memory().lock() else {
+        return;
+    };
+    trim_sender_memory_if_needed(&mut guard, sender_id);
+    let memory = guard
+        .entry(sender_id.to_string())
+        .or_insert_with(SenderRiskMemory::default);
+    memory.event_index = memory.event_index.saturating_add(1);
+    let now_index = memory.event_index;
+
+    let mut existing_idx = None;
+    for (idx, conv) in memory.recent_high_risk_conversations.iter().enumerate() {
+        if conv == conversation_id {
+            existing_idx = Some(idx);
+            break;
+        }
+    }
+    if let Some(idx) = existing_idx {
+        memory.recent_high_risk_conversations.remove(idx);
+    }
+    memory
+        .recent_high_risk_conversations
+        .push_back(conversation_id.to_string());
+    while memory.recent_high_risk_conversations.len() > SENDER_RISK_CONVERSATION_WINDOW {
+        memory.recent_high_risk_conversations.pop_front();
+    }
+
+    let conversation_count = memory.recent_high_risk_conversations.len();
+    if conversation_count >= settings.cross_conversation_repeat_min
+        && should_emit_sender_memory_signal(memory, "cross_conversation_repeat_offender", now_index, settings.cooldown_messages)
+    {
+        mark_sender_memory_signal_emitted(memory, "cross_conversation_repeat_offender", now_index);
+        signals.push(DomainSignal {
+            threat_key: "kids_memory_cross_conversation_repeat_offender".to_string(),
+            reason_code: "kids.memory.cross_conversation_repeat_offender".to_string(),
+            score: 0.96,
+            threat_type: Some("manipulation".to_string()),
+            severity: Some("critical".to_string()),
+            priority: Some(100),
+            action: Some(DomainAction::Warn),
+        });
+    }
 }
 
 fn trim_conversation_memory_if_needed(
@@ -328,6 +413,23 @@ fn trim_conversation_memory_if_needed(
         let mut candidate = None;
         for key in memory.keys() {
             if key.as_str() == current_conversation_id {
+                continue;
+            }
+            candidate = Some(key.clone());
+            break;
+        }
+        let Some(candidate) = candidate else {
+            break;
+        };
+        memory.remove(&candidate);
+    }
+}
+
+fn trim_sender_memory_if_needed(memory: &mut HashMap<String, SenderRiskMemory>, current_sender_id: &str) {
+    while memory.len() >= MAX_TRACKED_SENDERS {
+        let mut candidate = None;
+        for key in memory.keys() {
+            if key.as_str() == current_sender_id {
                 continue;
             }
             candidate = Some(key.clone());
@@ -356,6 +458,22 @@ fn mark_memory_signal_emitted(memory: &mut ConversationRiskMemory, key: &'static
     memory.last_emitted.insert(key, now_index);
 }
 
+fn should_emit_sender_memory_signal(
+    memory: &SenderRiskMemory,
+    key: &'static str,
+    now_index: u64,
+    cooldown_messages: u64,
+) -> bool {
+    let Some(previous) = memory.last_emitted.get(key) else {
+        return true;
+    };
+    now_index.saturating_sub(*previous) >= cooldown_messages
+}
+
+fn mark_sender_memory_signal_emitted(memory: &mut SenderRiskMemory, key: &'static str, now_index: u64) {
+    memory.last_emitted.insert(key, now_index);
+}
+
 fn profile_settings(
     profile: DomainRiskProfile,
     conversation_type: DomainConversationType,
@@ -371,6 +489,7 @@ fn profile_settings(
             new_sender_message_max: 2,
             sender_risk_new_sender_delta: 0.2,
             sender_risk_known_sender_delta: 0.2,
+            cross_conversation_repeat_min: 2,
         },
         (DomainRiskProfile::Strict, DomainConversationType::Group) => KidsProfileSettings {
             memory_window_messages: 18,
@@ -382,6 +501,7 @@ fn profile_settings(
             new_sender_message_max: 2,
             sender_risk_new_sender_delta: 0.2,
             sender_risk_known_sender_delta: 0.2,
+            cross_conversation_repeat_min: 2,
         },
         (DomainRiskProfile::Normal, DomainConversationType::Direct) => KidsProfileSettings {
             memory_window_messages: 12,
@@ -393,6 +513,7 @@ fn profile_settings(
             new_sender_message_max: 2,
             sender_risk_new_sender_delta: 0.2,
             sender_risk_known_sender_delta: 0.2,
+            cross_conversation_repeat_min: 3,
         },
         (DomainRiskProfile::Normal, DomainConversationType::Group) => KidsProfileSettings {
             memory_window_messages: 14,
@@ -404,6 +525,7 @@ fn profile_settings(
             new_sender_message_max: 2,
             sender_risk_new_sender_delta: 0.2,
             sender_risk_known_sender_delta: 0.2,
+            cross_conversation_repeat_min: 2,
         },
     }
 }
@@ -739,5 +861,36 @@ mod tests {
         trim_conversation_memory_if_needed(&mut map, "conv_current");
         assert!(map.len() < MAX_TRACKED_CONVERSATIONS);
         assert!(map.contains_key("conv_current"));
+    }
+
+    #[test]
+    fn pipeline_cross_conversation_repeat_offender_triggers() {
+        clear_conversation_memory_for_tests();
+        let first = DomainInput {
+            text: Some("our little secret. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: Some("repeat_sender".to_string()),
+            conversation_id: Some("conv_repeat_1".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let second = DomainInput {
+            text: Some("don't tell your parents. i have your photo.".to_string()),
+            language: None,
+            sender_id: Some("repeat_sender".to_string()),
+            conversation_id: Some("conv_repeat_2".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let _ = run_kids_pipeline(&first);
+        let output = run_kids_pipeline(&second);
+        let mut has_cross_signal = false;
+        for signal in &output.signals {
+            if signal.reason_code == "kids.memory.cross_conversation_repeat_offender" {
+                has_cross_signal = true;
+            }
+        }
+        assert!(has_cross_signal);
+        assert_eq!(output.action, Some(DomainAction::Warn));
     }
 }

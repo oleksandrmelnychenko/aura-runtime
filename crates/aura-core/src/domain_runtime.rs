@@ -168,6 +168,9 @@ pub fn map_domain_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
     if rule_id.contains("kids.memory.new_sender_fast_escalation") {
         return Some(EventKind::EmotionalBlackmail);
     }
+    if rule_id.contains("kids.memory.cross_conversation_repeat_offender") {
+        return Some(EventKind::EmotionalBlackmail);
+    }
     if rule_id.contains("kids.memory.bullying_cascade_selfharm") {
         return Some(EventKind::SuicidalIdeation);
     }
@@ -1101,6 +1104,10 @@ mod tests {
         );
         assert_eq!(
             map_domain_rule_to_event_kind("kids.memory.new_sender_fast_escalation"),
+            Some(EventKind::EmotionalBlackmail)
+        );
+        assert_eq!(
+            map_domain_rule_to_event_kind("kids.memory.cross_conversation_repeat_offender"),
             Some(EventKind::EmotionalBlackmail)
         );
         assert_eq!(
