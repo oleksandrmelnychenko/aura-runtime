@@ -117,6 +117,9 @@ pub fn map_domain_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
     if rule_id.contains("kids.memory.grooming_progression") {
         return Some(EventKind::SecrecyRequest);
     }
+    if rule_id.contains("kids.memory.sender_risk_accumulation") {
+        return Some(EventKind::EmotionalBlackmail);
+    }
     if rule_id.contains("kids.memory.bullying_cascade_selfharm") {
         return Some(EventKind::SuicidalIdeation);
     }
@@ -1041,6 +1044,10 @@ mod tests {
         assert_eq!(
             map_domain_rule_to_event_kind("kids.memory.grooming_progression"),
             Some(EventKind::SecrecyRequest)
+        );
+        assert_eq!(
+            map_domain_rule_to_event_kind("kids.memory.sender_risk_accumulation"),
+            Some(EventKind::EmotionalBlackmail)
         );
         assert_eq!(
             map_domain_rule_to_event_kind("kids.memory.bullying_cascade_selfharm"),
