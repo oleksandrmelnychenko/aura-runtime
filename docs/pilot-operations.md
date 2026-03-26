@@ -69,6 +69,8 @@ Reviewers should confirm:
 - no raw sender or conversation identifiers appear in artifacts
 - child-facing interventions match expected rollout mode
 - guardian-facing alerts are appropriate for the slice
+- mandatory `kids.memory.*` escalation reasons are preserved as guardian-review
+  class findings (no downgrade during pilot triage)
 - trusted-adult supportive traffic is not over-escalated
 - supportive self-harm replies are not treated as crisis-originating content
 - reputation/image-abuse cases open review with the expected urgency
@@ -138,3 +140,12 @@ If you need missing-model behavior to fail hard, set:
 ```bash
 AURA_REQUIRE_ONNX_MODELS=1
 ```
+
+## KIDS Memory Escalation Trail
+
+For KIDS-domain pilot review, use the mandatory reason-code matrix:
+
+- [KIDS Memory Escalation Matrix](./kids-memory-escalation-matrix.md)
+
+This matrix is the required explainability baseline when evaluating guardian
+escalations originating from memory-level KIDS signals.

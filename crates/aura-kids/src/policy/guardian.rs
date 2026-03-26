@@ -1,7 +1,21 @@
 use aura_domain::DomainSignal;
 
+const MANDATORY_GUARDIAN_REASONS: &[&str] = &[
+    "kids.memory.grooming_progression",
+    "kids.memory.sustained_sextortion",
+    "kids.memory.bullying_cascade_selfharm",
+    "kids.memory.sender_risk_accumulation",
+    "kids.memory.new_sender_fast_escalation",
+    "kids.memory.cross_conversation_repeat_offender",
+    "kids.memory.victim_vulnerability_targeting",
+];
+
 pub fn needs_guardian_escalation(signals: &[DomainSignal]) -> bool {
     needs_guardian_escalation_with_priority(signals, 92)
+}
+
+pub fn mandatory_guardian_reason_codes() -> &'static [&'static str] {
+    MANDATORY_GUARDIAN_REASONS
 }
 
 pub fn needs_guardian_escalation_with_priority(signals: &[DomainSignal], min_priority: u8) -> bool {
@@ -27,21 +41,17 @@ pub fn needs_guardian_escalation_with_priority(signals: &[DomainSignal], min_pri
 }
 
 fn is_mandatory_guardian_reason(reason_code: &str) -> bool {
-    match reason_code {
-        "kids.memory.grooming_progression"
-        | "kids.memory.sustained_sextortion"
-        | "kids.memory.bullying_cascade_selfharm"
-        | "kids.memory.sender_risk_accumulation"
-        | "kids.memory.new_sender_fast_escalation"
-        | "kids.memory.cross_conversation_repeat_offender"
-        | "kids.memory.victim_vulnerability_targeting" => true,
-        _ => false,
+    for code in MANDATORY_GUARDIAN_REASONS {
+        if *code == reason_code {
+            return true;
+        }
     }
+    false
 }
 
 #[cfg(test)]
 mod tests {
-    use super::needs_guardian_escalation_with_priority;
+    use super::{mandatory_guardian_reason_codes, needs_guardian_escalation_with_priority};
     use aura_domain::DomainSignal;
 
     fn signal(priority: Option<u8>, severity: Option<&str>, reason_code: &str) -> DomainSignal {
@@ -82,5 +92,10 @@ mod tests {
             "kids.memory.cross_conversation_repeat_offender",
         )];
         assert!(needs_guardian_escalation_with_priority(&signals, 92));
+    }
+
+    #[test]
+    fn mandatory_reason_catalog_is_not_empty() {
+        assert!(!mandatory_guardian_reason_codes().is_empty());
     }
 }

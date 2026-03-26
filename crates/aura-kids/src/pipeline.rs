@@ -599,10 +599,10 @@ mod tests {
 
     fn test_lock() -> MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        let Ok(guard) = LOCK.get_or_init(|| Mutex::new(())).lock() else {
-            panic!("test lock poisoned");
-        };
-        guard
+        match LOCK.get_or_init(|| Mutex::new(())).lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
     }
 
     fn input(text: &str) -> DomainInput {

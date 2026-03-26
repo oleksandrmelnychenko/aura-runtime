@@ -55,6 +55,9 @@ Recommended production check sequence (runs both reports even if release gate fa
 - Include and validate SHA-256 for ONNX sidecar tensors (`*.onnx.data`) in `manifest.json`.
 - `onnx_integration` safety/intent load tests are opt-in to avoid long-running hangs on some Windows environments.
   Enable explicitly with `AURA_RUN_SAFETY_INTENT_ONNX=1`.
+- KIDS memory-level guardian escalation reasons are mandatory regardless of
+  priority drift; keep regression checks aligned with
+  `docs/kids-memory-escalation-matrix.md`.
 
 ## Current Snapshot (2026-03-25)
 

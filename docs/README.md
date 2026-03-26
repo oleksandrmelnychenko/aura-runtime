@@ -21,6 +21,7 @@ Status: synchronized with runtime and policy behavior on March 25, 2026.
 - [Safety 5-Label Training](./safety-5label-training.md)
 - [Verification Commands](./verification-commands.md)
 - [Continuation Handoff](./continuation-handoff.md)
+- [KIDS Memory Escalation Matrix](./kids-memory-escalation-matrix.md)
 
 ## Product and Scenario Docs
 
