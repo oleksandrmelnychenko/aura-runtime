@@ -46,6 +46,7 @@ Escalation policy:
 - Daily: review strict `kids-memory-health` artifacts
 - Weekly: review trend deltas and scenario coverage drift
 - Release week: run strict check as a required pre-promotion gate
+- Release week: run strict pre-prod dry-run matrix and attach JSON to signoff
 
 ## Required Commands
 
@@ -64,4 +65,14 @@ CI strict run:
 
 ```bash
 gh workflow run kids-memory-health.yml -f require_mandatory_reasons=true
+```
+
+Pre-prod dry-run matrix:
+
+```bash
+python ci/kids_preprod_dry_run_matrix.py \
+  --policy-expectations crates/aura-core/data/action_policy_expectations.json \
+  --realistic-cases crates/aura-core/data/realistic_chat_cases.json \
+  --kids-memory-health artifacts/kids-memory-health.json \
+  --output artifacts/kids-preprod-dry-run-matrix.json
 ```

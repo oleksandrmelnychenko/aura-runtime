@@ -25,6 +25,7 @@ Status: synchronized with runtime and policy behavior on March 25, 2026.
 - [KIDS Memory Incident Runbook](./kids-memory-incident-runbook.md)
 - [KIDS Strict Scenario Matrix](./kids-strict-scenario-matrix.md)
 - [KIDS Memory Operational Targets](./kids-memory-operational-targets.md)
+- [KIDS Pre-Prod Dry-Run Matrix](./kids-preprod-dry-run-matrix.md)
 
 ## Product and Scenario Docs
 

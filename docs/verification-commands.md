@@ -11,6 +11,7 @@ just verify
 just verify-full
 just verify-onnx
 just kids-memory-health
+just kids-preprod-dry-run
 ```
 
 ## Core Release Gates
@@ -96,3 +97,16 @@ Reference strict readiness contracts:
 
 - `docs/kids-strict-scenario-matrix.md`
 - `docs/kids-memory-operational-targets.md`
+- `docs/kids-preprod-dry-run-matrix.md`
+
+## KIDS Pre-Prod Dry-Run Matrix
+
+Build strict pre-prod readiness matrix from policy/corpus + memory-health:
+
+```bash
+python ci/kids_preprod_dry_run_matrix.py \
+  --policy-expectations crates/aura-core/data/action_policy_expectations.json \
+  --realistic-cases crates/aura-core/data/realistic_chat_cases.json \
+  --kids-memory-health artifacts/kids-memory-health.json \
+  --output artifacts/kids-preprod-dry-run-matrix.json
+```

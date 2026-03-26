@@ -128,6 +128,7 @@ Strict baseline and rollback thresholds:
 
 - [KIDS Strict Scenario Matrix](./kids-strict-scenario-matrix.md)
 - [KIDS Memory Operational Targets](./kids-memory-operational-targets.md)
+- [KIDS Pre-Prod Dry-Run Matrix](./kids-preprod-dry-run-matrix.md)
 
 ## Rollback Triggers
 

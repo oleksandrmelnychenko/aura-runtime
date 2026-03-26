@@ -18,6 +18,7 @@ env:
   AURA_PILOT_SHADOW_BUNDLE_PATH_B: artifacts/pilot-shadow-run-b.json
   AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
   AURA_KIDS_MEMORY_HEALTH_PATH: artifacts/kids-memory-health.json
+  AURA_KIDS_PREPROD_DRY_RUN_PATH: artifacts/kids-preprod-dry-run-matrix.json
 
 jobs:
   kids-memory-health:
@@ -89,6 +90,43 @@ jobs:
                 for code in missing:
                     summary.write(f"  - `{code}`\n")
         PY
+    - name: Build KIDS pre-prod dry-run matrix
+      run: |
+        python3 ci/kids_preprod_dry_run_matrix.py \
+          --policy-expectations crates/aura-core/data/action_policy_expectations.json \
+          --realistic-cases crates/aura-core/data/realistic_chat_cases.json \
+          --kids-memory-health "$AURA_KIDS_MEMORY_HEALTH_PATH" \
+          --output "$AURA_KIDS_PREPROD_DRY_RUN_PATH"
+    - name: Summarize KIDS pre-prod dry-run matrix
+      if: ${{ always() }}
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        import pathlib
+
+        report_path = pathlib.Path(os.environ["AURA_KIDS_PREPROD_DRY_RUN_PATH"])
+        if not report_path.exists():
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+                summary.write("## KIDS Pre-Prod Dry-Run Matrix\n\n")
+                summary.write("- status: `missing`\n")
+                summary.write("- report: missing\n")
+            raise SystemExit(0)
+
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        checks = report.get("checks", {})
+        missing = report.get("missing", {})
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+            summary.write("## KIDS Pre-Prod Dry-Run Matrix\n\n")
+            summary.write(f"- overall_status: `{report.get('overall_status', 'missing')}`\n")
+            summary.write(f"- checks_passed: `{sum(1 for ok in checks.values() if ok is True)}`\n")
+            summary.write(f"- checks_failed: `{sum(1 for ok in checks.values() if ok is False)}`\n")
+            summary.write(f"- missing_policy_harmful_slices: `{len(missing.get('policy_harmful_slices', []))}`\n")
+            summary.write(f"- missing_policy_benign_slices: `{len(missing.get('policy_benign_slices', []))}`\n")
+            summary.write(f"- missing_realistic_harmful_slices: `{len(missing.get('realistic_harmful_slices', []))}`\n")
+            summary.write(f"- missing_realistic_benign_slices: `{len(missing.get('realistic_benign_slices', []))}`\n")
+            summary.write(f"- missing_required_memory_codes: `{len(missing.get('required_memory_codes', []))}`\n")
+        PY
     - name: Upload KIDS memory health artifacts
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
@@ -96,6 +134,7 @@ jobs:
         name: aura-kids-memory-health
         path: |
           ${{ env.AURA_KIDS_MEMORY_HEALTH_PATH }}
+          ${{ env.AURA_KIDS_PREPROD_DRY_RUN_PATH }}
           ${{ env.AURA_PILOT_REGRESSION_REPORT_PATH }}
           ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH_A }}
           ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH_B }}
