@@ -99,8 +99,10 @@ jobs:
           --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
           --review-signoffs "$AURA_PILOT_REVIEW_SIGNOFFS_PATH" \
           --kids-memory-health-report "$AURA_KIDS_MEMORY_HEALTH_PATH" \
+          --kids-preprod-dry-run-report "$AURA_KIDS_PREPROD_DRY_RUN_PATH" \
           --output "$AURA_PILOT_GATE_REPORT_PATH" \
           --require-kids-memory-pass \
+          --require-kids-preprod-dry-run-pass \
           --require-pass
     - name: Compile FFI Header Smoke
       if: ${{ always() }}

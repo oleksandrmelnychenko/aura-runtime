@@ -393,9 +393,12 @@ def main() -> int:
                     args.pilot_review_signoffs,
                     "--kids-memory-health-report",
                     paths["kids_memory_health"].as_posix(),
+                    "--kids-preprod-dry-run-report",
+                    paths["kids_preprod_dry_run"].as_posix(),
                     "--output",
                     paths["pilot_gate_report"].as_posix(),
                     "--require-kids-memory-pass",
+                    "--require-kids-preprod-dry-run-pass",
                     "--require-pass",
                 ]
             )

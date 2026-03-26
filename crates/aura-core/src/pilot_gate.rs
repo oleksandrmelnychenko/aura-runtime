@@ -45,6 +45,7 @@ pub struct PilotGateConfig {
     pub require_release_pass: bool,
     pub require_pilot_regression_pass: bool,
     pub require_kids_memory_pass: bool,
+    pub require_kids_preprod_dry_run_pass: bool,
     pub required_review_areas: Vec<PilotReviewArea>,
 }
 
@@ -56,6 +57,7 @@ impl Default for PilotGateConfig {
             require_release_pass: true,
             require_pilot_regression_pass: true,
             require_kids_memory_pass: false,
+            require_kids_preprod_dry_run_pass: false,
             required_review_areas: vec![
                 PilotReviewArea::FalsePositiveHotspots,
                 PilotReviewArea::SelfHarmBoundaryCases,
@@ -112,6 +114,13 @@ pub struct KidsMemoryHealthSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KidsPreprodDryRunSnapshot {
+    pub schema_version: Option<String>,
+    pub overall_status: String,
+    pub checks_failed: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PilotGateCheck {
     pub check_id: String,
     pub status: PilotGateStatus,
@@ -135,6 +144,7 @@ pub struct PilotGateReport {
     pub pilot_regression: PilotRegressionSnapshot,
     pub shadow_runs: Vec<PilotShadowSnapshot>,
     pub kids_memory_health: Option<KidsMemoryHealthSnapshot>,
+    pub kids_preprod_dry_run: Option<KidsPreprodDryRunSnapshot>,
     pub signoffs: Vec<PilotReviewSignoff>,
     pub checks: Vec<PilotGateCheck>,
     pub rollback_triggers: Vec<PilotRollbackTrigger>,
@@ -243,12 +253,43 @@ pub fn parse_kids_memory_health_snapshot(json: &str) -> Result<KidsMemoryHealthS
     })
 }
 
+pub fn parse_kids_preprod_dry_run_snapshot(json: &str) -> Result<KidsPreprodDryRunSnapshot, String> {
+    let value: serde_json::Value = serde_json::from_str(json)
+        .map_err(|err| format!("invalid kids preprod dry-run json: {err}"))?;
+    let overall_status = value
+        .get("overall_status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| "kids preprod dry-run report missing overall_status".to_string())?;
+    let checks = value
+        .get("checks")
+        .and_then(|value| value.as_object())
+        .ok_or_else(|| "kids preprod dry-run report missing checks".to_string())?;
+    let mut checks_failed = 0usize;
+    for check_value in checks.values() {
+        let Some(check_value) = check_value.as_bool() else {
+            return Err("kids preprod dry-run report has non-boolean checks value".to_string());
+        };
+        if !check_value {
+            checks_failed += 1;
+        }
+    }
+    Ok(KidsPreprodDryRunSnapshot {
+        schema_version: value
+            .get("schema_version")
+            .and_then(|value| value.as_str())
+            .map(ToOwned::to_owned),
+        overall_status: overall_status.to_string(),
+        checks_failed,
+    })
+}
+
 pub fn run_pilot_gate(
     config: PilotGateConfig,
     release: PilotReleaseSnapshot,
     pilot_regression: PilotRegressionSnapshot,
     shadow_runs: Vec<PilotShadowSnapshot>,
     kids_memory_health: Option<KidsMemoryHealthSnapshot>,
+    kids_preprod_dry_run: Option<KidsPreprodDryRunSnapshot>,
     signoffs: Vec<PilotReviewSignoff>,
 ) -> PilotGateReport {
     let mut checks = Vec::new();
@@ -306,6 +347,28 @@ pub fn run_pilot_gate(
             None => blocked_check(
                 "kids_memory_health",
                 "kids memory health report is required but missing".to_string(),
+            ),
+        });
+    }
+    if config.require_kids_preprod_dry_run_pass {
+        let kids_preprod_dry_run = kids_preprod_dry_run.as_ref();
+        checks.push(match kids_preprod_dry_run {
+            Some(report) if report.overall_status == "pass" && report.checks_failed == 0 => {
+                pass_check(
+                    "kids_preprod_dry_run",
+                    "kids preprod dry-run matrix passed with no failed checks",
+                )
+            }
+            Some(report) => fail_check(
+                "kids_preprod_dry_run",
+                format!(
+                    "kids preprod dry-run failed (overall_status={}, checks_failed={})",
+                    report.overall_status, report.checks_failed
+                ),
+            ),
+            None => blocked_check(
+                "kids_preprod_dry_run",
+                "kids preprod dry-run report is required but missing".to_string(),
             ),
         });
     }
@@ -453,6 +516,7 @@ pub fn run_pilot_gate(
         pilot_regression,
         shadow_runs,
         kids_memory_health,
+        kids_preprod_dry_run,
         signoffs,
         checks,
         rollback_triggers: default_pilot_rollback_triggers(),
@@ -616,6 +680,14 @@ mod tests {
         }
     }
 
+    fn healthy_kids_preprod_dry_run_snapshot() -> KidsPreprodDryRunSnapshot {
+        KidsPreprodDryRunSnapshot {
+            schema_version: Some("aura.kids_preprod_dry_run_matrix.v1".to_string()),
+            overall_status: "pass".to_string(),
+            checks_failed: 0,
+        }
+    }
+
     #[test]
     fn pilot_gate_passes_with_repeated_clean_runs_and_signoffs() {
         let report = run_pilot_gate(
@@ -623,6 +695,7 @@ mod tests {
             release_snapshot(),
             regression_snapshot(),
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            None,
             None,
             approved_signoffs(),
         );
@@ -636,6 +709,7 @@ mod tests {
             release_snapshot(),
             regression_snapshot(),
             vec![shadow_snapshot("run_a")],
+            None,
             None,
             approved_signoffs(),
         );
@@ -657,6 +731,7 @@ mod tests {
             regression_snapshot(),
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
             None,
+            None,
             signoffs,
         );
         assert_eq!(report.overall_status, PilotGateStatus::Fail);
@@ -676,6 +751,7 @@ mod tests {
             regression_snapshot(),
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
             Some(kids_memory),
+            None,
             approved_signoffs(),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Fail);
@@ -683,6 +759,30 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.check_id == "kids_memory_health"
+                && check.status == PilotGateStatus::Fail));
+    }
+
+    #[test]
+    fn pilot_gate_fails_when_kids_preprod_dry_run_is_required_but_not_pass() {
+        let mut config = PilotGateConfig::default();
+        config.require_kids_preprod_dry_run_pass = true;
+        let mut dry_run = healthy_kids_preprod_dry_run_snapshot();
+        dry_run.overall_status = "fail".to_string();
+        dry_run.checks_failed = 2;
+        let report = run_pilot_gate(
+            config,
+            release_snapshot(),
+            regression_snapshot(),
+            vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            None,
+            Some(dry_run),
+            approved_signoffs(),
+        );
+        assert_eq!(report.overall_status, PilotGateStatus::Fail);
+        assert!(report
+            .checks
+            .iter()
+            .any(|check| check.check_id == "kids_preprod_dry_run"
                 && check.status == PilotGateStatus::Fail));
     }
 }

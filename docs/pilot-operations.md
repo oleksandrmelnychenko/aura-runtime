@@ -13,6 +13,7 @@ A pilot is considered ready only when all of the following are true:
 - `pilot_regression_report` is `pass`
 - at least two clean shadow bundles are available
 - strict `kids-memory-health` snapshot is `pass` with zero missing mandatory reasons
+- strict `kids-preprod-dry-run-matrix` is `pass` with zero failed checks
 - shadow bundles contain no plaintext and no findings
 - required human signoffs are present and approved
 - rollback triggers are known before rollout starts
@@ -27,8 +28,10 @@ cargo run --example pilot_gate -p aura-core -- \
   --shadow-bundle artifacts/pilot-shadow-run-b.json \
   --review-signoffs docs/pilot-review-signoffs.json \
   --kids-memory-health-report artifacts/kids-memory-health.json \
+  --kids-preprod-dry-run-report artifacts/kids-preprod-dry-run-matrix.json \
   --output artifacts/pilot-gate-report.json \
   --require-kids-memory-pass \
+  --require-kids-preprod-dry-run-pass \
   --require-pass
 ```
 

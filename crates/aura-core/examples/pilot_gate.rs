@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::process;
 
 use aura_core::{
-    parse_kids_memory_health_snapshot, parse_pilot_regression_snapshot, parse_pilot_release_snapshot,
-    parse_pilot_review_signoffs, parse_pilot_shadow_snapshot, run_pilot_gate, PilotGateConfig,
-    PilotGateStatus,
+    parse_kids_memory_health_snapshot, parse_kids_preprod_dry_run_snapshot,
+    parse_pilot_regression_snapshot, parse_pilot_release_snapshot, parse_pilot_review_signoffs,
+    parse_pilot_shadow_snapshot, run_pilot_gate, PilotGateConfig, PilotGateStatus,
 };
 
 struct CliArgs {
@@ -15,9 +15,11 @@ struct CliArgs {
     shadow_bundles: Vec<PathBuf>,
     review_signoffs: PathBuf,
     kids_memory_health_report: Option<PathBuf>,
+    kids_preprod_dry_run_report: Option<PathBuf>,
     output: Option<PathBuf>,
     require_pass: bool,
     require_kids_memory_pass: bool,
+    require_kids_preprod_dry_run_pass: bool,
     min_shadow_runs: Option<usize>,
     min_shadow_total_events: Option<usize>,
 }
@@ -28,7 +30,7 @@ enum ParseArgsResult {
 }
 
 fn usage() -> &'static str {
-    "usage: cargo run --example pilot_gate -p aura-core -- --release-report PATH --pilot-regression-report PATH --shadow-bundle PATH [--shadow-bundle PATH ...] --review-signoffs PATH [--kids-memory-health-report PATH] [--output PATH] [--require-pass] [--require-kids-memory-pass] [--min-shadow-runs N] [--min-shadow-total-events N]"
+    "usage: cargo run --example pilot_gate -p aura-core -- --release-report PATH --pilot-regression-report PATH --shadow-bundle PATH [--shadow-bundle PATH ...] --review-signoffs PATH [--kids-memory-health-report PATH] [--kids-preprod-dry-run-report PATH] [--output PATH] [--require-pass] [--require-kids-memory-pass] [--require-kids-preprod-dry-run-pass] [--min-shadow-runs N] [--min-shadow-total-events N]"
 }
 
 fn parse_args() -> Result<ParseArgsResult, String> {
@@ -39,9 +41,11 @@ fn parse_args() -> Result<ParseArgsResult, String> {
     let mut shadow_bundles = Vec::new();
     let mut review_signoffs = None;
     let mut kids_memory_health_report = None;
+    let mut kids_preprod_dry_run_report = None;
     let mut output = None;
     let mut require_pass = false;
     let mut require_kids_memory_pass = false;
+    let mut require_kids_preprod_dry_run_pass = false;
     let mut min_shadow_runs = None;
     let mut min_shadow_total_events = None;
 
@@ -76,6 +80,11 @@ fn parse_args() -> Result<ParseArgsResult, String> {
                     "missing path after --kids-memory-health-report".to_string()
                 })?));
             }
+            "--kids-preprod-dry-run-report" => {
+                kids_preprod_dry_run_report = Some(PathBuf::from(args.next().ok_or_else(|| {
+                    "missing path after --kids-preprod-dry-run-report".to_string()
+                })?));
+            }
             "--output" => {
                 output = Some(PathBuf::from(
                     args.next()
@@ -84,6 +93,7 @@ fn parse_args() -> Result<ParseArgsResult, String> {
             }
             "--require-pass" => require_pass = true,
             "--require-kids-memory-pass" => require_kids_memory_pass = true,
+            "--require-kids-preprod-dry-run-pass" => require_kids_preprod_dry_run_pass = true,
             "--min-shadow-runs" => {
                 min_shadow_runs = Some(
                     args.next()
@@ -114,9 +124,11 @@ fn parse_args() -> Result<ParseArgsResult, String> {
         review_signoffs: review_signoffs
             .ok_or_else(|| "missing required --review-signoffs".to_string())?,
         kids_memory_health_report,
+        kids_preprod_dry_run_report,
         output,
         require_pass,
         require_kids_memory_pass,
+        require_kids_preprod_dry_run_pass,
         min_shadow_runs,
         min_shadow_total_events,
     };
@@ -195,9 +207,19 @@ fn main() {
         ),
         None => None,
     };
+    let kids_preprod_dry_run = match &args.kids_preprod_dry_run_report {
+        Some(path) => Some(
+            parse_kids_preprod_dry_run_snapshot(&fs::read_to_string(path).unwrap_or_else(|err| {
+                panic!("failed to read kids preprod dry-run report {}: {err}", path.display())
+            }))
+            .unwrap_or_else(|err| panic!("invalid kids preprod dry-run report: {err}")),
+        ),
+        None => None,
+    };
 
     let mut config = PilotGateConfig::default();
     config.require_kids_memory_pass = args.require_kids_memory_pass;
+    config.require_kids_preprod_dry_run_pass = args.require_kids_preprod_dry_run_pass;
     if let Some(value) = args.min_shadow_runs {
         config.min_shadow_runs = value;
     }
@@ -211,6 +233,7 @@ fn main() {
         pilot_regression,
         shadow_runs,
         kids_memory_health,
+        kids_preprod_dry_run,
         signoffs,
     );
     let json = serde_json::to_string_pretty(&report).expect("serialize pilot gate report");
