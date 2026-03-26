@@ -271,6 +271,16 @@ impl MlPipeline {
         );
     }
 
+    /// Analyzes multiple texts sequentially, returning one result per input.
+    ///
+    /// Each text passes through the full cascade pipeline individually.
+    /// This is **not** ONNX-level batching (which would pack multiple
+    /// inputs into a single tensor forward pass). Performance benefits
+    /// come from the inference cache: repeated or similar normalised
+    /// texts hit the cache and skip model evaluation entirely.
+    ///
+    /// Texts are processed in chunks of [`ANALYZE_BATCH_CHUNK_SIZE`] to
+    /// bound peak memory from intermediate allocations.
     pub fn analyze_batch(&mut self, texts: &[&str]) -> Vec<MlResult> {
         let mut results = Vec::with_capacity(texts.len());
         for chunk in texts.chunks(Self::ANALYZE_BATCH_CHUNK_SIZE) {

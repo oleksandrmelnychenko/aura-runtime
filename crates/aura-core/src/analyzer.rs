@@ -2090,13 +2090,25 @@ fn anchor_context_signals_to_current_message(signals: &mut [DetectionSignal]) {
     for signal in signals {
         match signal.layer {
             DetectionLayer::ContextAnalysis => {
+                let raw_score = signal.score;
                 signal.score *= damping;
+                // Floor protection prevents damping from burying
+                // genuine safety-critical context signals. However, it
+                // must only apply when the raw (pre-damping) score was
+                // already meaningful — otherwise a noise-level signal
+                // (e.g. raw=0.10) would be artificially boosted to the
+                // floor value, creating a false escalation.
+                const MIN_RAW_FOR_FLOOR: f32 = 0.35;
                 match signal.threat_type {
                     ThreatType::SelfHarm => {
-                        signal.score = signal.score.max(0.55);
+                        if raw_score >= MIN_RAW_FOR_FLOOR {
+                            signal.score = signal.score.max(0.55);
+                        }
                     }
                     ThreatType::Grooming | ThreatType::Manipulation => {
-                        signal.score = signal.score.max(0.45);
+                        if raw_score >= MIN_RAW_FOR_FLOOR {
+                            signal.score = signal.score.max(0.45);
+                        }
                     }
                     ThreatType::None
                     | ThreatType::Bullying

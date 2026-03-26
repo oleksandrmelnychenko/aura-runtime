@@ -774,6 +774,36 @@ pub unsafe extern "C" fn aura_import_context(
 }
 
 /// Removes expired conversation timelines and contact profiles.
+///
+/// **Must be called periodically by the host application.** AURA does not
+/// run background timers — the host is responsible for invoking this
+/// function to prevent unbounded memory growth from accumulated
+/// conversation state.
+///
+/// Recommended calling patterns:
+///
+/// - **App lifecycle:** call on every `applicationDidBecomeActive` /
+///   `onResume` transition.
+/// - **Periodic timer:** every 5–15 minutes while the app is active.
+/// - **After heavy sessions:** immediately after processing a large
+///   batch of messages (e.g. chat sync on reconnect).
+///
+/// `now_ms` is the current wall-clock time in milliseconds since the
+/// Unix epoch. Events older than `ttl_days` (from config, default 30)
+/// are removed.
+///
+/// # C example
+/// ```c
+/// #include <time.h>
+/// uint64_t now_ms = (uint64_t)time(NULL) * 1000;
+/// aura_cleanup_context(handle, now_ms);
+/// ```
+///
+/// # Swift example
+/// ```swift
+/// let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+/// aura_cleanup_context(handle, nowMs)
+/// ```
 #[no_mangle]
 pub unsafe extern "C" fn aura_cleanup_context(handle: *mut c_void, now_ms: u64) -> bool {
     clear_last_error();
@@ -953,6 +983,29 @@ pub unsafe extern "C" fn aura_free_string(ptr: *mut c_char) {
 }
 
 /// Frees an `AuraBuffer` previously returned by the FFI layer.
+///
+/// **Every `AuraBuffer` written by an FFI call must be freed exactly
+/// once** via this function. Failing to free causes a memory leak;
+/// double-freeing is undefined behaviour. The buffer becomes invalid
+/// after this call — do not read `ptr` or `len` afterwards.
+///
+/// # C example
+/// ```c
+/// AuraBuffer out = {0};
+/// if (aura_analyze(handle, req, req_len, &out)) {
+///     process(out.ptr, out.len);
+///     aura_free_buffer(out);   // mandatory
+/// }
+/// ```
+///
+/// # Swift example
+/// ```swift
+/// var out = AuraBuffer()
+/// if aura_analyze(handle, req, reqLen, &out) {
+///     let data = Data(bytes: out.ptr, count: out.len)
+///     aura_free_buffer(out)   // mandatory
+/// }
+/// ```
 #[no_mangle]
 pub unsafe extern "C" fn aura_free_buffer(buf: AuraBuffer) {
     if !buf.ptr.is_null() && buf.len > 0 {
