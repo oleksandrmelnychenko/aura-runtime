@@ -174,6 +174,12 @@ impl AuraConfig {
                 )));
             }
         }
+        if !(-14 * 60..=14 * 60).contains(&self.timezone_offset_minutes) {
+            return Err(crate::error::AuraError::InvalidConfig(format!(
+                "timezone_offset_minutes must be within UTC-14..UTC+14, got {}",
+                self.timezone_offset_minutes
+            )));
+        }
         Ok(())
     }
 }
@@ -222,5 +228,26 @@ mod tests {
             config.effective_domain_module(),
             Some(AuraDomainModule::Kids)
         );
+    }
+
+    #[test]
+    fn timezone_offset_validation_respects_utc_bounds() {
+        let too_low = AuraConfig {
+            timezone_offset_minutes: -14 * 60 - 1,
+            ..AuraConfig::default()
+        };
+        assert!(too_low.validate().is_err());
+
+        let too_high = AuraConfig {
+            timezone_offset_minutes: 14 * 60 + 1,
+            ..AuraConfig::default()
+        };
+        assert!(too_high.validate().is_err());
+
+        let on_edge = AuraConfig {
+            timezone_offset_minutes: 14 * 60,
+            ..AuraConfig::default()
+        };
+        assert!(on_edge.validate().is_ok());
     }
 }

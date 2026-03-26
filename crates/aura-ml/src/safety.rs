@@ -190,7 +190,10 @@ impl SafetyClassifier {
         }
 
         let max_risk = grooming.max(bullying).max(self_harm).max(manipulation);
-        let safe = if max_risk < 0.3 { 1.0 - max_risk } else { 0.0 };
+        // Smooth inverse: safe decreases linearly from 1.0 (risk=0) to 0.0
+        // (risk≥0.5). Avoids the previous step-function discontinuity at 0.3
+        // where safe jumped from 0.7 to 0.0 on a single-digit score change.
+        let safe = (1.0 - max_risk * 2.0).clamp(0.0, 1.0);
 
         SafetyPrediction::from_scores(
             grooming,

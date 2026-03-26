@@ -6,10 +6,18 @@
 
 use sha2::{Digest, Sha256};
 
-/// Validates that all inference output scores are in valid range.
+/// Validates that all inference output scores are in the expected
+/// post-activation range.
+///
+/// All classifier outputs pass through sigmoid (→ \[0,1\]) or softmax
+/// (→ \[0,1\], Σ=1). A score outside \[-0.01, 1.01\] indicates a
+/// numerical fault (NaN, Inf, or raw logits leaking through without
+/// activation). The ±0.01 tolerance accounts for f32 rounding.
 pub fn validate_output_range(scores: &[f32]) -> bool {
+    const TOLERANCE: f32 = 0.01;
     for score in scores {
-        if score.is_nan() || score.is_infinite() || *score < -1.0 || *score > 2.0 {
+        if score.is_nan() || score.is_infinite() || *score < -TOLERANCE || *score > 1.0 + TOLERANCE
+        {
             return false;
         }
     }
@@ -134,6 +142,15 @@ mod tests {
     #[test]
     fn output_range_rejects_extreme() {
         assert!(!validate_output_range(&[0.5, 5.0]));
+        assert!(!validate_output_range(&[0.5, 1.5]));
+        assert!(!validate_output_range(&[-0.5, 0.3]));
+    }
+
+    #[test]
+    fn output_range_accepts_boundary_with_tolerance() {
+        assert!(validate_output_range(&[0.0, 1.0, 0.005]));
+        assert!(validate_output_range(&[1.005, 0.0]));
+        assert!(validate_output_range(&[-0.005, 0.5]));
     }
 
     #[test]

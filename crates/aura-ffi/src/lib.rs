@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use aura_core::context::contact::{
     BehavioralSnapshotState as CoreBehavioralSnapshotState,
@@ -38,6 +39,9 @@ const MAX_BATCH_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SHADOW_BUNDLE_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_IMPORT_CONTEXT_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SMALL_CONTROL_REQUEST_BYTES: usize = 16 * 1024;
+const PATTERN_RELOAD_MIN_INTERVAL_MS: u64 = 1_500;
+const PATTERN_RELOAD_MAX_BACKOFF_MS: u64 = 30_000;
+const PATTERN_RELOAD_PATH_MAX_BYTES: usize = 1024;
 const MANDATORY_KIDS_MEMORY_REASON_CODES: &[&str] = &[
     "kids.memory.grooming_progression",
     "kids.memory.sustained_sextortion",
@@ -67,6 +71,8 @@ fn clear_last_error() {
 struct AuraInstance {
     analyzer: Analyzer,
     pattern_db: PatternDatabase,
+    last_pattern_reload_attempt: Option<Instant>,
+    pattern_reload_failures: u32,
 }
 
 #[repr(C)]
@@ -97,6 +103,8 @@ fn build_instance(config: AuraConfig) -> Result<*mut c_void, String> {
     let instance = Box::new(Mutex::new(AuraInstance {
         analyzer,
         pattern_db,
+        last_pattern_reload_attempt: None,
+        pattern_reload_failures: 0,
     }));
     Ok(Box::into_raw(instance) as *mut c_void)
 }
@@ -122,6 +130,15 @@ fn prepare_output(out: *mut AuraBuffer) -> Result<(), String> {
         *out = AuraBuffer::empty();
     }
     Ok(())
+}
+
+fn pattern_reload_backoff(failure_count: u32) -> Duration {
+    let shift = failure_count.min(4);
+    let multiplier = 1u64 << shift;
+    let millis = PATTERN_RELOAD_MIN_INTERVAL_MS
+        .saturating_mul(multiplier)
+        .min(PATTERN_RELOAD_MAX_BACKOFF_MS);
+    Duration::from_millis(millis)
 }
 
 unsafe fn decode_proto_bounded<M>(
@@ -630,17 +647,45 @@ pub unsafe extern "C" fn aura_reload_patterns(
         }
     };
 
-    let db = match PatternDatabase::from_file(&request.patterns_path) {
-        Ok(db) => db,
-        Err(e) => {
-            set_last_error(format!("pattern load failed: {e}"));
-            return false;
-        }
-    };
-
     match with_instance(handle, |instance| {
+        let patterns_path = request.patterns_path.trim();
+        if patterns_path.is_empty() {
+            return Err("patterns_path must not be empty".to_string());
+        }
+        if patterns_path.len() > PATTERN_RELOAD_PATH_MAX_BYTES {
+            return Err(format!(
+                "patterns_path exceeds {} bytes",
+                PATTERN_RELOAD_PATH_MAX_BYTES
+            ));
+        }
+        if !patterns_path.ends_with(".json") {
+            return Err("patterns_path must reference a .json file".to_string());
+        }
+
+        let now = Instant::now();
+        let cooldown = pattern_reload_backoff(instance.pattern_reload_failures);
+        if let Some(last_attempt) = instance.last_pattern_reload_attempt {
+            let elapsed = now.saturating_duration_since(last_attempt);
+            if elapsed < cooldown {
+                let retry_after_ms = (cooldown - elapsed).as_millis();
+                return Err(format!(
+                    "pattern reload is rate-limited; retry after {retry_after_ms}ms"
+                ));
+            }
+        }
+        instance.last_pattern_reload_attempt = Some(now);
+
+        let db = match PatternDatabase::from_file(patterns_path) {
+            Ok(db) => db,
+            Err(e) => {
+                instance.pattern_reload_failures = instance.pattern_reload_failures.saturating_add(1);
+                return Err(format!("pattern load failed: {e}"));
+            }
+        };
+
         instance.analyzer.reload_patterns(&db);
         instance.pattern_db = db;
+        instance.pattern_reload_failures = 0;
         write_proto_message(
             out,
             &proto::StatusResponse {
@@ -3515,6 +3560,40 @@ mod tests {
 
             aura_free(handle);
             let _ = fs::remove_file(invalid_path);
+        }
+    }
+
+    #[test]
+    fn reload_patterns_is_rate_limited() {
+        unsafe {
+            let valid_path =
+                write_temp_patterns_file("valid_reload_rate_limit", &custom_keyword_patterns_json("signal_rate_limit"));
+            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+            let request = encode_proto(&proto::ReloadPatternsRequest {
+                patterns_path: valid_path.to_string_lossy().into_owned(),
+            });
+
+            let mut out = AuraBuffer::empty();
+            assert!(aura_reload_patterns(
+                handle,
+                request.as_ptr(),
+                request.len(),
+                &mut out,
+            ));
+            aura_free_buffer(out);
+
+            let mut out2 = AuraBuffer::empty();
+            assert!(!aura_reload_patterns(
+                handle,
+                request.as_ptr(),
+                request.len(),
+                &mut out2,
+            ));
+            let err = last_error_string();
+            assert!(err.contains("rate-limited"), "Got: {err}");
+
+            aura_free(handle);
+            let _ = fs::remove_file(valid_path);
         }
     }
 

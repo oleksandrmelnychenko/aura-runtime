@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::backend::{GateModel, SentimentBackend, ToxicityBackend};
 use crate::cache::{self, InferenceCache};
@@ -18,6 +18,7 @@ use crate::telemetry::InferenceTelemetry;
 #[cfg(feature = "onnx")]
 use crate::tokenizer::WordPieceTokenizer;
 use crate::toxicity::ToxicityClassifier;
+use crate::toxicity::MlError;
 use crate::types::{CascadeTier, MlConfig, MlResult, MlUncertaintyLevel, OnDeviceProfile};
 
 pub struct MlPipeline {
@@ -33,7 +34,8 @@ pub struct MlPipeline {
 }
 
 impl MlPipeline {
-    pub fn new(config: MlConfig) -> Self {
+    const ANALYZE_BATCH_CHUNK_SIZE: usize = 256;
+    pub fn try_new(config: MlConfig) -> Result<Self, MlError> {
         let config = Self::normalize_config_for_on_device_profile(config);
         #[cfg(feature = "onnx")]
         if config.validate_hashes {
@@ -41,14 +43,18 @@ impl MlPipeline {
                 && config.manifest_path.is_none()
                 && Self::has_any_onnx_model_configured(&config)
             {
-                panic!("strict manifest validation requires manifest_path when ONNX models are configured");
+                return Err(MlError::ModelLoadFailed(
+                    "strict manifest validation requires manifest_path when ONNX models are configured".to_string(),
+                ));
             }
             if let Some(ref manifest_path) = config.manifest_path {
                 match manifest::validate_models_from_manifest(manifest_path) {
                     Ok(()) => info!("Model manifest validation passed"),
                     Err(e) => {
                         if config.strict_manifest_validation {
-                            panic!("Model manifest validation failed in strict mode: {e}");
+                            return Err(MlError::ModelLoadFailed(format!(
+                                "model manifest validation failed in strict mode: {e}"
+                            )));
                         }
                         tracing::warn!("Model manifest validation failed: {e}");
                     }
@@ -91,7 +97,36 @@ impl MlPipeline {
             pipeline.warmup();
         }
 
-        pipeline
+        Ok(pipeline)
+    }
+
+    pub fn new(config: MlConfig) -> Self {
+        let fallback_profile = config.on_device_profile;
+        let fallback_language = config.language.clone();
+        match Self::try_new(config) {
+            Ok(pipeline) => pipeline,
+            Err(error) => {
+                warn!("ML pipeline init failed; falling back to safe fallback-only mode: {error}");
+                let fallback_config = MlConfig {
+                    use_fallback: true,
+                    warmup_on_init: false,
+                    cascade_enabled: false,
+                    validate_hashes: false,
+                    strict_manifest_validation: false,
+                    manifest_path: None,
+                    toxicity_model_path: None,
+                    sentiment_model_path: None,
+                    safety_model_path: None,
+                    intent_model_path: None,
+                    vocab_path: None,
+                    on_device_profile: fallback_profile,
+                    language: fallback_language,
+                    ..Default::default()
+                };
+                Self::try_new(fallback_config)
+                    .unwrap_or_else(|_| unreachable!("fallback-only ML pipeline must initialize"))
+            }
+        }
     }
 
     pub fn fallback() -> Self {
@@ -157,6 +192,7 @@ impl MlPipeline {
             tracing::warn!("intent classifier returned None");
         }
 
+        let mut invalid_outputs = false;
         if let Some(ref tox) = toxicity {
             let scores = [
                 tox.toxicity,
@@ -168,13 +204,33 @@ impl MlPipeline {
             ];
             if !integrity::validate_output_range(&scores) {
                 tracing::error!("toxicity output out of range: {:?}", scores);
+                invalid_outputs = true;
+            }
+        }
+        if let Some(ref sent) = sentiment {
+            let scores = [sent.positive, sent.neutral, sent.negative];
+            if !integrity::validate_output_range(&scores) {
+                tracing::error!("sentiment output out of range: {:?}", scores);
+                invalid_outputs = true;
             }
         }
         if let Some(ref s) = safety {
             let scores = [s.grooming, s.bullying, s.self_harm, s.manipulation, s.safe];
             if !integrity::validate_output_range(&scores) {
                 tracing::error!("safety output out of range: {:?}", scores);
+                invalid_outputs = true;
             }
+        }
+        if let Some(ref i) = intent {
+            let scores = [i.request_meeting, i.request_secret, i.request_media, i.benign];
+            if !integrity::validate_output_range(&scores) {
+                tracing::error!("intent output out of range: {:?}", scores);
+                invalid_outputs = true;
+            }
+        }
+        if invalid_outputs {
+            tracing::warn!("invalid ML output scores detected; using gate-only fallback for this message");
+            return self.run_gate_only(text, decision);
         }
 
         MlResult {
@@ -217,8 +273,10 @@ impl MlPipeline {
 
     pub fn analyze_batch(&mut self, texts: &[&str]) -> Vec<MlResult> {
         let mut results = Vec::with_capacity(texts.len());
-        for text in texts {
-            results.push(self.analyze_text(text));
+        for chunk in texts.chunks(Self::ANALYZE_BATCH_CHUNK_SIZE) {
+            for text in chunk {
+                results.push(self.analyze_text(text));
+            }
         }
         results
     }

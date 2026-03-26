@@ -186,11 +186,10 @@ impl IntentClassifier {
         }
 
         let max_intent = meeting.max(secret).max(media);
-        let benign = if max_intent < 0.3 {
-            1.0 - max_intent
-        } else {
-            0.0
-        };
+        // Smooth inverse: benign decreases linearly from 1.0 (intent=0) to
+        // 0.0 (intent≥0.5). Avoids the previous step-function discontinuity
+        // at 0.3 where benign jumped from 0.7 to 0.0.
+        let benign = (1.0 - max_intent * 2.0).clamp(0.0, 1.0);
 
         IntentPrediction::from_scores(meeting, secret, media, benign, self.threshold)
     }

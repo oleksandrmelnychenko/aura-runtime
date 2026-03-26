@@ -903,6 +903,10 @@ impl ContactProfiler {
     /// Sets the inferred age for a sender if not already set and the value is valid (5-99).
     pub fn set_inferred_age(&mut self, sender_id: &str, age: u16) {
         if let Some(profile) = self.profiles.get_mut(sender_id) {
+            // Require at least minimal history before accepting claimed age.
+            if profile.total_messages < 2 {
+                return;
+            }
             if profile.inferred_age.is_none() && (5..=99).contains(&age) {
                 profile.inferred_age = Some(age);
             }
@@ -1398,6 +1402,7 @@ impl ContactProfiler {
         protected_sender_id: Option<&str>,
     ) -> Option<ContactProfile> {
         let mut oldest_sender: Option<SenderId> = None;
+        let mut best_risk_band = u8::MAX;
         let mut best_last_seen = u64::MAX;
         let mut best_first_seen = u64::MAX;
         let mut best_id: Option<&str> = None;
@@ -1405,12 +1410,20 @@ impl ContactProfiler {
             if Some(&**sender_id) == protected_sender_id {
                 continue;
             }
-            let cmp = profile
-                .last_seen_ms
-                .cmp(&best_last_seen)
+            let risk_band = if profile.risk_score() >= 0.75 {
+                2u8
+            } else if profile.risk_score() >= 0.45 {
+                1u8
+            } else {
+                0u8
+            };
+            let cmp = risk_band
+                .cmp(&best_risk_band)
+                .then_with(|| profile.last_seen_ms.cmp(&best_last_seen))
                 .then_with(|| profile.first_seen_ms.cmp(&best_first_seen))
                 .then_with(|| (**sender_id).cmp(best_id.unwrap_or("")));
             if cmp == std::cmp::Ordering::Less || oldest_sender.is_none() {
+                best_risk_band = risk_band;
                 best_last_seen = profile.last_seen_ms;
                 best_first_seen = profile.first_seen_ms;
                 best_id = Some(&**sender_id);
@@ -1778,6 +1791,12 @@ mod tests {
             EventKind::NormalConversation,
             1000,
         ));
+        profiler.record_event(&make_event(
+            "user_a",
+            "conv_1",
+            EventKind::NormalConversation,
+            1100,
+        ));
         profiler.set_inferred_age("user_a", 25);
 
         let profile = profiler.profile("user_a").unwrap();
@@ -1792,6 +1811,12 @@ mod tests {
             "conv_1",
             EventKind::NormalConversation,
             1000,
+        ));
+        profiler.record_event(&make_event(
+            "user_a",
+            "conv_1",
+            EventKind::NormalConversation,
+            1100,
         ));
         profiler.set_inferred_age("user_a", 25);
         profiler.set_inferred_age("user_a", 30);
@@ -1809,6 +1834,12 @@ mod tests {
             EventKind::NormalConversation,
             1000,
         ));
+        profiler.record_event(&make_event(
+            "user_a",
+            "conv_1",
+            EventKind::NormalConversation,
+            1100,
+        ));
         profiler.set_inferred_age("user_a", 3);
 
         assert_eq!(profiler.profile("user_a").unwrap().inferred_age, None);
@@ -1819,6 +1850,19 @@ mod tests {
     }
 
     #[test]
+    fn set_inferred_age_requires_minimal_history() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event(
+            "one_shot",
+            "conv_1",
+            EventKind::NormalConversation,
+            1000,
+        ));
+        profiler.set_inferred_age("one_shot", 24);
+        assert_eq!(profiler.profile("one_shot").unwrap().inferred_age, None);
+    }
+
+    #[test]
     fn age_gap_adult_to_child() {
         let mut profiler = ContactProfiler::new();
         profiler.record_event(&make_event(
@@ -1826,6 +1870,12 @@ mod tests {
             "conv_1",
             EventKind::NormalConversation,
             1000,
+        ));
+        profiler.record_event(&make_event(
+            "adult",
+            "conv_1",
+            EventKind::NormalConversation,
+            1100,
         ));
         profiler.set_inferred_age("adult", 30);
 
@@ -1868,6 +1918,12 @@ mod tests {
             EventKind::NormalConversation,
             1000,
         ));
+        profiler.record_event(&make_event(
+            "teen",
+            "conv_1",
+            EventKind::NormalConversation,
+            1100,
+        ));
         profiler.set_inferred_age("teen", 14);
 
         let signals = profiler.check_age_gap("teen", Some(13));
@@ -1886,6 +1942,12 @@ mod tests {
             EventKind::NormalConversation,
             1000,
         ));
+        profiler.record_event(&make_event(
+            "adult",
+            "conv_1",
+            EventKind::NormalConversation,
+            1100,
+        ));
         profiler.set_inferred_age("adult", 30);
 
         let signals = profiler.check_age_gap("adult", None);
@@ -1900,6 +1962,12 @@ mod tests {
             "conv_1",
             EventKind::NormalConversation,
             1000,
+        ));
+        profiler.record_event(&make_event(
+            "uncle",
+            "conv_1",
+            EventKind::NormalConversation,
+            1100,
         ));
         profiler.set_inferred_age("uncle", 40);
         profiler.mark_trusted("uncle");
@@ -3626,6 +3694,38 @@ mod tests {
         assert!(profiler.profile("oldest").is_none());
         assert!(profiler.profile("middle").is_some());
         assert!(profiler.profile("newest").is_some());
+    }
+
+    #[test]
+    fn max_profile_limit_prefers_keeping_higher_risk_contact() {
+        let mut profiler = ContactProfiler::with_max_profiles(2);
+        // Build enough grooming events to push risky_old into risk band ≥1
+        // (risk_score ≥ 0.45). Each grooming event adds 0.1, capped at 0.4.
+        // Five events → 0.4 grooming + severity bonus → exceeds 0.45.
+        for ts in 0..5 {
+            profiler.record_event(&make_event(
+                "risky_old",
+                "c1",
+                EventKind::SecrecyRequest,
+                1_000 + ts * 100,
+            ));
+        }
+        profiler.record_event(&make_event(
+            "benign_newer",
+            "c2",
+            EventKind::NormalConversation,
+            2_000,
+        ));
+        profiler.record_event(&make_event(
+            "incoming",
+            "c3",
+            EventKind::NormalConversation,
+            3_000,
+        ));
+
+        assert!(profiler.profile("risky_old").is_some());
+        assert!(profiler.profile("incoming").is_some());
+        assert!(profiler.profile("benign_newer").is_none());
     }
 
     #[test]

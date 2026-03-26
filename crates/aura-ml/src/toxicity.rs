@@ -554,7 +554,17 @@ impl ToxicityClassifier {
                     sexual = sexual.max(eff);
                 }
                 ToxCategory::Profanity => {
-                    profanity = profanity.max(entry.score);
+                    // Profanity in negated context ("don't say fuck") is still
+                    // somewhat toxic but less so than direct usage. Factor 0.7
+                    // is intentionally milder than other categories (0.1–0.3)
+                    // because the word itself carries weight regardless of
+                    // surrounding grammar.
+                    let eff = if negated {
+                        entry.score * 0.7
+                    } else {
+                        entry.score
+                    };
+                    profanity = profanity.max(eff);
                 }
                 ToxCategory::Drug => {
                     let eff = if negated {
@@ -574,8 +584,14 @@ impl ToxicityClassifier {
             .max(profanity)
             .max(drug);
 
+        // Severe toxicity requires at least one strong signal (≥0.7) and
+        // combines the two highest contributors for a balanced estimate.
+        // The previous formula ignored one of the three dimensions
+        // (e.g. profanity when insult was the averaging partner).
         let severe = if threat >= 0.7 || insult >= 0.7 || profanity >= 0.7 {
-            (threat.max(profanity) + insult) / 2.0
+            let mut trio = [threat, insult, profanity];
+            trio.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+            (trio[0] + trio[1]) / 2.0
         } else {
             0.0
         };
@@ -911,13 +927,20 @@ mod tests {
     }
 
     #[test]
-    fn negation_profanity_not_dampened() {
+    fn negation_profanity_dampened_mildly() {
         let mut c = ToxicityClassifier::fallback_only();
-        let pred = c.predict("Don't say fuck in class").unwrap();
+        let direct = c.predict("fuck this").unwrap();
+        let negated = c.predict("Don't say fuck in class").unwrap();
         assert!(
-            pred.toxicity >= 0.4,
-            "Profanity should stay even when negated: {}",
-            pred.toxicity
+            negated.toxicity > 0.0,
+            "Negated profanity should still register: {}",
+            negated.toxicity
+        );
+        assert!(
+            negated.toxicity < direct.toxicity,
+            "Negated profanity ({}) should be lower than direct ({})",
+            negated.toxicity,
+            direct.toxicity
         );
     }
 
