@@ -75,6 +75,8 @@ struct KidsProfileSettings {
     sender_risk_min: f32,
 }
 
+const MAX_TRACKED_CONVERSATIONS: usize = 2000;
+
 static KIDS_CONVERSATION_MEMORY: OnceLock<Mutex<HashMap<String, ConversationRiskMemory>>> =
     OnceLock::new();
 
@@ -166,6 +168,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
     let Ok(mut guard) = conversation_memory().lock() else {
         return;
     };
+    trim_conversation_memory_if_needed(&mut guard, conversation_id);
     let memory = guard
         .entry(conversation_id.to_string())
         .or_insert_with(ConversationRiskMemory::default);
@@ -284,6 +287,26 @@ fn clear_conversation_memory_for_tests() {
     guard.clear();
 }
 
+fn trim_conversation_memory_if_needed(
+    memory: &mut HashMap<String, ConversationRiskMemory>,
+    current_conversation_id: &str,
+) {
+    while memory.len() >= MAX_TRACKED_CONVERSATIONS {
+        let mut candidate = None;
+        for key in memory.keys() {
+            if key.as_str() == current_conversation_id {
+                continue;
+            }
+            candidate = Some(key.clone());
+            break;
+        }
+        let Some(candidate) = candidate else {
+            break;
+        };
+        memory.remove(&candidate);
+    }
+}
+
 fn should_emit_memory_signal(
     memory: &ConversationRiskMemory,
     key: &'static str,
@@ -372,8 +395,12 @@ fn action_rank(action: DomainAction) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{clear_conversation_memory_for_tests, run_kids_pipeline};
+    use super::{
+        clear_conversation_memory_for_tests, run_kids_pipeline, trim_conversation_memory_if_needed,
+        ConversationRiskMemory, MAX_TRACKED_CONVERSATIONS,
+    };
     use aura_domain::{DomainAction, DomainConversationType, DomainInput, DomainRiskProfile};
+    use std::collections::HashMap;
 
     fn input(text: &str) -> DomainInput {
         DomainInput {
@@ -632,5 +659,18 @@ mod tests {
             }
         }
         assert!(has_memory_signal);
+    }
+
+    #[test]
+    fn trim_conversation_memory_keeps_current_conversation() {
+        let mut map = HashMap::new();
+        for idx in 0..=MAX_TRACKED_CONVERSATIONS {
+            map.insert(format!("conv_{idx}"), ConversationRiskMemory::default());
+        }
+        trim_conversation_memory_if_needed(&mut map, "conv_current");
+        map.insert("conv_current".to_string(), ConversationRiskMemory::default());
+        trim_conversation_memory_if_needed(&mut map, "conv_current");
+        assert!(map.len() < MAX_TRACKED_CONVERSATIONS);
+        assert!(map.contains_key("conv_current"));
     }
 }
