@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use aura_domain::{DomainAction, DomainInput, DomainModuleId, DomainOutput, DomainRegistry, DomainRiskProfile};
+use aura_domain::{
+    DomainAction, DomainConversationType, DomainInput, DomainModuleId, DomainOutput, DomainRegistry,
+    DomainRiskProfile,
+};
 use aura_kids::KidsModule;
 use aura_military::MilitaryModule;
 use aura_patterns::{validate_ukraine_coordinates, BlockedUrlMatch};
@@ -11,8 +14,8 @@ use crate::context::propaganda::PropagandaDetector;
 use crate::context::propaganda::NarrativeId;
 use crate::ids::{ConversationId, SenderId};
 use crate::types::{
-    Action, ActionRecommendation, Confidence, DetectionSignal, ProtectionLevel, SignalFamily,
-    ThreatType,
+    Action, ActionRecommendation, Confidence, ConversationType, DetectionSignal, ProtectionLevel,
+    SignalFamily, ThreatType,
 };
 use crate::{AuraConfig, AuraDomainModule, MessageInput};
 use crate::DomainMode;
@@ -65,12 +68,14 @@ impl AuraDomainRuntime {
     ) -> Option<DomainOutput> {
         let module_id = domain_module_id_for_mode(domain_mode)?;
         let risk_profile = domain_risk_profile_for_mode(domain_mode, protection_level);
+        let conversation_type = domain_conversation_type(input.conversation_type);
         let domain_input = DomainInput {
             text: input.text.clone(),
             language: input.language.clone(),
             sender_id: Some(input.sender_id.0.clone()),
             conversation_id: Some(input.conversation_id.0.clone()),
             risk_profile,
+            conversation_type,
         };
         self.registry.run(module_id, &domain_input)
     }
@@ -99,6 +104,13 @@ fn domain_risk_profile_for_mode(
     match protection_level {
         ProtectionLevel::High => DomainRiskProfile::Strict,
         ProtectionLevel::Off | ProtectionLevel::Low | ProtectionLevel::Medium => DomainRiskProfile::Normal,
+    }
+}
+
+fn domain_conversation_type(conversation_type: ConversationType) -> DomainConversationType {
+    match conversation_type {
+        ConversationType::Direct => DomainConversationType::Direct,
+        ConversationType::GroupChat | ConversationType::Group => DomainConversationType::Group,
     }
 }
 
@@ -1016,7 +1028,8 @@ mod tests {
     use super::{
         build_blocked_url_signal, build_domain_context_events, build_domain_detection_signals,
         core_action_from_domain_action, detection_enabled_for_threat, domain_action_reason_marker,
-        domain_risk_profile_for_mode, domain_signal_confidence, domain_signal_threat_type,
+        domain_conversation_type, domain_risk_profile_for_mode, domain_signal_confidence,
+        domain_signal_threat_type,
         domain_threat_priority,
         decide_action_with_domain_overrides, is_domain_threat, is_link_family_threat,
         is_propaganda_threat, map_domain_rule_to_event_kind, map_domain_signal_to_event_kind,
@@ -1327,6 +1340,18 @@ mod tests {
         assert_eq!(
             domain_risk_profile_for_mode(DomainMode::Military, ProtectionLevel::High),
             aura_domain::DomainRiskProfile::Normal
+        );
+        assert_eq!(
+            domain_conversation_type(ConversationType::Direct),
+            aura_domain::DomainConversationType::Direct
+        );
+        assert_eq!(
+            domain_conversation_type(ConversationType::Group),
+            aura_domain::DomainConversationType::Group
+        );
+        assert_eq!(
+            domain_conversation_type(ConversationType::GroupChat),
+            aura_domain::DomainConversationType::Group
         );
     }
 }

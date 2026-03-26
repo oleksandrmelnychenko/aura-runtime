@@ -2,7 +2,8 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, OnceLock};
 
 use aura_domain::{
-    promote_action_to_warn, DomainAction, DomainInput, DomainOutput, DomainRiskProfile, DomainSignal,
+    promote_action_to_warn, DomainAction, DomainConversationType, DomainInput, DomainOutput,
+    DomainRiskProfile, DomainSignal,
 };
 
 use crate::detectors::{bullying, grooming, manipulation, selfharm};
@@ -153,7 +154,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
             || has_reason_fragment(signals, "sextortion"),
     };
     let sender = input.sender_id.clone();
-    let settings = profile_settings(input.risk_profile);
+    let settings = profile_settings(input.risk_profile, input.conversation_type);
 
     let mut repeated_sender_grooming = 0usize;
     let mut repeated_sender_blackmail = 0usize;
@@ -299,9 +300,12 @@ fn mark_memory_signal_emitted(memory: &mut ConversationRiskMemory, key: &'static
     memory.last_emitted.insert(key, now_index);
 }
 
-fn profile_settings(profile: DomainRiskProfile) -> KidsProfileSettings {
-    match profile {
-        DomainRiskProfile::Strict => KidsProfileSettings {
+fn profile_settings(
+    profile: DomainRiskProfile,
+    conversation_type: DomainConversationType,
+) -> KidsProfileSettings {
+    match (profile, conversation_type) {
+        (DomainRiskProfile::Strict, DomainConversationType::Direct) => KidsProfileSettings {
             memory_window_messages: 16,
             cooldown_messages: 2,
             grooming_progression_min: 1,
@@ -309,13 +313,29 @@ fn profile_settings(profile: DomainRiskProfile) -> KidsProfileSettings {
             bullying_cascade_min: 2,
             sender_risk_min: 2.8,
         },
-        DomainRiskProfile::Normal => KidsProfileSettings {
+        (DomainRiskProfile::Strict, DomainConversationType::Group) => KidsProfileSettings {
+            memory_window_messages: 18,
+            cooldown_messages: 2,
+            grooming_progression_min: 2,
+            sustained_sextortion_min: 2,
+            bullying_cascade_min: 2,
+            sender_risk_min: 2.6,
+        },
+        (DomainRiskProfile::Normal, DomainConversationType::Direct) => KidsProfileSettings {
             memory_window_messages: 12,
             cooldown_messages: 3,
             grooming_progression_min: 2,
             sustained_sextortion_min: 2,
             bullying_cascade_min: 3,
             sender_risk_min: 3.5,
+        },
+        (DomainRiskProfile::Normal, DomainConversationType::Group) => KidsProfileSettings {
+            memory_window_messages: 14,
+            cooldown_messages: 2,
+            grooming_progression_min: 3,
+            sustained_sextortion_min: 2,
+            bullying_cascade_min: 2,
+            sender_risk_min: 3.2,
         },
     }
 }
@@ -353,7 +373,7 @@ fn action_rank(action: DomainAction) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::{clear_conversation_memory_for_tests, run_kids_pipeline};
-    use aura_domain::{DomainAction, DomainInput, DomainRiskProfile};
+    use aura_domain::{DomainAction, DomainConversationType, DomainInput, DomainRiskProfile};
 
     fn input(text: &str) -> DomainInput {
         DomainInput {
@@ -362,6 +382,7 @@ mod tests {
             sender_id: None,
             conversation_id: Some("conv_test".to_string()),
             risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Direct,
         }
     }
 
@@ -410,6 +431,7 @@ mod tests {
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp".to_string()),
             risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
         };
         let followup = DomainInput {
             text: Some("you can only trust me. do it now or i post everything.".to_string()),
@@ -417,6 +439,7 @@ mod tests {
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp".to_string()),
             risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
         };
         let _ = run_kids_pipeline(&seed);
         let output = run_kids_pipeline(&followup);
@@ -439,6 +462,7 @@ mod tests {
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp_normal".to_string()),
             risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Direct,
         };
         let followup = DomainInput {
             text: Some("you can only trust me. do it now or i post everything.".to_string()),
@@ -446,6 +470,7 @@ mod tests {
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp_normal".to_string()),
             risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Direct,
         };
         let _ = run_kids_pipeline(&seed);
         let output = run_kids_pipeline(&followup);
@@ -467,6 +492,7 @@ mod tests {
             sender_id: Some("b1".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Direct,
         };
         let message_b = DomainInput {
             text: Some("everyone hates you. all of us hate you.".to_string()),
@@ -474,6 +500,7 @@ mod tests {
             sender_id: Some("b2".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Direct,
         };
         let message_c = DomainInput {
             text: Some("we will beat you after school.".to_string()),
@@ -481,6 +508,7 @@ mod tests {
             sender_id: Some("b3".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Direct,
         };
         let message_d = DomainInput {
             text: Some("there is no reason to live anymore.".to_string()),
@@ -488,6 +516,7 @@ mod tests {
             sender_id: Some("victim".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Direct,
         };
         let _ = run_kids_pipeline(&message_a);
         let _ = run_kids_pipeline(&message_b);
@@ -512,6 +541,7 @@ mod tests {
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
             risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
         };
         let msg2 = DomainInput {
             text: Some("i have your photo. do what i say or i post it.".to_string()),
@@ -519,6 +549,7 @@ mod tests {
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
             risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
         };
         let msg3 = DomainInput {
             text: Some("you can only trust me.".to_string()),
@@ -526,6 +557,7 @@ mod tests {
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
             risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
         };
         let msg4 = DomainInput {
             text: Some("move to private chat.".to_string()),
@@ -533,6 +565,7 @@ mod tests {
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
             risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
         };
         let _ = run_kids_pipeline(&msg1);
         let second = run_kids_pipeline(&msg2);
@@ -560,5 +593,44 @@ mod tests {
         assert!(second_has);
         assert!(!third_has);
         assert!(!fourth_has);
+    }
+
+    #[test]
+    fn pipeline_group_profile_accelerates_bullying_cascade_signal() {
+        clear_conversation_memory_for_tests();
+        let bullying_a = DomainInput {
+            text: Some("you're worthless. nobody likes you.".to_string()),
+            language: None,
+            sender_id: Some("g1".to_string()),
+            conversation_id: Some("conv_group_bc".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Group,
+        };
+        let bullying_b = DomainInput {
+            text: Some("everyone hates you. all of us hate you.".to_string()),
+            language: None,
+            sender_id: Some("g2".to_string()),
+            conversation_id: Some("conv_group_bc".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Group,
+        };
+        let selfharm = DomainInput {
+            text: Some("there is no reason to live anymore.".to_string()),
+            language: None,
+            sender_id: Some("victim".to_string()),
+            conversation_id: Some("conv_group_bc".to_string()),
+            risk_profile: DomainRiskProfile::Normal,
+            conversation_type: DomainConversationType::Group,
+        };
+        let _ = run_kids_pipeline(&bullying_a);
+        let _ = run_kids_pipeline(&bullying_b);
+        let output = run_kids_pipeline(&selfharm);
+        let mut has_memory_signal = false;
+        for signal in &output.signals {
+            if signal.reason_code == "kids.memory.bullying_cascade_selfharm" {
+                has_memory_signal = true;
+            }
+        }
+        assert!(has_memory_signal);
     }
 }
