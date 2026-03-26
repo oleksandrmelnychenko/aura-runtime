@@ -73,6 +73,9 @@ struct KidsProfileSettings {
     sustained_sextortion_min: usize,
     bullying_cascade_min: usize,
     sender_risk_min: f32,
+    new_sender_message_max: usize,
+    sender_risk_new_sender_delta: f32,
+    sender_risk_known_sender_delta: f32,
 }
 
 const MAX_TRACKED_CONVERSATIONS: usize = 2000;
@@ -160,6 +163,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
 
     let mut repeated_sender_grooming = 0usize;
     let mut repeated_sender_blackmail = 0usize;
+    let mut sender_message_count = 0usize;
     let mut sender_risk_score = 0.0f32;
     let mut repeated_conversation_bullying = 0usize;
     let mut conversation_has_self_harm = false;
@@ -181,6 +185,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
 
     for (entry_sender, snapshot) in &memory.entries {
         if *entry_sender == sender {
+            sender_message_count += 1;
             if snapshot.has_grooming {
                 repeated_sender_grooming += 1;
                 sender_risk_score += 1.0;
@@ -203,6 +208,12 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
             conversation_has_grooming = true;
         }
     }
+    let sender_is_new = sender_message_count <= settings.new_sender_message_max;
+    let sender_risk_min = if sender_is_new {
+        settings.sender_risk_min - settings.sender_risk_new_sender_delta
+    } else {
+        settings.sender_risk_min + settings.sender_risk_known_sender_delta
+    };
     if repeated_sender_grooming >= settings.grooming_progression_min
         && current.has_manipulation
         && should_emit_memory_signal(memory, "grooming_progression", now_index, settings.cooldown_messages)
@@ -256,7 +267,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
 
-    if sender_risk_score >= settings.sender_risk_min
+    if sender_risk_score >= sender_risk_min
         && (current.has_grooming || current.has_manipulation || current.has_blackmail_or_sextortion)
         && should_emit_memory_signal(
             memory,
@@ -273,6 +284,28 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
             threat_type: Some("manipulation".to_string()),
             severity: Some("high".to_string()),
             priority: Some(99),
+            action: Some(DomainAction::Warn),
+        });
+    }
+
+    if sender_is_new
+        && current.has_grooming
+        && current.has_blackmail_or_sextortion
+        && should_emit_memory_signal(
+            memory,
+            "new_sender_fast_escalation",
+            now_index,
+            settings.cooldown_messages,
+        )
+    {
+        mark_memory_signal_emitted(memory, "new_sender_fast_escalation", now_index);
+        signals.push(DomainSignal {
+            threat_key: "kids_memory_new_sender_fast_escalation".to_string(),
+            reason_code: "kids.memory.new_sender_fast_escalation".to_string(),
+            score: 0.97,
+            threat_type: Some("manipulation".to_string()),
+            severity: Some("critical".to_string()),
+            priority: Some(100),
             action: Some(DomainAction::Warn),
         });
     }
@@ -335,6 +368,9 @@ fn profile_settings(
             sustained_sextortion_min: 2,
             bullying_cascade_min: 2,
             sender_risk_min: 2.8,
+            new_sender_message_max: 2,
+            sender_risk_new_sender_delta: 0.2,
+            sender_risk_known_sender_delta: 0.2,
         },
         (DomainRiskProfile::Strict, DomainConversationType::Group) => KidsProfileSettings {
             memory_window_messages: 18,
@@ -343,6 +379,9 @@ fn profile_settings(
             sustained_sextortion_min: 2,
             bullying_cascade_min: 2,
             sender_risk_min: 2.6,
+            new_sender_message_max: 2,
+            sender_risk_new_sender_delta: 0.2,
+            sender_risk_known_sender_delta: 0.2,
         },
         (DomainRiskProfile::Normal, DomainConversationType::Direct) => KidsProfileSettings {
             memory_window_messages: 12,
@@ -351,6 +390,9 @@ fn profile_settings(
             sustained_sextortion_min: 2,
             bullying_cascade_min: 3,
             sender_risk_min: 3.5,
+            new_sender_message_max: 2,
+            sender_risk_new_sender_delta: 0.2,
+            sender_risk_known_sender_delta: 0.2,
         },
         (DomainRiskProfile::Normal, DomainConversationType::Group) => KidsProfileSettings {
             memory_window_messages: 14,
@@ -359,6 +401,9 @@ fn profile_settings(
             sustained_sextortion_min: 2,
             bullying_cascade_min: 2,
             sender_risk_min: 3.2,
+            new_sender_message_max: 2,
+            sender_risk_new_sender_delta: 0.2,
+            sender_risk_known_sender_delta: 0.2,
         },
     }
 }
@@ -659,6 +704,28 @@ mod tests {
             }
         }
         assert!(has_memory_signal);
+    }
+
+    #[test]
+    fn pipeline_new_sender_fast_escalation_triggers_on_grooming_blackmail_combo() {
+        clear_conversation_memory_for_tests();
+        let input = DomainInput {
+            text: Some("our little secret. if u dont do this ill share.".to_string()),
+            language: None,
+            sender_id: Some("new_sender".to_string()),
+            conversation_id: Some("conv_new_sender".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+        };
+        let output = run_kids_pipeline(&input);
+        let mut has_fast_signal = false;
+        for signal in &output.signals {
+            if signal.reason_code == "kids.memory.new_sender_fast_escalation" {
+                has_fast_signal = true;
+            }
+        }
+        assert!(has_fast_signal);
+        assert_eq!(output.action, Some(DomainAction::Warn));
     }
 
     #[test]
