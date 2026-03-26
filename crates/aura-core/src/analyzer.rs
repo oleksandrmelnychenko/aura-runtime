@@ -51,6 +51,12 @@ impl EscalationTracker {
         entries.push((timestamp_ms, SenderId::from(sender_id)));
     }
 
+    /// Returns a proportional escalation factor (0.0 or 0.20).
+    ///
+    /// When 5+ threat events from 2+ senders occur within one hour in
+    /// the same conversation (pile-on pattern), signals are boosted by
+    /// 20% of their current score. This replaces the previous flat
+    /// +0.15 bonus which disproportionately affected low scores.
     fn check_bonus(&self, conversation_id: &str, now_ms: u64) -> f32 {
         let one_hour = 3600 * 1000;
         let cutoff = now_ms.saturating_sub(one_hour);
@@ -73,7 +79,7 @@ impl EscalationTracker {
                     None => first_sender = Some(sender_id),
                 }
                 if recent_count >= 5 && multiple_senders {
-                    return 0.15;
+                    return 0.20;
                 }
             }
         }
@@ -6173,6 +6179,6 @@ mod tests {
         tracker.record(conv, "sender_a", now - 20_000);
         tracker.record(conv, "sender_b", now - 25_000);
 
-        assert_eq!(tracker.check_bonus(conv, now), 0.15);
+        assert_eq!(tracker.check_bonus(conv, now), 0.20);
     }
 }

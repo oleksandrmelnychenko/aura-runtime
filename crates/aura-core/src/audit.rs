@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::sync::OnceLock;
+use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub const AUDIT_SCHEMA_VERSION: &str = "aura.audit_record.v1";
-pub const AUDIT_IDENTIFIER_SCHEME: &str = "sha256_truncated_24hex_process_salted";
+pub const AUDIT_IDENTIFIER_SCHEME: &str = "sha256_truncated_24hex_epoch_salted";
 const AUDIT_IDENTIFIER_HEX_LEN: usize = 24;
 const AUDIT_TOKEN_SALT_ENV: &str = "AURA_AUDIT_TOKEN_SALT";
 
@@ -49,10 +49,38 @@ pub struct AuditRecord {
     pub request_id: String,
     pub sender_token: Option<ProtectedIdentifier>,
     pub conversation_token: Option<ProtectedIdentifier>,
+    /// Opaque epoch identifier for the salt in effect when tokens were
+    /// generated. Two records with the same `salt_epoch` use the same
+    /// salt, so their tokens are directly comparable. Records from
+    /// different epochs cannot be correlated by token alone.
+    #[serde(default)]
+    pub salt_epoch: u32,
 }
 
+/// Returns a tokenized identifier using the current epoch salt.
 pub fn tokenize_identifier(identifier: &str) -> ProtectedIdentifier {
-    tokenize_identifier_with_salt(identifier, audit_token_salt())
+    let state = current_salt_state();
+    tokenize_identifier_with_salt(identifier, &state.salt)
+}
+
+/// Returns the current salt epoch number.
+pub fn current_salt_epoch() -> u32 {
+    current_salt_state().epoch
+}
+
+/// Rotates the audit token salt to a new random value.
+///
+/// All subsequent `tokenize_identifier` calls will use the new salt.
+/// Tokens from the previous epoch are no longer reproducible, which
+/// limits the blast radius if a salt is leaked. Call this periodically
+/// (e.g. every 24 hours) or on security-relevant events.
+pub fn rotate_audit_salt() {
+    let new_salt = generate_random_salt();
+    let mut guard = SALT_STATE
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.epoch += 1;
+    guard.salt = new_salt;
 }
 
 fn tokenize_identifier_with_salt(identifier: &str, salt: &[u8]) -> ProtectedIdentifier {
@@ -72,18 +100,39 @@ fn tokenize_identifier_with_salt(identifier: &str, salt: &[u8]) -> ProtectedIden
     }
 }
 
-fn audit_token_salt() -> &'static [u8] {
-    static SALT: OnceLock<Vec<u8>> = OnceLock::new();
-    SALT.get_or_init(resolve_audit_token_salt).as_slice()
+struct SaltState {
+    salt: Vec<u8>,
+    epoch: u32,
 }
 
-fn resolve_audit_token_salt() -> Vec<u8> {
+static SALT_STATE: std::sync::LazyLock<RwLock<SaltState>> =
+    std::sync::LazyLock::new(|| RwLock::new(SaltState { salt: resolve_initial_salt(), epoch: 0 }));
+
+fn current_salt_state() -> SaltStateSnapshot {
+    let guard = SALT_STATE
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    SaltStateSnapshot {
+        salt: guard.salt.clone(),
+        epoch: guard.epoch,
+    }
+}
+
+struct SaltStateSnapshot {
+    salt: Vec<u8>,
+    epoch: u32,
+}
+
+fn resolve_initial_salt() -> Vec<u8> {
     if let Ok(value) = std::env::var(AUDIT_TOKEN_SALT_ENV) {
         if !value.trim().is_empty() {
             return value.into_bytes();
         }
     }
+    generate_random_salt()
+}
 
+fn generate_random_salt() -> Vec<u8> {
     let mut salt = [0u8; 32];
     if getrandom(&mut salt).is_ok() {
         return salt.to_vec();
@@ -138,6 +187,7 @@ impl AuditRecord {
             request_id: request_id.into(),
             sender_token: sender_id.map(tokenize_identifier),
             conversation_token: conversation_id.map(tokenize_identifier),
+            salt_epoch: current_salt_epoch(),
         }
     }
 }

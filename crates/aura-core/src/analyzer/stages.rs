@@ -232,13 +232,13 @@ impl Analyzer {
                 .record(&input.conversation_id, &input.sender_id, timestamp_ms);
         }
 
-        let bonus = self
+        let escalation_factor = self
             .escalation_tracker
             .check_bonus(&input.conversation_id, timestamp_ms);
-        if bonus > 0.0 {
+        if escalation_factor > 0.0 {
             for s in &mut signals {
                 if is_escalation_bonus_threat(s.threat_type) {
-                    s.score = (s.score + bonus).min(1.0);
+                    s.score = (s.score * (1.0 + escalation_factor)).min(1.0);
                 }
             }
         }

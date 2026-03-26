@@ -36,6 +36,18 @@ impl RiskCategory {
             RiskCategory::LowProfanity => 0.35,
         }
     }
+
+    /// Returns a unique bit flag for tracking distinct categories.
+    fn bit(self) -> u8 {
+        match self {
+            RiskCategory::HighThreat => 1 << 0,
+            RiskCategory::HighSafety => 1 << 1,
+            RiskCategory::MediumToxicity => 1 << 2,
+            RiskCategory::MediumManipulation => 1 << 3,
+            RiskCategory::LowGrooming => 1 << 4,
+            RiskCategory::LowProfanity => 1 << 5,
+        }
+    }
 }
 
 struct GateEntry {
@@ -78,6 +90,7 @@ impl GateModel for LexiconGate {
         let lower = text.to_lowercase();
         let mut max_score: f32 = 0.0;
         let mut hit_count: u32 = 0;
+        let mut category_mask: u8 = 0;
 
         for m in self.automaton.find_iter(&lower) {
             let start = m.start();
@@ -95,16 +108,27 @@ impl GateModel for LexiconGate {
             let weight = entry.category.weight();
             max_score = max_score.max(weight);
             hit_count += 1;
+            category_mask |= entry.category.bit();
         }
 
-        // Multiple hits boost the score slightly (compound risk).
-        let compound_bonus = match hit_count {
+        // Compound bonus reflects both volume and breadth of risk
+        // indicators. Cross-category hits (e.g. profanity + threat)
+        // receive a larger bonus than same-category repetition.
+        let distinct_categories = category_mask.count_ones();
+        let volume_bonus = match hit_count {
             0 => 0.0,
             1 => 0.0,
             2 => 0.05,
             3 => 0.10,
             _ => 0.15,
         };
+        // Each additional risk category beyond the first adds 0.05.
+        let breadth_bonus = if distinct_categories >= 2 {
+            (distinct_categories - 1) as f32 * 0.05
+        } else {
+            0.0
+        };
+        let compound_bonus = (volume_bonus + breadth_bonus).min(0.25);
 
         (max_score + compound_bonus).min(1.0)
     }

@@ -29,6 +29,35 @@ fn default_trust() -> f32 {
     0.5
 }
 
+/// Indicates how a contact's age was determined.
+///
+/// The source affects confidence weighting in age-gap detection:
+/// - `ParentVerified`: score used as-is (full confidence).
+/// - `UserReported`: score multiplied by 0.85 (self-report may be false).
+/// - `MlInferred`: score multiplied by 0.7 (ML estimate is noisy).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AgeSource {
+    /// Age verified by a parent or guardian (highest confidence).
+    ParentVerified,
+    /// Age self-reported by the contact during conversation.
+    #[default]
+    UserReported,
+    /// Age inferred by the ML pipeline from linguistic features.
+    MlInferred,
+}
+
+impl AgeSource {
+    /// Returns a confidence multiplier for age-gap scoring.
+    pub fn confidence_factor(self) -> f32 {
+        match self {
+            AgeSource::ParentVerified => 1.0,
+            AgeSource::UserReported => 0.85,
+            AgeSource::MlInferred => 0.7,
+        }
+    }
+}
+
 /// Captures aggregated behavioral statistics for a single weekly period.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehavioralSnapshot {
@@ -182,6 +211,8 @@ pub struct ContactProfile {
     #[serde(default)]
     pub inferred_age: Option<u16>,
     #[serde(default)]
+    pub age_source: AgeSource,
+    #[serde(default)]
     pub circle_tier: CircleTier,
     #[serde(default)]
     pub trend: BehavioralTrend,
@@ -308,6 +339,7 @@ impl From<ContactProfileState> for ContactProfile {
             severity_sum: profile.severity_sum,
             severity_count: profile.severity_count,
             inferred_age: profile.inferred_age,
+            age_source: AgeSource::default(),
             rating: profile.rating,
             trust_level: profile.trust_level,
             circle_tier: profile.circle_tier,
@@ -354,6 +386,7 @@ impl ContactProfile {
             severity_sum: 0.0,
             severity_count: 0,
             inferred_age: None,
+            age_source: AgeSource::default(),
             rating: 50.0,
             trust_level: 0.5,
             circle_tier: CircleTier::New,
@@ -901,14 +934,38 @@ impl ContactProfiler {
     }
 
     /// Sets the inferred age for a sender if not already set and the value is valid (5-99).
+    ///
+    /// A higher-confidence source always overwrites a lower-confidence one
+    /// (e.g. `ParentVerified` replaces `MlInferred`), but a same-or-lower
+    /// source is ignored once the age is already set.
     pub fn set_inferred_age(&mut self, sender_id: &str, age: u16) {
+        self.set_inferred_age_with_source(sender_id, age, AgeSource::UserReported);
+    }
+
+    /// Sets the inferred age with an explicit source confidence tag.
+    pub fn set_inferred_age_with_source(
+        &mut self,
+        sender_id: &str,
+        age: u16,
+        source: AgeSource,
+    ) {
         if let Some(profile) = self.profiles.get_mut(sender_id) {
             // Require at least minimal history before accepting claimed age.
             if profile.total_messages < 2 {
                 return;
             }
-            if profile.inferred_age.is_none() && (5..=99).contains(&age) {
+            if !(5..=99).contains(&age) {
+                return;
+            }
+            let dominated = match (profile.inferred_age, source, profile.age_source) {
+                (None, _, _) => false,
+                (Some(_), AgeSource::ParentVerified, AgeSource::ParentVerified) => true,
+                (Some(_), AgeSource::ParentVerified, _) => false,
+                (Some(_), _, _) => true,
+            };
+            if !dominated {
                 profile.inferred_age = Some(age);
+                profile.age_source = source;
             }
         }
     }
@@ -943,11 +1000,14 @@ impl ContactProfiler {
         if holder_age < 18 && sender_age >= 18 {
             let gap = sender_age - holder_age;
             if gap >= 5 {
-                let score = if profile.grooming_event_count > 0 {
+                let raw_score = if profile.grooming_event_count > 0 {
                     (0.6 + gap as f32 * 0.02).min(0.95)
                 } else {
                     (0.3 + gap as f32 * 0.01).min(0.6)
                 };
+                // Scale the score by how confident we are in the age
+                // data. ParentVerified → full score, MlInferred → 70%.
+                let score = (raw_score * profile.age_source.confidence_factor()).min(0.95);
 
                 signals.push(DetectionSignal::context(
                     ThreatType::Grooming,
@@ -1976,6 +2036,61 @@ mod tests {
         assert!(
             signals.is_empty(),
             "Trusted contacts should not trigger age gap"
+        );
+    }
+
+    #[test]
+    fn age_source_ml_inferred_reduces_age_gap_score() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event("ml_adult", "c1", EventKind::NormalConversation, 1000));
+        profiler.record_event(&make_event("ml_adult", "c1", EventKind::NormalConversation, 2000));
+        profiler.set_inferred_age_with_source("ml_adult", 30, AgeSource::MlInferred);
+
+        let mut profiler2 = ContactProfiler::new();
+        profiler2.record_event(&make_event("verified_adult", "c2", EventKind::NormalConversation, 1000));
+        profiler2.record_event(&make_event("verified_adult", "c2", EventKind::NormalConversation, 2000));
+        profiler2.set_inferred_age_with_source("verified_adult", 30, AgeSource::ParentVerified);
+
+        let ml_signals = profiler.check_age_gap("ml_adult", Some(12));
+        let verified_signals = profiler2.check_age_gap("verified_adult", Some(12));
+
+        assert!(!ml_signals.is_empty());
+        assert!(!verified_signals.is_empty());
+        assert!(
+            ml_signals[0].score < verified_signals[0].score,
+            "ML-inferred ({}) should score lower than parent-verified ({})",
+            ml_signals[0].score,
+            verified_signals[0].score,
+        );
+    }
+
+    #[test]
+    fn age_source_parent_verified_overwrites_ml_inferred() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event("user", "c1", EventKind::NormalConversation, 1000));
+        profiler.record_event(&make_event("user", "c1", EventKind::NormalConversation, 2000));
+        profiler.set_inferred_age_with_source("user", 25, AgeSource::MlInferred);
+        assert_eq!(profiler.profile("user").unwrap().inferred_age, Some(25));
+        assert_eq!(profiler.profile("user").unwrap().age_source, AgeSource::MlInferred);
+
+        profiler.set_inferred_age_with_source("user", 28, AgeSource::ParentVerified);
+        assert_eq!(profiler.profile("user").unwrap().inferred_age, Some(28));
+        assert_eq!(profiler.profile("user").unwrap().age_source, AgeSource::ParentVerified);
+    }
+
+    #[test]
+    fn age_source_ml_does_not_overwrite_user_reported() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event("user", "c1", EventKind::NormalConversation, 1000));
+        profiler.record_event(&make_event("user", "c1", EventKind::NormalConversation, 2000));
+        profiler.set_inferred_age("user", 25);
+        assert_eq!(profiler.profile("user").unwrap().age_source, AgeSource::UserReported);
+
+        profiler.set_inferred_age_with_source("user", 30, AgeSource::MlInferred);
+        assert_eq!(
+            profiler.profile("user").unwrap().inferred_age,
+            Some(25),
+            "ML should not overwrite user-reported age"
         );
     }
 
