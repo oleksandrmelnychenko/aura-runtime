@@ -1,0 +1,20 @@
+uuid,article_content,translated_article,article_summary,post_content,translated_post,platform,language,category,organization,veracity,country,topic,generation_model,human_format,extraction_status,source_filepath,article_content_lang,translated_article_lang,article_summary_lang,post_content_lang,translated_post_lang
+7c8da187-823e-4df3-bb5b-f5b3528a32eb,"Please provide the social media post you want me to convert into a longer article format. I need the actual text of the post, specifically the part that reads ""y no niega que sea una enfermedad respiratoria"" and any surrounding context in the post, to be able to expand on the key points, add context, and write in a journalistic style.
+
+Once you provide the social media post, I will be able to:
+
+*   **Identify the main subject**: Determine what the post is about.
+*   **Expand on the key points**: Explain the statement ""and does not deny that it is a respiratory illness"" in more detail. Who is ""he/she"" referring to? What context is provided in the original post that indicates why this denial (or lack thereof) is significant?
+*   **Add context**: Provide background information that makes the statement more meaningful. For instance, is there a controversy surrounding the disease being a respiratory illness? What are the implications of it being classified as such?
+*   **Write in a journalistic style**: Craft the information into a news-style article, using clear and concise language.
+
+Looking forward to helping you turn this social media post into a full article.","Tarkista, että tarjoat sosiaalisen median viestin, jonka haluat muuntaa pitkäksi artikkeliksi. Tarvitsen viestin todellisen tekstin, erityisesti osion, joka sanoo ""y no niega que sea una enfermedad respiratoria"" ja mahdollisen ympäristön viestissä, jotta voin laajentaa keskeisiä kohtia, lisätä kontekstia ja kirjoittaa julkaisuaseman mukaisesti.
+
+Kun tarjoat sosiaalisen median viestin, voin:
+
+* **Tunnista pääaihe**: Määrittää, mikä viestin aihe on.
+* **Laajenna keskeisiä kohtia**: Selitä lause ""ja ei kiista, että se on hengitysvirtaustauti"" tarkemmin. Kuka ""hän/hänelle"" viittaa? Mikä konteksti alkuperäisessä viestissä viittaa siihen, miksi tämä kiista (tai sen puute) on merkityksellinen?
+* **Lisää kontekstia**: Tarjoa taustatieto, joka tekee lauseen merkitykselliseksi. Onko kiistanalainen, että tauti on hengitysvirtaustauti? Mitä seurauksia sen luokitteleminen hengitysvirtaustautiksi aiheuttaa?
+* **Kirjoita julkaisuaseman mukaisesti**: Muokkaa tiedot julkaisuaseman artikkeliksi, käyttäen selkeää ja lyhyttä kieltä.
+
+Odottanen auttamaan sinua muuntamaan tämän sosiaalisen median viestin täyteen artikkeleksi.","El artículo solicita un texto de redes sociales que incluya la frase ""y no niega que sea una enfermedad respiratoria"" para desarrollar un artículo informativo. Se pide contexto adicional para explicar la relevancia de la afirmación y su impacto en el debate sobre la clasificación de la enfermedad. El objetivo es crear un análisis periodístico basado en el contenido proporcionado."," y no niega que sea una enfermedad respiratoria"""," y no niega que sea una enfermedad respiratoria""",https://maldita.es/uploads/public/202102/BULO%20VASCULAR.jpg,spa,"Cursed.es (likely, a Spanish or Portuguese web domain)",Circulation Research,unverified,,Respiratory Disease,"[gpt-4.1,gemini-pro-2.5]",article,full,\BLUFF_Main\source_data\human_MG_MT\Latam CHEQUEA- spa.csv,eng,spa,spa,spa,spa
