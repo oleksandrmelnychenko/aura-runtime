@@ -2,12 +2,17 @@
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+class BlockedRehearsal(RuntimeError):
+    pass
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,8 +83,24 @@ def run_command(argv: list[str], cwd: Path) -> dict:
 
 def detect_compiler() -> str | None:
     for candidate in ("cc", "clang", "gcc", "cl"):
-        if shutil.which(candidate):
-            return candidate
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+    fallback_candidates = []
+    program_files = os.environ.get("ProgramFiles")
+    if program_files:
+        fallback_candidates.append(Path(program_files) / "LLVM" / "bin" / "clang.exe")
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        fallback_candidates.extend(
+            [
+                Path(local_app_data) / "Programs" / "LLVM" / "bin" / "clang.exe",
+                Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / "clang.exe",
+            ]
+        )
+    for candidate_path in fallback_candidates:
+        if candidate_path.exists():
+            return str(candidate_path)
     return None
 
 
@@ -166,6 +187,95 @@ def compile_ffi_smoke(
     return command, evidence
 
 
+def apply_manifest_summary(summary: dict, manifest: dict) -> None:
+    manifest_summary = manifest.get("summary", {})
+    if not isinstance(manifest_summary, dict):
+        manifest_summary = {}
+
+    release_operator_summary = manifest_summary.get("release_operator_summary", [])
+    if not isinstance(release_operator_summary, list):
+        release_operator_summary = []
+
+    summary["manifest_evidence_status"] = manifest.get("evidence_status")
+    summary["ffi_smoke_status"] = manifest_summary.get("ffi_smoke_status")
+    summary["ffi_smoke_mode"] = manifest_summary.get("ffi_smoke_mode")
+    summary["ffi_smoke_compiler"] = manifest_summary.get("ffi_smoke_compiler")
+    summary["ffi_smoke_note"] = manifest_summary.get("ffi_smoke_note")
+    summary["release_report_status"] = manifest_summary.get("release_report_status")
+    summary["release_operator_summary"] = release_operator_summary
+    summary["release_social_context_inference_passed"] = manifest_summary.get(
+        "release_social_context_inference_passed"
+    )
+    summary["release_social_context_inference_total_expectations"] = manifest_summary.get(
+        "release_social_context_inference_total_expectations"
+    )
+    summary["release_social_context_inference_failed_expectations"] = manifest_summary.get(
+        "release_social_context_inference_failed_expectations"
+    )
+    summary["pilot_shadow_status"] = manifest_summary.get("pilot_shadow_status")
+    summary["pilot_regression_status"] = manifest_summary.get("pilot_regression_status")
+    summary["pilot_gate_status"] = manifest_summary.get("pilot_gate_status")
+
+
+def apply_release_report_summary(summary: dict, release_payload: dict) -> None:
+    operator_summary = release_payload.get("operator_summary", [])
+    if not isinstance(operator_summary, list):
+        operator_summary = []
+
+    summary["release_report_status"] = release_payload.get("overall_status")
+    summary["release_operator_summary"] = operator_summary
+
+    suites = release_payload.get("suites", [])
+    if not isinstance(suites, list):
+        return
+    for suite in suites:
+        if not isinstance(suite, dict) or suite.get("suite_id") != "social_context":
+            continue
+        inference = suite.get("social_context_inference")
+        if not isinstance(inference, dict):
+            return
+        summary["release_social_context_inference_passed"] = inference.get("passed")
+        summary["release_social_context_inference_total_expectations"] = inference.get(
+            "total_expectations"
+        )
+        summary["release_social_context_inference_failed_expectations"] = inference.get(
+            "failed_expectations"
+        )
+        return
+
+
+def print_rehearsal_summary(summary: dict, summary_path: Path) -> None:
+    status = summary.get("status")
+    manifest_status = summary.get("manifest_evidence_status")
+    release_status = summary.get("release_report_status")
+    print(
+        "promotion rehearsal summary written to "
+        f"{summary_path.as_posix()} "
+        f"(status={status}, manifest={manifest_status}, release={release_status})",
+        file=sys.stderr,
+    )
+
+    inference_passed = summary.get("release_social_context_inference_passed")
+    total_expectations = summary.get("release_social_context_inference_total_expectations")
+    failed_expectations = summary.get("release_social_context_inference_failed_expectations")
+    if inference_passed is not None:
+        print(
+            "release social-context inference: "
+            f"passed={inference_passed} "
+            f"total={total_expectations} "
+            f"failed={failed_expectations}",
+            file=sys.stderr,
+        )
+
+    for line in summary.get("release_operator_summary", []):
+        print(f"release summary: {line}", file=sys.stderr)
+
+    if summary.get("blocker"):
+        print(f"blocker: {summary['blocker']}", file=sys.stderr)
+    if "failure" in summary:
+        print(f"failure: {summary['failure']}", file=sys.stderr)
+
+
 def main() -> int:
     args = parse_args()
     workspace_root = Path(__file__).resolve().parents[1]
@@ -203,7 +313,16 @@ def main() -> int:
         "output_dir": output_dir.as_posix(),
         "soak_iterations": soak_iterations,
         "commands": [],
+        "blocker": None,
         "ffi_smoke_mode": None,
+        "ffi_smoke_status": None,
+        "ffi_smoke_compiler": None,
+        "ffi_smoke_note": None,
+        "release_report_status": None,
+        "release_operator_summary": [],
+        "release_social_context_inference_passed": None,
+        "release_social_context_inference_total_expectations": None,
+        "release_social_context_inference_failed_expectations": None,
         "pilot_shadow_status": None,
         "pilot_regression_status": None,
         "pilot_gate_status": None,
@@ -422,78 +541,84 @@ def main() -> int:
             summary["status"] = "fail"
             raise RuntimeError("ffi smoke compile failed")
 
-        record_and_require(
-            [
-                sys.executable,
-                "ci/generate_evidence_manifest.py",
-                "--output",
-                paths["manifest"].as_posix(),
-                "--label",
-                label,
-                "--release-report",
-                paths["release_report"].as_posix(),
-                "--contract-evidence",
-                paths["contract_evidence"].as_posix(),
-                "--ffi-soak",
-                paths["ffi_soak"].as_posix(),
-                "--dataset-evidence",
-                paths["dataset_evidence"].as_posix(),
-                "--audit-evidence",
-                paths["audit_evidence"].as_posix(),
-                "--pilot-shadow-bundle",
-                paths["pilot_shadow_bundle"].as_posix(),
-                "--pilot-regression-report",
-                paths["pilot_regression_report"].as_posix(),
-                *(
-                    ["--pilot-gate-report", paths["pilot_gate_report"].as_posix()]
-                    if args.pilot_review_signoffs
-                    else []
-                ),
-                *(
-                    [
-                        "--kids-preprod-dry-run-report",
-                        paths["kids_preprod_dry_run"].as_posix(),
-                    ]
-                    if args.pilot_review_signoffs
-                    else []
-                ),
-                "--ffi-smoke",
-                paths["ffi_smoke"].as_posix(),
-            ]
-        )
-        manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
-        summary["manifest_evidence_status"] = manifest.get("evidence_status")
-        summary["pilot_shadow_status"] = manifest.get("summary", {}).get("pilot_shadow_status")
-        summary["pilot_regression_status"] = manifest.get("summary", {}).get(
-            "pilot_regression_status"
-        )
-        summary["pilot_gate_status"] = manifest.get("summary", {}).get(
-            "pilot_gate_status"
-        )
+        manifest_argv = [
+            sys.executable,
+            "ci/generate_evidence_manifest.py",
+            "--output",
+            paths["manifest"].as_posix(),
+            "--label",
+            label,
+            "--release-report",
+            paths["release_report"].as_posix(),
+            "--contract-evidence",
+            paths["contract_evidence"].as_posix(),
+            "--ffi-soak",
+            paths["ffi_soak"].as_posix(),
+            "--dataset-evidence",
+            paths["dataset_evidence"].as_posix(),
+            "--audit-evidence",
+            paths["audit_evidence"].as_posix(),
+            "--pilot-shadow-bundle",
+            paths["pilot_shadow_bundle"].as_posix(),
+            "--pilot-regression-report",
+            paths["pilot_regression_report"].as_posix(),
+            *(
+                ["--pilot-gate-report", paths["pilot_gate_report"].as_posix()]
+                if args.pilot_review_signoffs
+                else []
+            ),
+            *(
+                [
+                    "--kids-preprod-dry-run-report",
+                    paths["kids_preprod_dry_run"].as_posix(),
+                ]
+                if args.pilot_review_signoffs
+                else []
+            ),
+            "--ffi-smoke",
+            paths["ffi_smoke"].as_posix(),
+        ]
+        manifest_result = run_command(manifest_argv, cwd=workspace_root)
+        summary["commands"].append(manifest_result)
+        if paths["manifest"].exists():
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            apply_manifest_summary(summary, manifest)
+        if manifest_result["returncode"] != 0:
+            if summary.get("manifest_evidence_status") == "blocked":
+                summary["status"] = "blocked"
+                summary["blocker"] = (
+                    "local promotion rehearsal blocked: no local C compiler for ffi_smoke; "
+                    "GitHub Actions will run the real compile on ubuntu-latest"
+                    if summary.get("ffi_smoke_mode") == "local_stub_no_compiler"
+                    else "local promotion rehearsal blocked: evidence manifest is blocked"
+                )
+                raise BlockedRehearsal(summary["blocker"])
+            summary["status"] = "fail"
+            raise RuntimeError(f"command failed: {' '.join(manifest_argv)}")
+    except BlockedRehearsal:
+        return_code = 1
     except RuntimeError as error:
         summary["failure"] = str(error)
         return_code = 1
     else:
         return_code = 0
     finally:
+        if paths["release_report"].exists():
+            try:
+                release_payload = json.loads(paths["release_report"].read_text(encoding="utf-8"))
+                apply_release_report_summary(summary, release_payload)
+            except json.JSONDecodeError:
+                pass
         if paths["manifest"].exists():
             try:
                 manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
-                summary["manifest_evidence_status"] = manifest.get("evidence_status")
-                summary["pilot_shadow_status"] = manifest.get("summary", {}).get(
-                    "pilot_shadow_status"
-                )
-                summary["pilot_regression_status"] = manifest.get("summary", {}).get(
-                    "pilot_regression_status"
-                )
-                summary["pilot_gate_status"] = manifest.get("summary", {}).get(
-                    "pilot_gate_status"
-                )
+                apply_manifest_summary(summary, manifest)
             except json.JSONDecodeError:
                 summary["manifest_evidence_status"] = "invalid_json"
         summary["finished_at_utc"] = now_utc()
         summary["duration_seconds"] = round(time.monotonic() - started, 3)
         paths["summary"].write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        print_rehearsal_summary(summary, paths["summary"])
 
     return return_code
 

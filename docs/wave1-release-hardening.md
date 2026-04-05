@@ -32,6 +32,8 @@ For each merge touching eval/rules/ML integration:
    - suite statuses
    - required slice coverage
    - drift status and failed checks
+   - `operator_summary` compact release notes
+   - evidence-manifest mirroring of `operator_summary` and social-context inference counters
    - `wave1_on_device_checks` for:
      - `wave1.on_device.high_risk_slice_coverage`
      - `wave1.on_device.safe_cohort_slice_coverage`

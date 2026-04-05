@@ -41,12 +41,13 @@ fn dm(text: &str, sender: &str, conv: &str, lang: &str) -> MessageInput {
         language: Some(lang.to_string()),
         conversation_type: ConversationType::Direct,
         member_count: None,
+        server_sender_risk_hint: None,
     }
 }
 
 fn grp(text: &str, sender: &str, conv: &str, lang: &str) -> MessageInput {
     MessageInput {
-        conversation_type: ConversationType::GroupChat,
+        conversation_type: ConversationType::Group,
         member_count: Some(12),
         ..dm(text, sender, conv, lang)
     }
@@ -1295,7 +1296,11 @@ fn sim_041_clean_teen_chat_with_slang() {
         15 * MIN,
         grp("кринж, знову лагає", "teen41b", "clean1", "uk"),
     );
-    assert!(s.no_threat_above(ThreatType::Grooming, 0.50));
+    assert!(
+        s.no_threat_above(ThreatType::Grooming, 0.50),
+        "peak grooming score was {}",
+        s.peak_threat(ThreatType::Grooming)
+    );
     assert!(s.no_threat_above(ThreatType::Bullying, 0.50));
 }
 
@@ -1371,7 +1376,11 @@ fn sim_044_clean_relationship_talk_uk() {
         3 * DAY,
         dm("я їй написав! вона відповіла!", "teen44", "clean4", "uk"),
     );
-    assert!(s.no_threat_above(ThreatType::Grooming, 0.50));
+    assert!(
+        s.no_threat_above(ThreatType::Grooming, 0.50),
+        "peak grooming score was {}",
+        s.peak_threat(ThreatType::Grooming)
+    );
 }
 
 #[test]
@@ -1499,14 +1508,22 @@ fn sim_049_clean_memes_and_jokes() {
 fn sim_050_clean_long_friendship_3_months() {
     let mut s = Sim::new(teen_uk());
     s.send(0, dm("привіт, як справи?", "friend50", "clean10", "uk"));
+    s.send(10 * MIN, dm("норм, а в тебе?", "self50", "clean10", "uk"));
     s.send(
         WEEK,
-        dm(
-            "йо, давай зустрінемось на вихідних",
-            "friend50",
-            "clean10",
-            "uk",
-        ),
+        dm("як пройшла контрольна?", "friend50", "clean10", "uk"),
+    );
+    s.send(
+        WEEK + 10 * MIN,
+        dm("нормально, дякую", "self50", "clean10", "uk"),
+    );
+    s.send(
+        2 * WEEK,
+        dm("бачив новий мем? ахаха", "friend50", "clean10", "uk"),
+    );
+    s.send(
+        2 * WEEK + 10 * MIN,
+        dm("ага, орнув", "self50", "clean10", "uk"),
     );
     s.send(
         MONTH,
@@ -1517,6 +1534,7 @@ fn sim_050_clean_long_friendship_3_months() {
             "uk",
         ),
     );
+    s.send(MONTH + 10 * MIN, dm("дякую!!", "self50", "clean10", "uk"));
     s.send(
         2 * MONTH,
         dm(
@@ -1527,6 +1545,10 @@ fn sim_050_clean_long_friendship_3_months() {
         ),
     );
     s.send(
+        2 * MONTH + 10 * MIN,
+        dm("го, я за", "self50", "clean10", "uk"),
+    );
+    s.send(
         3 * MONTH,
         dm(
             "братан, дякую що ти є, ти справжній друг",
@@ -1534,6 +1556,10 @@ fn sim_050_clean_long_friendship_3_months() {
             "clean10",
             "uk",
         ),
+    );
+    s.send(
+        3 * MONTH + 10 * MIN,
+        dm("взаємно, ти теж", "self50", "clean10", "uk"),
     );
     assert!(s.no_threat_above(ThreatType::Grooming, 0.50));
 }

@@ -324,6 +324,7 @@ mod tests {
                 confidence: 1.0,
                 subtype: None,
                 content_hash: None,
+                context: Default::default(),
             });
         }
         timeline
@@ -449,6 +450,7 @@ mod tests {
                 confidence: 1.0,
                 subtype: None,
                 content_hash: None,
+                context: Default::default(),
             });
         }
 
@@ -488,6 +490,7 @@ mod tests {
                 confidence: 1.0,
                 subtype: None,
                 content_hash: None,
+                context: Default::default(),
             });
         }
 

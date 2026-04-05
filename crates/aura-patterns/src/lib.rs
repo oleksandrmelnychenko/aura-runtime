@@ -10,7 +10,7 @@ pub mod matcher;
 pub mod normalizer;
 pub mod url_checker;
 
-pub use coordinates::{CoordinateFormat, CoordinateMatch, validate_ukraine_coordinates};
+pub use coordinates::{validate_ukraine_coordinates, CoordinateFormat, CoordinateMatch};
 pub use database::{PatternDatabase, PatternLoadError};
 pub use emoji::{EmojiAnalyzer, EmojiMatchResult};
 pub use matcher::{MatchResult, PatternMatcher, PatternMatcherBuildError};

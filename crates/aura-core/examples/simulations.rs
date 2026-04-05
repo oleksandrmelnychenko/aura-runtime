@@ -21,7 +21,7 @@ fn main() {
     simulation_8_normal_conversation(&db);
     simulation_9_bullying_to_self_harm(&db);
     simulation_10_multi_tactic_manipulator(&db);
-    simulation_11_realistic_group_chat_uk(&db);
+    simulation_11_realistic_group_uk(&db);
     simulation_12_drug_dealer(&db);
     simulation_13_sextortion_after_photo(&db);
     simulation_14_coordinated_raid(&db);
@@ -62,6 +62,7 @@ fn msg(text: &str, sender: &str, conv: &str) -> MessageInput {
         language: Some("en".to_string()),
         conversation_type: ConversationType::Direct,
         member_count: None,
+        server_sender_risk_hint: None,
     }
 }
 
@@ -75,6 +76,7 @@ fn msg_uk(text: &str, sender: &str, conv: &str) -> MessageInput {
         language: Some("uk".to_string()),
         conversation_type: ConversationType::Direct,
         member_count: None,
+        server_sender_risk_hint: None,
     }
 }
 
@@ -1048,7 +1050,7 @@ fn simulation_10_multi_tactic_manipulator(db: &PatternDatabase) {
     print_verdict("AURA detected: gaslighting (3x) + guilt-tripping (3x) + emotional blackmail (1x) + pressure (1x) = 4 different manipulation tactics. Textbook psychological abuse.");
 }
 
-fn simulation_11_realistic_group_chat_uk(db: &PatternDatabase) {
+fn simulation_11_realistic_group_uk(db: &PatternDatabase) {
     print_header(11, "Реальний груповий чат — 8 учасників атакують дитину (УКР)",
         "Маша, 10 років, у шкільному чаті '7-Б Клас'. 8 людей пишуть: мат, булінг, погрози, грумінг.");
 

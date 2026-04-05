@@ -21,14 +21,6 @@ const MAX_WEEKLY_PROPAGANDA_BUCKETS: usize = 52;
 /// Default upper bound for the number of contact profiles stored.
 pub const DEFAULT_MAX_CONTACT_PROFILES: usize = 1_000;
 
-fn default_rating() -> f32 {
-    50.0
-}
-
-fn default_trust() -> f32 {
-    0.5
-}
-
 /// Indicates how a contact's age was determined.
 ///
 /// The source affects confidence weighting in age-gap detection:
@@ -69,7 +61,6 @@ pub struct BehavioralSnapshot {
     pub neutral_count: u32,
     pub grooming_count: u32,
     pub manipulation_count: u32,
-    #[serde(default)]
     pub propaganda_count: u32,
     pub avg_severity: f32,
 }
@@ -163,11 +154,8 @@ impl BehavioralSnapshot {
 pub struct ContactProfile {
     pub sender_id: SenderId,
     pub(crate) conversations: Vec<ConversationId>,
-    #[serde(default)]
     weekly_snapshots: VecDeque<BehavioralSnapshot>,
-    #[serde(default)]
     current_snapshot: Option<BehavioralSnapshot>,
-    #[serde(default)]
     active_days: HashSet<u32>,
     pub first_seen_ms: u64,
     pub last_seen_ms: u64,
@@ -176,45 +164,26 @@ pub struct ContactProfile {
     pub grooming_event_count: u64,
     pub bullying_event_count: u64,
     pub manipulation_event_count: u64,
-    #[serde(default)]
     pub propaganda_event_count: u64,
-    #[serde(default)]
     pub propaganda_source_count: u64,
-    #[serde(default)]
     pub narrative_hits: Vec<(u8, u32)>,
-    #[serde(default)]
     pub propaganda_score: f32,
-    #[serde(default)]
     pub narrative_diversity: u8,
-    #[serde(default)]
     pub first_propaganda_ms: u64,
-    #[serde(default)]
     pub last_propaganda_ms: u64,
-    #[serde(default)]
     pub propaganda_conversations: Vec<ConversationId>,
-    #[serde(default)]
     pub hourly_activity: [u16; 24],
-    #[serde(default)]
     pub message_fingerprints: VecDeque<u64>,
-    #[serde(default)]
     pub narrative_timeline: VecDeque<(u64, u8)>,
-    #[serde(default)]
     pub weekly_propaganda_counts: VecDeque<(u64, u16)>,
-    #[serde(default)]
     last_fingerprint_marker: Option<(u64, u64)>,
     severity_count: u64,
     severity_sum: f32,
-    #[serde(default = "default_rating")]
     pub rating: f32,
-    #[serde(default = "default_trust")]
     pub trust_level: f32,
-    #[serde(default)]
     pub inferred_age: Option<u16>,
-    #[serde(default)]
     pub age_source: AgeSource,
-    #[serde(default)]
     pub circle_tier: CircleTier,
-    #[serde(default)]
     pub trend: BehavioralTrend,
     pub is_trusted: bool,
 }
@@ -247,6 +216,7 @@ pub struct ContactProfileState {
     pub severity_sum: f32,
     pub severity_count: u64,
     pub inferred_age: Option<u16>,
+    pub age_source: AgeSource,
     pub rating: f32,
     pub trust_level: f32,
     pub circle_tier: CircleTier,
@@ -290,6 +260,7 @@ impl From<&ContactProfile> for ContactProfileState {
             severity_sum: profile.severity_sum,
             severity_count: profile.severity_count,
             inferred_age: profile.inferred_age,
+            age_source: profile.age_source,
             rating: profile.rating,
             trust_level: profile.trust_level,
             circle_tier: profile.circle_tier,
@@ -339,7 +310,7 @@ impl From<ContactProfileState> for ContactProfile {
             severity_sum: profile.severity_sum,
             severity_count: profile.severity_count,
             inferred_age: profile.inferred_age,
-            age_source: AgeSource::default(),
+            age_source: profile.age_source,
             rating: profile.rating,
             trust_level: profile.trust_level,
             circle_tier: profile.circle_tier,
@@ -419,6 +390,12 @@ impl ContactProfile {
             first_seen_ms: self.first_seen_ms,
             last_seen_ms: self.last_seen_ms,
             conversation_count: self.conversation_count,
+            grooming_event_count: self.grooming_event_count,
+            bullying_event_count: self.bullying_event_count,
+            manipulation_event_count: self.manipulation_event_count,
+            total_threat_events: self.grooming_event_count
+                + self.bullying_event_count
+                + self.manipulation_event_count,
         }
     }
 
@@ -578,7 +555,7 @@ impl ContactProfile {
 
     /// Updates the contact's rating, snapshot, active days, and trust based on the given event.
     pub fn update_rating(&mut self, event: &ContextEvent) {
-        let delta = event.kind.rating_delta();
+        let delta = event.effective_rating_delta();
         self.rating = (self.rating + delta).clamp(0.0, 100.0);
 
         self.update_current_snapshot(event);
@@ -588,10 +565,10 @@ impl ContactProfile {
 
         self.recalculate_circle_tier();
 
-        if event.kind.is_propaganda_indicator() {
-            self.decay_trust(event.kind.severity() * 0.5);
-        } else if event.kind.is_hostile() {
-            self.decay_trust(event.kind.severity());
+        if event.supports_propaganda_inference() {
+            self.decay_trust(event.effective_severity() * 0.5);
+        } else if event.effective_is_hostile() {
+            self.decay_trust(event.effective_severity());
         }
     }
 
@@ -627,9 +604,9 @@ impl ContactProfile {
 
         let snapshot = self.current_snapshot.as_mut().unwrap();
         snapshot.total_messages += 1;
-        if event.kind.is_hostile() {
+        if event.effective_is_hostile() {
             snapshot.hostile_count += 1;
-        } else if event.kind.is_supportive() {
+        } else if event.effective_is_supportive() {
             snapshot.supportive_count += 1;
         } else {
             snapshot.neutral_count += 1;
@@ -640,12 +617,13 @@ impl ContactProfile {
         if event.kind.is_manipulation_indicator() {
             snapshot.manipulation_count += 1;
         }
-        if event.kind.is_propaganda_indicator() {
+        if event.supports_propaganda_inference() {
             snapshot.propaganda_count += 1;
         }
 
         let n = snapshot.total_messages as f32;
-        snapshot.avg_severity = snapshot.avg_severity * ((n - 1.0) / n) + event.kind.severity() / n;
+        snapshot.avg_severity =
+            snapshot.avg_severity * ((n - 1.0) / n) + event.effective_severity() / n;
     }
 
     fn recalculate_trend(&mut self) {
@@ -721,13 +699,6 @@ impl ContactProfile {
     /// Returns a reference to the stored weekly behavioral snapshots.
     pub fn weekly_snapshots(&self) -> &VecDeque<BehavioralSnapshot> {
         &self.weekly_snapshots
-    }
-
-    /// Fix up fields that may be missing from older serialized state.
-    fn post_deserialize_fixup(&mut self) {
-        if self.is_trusted && self.trust_level < 0.7 {
-            self.trust_level = 1.0;
-        }
     }
 }
 
@@ -831,7 +802,7 @@ impl ContactProfiler {
             profile.manipulation_event_count += 1;
         }
 
-        let is_propaganda_event = event.kind.is_propaganda_indicator();
+        let is_propaganda_event = event.supports_propaganda_inference();
         if is_propaganda_event {
             profile.propaganda_event_count += 1;
             if profile.first_propaganda_ms == 0 {
@@ -869,7 +840,7 @@ impl ContactProfiler {
             profile.update_propaganda_score();
         }
 
-        let severity = event.kind.severity();
+        let severity = event.effective_severity();
         if severity > 0.0 {
             profile.severity_sum += severity;
             profile.severity_count += 1;
@@ -943,12 +914,7 @@ impl ContactProfiler {
     }
 
     /// Sets the inferred age with an explicit source confidence tag.
-    pub fn set_inferred_age_with_source(
-        &mut self,
-        sender_id: &str,
-        age: u16,
-        source: AgeSource,
-    ) {
+    pub fn set_inferred_age_with_source(&mut self, sender_id: &str, age: u16, source: AgeSource) {
         if let Some(profile) = self.profiles.get_mut(sender_id) {
             // Require at least minimal history before accepting claimed age.
             if profile.total_messages < 2 {
@@ -1066,7 +1032,8 @@ impl ContactProfiler {
             ));
         }
 
-        if is_minor_account && profile.conversation_count >= 5 && profile.grooming_event_count >= 3 {
+        if is_minor_account && profile.conversation_count >= 5 && profile.grooming_event_count >= 3
+        {
             signals.push(DetectionSignal::context(
                 ThreatType::Grooming,
                 0.8,
@@ -1195,8 +1162,7 @@ impl ContactProfiler {
 
     /// Imports profiles from a state snapshot, replacing existing profiles with the same sender ID.
     pub fn import(&mut self, state: ContactProfilerState) {
-        for mut profile in state.profiles {
-            profile.post_deserialize_fixup();
+        for profile in state.profiles {
             self.profiles.insert(profile.sender_id.clone(), profile);
         }
         self.enforce_profile_limit();
@@ -1204,8 +1170,7 @@ impl ContactProfiler {
 
     /// Merge-based import: preserves local profiles, takes the most cautious values.
     pub fn merge_import(&mut self, state: ContactProfilerState) {
-        for mut incoming in state.profiles {
-            incoming.post_deserialize_fixup();
+        for incoming in state.profiles {
             match self.profiles.get_mut(&incoming.sender_id) {
                 Some(local) => {
                     let incoming_average = incoming.average_severity();
@@ -1504,7 +1469,7 @@ pub struct ContactProfilerState {
 
 #[cfg(test)]
 mod tests {
-    use super::super::events::{ContextEvent, EventKind};
+    use super::super::events::{ContextEvent, EventKind, EventStance};
     use super::*;
 
     fn make_event(sender: &str, conv: &str, kind: EventKind, ts: u64) -> ContextEvent {
@@ -1517,6 +1482,7 @@ mod tests {
             confidence: 0.8,
             subtype: None,
             content_hash: None,
+            context: Default::default(),
         }
     }
 
@@ -1708,9 +1674,8 @@ mod tests {
 
         let signals = profiler.check_anomalies("predator", false);
         assert!(
-            !signals
-                .iter()
-                .any(|signal| signal.reason_code == "conversation.contact.multi_conversation_predator_pattern"),
+            !signals.iter().any(|signal| signal.reason_code
+                == "conversation.contact.multi_conversation_predator_pattern"),
             "predator pattern should be minor-account only"
         );
     }
@@ -2042,13 +2007,33 @@ mod tests {
     #[test]
     fn age_source_ml_inferred_reduces_age_gap_score() {
         let mut profiler = ContactProfiler::new();
-        profiler.record_event(&make_event("ml_adult", "c1", EventKind::NormalConversation, 1000));
-        profiler.record_event(&make_event("ml_adult", "c1", EventKind::NormalConversation, 2000));
+        profiler.record_event(&make_event(
+            "ml_adult",
+            "c1",
+            EventKind::NormalConversation,
+            1000,
+        ));
+        profiler.record_event(&make_event(
+            "ml_adult",
+            "c1",
+            EventKind::NormalConversation,
+            2000,
+        ));
         profiler.set_inferred_age_with_source("ml_adult", 30, AgeSource::MlInferred);
 
         let mut profiler2 = ContactProfiler::new();
-        profiler2.record_event(&make_event("verified_adult", "c2", EventKind::NormalConversation, 1000));
-        profiler2.record_event(&make_event("verified_adult", "c2", EventKind::NormalConversation, 2000));
+        profiler2.record_event(&make_event(
+            "verified_adult",
+            "c2",
+            EventKind::NormalConversation,
+            1000,
+        ));
+        profiler2.record_event(&make_event(
+            "verified_adult",
+            "c2",
+            EventKind::NormalConversation,
+            2000,
+        ));
         profiler2.set_inferred_age_with_source("verified_adult", 30, AgeSource::ParentVerified);
 
         let ml_signals = profiler.check_age_gap("ml_adult", Some(12));
@@ -2067,24 +2052,53 @@ mod tests {
     #[test]
     fn age_source_parent_verified_overwrites_ml_inferred() {
         let mut profiler = ContactProfiler::new();
-        profiler.record_event(&make_event("user", "c1", EventKind::NormalConversation, 1000));
-        profiler.record_event(&make_event("user", "c1", EventKind::NormalConversation, 2000));
+        profiler.record_event(&make_event(
+            "user",
+            "c1",
+            EventKind::NormalConversation,
+            1000,
+        ));
+        profiler.record_event(&make_event(
+            "user",
+            "c1",
+            EventKind::NormalConversation,
+            2000,
+        ));
         profiler.set_inferred_age_with_source("user", 25, AgeSource::MlInferred);
         assert_eq!(profiler.profile("user").unwrap().inferred_age, Some(25));
-        assert_eq!(profiler.profile("user").unwrap().age_source, AgeSource::MlInferred);
+        assert_eq!(
+            profiler.profile("user").unwrap().age_source,
+            AgeSource::MlInferred
+        );
 
         profiler.set_inferred_age_with_source("user", 28, AgeSource::ParentVerified);
         assert_eq!(profiler.profile("user").unwrap().inferred_age, Some(28));
-        assert_eq!(profiler.profile("user").unwrap().age_source, AgeSource::ParentVerified);
+        assert_eq!(
+            profiler.profile("user").unwrap().age_source,
+            AgeSource::ParentVerified
+        );
     }
 
     #[test]
     fn age_source_ml_does_not_overwrite_user_reported() {
         let mut profiler = ContactProfiler::new();
-        profiler.record_event(&make_event("user", "c1", EventKind::NormalConversation, 1000));
-        profiler.record_event(&make_event("user", "c1", EventKind::NormalConversation, 2000));
+        profiler.record_event(&make_event(
+            "user",
+            "c1",
+            EventKind::NormalConversation,
+            1000,
+        ));
+        profiler.record_event(&make_event(
+            "user",
+            "c1",
+            EventKind::NormalConversation,
+            2000,
+        ));
         profiler.set_inferred_age("user", 25);
-        assert_eq!(profiler.profile("user").unwrap().age_source, AgeSource::UserReported);
+        assert_eq!(
+            profiler.profile("user").unwrap().age_source,
+            AgeSource::UserReported
+        );
 
         profiler.set_inferred_age_with_source("user", 30, AgeSource::MlInferred);
         assert_eq!(
@@ -2251,6 +2265,27 @@ mod tests {
             "Expected trust_level {}, got {}",
             expected,
             profile.trust_level
+        );
+    }
+
+    #[test]
+    fn neutral_propaganda_context_does_not_accumulate_profile_risk() {
+        let mut profiler = ContactProfiler::new();
+        let mut event = make_event("friend", "conv_1", EventKind::PropagandaNarrative, 2_000);
+        event.subtype = Some("war_denial".to_string());
+        event.context.stance = EventStance::Neutral;
+        event.context.confidence = 0.8;
+
+        profiler.record_event(&event);
+
+        let profile = profiler.profile("friend").unwrap();
+        assert_eq!(profile.propaganda_event_count, 0);
+        assert_eq!(profile.propaganda_score, 0.0);
+        assert_eq!(profile.severity_count, 0);
+        assert!(
+            (profile.rating - 50.0).abs() < f32::EPSILON,
+            "neutral context should not change rating, got {}",
+            profile.rating
         );
     }
 
@@ -2796,8 +2831,7 @@ mod tests {
     }
 
     #[test]
-    fn backward_compat_old_state_import() {
-        let mut profiler = ContactProfiler::new();
+    fn incomplete_old_state_deserialization_is_rejected() {
         let old_json = r#"{"profiles":[{
             "sender_id":"alice",
             "first_seen_ms":1000,
@@ -2812,14 +2846,8 @@ mod tests {
             "severity_sum":0.0,
             "severity_count":0
         }]}"#;
-        let state: ContactProfilerState = serde_json::from_str(old_json).unwrap();
-        profiler.import(state);
-
-        let profile = profiler.profile("alice").unwrap();
-        assert_eq!(profile.trust_level, 1.0);
-        assert_eq!(profile.rating, 50.0);
-        assert_eq!(profile.circle_tier, CircleTier::New);
-        assert_eq!(profile.trend, BehavioralTrend::Stable);
+        let state: Result<ContactProfilerState, _> = serde_json::from_str(old_json);
+        assert!(state.is_err(), "incomplete state should not deserialize");
     }
 
     #[test]
@@ -3864,14 +3892,45 @@ mod tests {
         let json = r#"{"profiles":[{
             "sender_id":"x","first_seen_ms":0,"last_seen_ms":1000,"total_messages":1,
             "conversation_count":1,"conversations":["c"],"grooming_event_count":0,
-            "bullying_event_count":0,"manipulation_event_count":0,"is_trusted":false,
-            "severity_sum":0.0,"severity_count":0,"rating":999.0,"trust_level":5.0
+            "bullying_event_count":0,"manipulation_event_count":0,
+            "propaganda_event_count":0,"propaganda_source_count":0,"narrative_hits":[],
+            "propaganda_score":0.0,"narrative_diversity":0,"first_propaganda_ms":0,
+            "last_propaganda_ms":0,"propaganda_conversations":[],"hourly_activity":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            "message_fingerprints":[],"narrative_timeline":[],"weekly_propaganda_counts":[],
+            "is_trusted":false,"severity_sum":0.0,"severity_count":0,
+            "rating":999.0,"trust_level":5.0,"inferred_age":null,"age_source":"user_reported",
+            "circle_tier":"new","trend":"stable","weekly_snapshots":[],"current_snapshot":null,
+            "active_days":[]
         }]}"#;
         let state: ContactProfilerState = serde_json::from_str(json).unwrap();
         let mut profiler = ContactProfiler::new();
         profiler.import(state);
         let p = profiler.profile("x").unwrap();
         assert_eq!(p.rating, 999.0);
+    }
+
+    #[test]
+    fn wire_state_roundtrip_preserves_age_source() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event(
+            "alice",
+            "conv_1",
+            EventKind::NormalConversation,
+            1_000,
+        ));
+        {
+            let profile = profiler.profiles.get_mut("alice").unwrap();
+            profile.inferred_age = Some(17);
+            profile.age_source = AgeSource::MlInferred;
+        }
+
+        let wire = profiler.export_wire_state();
+        let mut restored = ContactProfiler::new();
+        restored.import_wire_state(wire);
+
+        let restored_profile = restored.profile("alice").unwrap();
+        assert_eq!(restored_profile.inferred_age, Some(17));
+        assert_eq!(restored_profile.age_source, AgeSource::MlInferred);
     }
 
     #[test]

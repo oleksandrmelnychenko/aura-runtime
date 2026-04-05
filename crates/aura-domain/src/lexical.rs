@@ -229,7 +229,9 @@ pub fn validate_lexical_rules(rules: &[LexicalRuleRecord]) -> Result<(), String>
                 | "coordinate_leak"
         );
         if !valid_threat_type {
-            return Err(format!("rule[{idx}] has invalid threat_type `{threat_type}`"));
+            return Err(format!(
+                "rule[{idx}] has invalid threat_type `{threat_type}`"
+            ));
         }
 
         let Some(ref severity) = rule.severity else {
@@ -308,8 +310,8 @@ fn parse_action_hint(action: Option<&str>) -> Option<DomainAction> {
 #[cfg(test)]
 mod tests {
     use super::{
-        match_all_lexical_rules, match_lexical_rules, validate_lexical_rules, validate_schema_version,
-        LexicalRuleRecord,
+        match_all_lexical_rules, match_lexical_rules, validate_lexical_rules,
+        validate_schema_version, LexicalRuleRecord,
     };
 
     #[test]
@@ -389,7 +391,10 @@ mod tests {
                 vec!["do what i say or i post it".to_string()],
             ],
         }];
-        let hit = match_lexical_rules("i h@ve your ph0to. d o w h a t i s a y or i p0st it", &rules);
+        let hit = match_lexical_rules(
+            "i h@ve your ph0to. d o w h a t i s a y or i p0st it",
+            &rules,
+        );
         assert!(hit.is_some());
     }
 

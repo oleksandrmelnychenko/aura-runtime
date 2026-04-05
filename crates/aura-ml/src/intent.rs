@@ -268,10 +268,7 @@ fn build_fallback_matcher() -> IntentFallbackMatcher {
     IntentFallbackMatcher { automaton, entries }
 }
 
-pub trait IntentBackend: Send {
-    fn predict(&mut self, text: &str) -> Option<IntentPrediction>;
-    fn name(&self) -> &str;
-}
+pub use crate::backend::IntentBackend;
 
 #[derive(Clone, Copy)]
 pub struct IntentCalibration {

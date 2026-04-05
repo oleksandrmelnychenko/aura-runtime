@@ -39,7 +39,8 @@ pub fn decide_action_with_thresholds(
             let replace = match action_hint {
                 Some((hint_priority, hint_action)) => {
                     priority > hint_priority
-                        || (priority == hint_priority && action_rank(action) > action_rank(hint_action))
+                        || (priority == hint_priority
+                            && action_rank(action) > action_rank(hint_action))
                 }
                 None => true,
             };
@@ -52,7 +53,6 @@ pub fn decide_action_with_thresholds(
         if severity_rank > max_severity_rank {
             max_severity_rank = severity_rank;
         }
-
     }
 
     if let Some((_, action)) = action_hint {
@@ -114,7 +114,8 @@ fn action_rank(action: DomainAction) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::{
-        decide_action, decide_action_with_thresholds, promote_action_to_warn, DomainPolicyThresholds,
+        decide_action, decide_action_with_thresholds, promote_action_to_warn,
+        DomainPolicyThresholds,
     };
     use crate::DomainSignal;
 

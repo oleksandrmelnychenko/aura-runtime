@@ -1,0 +1,122 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "multilingual_toxic_spans",
+  "dataset_size": 1200400,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/en-00000-of-00001.parquet": {
+      "num_bytes": 51896,
+      "checksum": null
+    },
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/es-00000-of-00001.parquet": {
+      "num_bytes": 61946,
+      "checksum": null
+    },
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/de-00000-of-00001.parquet": {
+      "num_bytes": 98331,
+      "checksum": null
+    },
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/zh-00000-of-00001.parquet": {
+      "num_bytes": 82031,
+      "checksum": null
+    },
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/ar-00000-of-00001.parquet": {
+      "num_bytes": 80141,
+      "checksum": null
+    },
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/am-00000-of-00001.parquet": {
+      "num_bytes": 128038,
+      "checksum": null
+    },
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/ru-00000-of-00001.parquet": {
+      "num_bytes": 87459,
+      "checksum": null
+    },
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/uk-00000-of-00001.parquet": {
+      "num_bytes": 68853,
+      "checksum": null
+    },
+    "hf://datasets/textdetox/multilingual_toxic_spans@ce71b06f53fbb24a796c436063d7897b5ef99bc1/data/hi-00000-of-00001.parquet": {
+      "num_bytes": 74530,
+      "checksum": null
+    }
+  },
+  "download_size": 733225,
+  "features": {
+    "Sentence": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "Negative Connotations": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 1933625,
+  "splits": {
+    "en": {
+      "name": "en",
+      "num_bytes": 77316,
+      "num_examples": 991,
+      "dataset_name": "multilingual_toxic_spans"
+    },
+    "es": {
+      "name": "es",
+      "num_bytes": 85086,
+      "num_examples": 987,
+      "dataset_name": "multilingual_toxic_spans"
+    },
+    "de": {
+      "name": "de",
+      "num_bytes": 137888,
+      "num_examples": 970,
+      "dataset_name": "multilingual_toxic_spans"
+    },
+    "zh": {
+      "name": "zh",
+      "num_bytes": 104192,
+      "num_examples": 921,
+      "dataset_name": "multilingual_toxic_spans"
+    },
+    "ar": {
+      "name": "ar",
+      "num_bytes": 135382,
+      "num_examples": 990,
+      "dataset_name": "multilingual_toxic_spans"
+    },
+    "am": {
+      "name": "am",
+      "num_bytes": 220043,
+      "num_examples": 995,
+      "dataset_name": "multilingual_toxic_spans"
+    },
+    "ru": {
+      "name": "ru",
+      "num_bytes": 150334,
+      "num_examples": 999,
+      "dataset_name": "multilingual_toxic_spans"
+    },
+    "uk": {
+      "name": "uk",
+      "num_bytes": 117364,
+      "num_examples": 943,
+      "dataset_name": "multilingual_toxic_spans"
+    },
+    "hi": {
+      "name": "hi",
+      "num_bytes": 172795,
+      "num_examples": 992,
+      "dataset_name": "multilingual_toxic_spans"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

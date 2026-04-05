@@ -70,7 +70,7 @@ impl Msg {
             conv,
             text,
             lang: "uk",
-            conv_type: ConversationType::GroupChat,
+            conv_type: ConversationType::Group,
             members: Some(members),
         }
     }
@@ -80,7 +80,7 @@ impl Msg {
             conv,
             text,
             lang: "en",
-            conv_type: ConversationType::GroupChat,
+            conv_type: ConversationType::Group,
             members: Some(members),
         }
     }
@@ -222,6 +222,7 @@ fn run_scenario(analyzer: &mut Analyzer, num: usize, scenario: &Scenario, stats:
             language: Some(msg.lang.to_string()),
             conversation_type: msg.conv_type,
             member_count: msg.members,
+            server_sender_risk_hint: None,
         };
 
         let result = analyzer.analyze_with_context(&input, ts);

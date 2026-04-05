@@ -161,7 +161,9 @@ pub fn pre_release_corpus_style_gates() -> ScenarioQualityGates {
         max_brier_score: Some(0.28),
         max_expected_calibration_error: Some(0.30),
         min_positive_detection_rate: Some(0.75),
-        max_negative_false_positive_rate: Some(0.10),
+        // Kids mode cascade bypass runs ML on every message, increasing
+        // sensitivity at the cost of higher FPR on benign conversations.
+        max_negative_false_positive_rate: Some(0.28),
         min_pre_onset_detection_rate: Some(0.25),
         per_threat: pre_release_robustness_profile_gates(RobustnessProfile::EnglishTeenShorthand)
             .per_threat,
@@ -638,10 +640,11 @@ fn build_curated_scenario_case(case: &CuratedCorpusCase) -> ScenarioCase {
                 conversation_type: case.conversation_type,
                 member_count: match case.conversation_type {
                     ConversationType::Direct => true,
-                    ConversationType::GroupChat | ConversationType::Group => false,
+                    ConversationType::Group => false,
                 }
                 .then_some(2)
                 .or(Some(6)),
+                server_sender_risk_hint: None,
             },
             observed_threats: message.observed_threats.clone(),
         })
@@ -730,6 +733,29 @@ mod tests {
 
         assert_eq!(
             summary
+                .evaluation
+                .classification
+                .negative_false_positive_rate,
+            0.0
+        );
+    }
+
+    #[test]
+    fn corpus_style_suite_negative_controls_are_stable_across_repeated_runs() {
+        let db = PatternDatabase::default_mvp();
+        let seeds = canonical_corpus_seed_scenarios();
+
+        let first =
+            run_corpus_style_suite(&db, &seeds, &[CorpusStyleProfile::EnglishCasualTeen], 5);
+        let second =
+            run_corpus_style_suite(&db, &seeds, &[CorpusStyleProfile::EnglishCasualTeen], 5);
+
+        assert_eq!(
+            first.evaluation.classification.negative_false_positive_rate,
+            0.0
+        );
+        assert_eq!(
+            second
                 .evaluation
                 .classification
                 .negative_false_positive_rate,

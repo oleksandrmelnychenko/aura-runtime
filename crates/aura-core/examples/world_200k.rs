@@ -166,7 +166,7 @@ fn build_population(rng: &mut Rng) -> Vec<ChildProfile> {
         }
         conversations.push(Conv {
             id: format!("class_group_{}", i),
-            conv_type: ConversationType::GroupChat,
+            conv_type: ConversationType::Group,
             members: Some(group_parts.len() as u32 + 1),
             participants: group_parts,
         });
@@ -735,7 +735,7 @@ fn pick_conv_and_sender<'a>(
                     .conversations
                     .iter()
                     .position(|c| match c.conv_type {
-                        ConversationType::GroupChat | ConversationType::Group => true,
+                        ConversationType::Group => true,
                         ConversationType::Direct => false,
                     })
                     .unwrap_or(1);
@@ -959,6 +959,7 @@ fn main() {
                 language: Some(child.lang.to_string()),
                 conversation_type: conv_type,
                 member_count: members,
+                server_sender_risk_hint: None,
             };
 
             let ts = base_ts + (ev as u64 * 30_000) + rng.range(0, 15_000) as u64;

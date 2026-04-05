@@ -237,8 +237,8 @@ Current manifest contract:
 - Dataset evidence is green
 - Privacy and audit constraints are unchanged or explicitly approved
 - Audit evidence proves forbidden fields are absent
-- Local promotion rehearsal is not treated as green if the FFI smoke compile is
-  only a stub due to a missing local compiler
+- Local promotion rehearsal is treated as `BLOCKED`, not green, if the FFI
+  smoke compile is only a stub due to a missing local compiler
 
 ## What Does Not Count As Release Readiness
 

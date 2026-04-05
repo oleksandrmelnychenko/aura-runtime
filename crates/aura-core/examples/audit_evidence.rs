@@ -5,9 +5,10 @@ use std::process;
 
 use aura_core::context::tracker::TRACKER_STATE_VERSION;
 use aura_core::{
-    Action, ActionRecommendation, AlertPriority, AnalysisResult, AuditRecord, BehavioralTrend,
-    CircleTier, Confidence, ContactSnapshot, FollowUpAction, ProtectionLevel, RiskBreakdown,
-    ThreatType, UiAction, AUDIT_IDENTIFIER_SCHEME, AUDIT_SCHEMA_VERSION,
+    Action, ActionRecommendation, AlertPriority, AnalysisContextSummary, AnalysisResult,
+    AuditRecord, BehavioralTrend, CircleTier, Confidence, ContactSnapshot, FollowUpAction,
+    ProtectionLevel, RiskBreakdown, ThreatType, UiAction, AUDIT_IDENTIFIER_SCHEME,
+    AUDIT_SCHEMA_VERSION,
 };
 use chrono::Utc;
 use serde::Serialize;
@@ -169,11 +170,23 @@ fn sample_result() -> AnalysisResult {
             first_seen_ms: 1_000,
             last_seen_ms: 2_000,
             conversation_count: 1,
+            grooming_event_count: 0,
+            bullying_event_count: 0,
+            manipulation_event_count: 0,
+            total_threat_events: 0,
         }),
         reason_codes: vec![
             "conversation.grooming.stage_sequence".to_string(),
             "conversation.grooming.new_contact_flattery".to_string(),
         ],
+        context_markers: vec![
+            "context.direction.directed_at_user".to_string(),
+            "context.relationship.new_contact".to_string(),
+        ],
+        context_summary: AnalysisContextSummary::from_markers(&[
+            "context.direction.directed_at_user".to_string(),
+            "context.relationship.new_contact".to_string(),
+        ]),
         inference: Default::default(),
         analysis_time_us: 420,
     }

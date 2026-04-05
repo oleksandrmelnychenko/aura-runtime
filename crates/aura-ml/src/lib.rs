@@ -29,8 +29,9 @@ pub mod tokenizer;
 pub mod tokenizer_sp;
 pub mod toxicity;
 pub mod types;
+pub mod unified;
 
-pub use backend::{GateModel, SentimentBackend, ToxicityBackend};
+pub use backend::{GateModel, IntentBackend, SafetyBackend, SentimentBackend, ToxicityBackend};
 pub use dataset_adapters::{
     compare_rule_only_vs_rule_plus_ml, parse_koalaai_adapter_records,
     parse_sensitive_content_adapter_records, Wave1AdapterComparison, Wave1DatasetSource,

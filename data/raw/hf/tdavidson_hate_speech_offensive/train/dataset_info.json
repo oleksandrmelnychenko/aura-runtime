@@ -1,0 +1,62 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "hate_speech_offensive",
+  "dataset_size": 3223304,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/tdavidson/hate_speech_offensive@adc5fb774614827695774f2dbe0ea8122f6a92b4/data/train-00000-of-00001.parquet": {
+      "num_bytes": 1627672,
+      "checksum": null
+    }
+  },
+  "download_size": 1627672,
+  "features": {
+    "count": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "hate_speech_count": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "offensive_language_count": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "neither_count": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "class": {
+      "names": [
+        "hate speech",
+        "offensive language",
+        "neither"
+      ],
+      "_type": "ClassLabel"
+    },
+    "tweet": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 4850976,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 3223304,
+      "num_examples": 24783,
+      "dataset_name": "hate_speech_offensive"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

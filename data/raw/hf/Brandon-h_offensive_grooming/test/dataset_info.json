@@ -1,0 +1,66 @@
+{
+  "builder_name": "csv",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "offensive-and-grooming-dataset",
+  "dataset_size": 5976559,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/Brandon-h/offensive-and-grooming-dataset@792b973d89904080d86053be4fd5d30c847a87bf/train.csv": {
+      "num_bytes": 3116083,
+      "checksum": null
+    },
+    "hf://datasets/Brandon-h/offensive-and-grooming-dataset@792b973d89904080d86053be4fd5d30c847a87bf/validation.csv": {
+      "num_bytes": 20918,
+      "checksum": null
+    },
+    "hf://datasets/Brandon-h/offensive-and-grooming-dataset@792b973d89904080d86053be4fd5d30c847a87bf/test.csv": {
+      "num_bytes": 2518026,
+      "checksum": null
+    }
+  },
+  "download_size": 5655027,
+  "features": {
+    "index": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 11631586,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 3291456,
+      "num_examples": 16726,
+      "dataset_name": "offensive-and-grooming-dataset"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 22286,
+      "num_examples": 108,
+      "dataset_name": "offensive-and-grooming-dataset"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 2662817,
+      "num_examples": 13612,
+      "dataset_name": "offensive-and-grooming-dataset"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

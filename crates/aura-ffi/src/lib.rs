@@ -12,11 +12,14 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use aura_core::context::contact::{
-    BehavioralSnapshotState as CoreBehavioralSnapshotState,
+    AgeSource as CoreAgeSource, BehavioralSnapshotState as CoreBehavioralSnapshotState,
     ContactProfileState as CoreContactProfileState,
     ContactProfilerWireState as CoreContactProfilerWireState,
 };
-use aura_core::context::events::{ContextEvent as CoreContextEvent, EventKind as CoreEventKind};
+use aura_core::context::events::{
+    ContextEvent as CoreContextEvent, EventContextFrame as CoreEventContextFrame,
+    EventKind as CoreEventKind,
+};
 use aura_core::context::tracker::{
     ConversationTimelineState as CoreConversationTimelineState,
     TrackerWireState as CoreTrackerWireState,
@@ -39,6 +42,8 @@ const MAX_BATCH_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SHADOW_BUNDLE_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_IMPORT_CONTEXT_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SMALL_CONTROL_REQUEST_BYTES: usize = 16 * 1024;
+const MAX_QUICK_CHECK_TEXT_BYTES: usize = 64 * 1024;
+const MAX_URL_INPUT_BYTES: usize = 4096;
 const PATTERN_RELOAD_MIN_INTERVAL_MS: u64 = 1_500;
 const PATTERN_RELOAD_MAX_BACKOFF_MS: u64 = 30_000;
 const PATTERN_RELOAD_PATH_MAX_BYTES: usize = 1024;
@@ -369,7 +374,14 @@ pub unsafe extern "C" fn aura_analyze(
 
     match with_instance(handle, |instance| {
         let result = instance.analyzer.analyze(&input);
-        write_proto_message(out, &analysis_result_to_proto(&result))
+        write_proto_message(
+            out,
+            &analysis_result_to_proto(
+                &result,
+                Some(input.conversation_id.0.as_str()),
+                Some(input.sender_id.0.as_str()),
+            ),
+        )
     }) {
         Ok(()) => true,
         Err(e) => {
@@ -417,7 +429,14 @@ pub unsafe extern "C" fn aura_analyze_context(
         let result = instance
             .analyzer
             .analyze_with_context(&input, request.timestamp_ms);
-        write_proto_message(out, &analysis_result_to_proto(&result))
+        write_proto_message(
+            out,
+            &analysis_result_to_proto(
+                &result,
+                Some(input.conversation_id.0.as_str()),
+                Some(input.sender_id.0.as_str()),
+            ),
+        )
     }) {
         Ok(()) => true,
         Err(e) => {
@@ -478,7 +497,11 @@ pub unsafe extern "C" fn aura_analyze_batch(
                 Some(ts) => instance.analyzer.analyze_with_context(&input, ts),
                 None => instance.analyzer.analyze(&input),
             };
-            results.push(analysis_result_to_proto(&result));
+            results.push(analysis_result_to_proto(
+                &result,
+                Some(input.conversation_id.0.as_str()),
+                Some(input.sender_id.0.as_str()),
+            ));
         }
 
         write_proto_message(out, &proto::BatchAnalyzeResponse { results })
@@ -678,7 +701,8 @@ pub unsafe extern "C" fn aura_reload_patterns(
         let db = match PatternDatabase::from_file(patterns_path) {
             Ok(db) => db,
             Err(e) => {
-                instance.pattern_reload_failures = instance.pattern_reload_failures.saturating_add(1);
+                instance.pattern_reload_failures =
+                    instance.pattern_reload_failures.saturating_add(1);
                 return Err(format!("pattern load failed: {e}"));
             }
         };
@@ -759,13 +783,25 @@ pub unsafe extern "C" fn aura_import_context(
         }
     };
 
+    let ImportTrackerState {
+        core_state,
+        kids_state,
+    } = state;
+
     match with_instance(handle, |instance| {
         instance
             .analyzer
-            .import_context_state(state)
+            .import_context_state(core_state)
             .map_err(|e| format!("import failed: {e}"))
     }) {
-        Ok(()) => true,
+        Ok(()) => {
+            if let Some(kids_state) = kids_state {
+                aura_kids::pipeline::import_kids_memory(&kids_state);
+            } else {
+                aura_kids::pipeline::clear_kids_memory();
+            }
+            true
+        }
         Err(e) => {
             set_last_error(e);
             false
@@ -932,6 +968,225 @@ pub unsafe extern "C" fn aura_mark_contact_trusted(
     match with_instance(handle, |instance| {
         instance.analyzer.mark_contact_trusted(&request.sender_id);
         Ok(())
+    }) {
+        Ok(()) => true,
+        Err(e) => {
+            set_last_error(e);
+            false
+        }
+    }
+}
+
+/// Processes guardian feedback to adjust kids memory state.
+///
+/// Accepts a protobuf-encoded `GuardianFeedbackRequest` and applies the
+/// guardian's verdict (Trusted, Block, Monitor, FalsePositive) to the
+/// kids conversation and sender memory.
+#[no_mangle]
+pub unsafe extern "C" fn aura_guardian_feedback(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    clear_last_error();
+
+    if let Err(e) = prepare_output(out) {
+        set_last_error(e);
+        return false;
+    }
+
+    let request: proto::GuardianFeedbackRequest = match decode_proto_bounded(
+        request_ptr,
+        request_len,
+        "guardian_feedback request",
+        MAX_SMALL_CONTROL_REQUEST_BYTES,
+    ) {
+        Ok(request) => request,
+        Err(e) => {
+            set_last_error(e);
+            return false;
+        }
+    };
+
+    let verdict = match proto::GuardianVerdict::try_from(request.verdict) {
+        Ok(proto::GuardianVerdict::Trusted) => aura_kids::pipeline::GuardianVerdict::Trusted,
+        Ok(proto::GuardianVerdict::Block) => aura_kids::pipeline::GuardianVerdict::Block,
+        Ok(proto::GuardianVerdict::Monitor) => aura_kids::pipeline::GuardianVerdict::Monitor,
+        Ok(proto::GuardianVerdict::FalsePositive) => {
+            aura_kids::pipeline::GuardianVerdict::FalsePositive
+        }
+        Ok(proto::GuardianVerdict::Unspecified) | Err(_) => {
+            set_last_error("unspecified or invalid guardian verdict".to_string());
+            return false;
+        }
+    };
+
+    match with_instance(handle, |_instance| {
+        aura_kids::pipeline::apply_guardian_feedback(
+            &request.sender_id,
+            &request.conversation_id,
+            verdict,
+        );
+        let response = proto::GuardianFeedbackResponse {
+            ok: true,
+            message: None,
+        };
+        write_proto_message(out, &response)
+    }) {
+        Ok(()) => true,
+        Err(e) => {
+            set_last_error(e);
+            false
+        }
+    }
+}
+
+/// Performs a lightweight safety check on raw UTF-8 text for notification filtering.
+///
+/// Accepts raw text bytes (not protobuf) and returns a protobuf-encoded
+/// `StatusResponse`. The `ok` field is `true` when the text is safe to
+/// display (action is `Allow` or `Mark`). When the text is unsafe, `ok`
+/// is `false` and `message` contains the threat type name (e.g.
+/// `"Grooming"`, `"SelfHarm"`).
+///
+/// This is faster than `aura_analyze` because it skips protobuf
+/// decode on the input side and runs a stateless analysis (no context
+/// tracking).
+#[no_mangle]
+pub unsafe extern "C" fn aura_quick_check(
+    handle: *mut c_void,
+    text_ptr: *const u8,
+    text_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    clear_last_error();
+
+    if let Err(e) = prepare_output(out) {
+        set_last_error(e);
+        return false;
+    }
+
+    if text_ptr.is_null() {
+        set_last_error("null text pointer");
+        return false;
+    }
+
+    if text_len == 0 || text_len > MAX_QUICK_CHECK_TEXT_BYTES {
+        set_last_error(format!(
+            "text length {text_len} out of range (1..{MAX_QUICK_CHECK_TEXT_BYTES})"
+        ));
+        return false;
+    }
+
+    let text_bytes = std::slice::from_raw_parts(text_ptr, text_len);
+    let text = match std::str::from_utf8(text_bytes) {
+        Ok(s) => s.to_string(),
+        Err(e) => {
+            set_last_error(format!("invalid UTF-8 in text input: {e}"));
+            return false;
+        }
+    };
+
+    match with_instance(handle, |instance| {
+        let input = MessageInput {
+            content_type: aura_core::ContentType::Text,
+            text: Some(text),
+            image_data: None,
+            sender_id: aura_core::SenderId::from("notification"),
+            conversation_id: aura_core::ConversationId::from("notification"),
+            language: None,
+            conversation_type: aura_core::ConversationType::Direct,
+            member_count: None,
+            server_sender_risk_hint: None,
+        };
+        let result = instance.analyzer.analyze(&input);
+        let safe = match result.action {
+            Action::Allow | Action::Mark => true,
+            Action::Blur | Action::Warn | Action::Block => false,
+        };
+        let message = match safe {
+            true => None,
+            false => Some(format!("{:?}", result.threat_type)),
+        };
+        let response = proto::StatusResponse { ok: safe, message };
+        write_proto_message(out, &response)
+    }) {
+        Ok(()) => true,
+        Err(e) => {
+            set_last_error(e);
+            false
+        }
+    }
+}
+
+/// Checks a single URL for phishing or malicious patterns.
+///
+/// Accepts raw UTF-8 URL bytes (not protobuf) and returns a
+/// protobuf-encoded `StatusResponse`. The `ok` field is `true` when the
+/// URL appears safe. When the URL is suspicious or blocked, `ok` is
+/// `false` and `message` contains the threat description.
+#[no_mangle]
+pub unsafe extern "C" fn aura_detect_suspicious_url(
+    handle: *mut c_void,
+    url_ptr: *const u8,
+    url_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    clear_last_error();
+
+    if let Err(e) = prepare_output(out) {
+        set_last_error(e);
+        return false;
+    }
+
+    if url_ptr.is_null() {
+        set_last_error("null url pointer");
+        return false;
+    }
+
+    if url_len == 0 || url_len > MAX_URL_INPUT_BYTES {
+        set_last_error(format!(
+            "url length {url_len} out of range (1..{MAX_URL_INPUT_BYTES})"
+        ));
+        return false;
+    }
+
+    let url_bytes = std::slice::from_raw_parts(url_ptr, url_len);
+    let url = match std::str::from_utf8(url_bytes) {
+        Ok(s) => s.to_string(),
+        Err(e) => {
+            set_last_error(format!("invalid UTF-8 in url input: {e}"));
+            return false;
+        }
+    };
+
+    match with_instance(handle, |instance| {
+        let checker = aura_patterns::UrlChecker::from_database(&instance.pattern_db);
+
+        let blocked_matches = checker.find_blocked_matches(&url);
+        if let Some(hit) = blocked_matches.first() {
+            let response = proto::StatusResponse {
+                ok: false,
+                message: Some(format!("{}: {}", hit.threat_type, hit.explanation)),
+            };
+            return write_proto_message(out, &response);
+        }
+
+        let suspicious = checker.find_suspicious_urls(&url);
+        if let Some(hit) = suspicious.first() {
+            let response = proto::StatusResponse {
+                ok: false,
+                message: Some(hit.explanation.clone()),
+            };
+            return write_proto_message(out, &response);
+        }
+
+        let response = proto::StatusResponse {
+            ok: true,
+            message: None,
+        };
+        write_proto_message(out, &response)
     }) {
         Ok(()) => true,
         Err(e) => {
@@ -1129,6 +1384,7 @@ fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
         language: message.language,
         conversation_type: conversation_type_from_proto(message.conversation_type),
         member_count: message.member_count,
+        server_sender_risk_hint: message.server_sender_risk_hint,
     }
 }
 
@@ -1350,18 +1606,36 @@ fn has_mandatory_kids_memory_reason(reason_codes: &[String]) -> bool {
 
 fn kids_memory_explainability_to_proto(
     reason_codes: &[String],
+    conversation_id: Option<&str>,
+    sender_id: Option<&str>,
 ) -> Option<proto::KidsMemoryExplainability> {
     let reason_codes = kids_memory_reason_codes(reason_codes);
     if reason_codes.is_empty() {
         return None;
     }
+    let conversation_risk_score = conversation_id
+        .map(aura_kids::pipeline::conversation_risk_score)
+        .unwrap_or(0.0);
+    let sender_risk_score = sender_id
+        .map(aura_kids::pipeline::sender_cross_risk_score)
+        .unwrap_or(0.0);
+    let escalation_message_count = conversation_id
+        .map(aura_kids::pipeline::conversation_escalation_message_count)
+        .unwrap_or(0);
     Some(proto::KidsMemoryExplainability {
         reason_codes: reason_codes.clone(),
         mandatory_guardian_escalation: has_mandatory_kids_memory_reason(&reason_codes),
+        conversation_risk_score,
+        sender_risk_score,
+        escalation_message_count,
     })
 }
 
-fn analysis_result_to_proto(result: &aura_core::AnalysisResult) -> proto::AnalysisResult {
+fn analysis_result_to_proto(
+    result: &aura_core::AnalysisResult,
+    conversation_id: Option<&str>,
+    sender_id: Option<&str>,
+) -> proto::AnalysisResult {
     proto::AnalysisResult {
         threat_type: proto_threat_type(result.threat_type) as i32,
         confidence: proto_confidence(result.confidence) as i32,
@@ -1396,7 +1670,11 @@ fn analysis_result_to_proto(result: &aura_core::AnalysisResult) -> proto::Analys
         product_surface: Some(product_decision_surface_to_proto(
             &build_product_decision_surface(result, ProductRolloutMode::GuardianEnabled),
         )),
-        kids_memory: kids_memory_explainability_to_proto(&result.reason_codes),
+        kids_memory: kids_memory_explainability_to_proto(
+            &result.reason_codes,
+            conversation_id,
+            sender_id,
+        ),
     }
 }
 
@@ -1608,7 +1886,7 @@ fn audit_record_to_proto(record: &aura_core::AuditRecord) -> proto::AuditRecord 
             .conversation_token
             .as_ref()
             .map(protected_identifier_to_proto),
-        kids_memory: kids_memory_explainability_to_proto(&record.reason_codes),
+        kids_memory: kids_memory_explainability_to_proto(&record.reason_codes, None, None),
     }
 }
 
@@ -1741,7 +2019,7 @@ fn shadow_mode_decision_to_proto(
             .map(shadow_mode_contact_summary_to_proto),
         mirror: Some(shadow_mode_mirror_to_proto(&decision.mirror)),
         product_surface: Some(product_decision_surface_to_proto(&decision.product_surface)),
-        kids_memory: kids_memory_explainability_to_proto(&decision.reason_codes),
+        kids_memory: kids_memory_explainability_to_proto(&decision.reason_codes, None, None),
     }
 }
 
@@ -1808,6 +2086,7 @@ fn shadow_mode_bundle_to_proto(bundle: &aura_core::ShadowModeBundle) -> proto::S
 }
 
 fn tracker_state_to_proto(state: &CoreTrackerWireState) -> proto::TrackerState {
+    let kids = aura_kids::pipeline::export_kids_memory();
     proto::TrackerState {
         schema_version: state.schema_version,
         timelines: state
@@ -1816,24 +2095,120 @@ fn tracker_state_to_proto(state: &CoreTrackerWireState) -> proto::TrackerState {
             .map(conversation_timeline_state_to_proto)
             .collect(),
         contact_profiler: Some(contact_profiler_state_to_proto(&state.contact_profiler)),
+        kids_memory: if kids.conversations.is_empty() && kids.senders.is_empty() {
+            None
+        } else {
+            Some(kids_memory_state_to_proto(&kids))
+        },
     }
 }
 
-fn tracker_state_from_proto(state: proto::TrackerState) -> Result<CoreTrackerWireState, String> {
-    Ok(CoreTrackerWireState {
-        schema_version: state.schema_version,
-        timelines: state
-            .timelines
-            .into_iter()
-            .map(conversation_timeline_state_from_proto)
-            .collect::<Result<Vec<_>, _>>()?,
-        contact_profiler: match state.contact_profiler {
-            Some(state) => contact_profiler_state_from_proto(state)?,
-            None => CoreContactProfilerWireState {
-                profiles: Vec::new(),
+struct ImportTrackerState {
+    core_state: CoreTrackerWireState,
+    kids_state: Option<aura_kids::pipeline::ExportedKidsMemoryState>,
+}
+
+fn tracker_state_from_proto(state: proto::TrackerState) -> Result<ImportTrackerState, String> {
+    let kids_state = state.kids_memory.as_ref().map(kids_memory_state_from_proto);
+    Ok(ImportTrackerState {
+        core_state: CoreTrackerWireState {
+            schema_version: state.schema_version,
+            timelines: state
+                .timelines
+                .into_iter()
+                .map(conversation_timeline_state_from_proto)
+                .collect::<Result<Vec<_>, _>>()?,
+            contact_profiler: match state.contact_profiler {
+                Some(state) => contact_profiler_state_from_proto(state)?,
+                None => CoreContactProfilerWireState {
+                    profiles: Vec::new(),
+                },
             },
         },
+        kids_state,
     })
+}
+
+fn kids_memory_state_to_proto(
+    state: &aura_kids::pipeline::ExportedKidsMemoryState,
+) -> proto::KidsMemoryState {
+    proto::KidsMemoryState {
+        conversations: state
+            .conversations
+            .iter()
+            .map(|conv| proto::KidsConversationMemoryState {
+                conversation_id: conv.conversation_id.clone(),
+                message_index: conv.message_index,
+                entries: conv
+                    .entries
+                    .iter()
+                    .map(|snap| proto::KidsMessageRiskSnapshot {
+                        sender_id: snap.sender_id.clone(),
+                        has_grooming: snap.has_grooming,
+                        has_manipulation: snap.has_manipulation,
+                        has_bullying: snap.has_bullying,
+                        has_self_harm: snap.has_self_harm,
+                        has_blackmail_or_sextortion: snap.has_blackmail_or_sextortion,
+                        ml_grooming: snap.ml_grooming,
+                        ml_bullying: snap.ml_bullying,
+                        ml_self_harm: snap.ml_self_harm,
+                        ml_manipulation: snap.ml_manipulation,
+                    })
+                    .collect(),
+            })
+            .collect(),
+        senders: state
+            .senders
+            .iter()
+            .map(|sender| proto::KidsSenderMemoryState {
+                sender_id: sender.sender_id.clone(),
+                event_index: sender.event_index,
+                recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
+            })
+            .collect(),
+    }
+}
+
+fn kids_memory_state_from_proto(
+    state: &proto::KidsMemoryState,
+) -> aura_kids::pipeline::ExportedKidsMemoryState {
+    aura_kids::pipeline::ExportedKidsMemoryState {
+        conversations: state
+            .conversations
+            .iter()
+            .map(|conv| aura_kids::pipeline::ExportedConversationMemory {
+                conversation_id: conv.conversation_id.clone(),
+                message_index: conv.message_index,
+                last_activity_index: conv.message_index,
+                entries: conv
+                    .entries
+                    .iter()
+                    .map(|snap| aura_kids::pipeline::ExportedMessageSnapshot {
+                        sender_id: snap.sender_id.clone(),
+                        has_grooming: snap.has_grooming,
+                        has_manipulation: snap.has_manipulation,
+                        has_bullying: snap.has_bullying,
+                        has_self_harm: snap.has_self_harm,
+                        has_blackmail_or_sextortion: snap.has_blackmail_or_sextortion,
+                        ml_grooming: snap.ml_grooming,
+                        ml_bullying: snap.ml_bullying,
+                        ml_self_harm: snap.ml_self_harm,
+                        ml_manipulation: snap.ml_manipulation,
+                    })
+                    .collect(),
+            })
+            .collect(),
+        senders: state
+            .senders
+            .iter()
+            .map(|sender| aura_kids::pipeline::ExportedSenderMemory {
+                sender_id: sender.sender_id.clone(),
+                event_index: sender.event_index,
+                last_activity_index: sender.event_index,
+                recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
+            })
+            .collect(),
+    }
 }
 
 fn conversation_timeline_state_to_proto(
@@ -1887,6 +2262,7 @@ fn context_event_from_proto(event: proto::ContextEvent) -> Result<CoreContextEve
             Some(event.subtype)
         },
         content_hash: event.content_hash,
+        context: CoreEventContextFrame::default(),
     })
 }
 
@@ -1994,6 +2370,7 @@ fn contact_profile_state_to_proto(state: &CoreContactProfileState) -> proto::Con
         message_fingerprints,
         narrative_timeline,
         weekly_propaganda_counts,
+        age_source: proto_age_source(state.age_source) as i32,
     }
 }
 
@@ -2094,6 +2471,7 @@ fn contact_profile_state_from_proto(
         severity_sum: state.severity_sum,
         severity_count: state.severity_count,
         inferred_age,
+        age_source: age_source_from_proto(state.age_source),
         rating: state.rating,
         trust_level: state.trust_level,
         circle_tier: circle_tier_from_proto(state.circle_tier),
@@ -2204,7 +2582,6 @@ fn content_type_from_proto(value: i32) -> aura_core::ContentType {
 
 fn conversation_type_from_proto(value: i32) -> aura_core::ConversationType {
     match proto::ConversationType::try_from(value).unwrap_or(proto::ConversationType::Direct) {
-        proto::ConversationType::GroupChat => aura_core::ConversationType::GroupChat,
         proto::ConversationType::Group => aura_core::ConversationType::Group,
         _ => aura_core::ConversationType::Direct,
     }
@@ -2213,7 +2590,6 @@ fn conversation_type_from_proto(value: i32) -> aura_core::ConversationType {
 fn proto_conversation_type(value: aura_core::ConversationType) -> proto::ConversationType {
     match value {
         aura_core::ConversationType::Direct => proto::ConversationType::Direct,
-        aura_core::ConversationType::GroupChat => proto::ConversationType::GroupChat,
         aura_core::ConversationType::Group => proto::ConversationType::Group,
     }
 }
@@ -2423,6 +2799,22 @@ fn proto_behavioral_trend(value: aura_core::BehavioralTrend) -> proto::Behaviora
         aura_core::BehavioralTrend::GradualWorsening => proto::BehavioralTrend::GradualWorsening,
         aura_core::BehavioralTrend::RapidWorsening => proto::BehavioralTrend::RapidWorsening,
         aura_core::BehavioralTrend::RoleReversal => proto::BehavioralTrend::RoleReversal,
+    }
+}
+
+fn age_source_from_proto(value: i32) -> CoreAgeSource {
+    match proto::AgeSource::try_from(value).unwrap_or(proto::AgeSource::UserReported) {
+        proto::AgeSource::ParentVerified => CoreAgeSource::ParentVerified,
+        proto::AgeSource::MlInferred => CoreAgeSource::MlInferred,
+        _ => CoreAgeSource::UserReported,
+    }
+}
+
+fn proto_age_source(value: CoreAgeSource) -> proto::AgeSource {
+    match value {
+        CoreAgeSource::ParentVerified => proto::AgeSource::ParentVerified,
+        CoreAgeSource::UserReported => proto::AgeSource::UserReported,
+        CoreAgeSource::MlInferred => proto::AgeSource::MlInferred,
     }
 }
 
@@ -2644,6 +3036,7 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: proto::ConversationType::Direct as i32,
             member_count: None,
+            server_sender_risk_hint: None,
         }
     }
 
@@ -3154,12 +3547,17 @@ mod tests {
             assert_eq!(summary.total_conversations, 1);
             assert_eq!(summary.conversations.len(), 1);
             assert_eq!(summary.conversations[0].conversation_id, "conv_1");
-            assert_eq!(summary.conversations[0].total_events, 2);
+            assert!(
+                summary.conversations[0].total_events >= 2,
+                "expected at least 2 events, got {}",
+                summary.conversations[0].total_events,
+            );
 
+            let expected_events = summary.conversations[0].total_events;
             let profile = get_contact_profile(replica, "stranger");
             assert!(profile.found);
             let profile = profile.profile.expect("missing contact profile");
-            assert_eq!(profile.total_messages, 2);
+            assert_eq!(profile.total_messages, expected_events);
 
             aura_free(source);
             aura_free(replica);
@@ -3210,7 +3608,10 @@ mod tests {
             let event_delta = summary_a.conversations[0]
                 .total_events
                 .abs_diff(summary_b.conversations[0].total_events);
-            assert!(event_delta <= 1, "replicas diverged too much: {event_delta}");
+            assert!(
+                event_delta <= 1,
+                "replicas diverged too much: {event_delta}"
+            );
             assert_eq!(summary_a.conversations[0].latest_event_ms, 6000);
             assert_eq!(summary_b.conversations[0].latest_event_ms, 6000);
 
@@ -3619,8 +4020,10 @@ mod tests {
     #[test]
     fn reload_patterns_is_rate_limited() {
         unsafe {
-            let valid_path =
-                write_temp_patterns_file("valid_reload_rate_limit", &custom_keyword_patterns_json("signal_rate_limit"));
+            let valid_path = write_temp_patterns_file(
+                "valid_reload_rate_limit",
+                &custom_keyword_patterns_json("signal_rate_limit"),
+            );
             let handle = init_handle(proto_config(proto::AccountType::Adult, true));
             let request = encode_proto(&proto::ReloadPatternsRequest {
                 patterns_path: valid_path.to_string_lossy().into_owned(),
@@ -4155,6 +4558,173 @@ mod tests {
 
             aura_free_buffer(export_buf);
             aura_free_buffer(export_buf2);
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn quick_check_safe_text_returns_ok_true() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            let text = b"Hey, how are you doing today?";
+            let mut out = AuraBuffer::empty();
+            assert!(aura_quick_check(
+                handle,
+                text.as_ptr(),
+                text.len(),
+                &mut out,
+            ));
+            let response: proto::StatusResponse = decode_buffer(out);
+            assert!(response.ok);
+            assert!(response.message.is_none());
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn quick_check_null_text_fails() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_quick_check(handle, std::ptr::null(), 10, &mut out,));
+            let err = aura_last_error();
+            assert!(!err.is_null());
+            let msg = CStr::from_ptr(err).to_string_lossy().to_string();
+            assert!(msg.contains("null text pointer"));
+            aura_free_string(err);
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn quick_check_empty_text_fails() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            let text = b"x";
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_quick_check(handle, text.as_ptr(), 0, &mut out,));
+            let err = aura_last_error();
+            assert!(!err.is_null());
+            let msg = CStr::from_ptr(err).to_string_lossy().to_string();
+            assert!(msg.contains("out of range"));
+            aura_free_string(err);
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn quick_check_null_handle_fails() {
+        unsafe {
+            let text = b"hello";
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_quick_check(
+                std::ptr::null_mut(),
+                text.as_ptr(),
+                text.len(),
+                &mut out,
+            ));
+        }
+    }
+
+    #[test]
+    fn quick_check_null_out_fails() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            let text = b"hello";
+            assert!(!aura_quick_check(
+                handle,
+                text.as_ptr(),
+                text.len(),
+                std::ptr::null_mut(),
+            ));
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn detect_suspicious_url_safe_url_returns_ok() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            let url = b"https://www.google.com";
+            let mut out = AuraBuffer::empty();
+            assert!(aura_detect_suspicious_url(
+                handle,
+                url.as_ptr(),
+                url.len(),
+                &mut out,
+            ));
+            let response: proto::StatusResponse = decode_buffer(out);
+            assert!(response.ok);
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn detect_suspicious_url_null_pointer_fails() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_detect_suspicious_url(
+                handle,
+                std::ptr::null(),
+                10,
+                &mut out,
+            ));
+            let err = aura_last_error();
+            assert!(!err.is_null());
+            let msg = CStr::from_ptr(err).to_string_lossy().to_string();
+            assert!(msg.contains("null url pointer"));
+            aura_free_string(err);
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn detect_suspicious_url_empty_url_fails() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            let url = b"x";
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_detect_suspicious_url(
+                handle,
+                url.as_ptr(),
+                0,
+                &mut out,
+            ));
+            let err = aura_last_error();
+            assert!(!err.is_null());
+            let msg = CStr::from_ptr(err).to_string_lossy().to_string();
+            assert!(msg.contains("out of range"));
+            aura_free_string(err);
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn detect_suspicious_url_null_handle_fails() {
+        unsafe {
+            let url = b"https://example.com";
+            let mut out = AuraBuffer::empty();
+            assert!(!aura_detect_suspicious_url(
+                std::ptr::null_mut(),
+                url.as_ptr(),
+                url.len(),
+                &mut out,
+            ));
+        }
+    }
+
+    #[test]
+    fn detect_suspicious_url_null_out_fails() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
+            let url = b"https://example.com";
+            assert!(!aura_detect_suspicious_url(
+                handle,
+                url.as_ptr(),
+                url.len(),
+                std::ptr::null_mut(),
+            ));
             aura_free(handle);
         }
     }

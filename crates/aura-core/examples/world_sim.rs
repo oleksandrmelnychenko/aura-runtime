@@ -516,6 +516,7 @@ fn run_world_simulation(
             language: Some(event.language.clone()),
             conversation_type: event.conversation_type,
             member_count: event.member_count,
+            server_sender_risk_hint: None,
         };
 
         let result = analyzer.analyze_with_context(&input, event.timestamp_ms);
@@ -1182,6 +1183,9 @@ fn kids_memory_explainability_to_proto(
     Some(proto::KidsMemoryExplainability {
         reason_codes: reason_codes.clone(),
         mandatory_guardian_escalation: has_mandatory_kids_memory_reason(&reason_codes),
+        conversation_risk_score: 0.0,
+        sender_risk_score: 0.0,
+        escalation_message_count: 0,
     })
 }
 
@@ -1525,7 +1529,6 @@ fn proto_protection_level(value: ProtectionLevel) -> proto::ProtectionLevel {
 fn proto_conversation_type(value: ConversationType) -> proto::ConversationType {
     match value {
         ConversationType::Direct => proto::ConversationType::Direct,
-        ConversationType::GroupChat => proto::ConversationType::GroupChat,
         ConversationType::Group => proto::ConversationType::Group,
     }
 }

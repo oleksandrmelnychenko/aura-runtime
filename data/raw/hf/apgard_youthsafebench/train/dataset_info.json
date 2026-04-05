@@ -1,0 +1,50 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "youthsafebench-teen-suicide-and-self-harm",
+  "dataset_size": 14204,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/apgard/youthsafebench-teen-suicide-and-self-harm@b89c872210ad5da7bde6067ba640b997e4f2249b/teen_ssh_labels.parquet": {
+      "num_bytes": 11693,
+      "checksum": null
+    }
+  },
+  "download_size": 11693,
+  "features": {
+    "Message": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "Topic": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "Linguistic characteristic": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "Label": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 25897,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 14204,
+      "num_examples": 90,
+      "dataset_name": "youthsafebench-teen-suicide-and-self-harm"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

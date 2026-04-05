@@ -1,0 +1,70 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "fake_news",
+  "dataset_size": 105263312,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/GonzaloA/fake_news@d653ddbf8eecee268bf6bc6e2fb2d0433704fedf/data/train-00000-of-00001.parquet": {
+      "num_bytes": 38790951,
+      "checksum": null
+    },
+    "hf://datasets/GonzaloA/fake_news@d653ddbf8eecee268bf6bc6e2fb2d0433704fedf/data/validation-00000-of-00001.parquet": {
+      "num_bytes": 12986224,
+      "checksum": null
+    },
+    "hf://datasets/GonzaloA/fake_news@d653ddbf8eecee268bf6bc6e2fb2d0433704fedf/data/test-00000-of-00001.parquet": {
+      "num_bytes": 13044162,
+      "checksum": null
+    }
+  },
+  "download_size": 64821337,
+  "features": {
+    "Unnamed: 0": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "title": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 170084649,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 62972390,
+      "num_examples": 24353,
+      "dataset_name": "fake_news"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 21101325,
+      "num_examples": 8117,
+      "dataset_name": "fake_news"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 21189597,
+      "num_examples": 8117,
+      "dataset_name": "fake_news"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

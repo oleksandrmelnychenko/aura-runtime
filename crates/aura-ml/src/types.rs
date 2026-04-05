@@ -168,7 +168,12 @@ impl SafetyPrediction {
     }
 
     pub fn top_two_gap(&self) -> f32 {
-        let mut scores = [self.grooming, self.bullying, self.self_harm, self.manipulation];
+        let mut scores = [
+            self.grooming,
+            self.bullying,
+            self.self_harm,
+            self.manipulation,
+        ];
         scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
         scores[0] - scores[1]
     }
@@ -242,7 +247,11 @@ impl IntentPrediction {
     }
 
     pub fn top_two_gap(&self) -> f32 {
-        let mut scores = [self.request_meeting, self.request_secret, self.request_media];
+        let mut scores = [
+            self.request_meeting,
+            self.request_secret,
+            self.request_media,
+        ];
         scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
         scores[0] - scores[1]
     }
@@ -324,6 +333,7 @@ pub enum MlUncertaintyLevel {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MlConfig {
+    pub unified_model_path: Option<String>,
     pub toxicity_model_path: Option<String>,
     pub sentiment_model_path: Option<String>,
     pub safety_model_path: Option<String>,
@@ -362,6 +372,11 @@ pub struct MlConfig {
 
     #[serde(default = "default_true")]
     pub cascade_enabled: bool,
+
+    /// Force-bypass cascade gate regardless of cascade_enabled.
+    /// Used by Kids domain mode to ensure every message gets ML inference.
+    #[serde(default)]
+    pub cascade_force_bypass: bool,
 
     #[serde(default = "default_cascade_threshold")]
     pub cascade_gate_threshold: f32,
@@ -410,6 +425,7 @@ fn default_intent_threshold() -> f32 {
 impl Default for MlConfig {
     fn default() -> Self {
         Self {
+            unified_model_path: None,
             toxicity_model_path: None,
             sentiment_model_path: None,
             safety_model_path: None,
@@ -430,6 +446,7 @@ impl Default for MlConfig {
             cache_size: default_cache_size(),
             cache_ttl_secs: default_cache_ttl_secs(),
             cascade_enabled: true,
+            cascade_force_bypass: false,
             cascade_gate_threshold: default_cascade_threshold(),
             uncertainty_abstain_score_floor: default_abstain_score_floor(),
             uncertainty_abstain_margin_threshold: default_abstain_margin_threshold(),

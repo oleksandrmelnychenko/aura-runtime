@@ -210,7 +210,9 @@ pub fn summarize_policy_actions_with_expectation_names(
             }
         }
 
-        let expected_guardian_escalation = expectation.required_any.contains(&UiAction::EscalateToGuardian)
+        let expected_guardian_escalation = expectation
+            .required_any
+            .contains(&UiAction::EscalateToGuardian)
             || expectation
                 .required_by_onset
                 .contains(&UiAction::EscalateToGuardian);

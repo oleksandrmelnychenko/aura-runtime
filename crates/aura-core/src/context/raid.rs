@@ -79,7 +79,7 @@ impl RaidDetector {
         contact_profiler: &ContactProfiler,
     ) -> usize {
         let hostile_senders =
-            timeline.unique_senders_matching(since_ms, |event| event.kind.is_bullying_indicator());
+            timeline.unique_senders_matching(since_ms, |event| event.supports_bullying_inference());
 
         let mut count = 0usize;
         for sender_id in &hostile_senders {
@@ -93,7 +93,7 @@ impl RaidDetector {
 
 #[cfg(test)]
 mod tests {
-    use super::super::events::{ContextEvent, EventKind};
+    use super::super::events::{ContextEvent, EventDirectionality, EventKind, EventSpeechAct};
     use super::*;
 
     fn make_event(sender: &str, conv: &str, kind: EventKind, ts: u64) -> ContextEvent {
@@ -106,6 +106,7 @@ mod tests {
             confidence: 0.8,
             subtype: None,
             content_hash: None,
+            context: Default::default(),
         }
     }
 
@@ -154,6 +155,39 @@ mod tests {
         let detector = RaidDetector::new();
         let signals = detector.analyze(&timeline, 5000, &profiler);
         assert!(signals.is_empty(), "Single bully should not trigger raid");
+    }
+
+    #[test]
+    fn third_party_reported_insults_do_not_trigger_raid() {
+        let base_ts = 100_000u64;
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
+        let mut all_events = Vec::new();
+
+        for i in 0..5 {
+            let mut event = make_event(
+                &format!("reporter_{i}"),
+                "conv_1",
+                EventKind::Insult,
+                base_ts + i as u64 * 60_000,
+            );
+            event.context.speech_act = EventSpeechAct::Report;
+            event.context.directionality = EventDirectionality::ThirdParty;
+            event.context.confidence = 0.8;
+            all_events.push(event);
+        }
+
+        let profiler = setup_profiler_with_events(&all_events);
+        for event in all_events {
+            timeline.push(event);
+        }
+
+        let detector = RaidDetector::new();
+        let now = base_ts + 5 * 60_000;
+        let signals = detector.analyze(&timeline, now, &profiler);
+        assert!(
+            signals.is_empty(),
+            "Third-party reported insults should not look like a live raid"
+        );
     }
 
     #[test]

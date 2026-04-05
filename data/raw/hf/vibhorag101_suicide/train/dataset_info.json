@@ -1,0 +1,52 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "suicide_prediction_dataset_phr",
+  "dataset_size": 94970093,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/vibhorag101/suicide_prediction_dataset_phr@cae0100af7740cd42a1baa25da5f94bd19157060/data/train-00000-of-00001-2ab36d8ba3acdbcd.parquet": {
+      "num_bytes": 42941119,
+      "checksum": null
+    },
+    "hf://datasets/vibhorag101/suicide_prediction_dataset_phr@cae0100af7740cd42a1baa25da5f94bd19157060/data/test-00000-of-00001-a1bf8c09fedae1d2.parquet": {
+      "num_bytes": 10646056,
+      "checksum": null
+    }
+  },
+  "download_size": 53587175,
+  "features": {
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 148557268,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 76017522,
+      "num_examples": 185574,
+      "dataset_name": "suicide_prediction_dataset_phr"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 18952571,
+      "num_examples": 46394,
+      "dataset_name": "suicide_prediction_dataset_phr"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

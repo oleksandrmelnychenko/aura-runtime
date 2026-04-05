@@ -139,6 +139,23 @@ pub struct PolicyReleaseSnapshot {
     pub gates: GateReportSnapshot,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SocialContextInferenceFailureSnapshot {
+    pub cohort_id: String,
+    pub base_case_name: String,
+    pub failure_count: usize,
+    pub failures: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SocialContextInferenceReleaseSnapshot {
+    pub passed: bool,
+    pub total_expectations: usize,
+    pub passed_expectations: usize,
+    pub failed_expectations: usize,
+    pub failures: Vec<SocialContextInferenceFailureSnapshot>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SliceReleaseReport {
     pub group: String,
@@ -159,6 +176,8 @@ pub struct SuiteReleaseReport {
     pub evaluation: EvaluationMetricsSnapshot,
     pub evaluation_gates: GateReportSnapshot,
     pub policy: Option<PolicyReleaseSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub social_context_inference: Option<SocialContextInferenceReleaseSnapshot>,
     pub slices: Vec<SliceReleaseReport>,
 }
 
@@ -191,6 +210,7 @@ pub struct PreReleaseReport {
     pub support_thresholds: ReleaseSupportThresholds,
     pub drift_thresholds: ReleaseDriftThresholds,
     pub overall_status: ReleaseStatus,
+    pub operator_summary: Vec<String>,
     pub suites: Vec<SuiteReleaseReport>,
     pub drift_checks: Vec<SuiteDriftReport>,
     pub wave1_on_device_checks: Vec<GateCheckSnapshot>,
@@ -346,6 +366,14 @@ pub fn evaluate_wave1_rollback_criteria(report: &PreReleaseReport) -> Wave1Rollb
         if suite.status != ReleaseStatus::Pass {
             reasons.push(format!("suite_failed:{}", suite.suite_id));
         }
+        if let Some(inference) = suite.social_context_inference.as_ref() {
+            if !inference.passed {
+                reasons.push(format!(
+                    "social_context_inference_failed:{}:{}",
+                    suite.suite_id, inference.failed_expectations
+                ));
+            }
+        }
         if !suite.missing_required_slices.is_empty() {
             reasons.push(format!(
                 "missing_required_slices:{}:{}",
@@ -378,6 +406,73 @@ pub fn evaluate_wave1_rollback_criteria(report: &PreReleaseReport) -> Wave1Rollb
     }
 }
 
+fn collect_operator_summary(report: &PreReleaseReport) -> Vec<String> {
+    const MAX_SOCIAL_CONTEXT_FAILURES: usize = 5;
+
+    let suite_failures = report
+        .suites
+        .iter()
+        .filter(|suite| suite.status != ReleaseStatus::Pass)
+        .count();
+    let drift_failures = report
+        .drift_checks
+        .iter()
+        .filter(|drift| drift.status != ReleaseStatus::Pass)
+        .count();
+    let failed_on_device_checks = report
+        .wave1_on_device_checks
+        .iter()
+        .filter(|check| !check.passed)
+        .map(|check| check.name.clone())
+        .collect::<Vec<_>>();
+
+    let mut lines = vec![format!(
+        "overall_status={} suite_failures={} drift_failures={} rollback={}",
+        release_status_label(report.overall_status),
+        suite_failures,
+        drift_failures,
+        report.wave1_rollback_decision.should_rollback
+    )];
+
+    if !failed_on_device_checks.is_empty() {
+        lines.push(format!(
+            "wave1_on_device_failed_checks={}",
+            failed_on_device_checks.join(",")
+        ));
+    }
+
+    if let Some(suite) = report
+        .suites
+        .iter()
+        .find(|suite| suite.suite_id == "social_context")
+    {
+        if let Some(inference) = suite.social_context_inference.as_ref() {
+            lines.push(format!(
+                "social_context_inference={}/{} passed",
+                inference.passed_expectations, inference.total_expectations
+            ));
+            for failure in inference.failures.iter().take(MAX_SOCIAL_CONTEXT_FAILURES) {
+                lines.push(format!(
+                    "social_context_failure cohort={} case={} failures={}",
+                    failure.cohort_id, failure.base_case_name, failure.failure_count
+                ));
+            }
+            if inference.failures.len() > MAX_SOCIAL_CONTEXT_FAILURES {
+                lines.push(format!(
+                    "social_context_failure additional={}",
+                    inference.failures.len() - MAX_SOCIAL_CONTEXT_FAILURES
+                ));
+            }
+        }
+    }
+
+    if lines.len() == 1 && failed_on_device_checks.is_empty() {
+        lines.push("no_operator_action_required".to_string());
+    }
+
+    lines
+}
+
 fn evaluate_wave1_on_device_checks(report: &PreReleaseReport) -> Vec<GateCheckSnapshot> {
     const MIN_HIGH_RISK_RECALL: f32 = 0.82;
     const MAX_SAFE_COHORT_FP: f32 = 0.05;
@@ -395,7 +490,8 @@ fn evaluate_wave1_on_device_checks(report: &PreReleaseReport) -> Vec<GateCheckSn
             {
                 high_risk_positive_rates.push(slice.evaluation.positive_detection_rate);
             }
-            if (slice.group == "relationship" && SAFE_RELATIONSHIPS.contains(&slice.slice_id.as_str()))
+            if (slice.group == "relationship"
+                && SAFE_RELATIONSHIPS.contains(&slice.slice_id.as_str()))
                 || (slice.group == "tone" && SAFE_TONES.contains(&slice.slice_id.as_str()))
             {
                 safe_fp_rates.push(slice.evaluation.negative_false_positive_rate);
@@ -406,7 +502,10 @@ fn evaluate_wave1_on_device_checks(report: &PreReleaseReport) -> Vec<GateCheckSn
     let high_risk_avg = if high_risk_positive_rates.is_empty() {
         None
     } else {
-        Some(high_risk_positive_rates.iter().copied().sum::<f32>() / high_risk_positive_rates.len() as f32)
+        Some(
+            high_risk_positive_rates.iter().copied().sum::<f32>()
+                / high_risk_positive_rates.len() as f32,
+        )
     };
     let safe_fp_max = safe_fp_rates
         .iter()
@@ -462,6 +561,15 @@ fn collect_wave1_model_profile_drift(report: &PreReleaseReport) -> Vec<String> {
         notes.push("no_material_profile_drift_detected".to_string());
     }
     notes
+}
+
+fn release_status_label(status: ReleaseStatus) -> &'static str {
+    match status {
+        ReleaseStatus::Pass => "pass",
+        ReleaseStatus::Fail => "fail",
+        ReleaseStatus::InsufficientSupport => "insufficient_support",
+        ReleaseStatus::Blocked => "blocked",
+    }
 }
 
 pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) -> PreReleaseReport {
@@ -617,6 +725,7 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
         support_thresholds,
         drift_thresholds,
         overall_status,
+        operator_summary: Vec::new(),
         suites,
         drift_checks,
         wave1_on_device_checks: Vec::new(),
@@ -630,6 +739,7 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
     report.wave1_on_device_checks = evaluate_wave1_on_device_checks(&report);
     report.wave1_rollback_decision = evaluate_wave1_rollback_criteria(&report);
     report.wave1_model_profile_drift = collect_wave1_model_profile_drift(&report);
+    report.operator_summary = collect_operator_summary(&report);
     report
 }
 
@@ -699,6 +809,7 @@ fn build_scenario_suite_report(
         evaluation: evaluation_metrics_from_summary(summary),
         evaluation_gates: gate_report_snapshot(&evaluation_gates),
         policy: None,
+        social_context_inference: None,
         slices,
     }
 }
@@ -750,6 +861,7 @@ fn build_robustness_suite_report(
         evaluation: evaluation_metrics_from_summary(&summary.evaluation),
         evaluation_gates: gate_report_snapshot(&overall_eval),
         policy: None,
+        social_context_inference: None,
         slices,
     }
 }
@@ -814,6 +926,7 @@ fn build_corpus_suite_report(
         evaluation: evaluation_metrics_from_summary(&summary.evaluation),
         evaluation_gates: gate_report_snapshot(&overall_eval),
         policy: Some(policy_release_snapshot(&summary.policy, &overall_policy)),
+        social_context_inference: None,
         slices,
     }
 }
@@ -827,6 +940,7 @@ fn build_social_context_suite_report(
         evaluate_social_context_suite(summary, &pre_release_social_context_gates());
     let (overall_policy, by_cohort_policy) =
         evaluate_social_context_policy_suite(summary, &pre_release_social_context_policy_gates());
+    let inference_snapshot = social_context_inference_release_snapshot(summary);
     let eval_map = by_cohort_eval.into_iter().collect::<BTreeMap<_, _>>();
     let policy_map = by_cohort_policy.into_iter().collect::<BTreeMap<_, _>>();
     let mut lookup_failed = false;
@@ -862,21 +976,75 @@ fn build_social_context_suite_report(
 
     SuiteReleaseReport {
         suite_id: "social_context".to_string(),
-        status: finalize_suite_status(
-            suite_status(
-                &overall_eval,
-                Some(&overall_policy),
-                &slices,
-                &missing_required_slices,
-            ),
+        status: social_context_suite_status(
+            &overall_eval,
+            &overall_policy,
+            &slices,
+            &missing_required_slices,
+            &inference_snapshot,
             lookup_failed,
         ),
         missing_required_slices,
         evaluation: evaluation_metrics_from_summary(&summary.evaluation),
         evaluation_gates: gate_report_snapshot(&overall_eval),
         policy: Some(policy_release_snapshot(&summary.policy, &overall_policy)),
+        social_context_inference: Some(inference_snapshot),
         slices,
     }
+}
+
+fn social_context_inference_release_snapshot(
+    summary: &SocialContextSuiteSummary,
+) -> SocialContextInferenceReleaseSnapshot {
+    let mut failures = Vec::new();
+    let mut total_expectations = 0usize;
+
+    for cohort in &summary.cohorts {
+        for expectation in &cohort.inference_expectations {
+            total_expectations += 1;
+            if !expectation.passed {
+                failures.push(SocialContextInferenceFailureSnapshot {
+                    cohort_id: cohort.cohort_id.clone(),
+                    base_case_name: expectation.base_case_name.clone(),
+                    failure_count: expectation.failures.len(),
+                    failures: expectation.failures.clone(),
+                });
+            }
+        }
+    }
+
+    let failed_expectations = failures.len();
+    let passed_expectations = total_expectations.saturating_sub(failed_expectations);
+
+    SocialContextInferenceReleaseSnapshot {
+        passed: failed_expectations == 0,
+        total_expectations,
+        passed_expectations,
+        failed_expectations,
+        failures,
+    }
+}
+
+fn social_context_suite_status(
+    evaluation_gates: &ScenarioGateReport,
+    policy_gates: &ScenarioGateReport,
+    slices: &[SliceReleaseReport],
+    missing_required_slices: &[String],
+    inference: &SocialContextInferenceReleaseSnapshot,
+    lookup_failed: bool,
+) -> ReleaseStatus {
+    finalize_suite_status(
+        combine_statuses(
+            std::iter::once(suite_status(
+                evaluation_gates,
+                Some(policy_gates),
+                slices,
+                missing_required_slices,
+            ))
+            .chain((!inference.passed).then_some(ReleaseStatus::Fail)),
+        ),
+        lookup_failed,
+    )
 }
 
 fn build_realistic_suite_report(
@@ -986,6 +1154,7 @@ fn build_realistic_suite_report(
         evaluation: evaluation_metrics_from_summary(&summary.evaluation),
         evaluation_gates: gate_report_snapshot(&overall_eval),
         policy: Some(policy_release_snapshot(&summary.policy, &overall_policy)),
+        social_context_inference: None,
         slices,
     }
 }
@@ -1174,6 +1343,7 @@ fn build_external_suite_report(
         evaluation: evaluation_metrics_from_summary(&summary.evaluation),
         evaluation_gates: gate_report_snapshot(&overall_eval),
         policy: Some(policy_release_snapshot(&summary.policy, &overall_policy)),
+        social_context_inference: None,
         slices,
     }
 }
@@ -1591,6 +1761,69 @@ fn finalize_suite_status(status: ReleaseStatus, lookup_failed: bool) -> ReleaseS
 mod tests {
     use super::*;
 
+    fn empty_scenario_summary() -> ScenarioEvaluationSummary {
+        ScenarioEvaluationSummary {
+            calibration: crate::CalibrationReport {
+                count: 0,
+                brier_score: 0.0,
+                weighted_brier_score: 0.0,
+                expected_calibration_error: 0.0,
+                bins: Vec::new(),
+                by_threat: Vec::new(),
+            },
+            lead_time: crate::LeadTimeSummary {
+                total_cases: 0,
+                detected_cases: 0,
+                detected_before_onset_cases: 0,
+                missed_cases: 0,
+                mean_lead_time_ms: None,
+                median_lead_time_ms: None,
+            },
+            classification: crate::ScenarioClassificationSummary {
+                total_positive_scenarios: 0,
+                detected_positive_scenarios: 0,
+                missed_positive_scenarios: 0,
+                positive_detection_rate: 1.0,
+                total_negative_scenarios: 0,
+                clean_negative_scenarios: 0,
+                false_positive_scenarios: 0,
+                negative_false_positive_rate: 0.0,
+                scenarios: Vec::new(),
+            },
+            language_slices: Vec::new(),
+            scenarios: Vec::new(),
+        }
+    }
+
+    fn empty_policy_summary() -> PolicyActionSummary {
+        PolicyActionSummary {
+            total_scenarios: 0,
+            passed_scenarios: 0,
+            failed_scenarios: 0,
+            scenario_pass_rate: 1.0,
+            required_any_coverage: 1.0,
+            required_by_onset_coverage: 1.0,
+            forbidden_violation_rate: 0.0,
+            guardian_escalation_coverage: 1.0,
+            scenarios: Vec::new(),
+        }
+    }
+
+    fn failing_social_context_inference_snapshot() -> SocialContextInferenceReleaseSnapshot {
+        SocialContextInferenceReleaseSnapshot {
+            passed: false,
+            total_expectations: 2,
+            passed_expectations: 1,
+            failed_expectations: 1,
+            failures: vec![SocialContextInferenceFailureSnapshot {
+                cohort_id: "trusted_adult_authority_boundary".to_string(),
+                base_case_name: "negative_control_trusted_adult".to_string(),
+                failure_count: 1,
+                failures: vec!["risk_horizon was short_term, expected unknown".to_string()],
+            }],
+        }
+    }
+
     #[test]
     fn support_assessment_tracks_reportable_and_blocking_thresholds() {
         let summary = ScenarioEvaluationSummary {
@@ -1852,6 +2085,150 @@ mod tests {
     }
 
     #[test]
+    fn social_context_inference_snapshot_counts_failures() {
+        let summary = SocialContextSuiteSummary {
+            evaluation: empty_scenario_summary(),
+            policy: empty_policy_summary(),
+            cohorts: vec![crate::SocialContextCohortSummary {
+                cohort_id: "trusted_adult_authority_boundary".to_string(),
+                description: "boundary".to_string(),
+                variant_count: 2,
+                base_cases: vec![
+                    "trusted_adult_grooming".to_string(),
+                    "negative_control_trusted_adult".to_string(),
+                ],
+                style_profiles: vec!["baseline".to_string()],
+                evaluation: empty_scenario_summary(),
+                policy: empty_policy_summary(),
+                inference_expectations: vec![
+                    crate::SocialContextInferenceExpectationSummary {
+                        base_case_name: "trusted_adult_grooming".to_string(),
+                        variant_count: 1,
+                        scope: crate::SocialContextInferenceScope::FinalStep,
+                        passed: true,
+                        failures: Vec::new(),
+                    },
+                    crate::SocialContextInferenceExpectationSummary {
+                        base_case_name: "negative_control_trusted_adult".to_string(),
+                        variant_count: 1,
+                        scope: crate::SocialContextInferenceScope::FinalStep,
+                        passed: false,
+                        failures: vec![
+                            "variant_a: risk_horizon was short_term, expected unknown".to_string()
+                        ],
+                    },
+                ],
+            }],
+            variants: Vec::new(),
+        };
+
+        let snapshot = social_context_inference_release_snapshot(&summary);
+
+        assert!(!snapshot.passed);
+        assert_eq!(snapshot.total_expectations, 2);
+        assert_eq!(snapshot.passed_expectations, 1);
+        assert_eq!(snapshot.failed_expectations, 1);
+        assert_eq!(
+            snapshot.failures[0].cohort_id,
+            "trusted_adult_authority_boundary"
+        );
+        assert_eq!(
+            snapshot.failures[0].base_case_name,
+            "negative_control_trusted_adult"
+        );
+    }
+
+    #[test]
+    fn social_context_inference_failures_block_suite_status() {
+        let passing_gates = ScenarioGateReport {
+            passed: true,
+            checks: Vec::new(),
+        };
+
+        assert_eq!(
+            social_context_suite_status(
+                &passing_gates,
+                &passing_gates,
+                &[],
+                &[],
+                &failing_social_context_inference_snapshot(),
+                false,
+            ),
+            ReleaseStatus::Fail
+        );
+    }
+
+    #[test]
+    fn operator_summary_highlights_social_context_failures() {
+        let report = PreReleaseReport {
+            schema_version: RELEASE_REPORT_SCHEMA_VERSION,
+            generated_at_utc: "2026-03-24T00:00:00Z".to_string(),
+            runtime_version: "test".to_string(),
+            support_thresholds: default_release_support_thresholds(),
+            drift_thresholds: default_release_drift_thresholds(),
+            overall_status: ReleaseStatus::Fail,
+            operator_summary: Vec::new(),
+            suites: vec![SuiteReleaseReport {
+                suite_id: "social_context".to_string(),
+                status: ReleaseStatus::Fail,
+                missing_required_slices: Vec::new(),
+                evaluation: evaluation_metrics_from_summary(&empty_scenario_summary()),
+                evaluation_gates: GateReportSnapshot {
+                    passed: true,
+                    checks: Vec::new(),
+                },
+                policy: Some(PolicyReleaseSnapshot {
+                    metrics: PolicyMetricsSnapshot {
+                        total_scenarios: 0,
+                        passed_scenarios: 0,
+                        failed_scenarios: 0,
+                        scenario_pass_rate: 1.0,
+                        required_any_coverage: 1.0,
+                        required_by_onset_coverage: 1.0,
+                        forbidden_violation_rate: 0.0,
+                        guardian_escalation_coverage: 1.0,
+                    },
+                    gates: GateReportSnapshot {
+                        passed: true,
+                        checks: Vec::new(),
+                    },
+                }),
+                social_context_inference: Some(failing_social_context_inference_snapshot()),
+                slices: Vec::new(),
+            }],
+            drift_checks: Vec::new(),
+            wave1_on_device_checks: vec![GateCheckSnapshot {
+                name: "wave1.on_device.safe_cohort_fp_budget".to_string(),
+                comparison: "at_most".to_string(),
+                actual: Some(0.12),
+                threshold: 0.05,
+                passed: false,
+            }],
+            wave1_model_profile_drift: Vec::new(),
+            wave1_rollback_decision: Wave1RollbackDecision {
+                should_rollback: true,
+                reasons: vec!["social_context_inference_failed:social_context:1".to_string()],
+            },
+        };
+
+        let summary = collect_operator_summary(&report);
+
+        assert!(summary.iter().any(|line| {
+            line == "overall_status=fail suite_failures=1 drift_failures=0 rollback=true"
+        }));
+        assert!(summary.iter().any(|line| {
+            line == "wave1_on_device_failed_checks=wave1.on_device.safe_cohort_fp_budget"
+        }));
+        assert!(summary
+            .iter()
+            .any(|line| { line == "social_context_inference=1/2 passed" }));
+        assert!(summary.iter().any(|line| {
+            line.contains("cohort=trusted_adult_authority_boundary")
+                && line.contains("case=negative_control_trusted_adult")
+        }));
+    }
+
+    #[test]
     fn drift_status_requires_blocking_ready_for_hard_failures() {
         let failing_gates = ScenarioGateReport {
             passed: false,
@@ -1906,6 +2283,8 @@ mod tests {
             evaluation: empty_eval.clone(),
             evaluation_gates: empty_gates.clone(),
             policy: None,
+            social_context_inference: (suite_id == "social_context")
+                .then_some(failing_social_context_inference_snapshot()),
             slices: vec![SliceReleaseReport {
                 group: "language".to_string(),
                 slice_id: "ru".to_string(),
@@ -1924,8 +2303,12 @@ mod tests {
             support_thresholds: default_release_support_thresholds(),
             drift_thresholds: default_release_drift_thresholds(),
             overall_status: ReleaseStatus::Pass,
+            operator_summary: vec![
+                "overall_status=pass suite_failures=0 drift_failures=0 rollback=false".to_string(),
+            ],
             suites: vec![
                 suite("canonical_messenger"),
+                suite("social_context"),
                 suite("realistic_chat"),
                 suite("external_curated_gold"),
             ],
@@ -1967,8 +2350,65 @@ mod tests {
         assert!(json.contains("support_enforcement"));
         assert!(json.contains("missing_required_slices"));
         assert!(json.contains("release_blocking_ready"));
+        assert!(json.contains("social_context_inference"));
+        assert!(json.contains("operator_summary"));
         assert!(json.contains("wave1.on_device.high_risk_recall"));
         assert_eq!(report.schema_version, RELEASE_REPORT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn wave1_rollback_criteria_lists_social_context_inference_failures() {
+        let report = PreReleaseReport {
+            schema_version: RELEASE_REPORT_SCHEMA_VERSION,
+            generated_at_utc: "2026-03-24T00:00:00Z".to_string(),
+            runtime_version: "test".to_string(),
+            support_thresholds: default_release_support_thresholds(),
+            drift_thresholds: default_release_drift_thresholds(),
+            overall_status: ReleaseStatus::Pass,
+            operator_summary: Vec::new(),
+            suites: vec![SuiteReleaseReport {
+                suite_id: "social_context".to_string(),
+                status: ReleaseStatus::Pass,
+                missing_required_slices: Vec::new(),
+                evaluation: evaluation_metrics_from_summary(&empty_scenario_summary()),
+                evaluation_gates: GateReportSnapshot {
+                    passed: true,
+                    checks: Vec::new(),
+                },
+                policy: Some(PolicyReleaseSnapshot {
+                    metrics: PolicyMetricsSnapshot {
+                        total_scenarios: 0,
+                        passed_scenarios: 0,
+                        failed_scenarios: 0,
+                        scenario_pass_rate: 1.0,
+                        required_any_coverage: 1.0,
+                        required_by_onset_coverage: 1.0,
+                        forbidden_violation_rate: 0.0,
+                        guardian_escalation_coverage: 1.0,
+                    },
+                    gates: GateReportSnapshot {
+                        passed: true,
+                        checks: Vec::new(),
+                    },
+                }),
+                social_context_inference: Some(failing_social_context_inference_snapshot()),
+                slices: Vec::new(),
+            }],
+            drift_checks: Vec::new(),
+            wave1_on_device_checks: Vec::new(),
+            wave1_model_profile_drift: Vec::new(),
+            wave1_rollback_decision: Wave1RollbackDecision {
+                should_rollback: false,
+                reasons: Vec::new(),
+            },
+        };
+
+        let decision = evaluate_wave1_rollback_criteria(&report);
+        assert!(decision.should_rollback);
+        assert!(decision
+            .reasons
+            .iter()
+            .any(|reason| { reason == "social_context_inference_failed:social_context:1" }));
     }
 
     #[test]
@@ -1993,6 +2433,7 @@ mod tests {
             support_thresholds: default_release_support_thresholds(),
             drift_thresholds: default_release_drift_thresholds(),
             overall_status: ReleaseStatus::Fail,
+            operator_summary: Vec::new(),
             suites: Vec::new(),
             drift_checks: Vec::new(),
             wave1_on_device_checks: Vec::new(),

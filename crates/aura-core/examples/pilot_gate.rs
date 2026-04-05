@@ -81,9 +81,10 @@ fn parse_args() -> Result<ParseArgsResult, String> {
                 })?));
             }
             "--kids-preprod-dry-run-report" => {
-                kids_preprod_dry_run_report = Some(PathBuf::from(args.next().ok_or_else(|| {
-                    "missing path after --kids-preprod-dry-run-report".to_string()
-                })?));
+                kids_preprod_dry_run_report =
+                    Some(PathBuf::from(args.next().ok_or_else(|| {
+                        "missing path after --kids-preprod-dry-run-report".to_string()
+                    })?));
             }
             "--output" => {
                 output = Some(PathBuf::from(
@@ -201,7 +202,10 @@ fn main() {
     let kids_memory_health = match &args.kids_memory_health_report {
         Some(path) => Some(
             parse_kids_memory_health_snapshot(&fs::read_to_string(path).unwrap_or_else(|err| {
-                panic!("failed to read kids memory health report {}: {err}", path.display())
+                panic!(
+                    "failed to read kids memory health report {}: {err}",
+                    path.display()
+                )
             }))
             .unwrap_or_else(|err| panic!("invalid kids memory health report: {err}")),
         ),
@@ -210,7 +214,10 @@ fn main() {
     let kids_preprod_dry_run = match &args.kids_preprod_dry_run_report {
         Some(path) => Some(
             parse_kids_preprod_dry_run_snapshot(&fs::read_to_string(path).unwrap_or_else(|err| {
-                panic!("failed to read kids preprod dry-run report {}: {err}", path.display())
+                panic!(
+                    "failed to read kids preprod dry-run report {}: {err}",
+                    path.display()
+                )
             }))
             .unwrap_or_else(|err| panic!("invalid kids preprod dry-run report: {err}")),
         ),

@@ -1,0 +1,52 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "phishing_emails-data",
+  "dataset_size": 24128571,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/drorrabin/phishing_emails-data@9f364df1d4fa9ec50601bf2ddc293c71a469f749/data/train-00000-of-00001.parquet": {
+      "num_bytes": 11019125,
+      "checksum": null
+    },
+    "hf://datasets/drorrabin/phishing_emails-data@9f364df1d4fa9ec50601bf2ddc293c71a469f749/data/test-00000-of-00001.parquet": {
+      "num_bytes": 1882229,
+      "checksum": null
+    }
+  },
+  "download_size": 12901354,
+  "features": {
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "email_type": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 37029925,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 20821235,
+      "num_examples": 26946,
+      "dataset_name": "phishing_emails-data"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 3307336,
+      "num_examples": 3705,
+      "dataset_name": "phishing_emails-data"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

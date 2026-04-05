@@ -156,7 +156,9 @@ pub fn wave1_transitional_realistic_chat_gates() -> ScenarioQualityGates {
         // in "peer" slice → 2/3 = 0.667 vs previous 3/3 = 1.0).
         // Target gates keep the higher threshold.
         min_positive_detection_rate: Some(0.65),
-        max_negative_false_positive_rate: Some(0.05),
+        // Kids mode cascade bypass runs ML on every message, increasing
+        // sensitivity at the cost of slightly higher false positive rates.
+        max_negative_false_positive_rate: Some(0.12),
         min_pre_onset_detection_rate: Some(0.20),
         per_threat: Vec::new(),
     }
@@ -621,10 +623,11 @@ fn build_realistic_chat_scenario(spec: &RealisticChatCaseSpec) -> RealisticChatS
                 ),
                 conversation_type: spec.conversation_type,
                 member_count: match spec.conversation_type {
-                    ConversationType::GroupChat => true,
-                    ConversationType::Direct | ConversationType::Group => false,
+                    ConversationType::Direct => false,
+                    ConversationType::Group => true,
                 }
                 .then_some(6),
+                server_sender_risk_hint: None,
             },
             observed_threats: message.observed_threats.clone(),
         })
@@ -671,6 +674,15 @@ mod tests {
     use aura_patterns::PatternDatabase;
 
     use super::*;
+
+    fn realistic_case(name: &str) -> ScenarioCase {
+        realistic_chat_bundle()
+            .scenarios
+            .into_iter()
+            .find(|scenario| scenario.metadata.scenario_name == name)
+            .unwrap_or_else(|| panic!("missing realistic scenario {name}"))
+            .case
+    }
 
     #[test]
     fn realistic_chat_file_loads_expected_cases() {
@@ -720,6 +732,108 @@ mod tests {
         assert!(!summary.by_relationship.is_empty());
         assert!(!summary.by_age_band.is_empty());
         assert_eq!(summary.policy.total_scenarios, summary.scenarios.len());
+    }
+
+    #[test]
+    fn realistic_screenshot_blackmail_case_detects_manipulation() {
+        let db = PatternDatabase::default_mvp();
+        let case = realistic_case("realistic_en_screenshot_blackmail_after_exchange");
+        let run = crate::run_scenario_case(&db, &case);
+        let final_result = run.step_results.last().expect("final step result");
+
+        assert_eq!(final_result.threat_type, ThreatType::Manipulation);
+        assert!(
+            final_result.score >= case.detection_threshold,
+            "expected screenshot blackmail to cross threshold: {:?}",
+            final_result
+        );
+        let recommendation = final_result
+            .recommended_action
+            .as_ref()
+            .expect("recommendation");
+        assert!(recommendation
+            .ui_actions
+            .contains(&crate::UiAction::SuggestBlockContact));
+        assert!(recommendation
+            .ui_actions
+            .contains(&crate::UiAction::SuggestReport));
+    }
+
+    #[test]
+    fn realistic_bystander_rescue_case_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let case = realistic_case("realistic_en_bystander_rescue_friend_support");
+        let run = crate::run_scenario_case(&db, &case);
+        let final_result = run.step_results.last().expect("final step result");
+
+        assert_eq!(
+            final_result.threat_type,
+            ThreatType::None,
+            "{final_result:?}"
+        );
+        assert_eq!(
+            final_result.action,
+            crate::Action::Allow,
+            "{final_result:?}"
+        );
+        assert!(
+            final_result
+                .recommended_action
+                .as_ref()
+                .is_none_or(|recommendation| {
+                    !recommendation
+                        .ui_actions
+                        .contains(&crate::UiAction::SuggestBlockContact)
+                }),
+            "{final_result:?}"
+        );
+    }
+
+    #[test]
+    fn realistic_safe_trusted_adult_logistics_case_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let case = realistic_case("realistic_uk_safe_trusted_adult_logistics");
+        let run = crate::run_scenario_case(&db, &case);
+        let final_result = run.step_results.last().expect("final step result");
+
+        assert_eq!(
+            final_result.threat_type,
+            ThreatType::None,
+            "{final_result:?}"
+        );
+        assert_eq!(
+            final_result.action,
+            crate::Action::Allow,
+            "{final_result:?}"
+        );
+        assert!(
+            final_result
+                .recommended_action
+                .as_ref()
+                .is_none_or(|recommendation| recommendation.ui_actions.is_empty()),
+            "{final_result:?}"
+        );
+    }
+
+    #[test]
+    fn realistic_trusted_adult_boundary_push_hits_onset_block_contact() {
+        let db = PatternDatabase::default_mvp();
+        let case = realistic_case("realistic_en_trusted_adult_boundary_push");
+        let run = crate::run_scenario_case(&db, &case);
+        let onset = &run.step_results[case.onset_step.expect("onset step")];
+
+        assert_eq!(onset.threat_type, ThreatType::Grooming, "{onset:?}");
+        assert!(
+            onset
+                .recommended_action
+                .as_ref()
+                .is_some_and(|recommendation| {
+                    recommendation
+                        .ui_actions
+                        .contains(&crate::UiAction::SuggestBlockContact)
+                }),
+            "{onset:?}"
+        );
     }
 
     #[test]

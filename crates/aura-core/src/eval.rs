@@ -516,6 +516,22 @@ pub fn summarize_runs_by_language(
 }
 
 pub fn run_scenario_case(pattern_db: &PatternDatabase, case: &ScenarioCase) -> ScenarioRunResult {
+    struct EvalKidsMemoryGuard;
+
+    impl EvalKidsMemoryGuard {
+        fn new() -> Self {
+            aura_kids::pipeline::clear_kids_memory();
+            Self
+        }
+    }
+
+    impl Drop for EvalKidsMemoryGuard {
+        fn drop(&mut self) {
+            aura_kids::pipeline::clear_kids_memory();
+        }
+    }
+
+    let _kids_memory_guard = EvalKidsMemoryGuard::new();
     let mut analyzer = Analyzer::new(case.config.clone(), pattern_db);
     let mut step_results = Vec::with_capacity(case.steps.len());
     let mut languages = BTreeSet::new();
@@ -968,7 +984,7 @@ fn normalize_language_code(language: Option<&str>) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-fn all_scored_threat_types() -> [ThreatType; 13] {
+fn all_scored_threat_types() -> [ThreatType; 18] {
     [
         ThreatType::Bullying,
         ThreatType::Grooming,
@@ -983,6 +999,11 @@ fn all_scored_threat_types() -> [ThreatType; 13] {
         ThreatType::HateSpeech,
         ThreatType::Doxxing,
         ThreatType::PiiLeakage,
+        ThreatType::Propaganda,
+        ThreatType::OpsecViolation,
+        ThreatType::Psyops,
+        ThreatType::MilitarySocialEng,
+        ThreatType::CoordinateLeak,
     ]
 }
 
@@ -990,8 +1011,9 @@ fn all_scored_threat_types() -> [ThreatType; 13] {
 mod tests {
     use super::*;
     use crate::types::{
-        AccountType, Action, AnalysisResult, Confidence, ContactSnapshot, ContentType,
-        ConversationType, InferenceSummary, MessageInput, ProtectionLevel, RiskBreakdown,
+        AccountType, Action, AnalysisContextSummary, AnalysisResult, Confidence, ContactSnapshot,
+        ContentType, ConversationType, InferenceSummary, MessageInput, ProtectionLevel,
+        RiskBreakdown,
     };
     use aura_patterns::PatternDatabase;
 
@@ -1020,8 +1042,16 @@ mod tests {
                 first_seen_ms: 0,
                 last_seen_ms: 1,
                 conversation_count: 1,
+                grooming_event_count: 0,
+                bullying_event_count: 0,
+                manipulation_event_count: 0,
+                total_threat_events: 0,
             }),
             reason_codes: vec!["conversation.grooming.stage_sequence".to_string()],
+            context_markers: vec!["context.relationship.new_contact".to_string()],
+            context_summary: AnalysisContextSummary::from_markers(&[
+                "context.relationship.new_contact".to_string(),
+            ]),
             inference: InferenceSummary::default(),
             analysis_time_us: 123,
         }
@@ -1207,6 +1237,7 @@ mod tests {
                         language: Some("en".to_string()),
                         conversation_type: ConversationType::Direct,
                         member_count: None,
+                        server_sender_risk_hint: None,
                     },
                     observed_threats: vec![ThreatType::SelfHarm],
                 },
@@ -1221,6 +1252,7 @@ mod tests {
                         language: Some("en".to_string()),
                         conversation_type: ConversationType::Direct,
                         member_count: None,
+                        server_sender_risk_hint: None,
                     },
                     observed_threats: vec![ThreatType::SelfHarm],
                 },
@@ -1262,6 +1294,7 @@ mod tests {
                         language: Some("en".to_string()),
                         conversation_type: ConversationType::Direct,
                         member_count: None,
+                        server_sender_risk_hint: None,
                     },
                     observed_threats: vec![ThreatType::Grooming],
                 },
@@ -1278,6 +1311,7 @@ mod tests {
                         language: Some("en".to_string()),
                         conversation_type: ConversationType::Direct,
                         member_count: None,
+                        server_sender_risk_hint: None,
                     },
                     observed_threats: vec![ThreatType::Grooming],
                 },
@@ -1320,6 +1354,7 @@ mod tests {
                         language: Some("en".to_string()),
                         conversation_type: ConversationType::Direct,
                         member_count: None,
+                        server_sender_risk_hint: None,
                     },
                     observed_threats: vec![ThreatType::Grooming],
                 },
@@ -1334,6 +1369,7 @@ mod tests {
                         language: Some("uk".to_string()),
                         conversation_type: ConversationType::Direct,
                         member_count: None,
+                        server_sender_risk_hint: None,
                     },
                     observed_threats: vec![ThreatType::Grooming],
                 },

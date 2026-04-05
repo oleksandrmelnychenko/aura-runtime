@@ -1,24 +1,24 @@
 use std::collections::HashSet;
 
 use aura_domain::{
-    DomainAction, DomainConversationType, DomainInput, DomainModuleId, DomainOutput, DomainRegistry,
-    DomainRiskProfile,
+    DomainAction, DomainConversationType, DomainInput, DomainModuleId, DomainOutput,
+    DomainRegistry, DomainRiskProfile, MlSafetyHint,
 };
 use aura_kids::KidsModule;
 use aura_military::MilitaryModule;
 use aura_patterns::{validate_ukraine_coordinates, BlockedUrlMatch};
 
 use crate::action::{decide_action_v2, propaganda_action_for_subtype};
-use crate::context::events::{ContextEvent, EventKind};
-use crate::context::propaganda::PropagandaDetector;
+use crate::context::events::EventKind;
+use crate::context::observation::RawObservation;
 use crate::context::propaganda::NarrativeId;
-use crate::ids::{ConversationId, SenderId};
+use crate::context::propaganda::PropagandaDetector;
 use crate::types::{
     Action, ActionRecommendation, Confidence, ConversationType, DetectionSignal, ProtectionLevel,
     SignalFamily, ThreatType,
 };
-use crate::{AuraConfig, AuraDomainModule, MessageInput};
 use crate::DomainMode;
+use crate::{AuraConfig, AuraDomainModule, MessageInput};
 
 #[derive(Default)]
 pub struct AuraDomainRuntime {
@@ -66,6 +66,17 @@ impl AuraDomainRuntime {
         protection_level: ProtectionLevel,
         input: &MessageInput,
     ) -> Option<DomainOutput> {
+        self.analyze_for_mode_with_hints(domain_mode, protection_level, input, None, None)
+    }
+
+    pub fn analyze_for_mode_with_hints(
+        &self,
+        domain_mode: DomainMode,
+        protection_level: ProtectionLevel,
+        input: &MessageInput,
+        ml_safety_hint: Option<MlSafetyHint>,
+        server_sender_risk_hint: Option<f32>,
+    ) -> Option<DomainOutput> {
         let module_id = domain_module_id_for_mode(domain_mode)?;
         let risk_profile = domain_risk_profile_for_mode(domain_mode, protection_level);
         let conversation_type = domain_conversation_type(input.conversation_type);
@@ -76,6 +87,8 @@ impl AuraDomainRuntime {
             conversation_id: Some(input.conversation_id.0.clone()),
             risk_profile,
             conversation_type,
+            ml_safety_hint,
+            server_sender_risk_hint,
         };
         self.registry.run(module_id, &domain_input)
     }
@@ -103,14 +116,16 @@ fn domain_risk_profile_for_mode(
     }
     match protection_level {
         ProtectionLevel::High => DomainRiskProfile::Strict,
-        ProtectionLevel::Off | ProtectionLevel::Low | ProtectionLevel::Medium => DomainRiskProfile::Normal,
+        ProtectionLevel::Off | ProtectionLevel::Low | ProtectionLevel::Medium => {
+            DomainRiskProfile::Normal
+        }
     }
 }
 
 fn domain_conversation_type(conversation_type: ConversationType) -> DomainConversationType {
     match conversation_type {
         ConversationType::Direct => DomainConversationType::Direct,
-        ConversationType::GroupChat | ConversationType::Group => DomainConversationType::Group,
+        ConversationType::Group => DomainConversationType::Group,
     }
 }
 
@@ -123,7 +138,8 @@ pub fn map_domain_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
     {
         return Some(EventKind::Exclusion);
     }
-    if rule_id.contains("kids.bullying.group_pile_on") || rule_id.contains("kids.bullying.harassment")
+    if rule_id.contains("kids.bullying.group_pile_on")
+        || rule_id.contains("kids.bullying.harassment")
     {
         return Some(EventKind::Insult);
     }
@@ -420,7 +436,10 @@ pub fn map_threat_to_event_kind(threat_type: ThreatType) -> Option<EventKind> {
     }
 }
 
-pub fn map_rule_or_threat_to_event_kind(rule_id: &str, threat_type: ThreatType) -> Option<EventKind> {
+pub fn map_rule_or_threat_to_event_kind(
+    rule_id: &str,
+    threat_type: ThreatType,
+) -> Option<EventKind> {
     if let Some(kind) = map_domain_rule_to_event_kind(rule_id) {
         return Some(kind);
     }
@@ -743,7 +762,9 @@ pub fn merge_domain_output_effects(
     }
 }
 
-pub fn build_domain_detection_signals(domain_output: Option<&DomainOutput>) -> Vec<DetectionSignal> {
+pub fn build_domain_detection_signals(
+    domain_output: Option<&DomainOutput>,
+) -> Vec<DetectionSignal> {
     let Some(domain_output) = domain_output else {
         return Vec::new();
     };
@@ -775,14 +796,11 @@ pub fn build_domain_detection_signals(domain_output: Option<&DomainOutput>) -> V
     signals
 }
 
-pub fn build_domain_context_events(
-    domain_signals: &[DetectionSignal],
-    timestamp_ms: u64,
-    sender_id: &SenderId,
-    conversation_id: &ConversationId,
+pub fn build_domain_observations(
+    domain_signals: Vec<DetectionSignal>,
     content_hash: Option<u64>,
-) -> Vec<ContextEvent> {
-    let mut events = Vec::with_capacity(domain_signals.len());
+) -> Vec<RawObservation> {
+    let mut observations = Vec::with_capacity(domain_signals.len());
     for signal in domain_signals {
         let kind_from_reason = map_domain_rule_to_event_kind(&signal.reason_code);
         let kind_from_subtype = map_domain_rule_to_event_kind(&signal.threat_subtype);
@@ -791,32 +809,30 @@ pub fn build_domain_context_events(
             (None, Some(kind)) => Some(kind),
             (None, None) => map_domain_signal_to_event_kind(signal.threat_type),
         };
-        let Some(kind) = kind else {
-            continue;
+        let subtype = if signal.threat_subtype.is_empty() {
+            None
+        } else {
+            Some(signal.threat_subtype.clone())
         };
-        events.push(ContextEvent {
-            event_id: 0,
-            timestamp_ms,
-            sender_id: sender_id.clone(),
-            conversation_id: conversation_id.clone(),
-            kind,
-            confidence: signal.score,
-            subtype: if signal.threat_subtype.is_empty() {
-                None
-            } else {
-                Some(signal.threat_subtype.clone())
-            },
-            content_hash,
-        });
+
+        let observation = match kind {
+            Some(kind) => {
+                let score = signal.score;
+                RawObservation::signal_with_event(signal, kind, score, subtype, content_hash)
+            }
+            None => RawObservation::signal(signal),
+        };
+        observations.push(observation);
     }
-    events
+    observations
 }
 
 pub fn build_blocked_url_signal(blocked: &BlockedUrlMatch) -> DetectionSignal {
     let threat_type = parse_threat_type_label(&blocked.threat_type);
     let reason_code = blocked_url_reason_code(threat_type, &blocked.rule_id);
     let explanation = format!("{}: {}", blocked.explanation, blocked.url);
-    let threat_subtype = map_domain_threat_subtype(&blocked.rule_id, threat_type, Some(&blocked.url));
+    let threat_subtype =
+        map_domain_threat_subtype(&blocked.rule_id, threat_type, Some(&blocked.url));
 
     let mut signal = DetectionSignal::pattern(
         threat_type,
@@ -865,11 +881,9 @@ pub fn confidence_from_score(score: f32) -> Confidence {
     }
 }
 
-pub fn should_skip_domain_rule_override(
-    rule_id: &str,
-    matched_rule_ids: &HashSet<String>,
-) -> bool {
-    rule_id == "opsec_coordinates_001" && matched_rule_ids.contains("opsec_coordinates_ukraine_dd_001")
+pub fn should_skip_domain_rule_override(rule_id: &str, matched_rule_ids: &HashSet<String>) -> bool {
+    rule_id == "opsec_coordinates_001"
+        && matched_rule_ids.contains("opsec_coordinates_ukraine_dd_001")
 }
 
 pub fn should_skip_domain_match(
@@ -1035,24 +1049,23 @@ fn opsec_subtype(rule_id: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_blocked_url_signal, build_domain_context_events, build_domain_detection_signals,
-        core_action_from_domain_action, detection_enabled_for_threat, domain_action_reason_marker,
-        domain_conversation_type, domain_risk_profile_for_mode, domain_signal_confidence,
-        domain_signal_threat_type,
-        domain_threat_priority,
-        decide_action_with_domain_overrides, is_domain_threat, is_link_family_threat,
-        is_propaganda_threat, map_domain_rule_to_event_kind, map_domain_signal_to_event_kind,
-        map_domain_threat_subtype, map_domain_threat_to_event_kind, map_ml_signal_to_event_kind,
+        build_blocked_url_signal, build_domain_detection_signals, build_domain_observations,
+        core_action_from_domain_action, decide_action_with_domain_overrides,
+        detection_enabled_for_threat, domain_action_reason_marker, domain_conversation_type,
+        domain_risk_profile_for_mode, domain_signal_confidence, domain_signal_threat_type,
+        domain_threat_priority, is_domain_threat, is_link_family_threat, is_propaganda_threat,
+        map_domain_rule_to_event_kind, map_domain_signal_to_event_kind, map_domain_threat_subtype,
+        map_domain_threat_to_event_kind, map_ml_signal_to_event_kind,
         map_rule_or_threat_to_event_kind, map_threat_to_event_kind, merge_domain_output_effects,
         parse_domain_threat_type, parse_threat_type_label, should_skip_domain_match,
         should_skip_domain_rule_override, threat_priority_for_sort,
     };
-    use aura_domain::{DomainAction, DomainOutput, DomainSignal};
-    use aura_patterns::BlockedUrlMatch;
     use crate::context::events::EventKind;
     use crate::ids::{ConversationId, SenderId};
     use crate::types::{Action, ContentType, ConversationType, ProtectionLevel, ThreatType};
     use crate::{AuraConfig, AuraDomainRuntime, DomainMode, MessageInput};
+    use aura_domain::{DomainAction, DomainOutput, DomainSignal};
+    use aura_patterns::BlockedUrlMatch;
     use std::collections::HashSet;
 
     #[test]
@@ -1182,7 +1195,10 @@ mod tests {
         assert_eq!(domain_threat_priority(ThreatType::Threat), None);
         assert!(is_domain_threat(ThreatType::CoordinateLeak));
         assert!(!is_domain_threat(ThreatType::SelfHarm));
-        assert_eq!(parse_threat_type_label("propaganda"), ThreatType::Propaganda);
+        assert_eq!(
+            parse_threat_type_label("propaganda"),
+            ThreatType::Propaganda
+        );
         assert_eq!(threat_priority_for_sort(ThreatType::Threat), 3);
         let mut config = AuraConfig::default();
         config.enabled = false;
@@ -1191,12 +1207,18 @@ mod tests {
             domain_signal_threat_type(Some("military_social_eng")),
             ThreatType::MilitarySocialEng
         );
-        assert_eq!(domain_signal_confidence(Some("critical"), 0.2), crate::types::Confidence::High);
+        assert_eq!(
+            domain_signal_confidence(Some("critical"), 0.2),
+            crate::types::Confidence::High
+        );
         assert_eq!(
             core_action_from_domain_action(DomainAction::Warn),
             Action::Warn
         );
-        assert_eq!(domain_action_reason_marker(DomainAction::Block), "domain.action.block");
+        assert_eq!(
+            domain_action_reason_marker(DomainAction::Block),
+            "domain.action.block"
+        );
 
         let domain_output = DomainOutput {
             signals: vec![DomainSignal {
@@ -1213,15 +1235,15 @@ mod tests {
         let signals = build_domain_detection_signals(Some(&domain_output));
         assert_eq!(signals.len(), 1);
         assert_eq!(signals[0].threat_type, ThreatType::Grooming);
-        let events = build_domain_context_events(
-            &signals,
-            123,
-            &SenderId::from("sender"),
-            &ConversationId::from("conv"),
-            Some(42),
+        let observations = build_domain_observations(signals, Some(42));
+        assert_eq!(observations.len(), 1);
+        assert_eq!(
+            observations[0]
+                .event_hint
+                .as_ref()
+                .map(|hint| hint.kind.clone()),
+            Some(EventKind::SecrecyRequest)
         );
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].kind, EventKind::SecrecyRequest);
         let blocked_signal = build_blocked_url_signal(&BlockedUrlMatch {
             url: "http://bad.tld".to_string(),
             domain: "bad.tld".to_string(),
@@ -1235,9 +1257,12 @@ mod tests {
         assert_eq!(blocked_signal.threat_type, ThreatType::Phishing);
 
         let mut reason_codes = Vec::new();
-        let action = merge_domain_output_effects(&mut reason_codes, Action::Allow, Some(&domain_output));
+        let action =
+            merge_domain_output_effects(&mut reason_codes, Action::Allow, Some(&domain_output));
         assert_eq!(action, Action::Allow);
-        assert!(reason_codes.iter().any(|code| code == "domain.kids.grooming.secrecy"));
+        assert!(reason_codes
+            .iter()
+            .any(|code| code == "domain.kids.grooming.secrecy"));
         let (action, _) = decide_action_with_domain_overrides(
             ThreatType::Propaganda,
             0.8,
@@ -1317,6 +1342,7 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
+            server_sender_risk_hint: None,
         };
         let output = runtime.analyze_for_mode(DomainMode::None, &input);
         assert!(output.is_none());
@@ -1334,6 +1360,7 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
+            server_sender_risk_hint: None,
         };
         let output = runtime
             .analyze_for_mode(DomainMode::Military, &input)
@@ -1368,10 +1395,6 @@ mod tests {
         );
         assert_eq!(
             domain_conversation_type(ConversationType::Group),
-            aura_domain::DomainConversationType::Group
-        );
-        assert_eq!(
-            domain_conversation_type(ConversationType::GroupChat),
             aura_domain::DomainConversationType::Group
         );
     }

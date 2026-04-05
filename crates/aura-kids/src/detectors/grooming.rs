@@ -27,6 +27,8 @@ mod tests {
             conversation_id: Some("c1".to_string()),
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
+            ml_safety_hint: None,
+            server_sender_risk_hint: None,
         }
     }
 
@@ -38,7 +40,9 @@ mod tests {
 
     #[test]
     fn detect_all_returns_multiple_grooming_hits() {
-        let signals = detect_all(&input("our little secret. move to private chat. meet me tonight."));
+        let signals = detect_all(&input(
+            "our little secret. move to private chat. meet me tonight.",
+        ));
         assert!(signals.len() >= 2);
     }
 }

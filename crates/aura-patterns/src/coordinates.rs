@@ -42,8 +42,7 @@ fn mgrs_regex() -> &'static Regex {
 fn military_grid_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| {
-        Regex::new(r"(?:квадрат|кв\.?)\s*\d{2,4}[-/]\d{2,4}")
-            .expect("invalid military grid regex")
+        Regex::new(r"(?:квадрат|кв\.?)\s*\d{2,4}[-/]\d{2,4}").expect("invalid military grid regex")
     })
 }
 

@@ -1,0 +1,606 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "measuring-hate-speech",
+  "dataset_size": 53495869,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/ucberkeley-dlab/measuring-hate-speech@5468f6e118396646b02a2f691e771f6b6d9502ea/data/train-00000-of-00001.parquet": {
+      "num_bytes": 20097387,
+      "checksum": null
+    }
+  },
+  "download_size": 20097387,
+  "features": {
+    "comment_id": {
+      "dtype": "int32",
+      "_type": "Value"
+    },
+    "annotator_id": {
+      "dtype": "int32",
+      "_type": "Value"
+    },
+    "platform": {
+      "dtype": "int8",
+      "_type": "Value"
+    },
+    "sentiment": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "respect": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "insult": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "humiliate": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "status": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "dehumanize": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "violence": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "genocide": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "attack_defend": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "hatespeech": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "hate_speech_score": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "infitms": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "outfitms": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "annotator_severity": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "std_err": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "annotator_infitms": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "annotator_outfitms": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "hypothesis": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "target_race_asian": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_race_black": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_race_latinx": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_race_middle_eastern": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_race_native_american": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_race_pacific_islander": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_race_white": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_race_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_race": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion_atheist": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion_buddhist": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion_christian": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion_hindu": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion_jewish": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion_mormon": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion_muslim": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_religion": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_origin_immigrant": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_origin_migrant_worker": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_origin_specific_country": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_origin_undocumented": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_origin_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_origin": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_gender_men": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_gender_non_binary": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_gender_transgender_men": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_gender_transgender_unspecified": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_gender_transgender_women": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_gender_women": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_gender_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_gender": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_sexuality_bisexual": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_sexuality_gay": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_sexuality_lesbian": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_sexuality_straight": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_sexuality_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_sexuality": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_age_children": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_age_teenagers": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_age_young_adults": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_age_middle_aged": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_age_seniors": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_age_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_age": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_disability_physical": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_disability_cognitive": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_disability_neurological": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_disability_visually_impaired": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_disability_hearing_impaired": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_disability_unspecific": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_disability_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_disability": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_alt_right": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_communist": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_conservative": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_democrat": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_green_party": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_leftist": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_liberal": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_libertarian": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_republican": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_socialist": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "target_politics": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_gender": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "annotator_trans": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "annotator_educ": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "annotator_income": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "annotator_ideology": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "annotator_gender_men": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_gender_women": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_gender_non_binary": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_gender_prefer_not_to_say": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_gender_self_describe": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_transgender": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_cisgender": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_transgender_prefer_not_to_say": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_education_some_high_school": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_education_high_school_grad": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_education_some_college": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_education_college_grad_aa": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_education_college_grad_ba": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_education_professional_degree": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_education_masters": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_education_phd": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_income_<10k": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_income_10k-50k": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_income_50k-100k": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_income_100k-200k": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_income_>200k": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_ideology_extremeley_conservative": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_ideology_conservative": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_ideology_slightly_conservative": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_ideology_neutral": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_ideology_slightly_liberal": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_ideology_liberal": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_ideology_extremeley_liberal": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_ideology_no_opinion": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_race_asian": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_race_black": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_race_latinx": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_race_middle_eastern": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_race_native_american": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_race_pacific_islander": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_race_white": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_race_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_age": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "annotator_religion_atheist": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_religion_buddhist": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_religion_christian": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_religion_hindu": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_religion_jewish": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_religion_mormon": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_religion_muslim": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_religion_nothing": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_religion_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_sexuality_bisexual": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_sexuality_gay": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_sexuality_straight": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "annotator_sexuality_other": {
+      "dtype": "bool",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 73593256,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 53495869,
+      "num_examples": 135556,
+      "dataset_name": "measuring-hate-speech"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

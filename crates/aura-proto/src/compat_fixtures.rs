@@ -240,8 +240,10 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
                     week_start_ms: 1_709_913_600_000,
                     count: 2,
                 }],
+                age_source: proto::AgeSource::UserReported as i32,
             }],
         }),
+        kids_memory: None,
     }
 }
 

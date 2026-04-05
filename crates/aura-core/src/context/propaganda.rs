@@ -398,7 +398,7 @@ impl SenderSnapshot {
                 continue;
             }
             match event.kind {
-                EventKind::PropagandaNarrative => {
+                EventKind::PropagandaNarrative if event.supports_propaganda_inference() => {
                     snap.propaganda_count += 1;
                     snap.timestamps.push(event.timestamp_ms);
                     if event.timestamp_ms >= burst_start {
@@ -411,8 +411,10 @@ impl SenderSnapshot {
                         }
                     }
                 }
-                EventKind::SuspiciousSource => snap.source_count += 1,
-                EventKind::MilitaryDisinfo => {
+                EventKind::SuspiciousSource if event.supports_propaganda_inference() => {
+                    snap.source_count += 1
+                }
+                EventKind::MilitaryDisinfo if event.supports_propaganda_inference() => {
                     snap.disinfo_count += 1;
                     snap.timestamps.push(event.timestamp_ms);
                     if event.timestamp_ms >= burst_start {
@@ -1228,6 +1230,9 @@ impl PropagandaDetector {
                 if !is_propaganda_event {
                     continue;
                 }
+                if !event.supports_propaganda_inference() {
+                    continue;
+                }
                 has_propaganda = true;
 
                 if let Some(ref st) = event.subtype {
@@ -1264,7 +1269,7 @@ impl PropagandaDetector {
 
 #[cfg(test)]
 mod tests {
-    use super::super::events::ContextEvent;
+    use super::super::events::{ContextEvent, EventStance};
     use super::*;
 
     fn event(sender: &str, conv: &str, kind: EventKind, ts: u64) -> ContextEvent {
@@ -1323,6 +1328,23 @@ mod tests {
         )]);
         let d = PropagandaDetector::new(AnalysisMode::Standard);
         assert!(d.analyze(&tl, "troll", 5000, &pr).is_empty());
+    }
+
+    #[test]
+    fn neutral_context_events_do_not_trigger_propaganda_memory() {
+        let mut a = typed_event("troll", "conv_1", 1_000, "war_denial");
+        a.context.stance = EventStance::Neutral;
+        a.context.confidence = 0.8;
+        let mut b = typed_event("troll", "conv_1", 2_000, "war_denial");
+        b.context.stance = EventStance::Neutral;
+        b.context.confidence = 0.8;
+        let mut c = typed_event("troll", "conv_1", 3_000, "war_denial");
+        c.context.stance = EventStance::Neutral;
+        c.context.confidence = 0.8;
+
+        let (tl, pr) = build(vec![a, b, c]);
+        let d = PropagandaDetector::new(AnalysisMode::Strict);
+        assert!(d.analyze(&tl, "troll", 5_000, &pr).is_empty());
     }
 
     #[test]

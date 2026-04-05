@@ -7,7 +7,7 @@ use crate::ids::{ConversationId, SenderId};
 use crate::types::{Confidence, ConversationType, DetectionSignal, SignalFamily, ThreatType};
 
 /// Current schema version for serialized tracker state.
-pub const TRACKER_STATE_VERSION: u32 = 2;
+pub const TRACKER_STATE_VERSION: u32 = 3;
 
 use super::coercion::CoercionDetector;
 use super::contact::{ContactProfiler, ContactProfilerWireState, DEFAULT_MAX_CONTACT_PROFILES};
@@ -43,7 +43,6 @@ pub struct TrackerConfig {
     /// Used for late-night detection in TimingAnalyzer.
     #[serde(default)]
     pub timezone_offset_minutes: i32,
-
 }
 
 impl Default for TrackerConfig {
@@ -71,10 +70,8 @@ fn default_max_contact_profiles() -> usize {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationTimeline {
     pub conversation_id: ConversationId,
-    #[serde(default)]
     pub conversation_type: ConversationType,
     events: Vec<ContextEvent>,
-    #[serde(default)]
     start_idx: usize,
     max_events: usize,
 }
@@ -417,17 +414,16 @@ impl ConversationTracker {
             .check_age_gap(sender_id, self.config.account_holder_age);
         signals.extend(age_gap_signals);
 
-        let contact_signals = self
-            .contact_profiler
-            .check_anomalies(
-                sender_id,
-                self.config.is_child_account || self.config.is_teen_account,
-            );
+        let contact_signals = self.contact_profiler.check_anomalies(
+            sender_id,
+            self.config.is_child_account || self.config.is_teen_account,
+        );
         signals.extend(contact_signals);
 
         let shift_signals = self.contact_profiler.check_behavioral_shift(sender_id);
         signals.extend(shift_signals);
-        let inferred_event_signals = self.infer_event_pattern_signals(timeline, sender_id, window_start);
+        let inferred_event_signals =
+            self.infer_event_pattern_signals(timeline, sender_id, window_start);
         signals.extend(inferred_event_signals);
         signals
     }
@@ -440,7 +436,11 @@ impl ConversationTracker {
     ) -> Vec<DetectionSignal> {
         let mut signals = Vec::with_capacity(2);
 
-        let gaslighting_count = timeline.count_events(sender_id, &EventKind::Gaslighting, window_start);
+        let gaslighting_count = timeline.count_matching(window_start, |event| {
+            event.sender_id == *sender_id
+                && event.kind == EventKind::Gaslighting
+                && event.supports_manipulation_inference()
+        });
         if gaslighting_count > 0 {
             let score = (0.35 + gaslighting_count as f32 * 0.10).min(0.75);
             signals.push(DetectionSignal::context(
@@ -453,26 +453,10 @@ impl ConversationTracker {
             ));
         }
 
-        let pile_on_hostile_count = timeline.count_matching(window_start, |event| {
-            matches!(
-                event.kind,
-                EventKind::Insult
-                    | EventKind::Denigration
-                    | EventKind::Mockery
-                    | EventKind::RumorSpreading
-                    | EventKind::Exclusion
-            )
-        });
-        let hostile_senders = timeline.unique_senders_matching(window_start, |event| {
-            matches!(
-                event.kind,
-                EventKind::Insult
-                    | EventKind::Denigration
-                    | EventKind::Mockery
-                    | EventKind::RumorSpreading
-                    | EventKind::Exclusion
-            )
-        });
+        let pile_on_hostile_count =
+            timeline.count_matching(window_start, |event| event.supports_bullying_inference());
+        let hostile_senders = timeline
+            .unique_senders_matching(window_start, |event| event.supports_bullying_inference());
         if hostile_senders.len() >= 2 && pile_on_hostile_count >= 3 {
             let score = (0.45 + hostile_senders.len() as f32 * 0.08).min(0.75);
             signals.push(DetectionSignal::context(
@@ -581,7 +565,7 @@ impl ConversationTracker {
 
     /// Imports a previously exported wire state, merging timelines and contact profiles.
     pub fn import_wire_state(&mut self, state: TrackerWireState) -> Result<(), AuraError> {
-        if state.schema_version > TRACKER_STATE_VERSION {
+        if state.schema_version != TRACKER_STATE_VERSION {
             return Err(AuraError::IncompatibleStateVersion {
                 found: state.schema_version,
                 supported: TRACKER_STATE_VERSION,
@@ -658,6 +642,7 @@ mod tests {
             confidence: 0.8,
             subtype: None,
             content_hash: None,
+            context: Default::default(),
         }
     }
 
@@ -819,11 +804,11 @@ mod tests {
         tracker.record_event(make_event("conv_1", "alice", EventKind::Flattery, 1000));
 
         let state = tracker.export_wire_state();
-        assert_eq!(state.schema_version, 2);
+        assert_eq!(state.schema_version, TRACKER_STATE_VERSION);
     }
 
     #[test]
-    fn state_import_future_version_fails() {
+    fn state_import_mismatched_version_fails() {
         let state = TrackerWireState {
             schema_version: 999,
             timelines: Vec::new(),
@@ -839,6 +824,16 @@ mod tests {
             err.to_string().contains("incompatible state version"),
             "Error should mention incompatible version: {err}"
         );
+
+        let older_state = TrackerWireState {
+            schema_version: TRACKER_STATE_VERSION.saturating_sub(1),
+            timelines: Vec::new(),
+            contact_profiler: ContactProfilerWireState {
+                profiles: Vec::new(),
+            },
+        };
+        let result = tracker.import_wire_state(older_state);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1072,7 +1067,10 @@ mod tests {
         let has_manipulation = signals
             .iter()
             .any(|s| s.threat_type == crate::types::ThreatType::Manipulation);
-        assert!(has_manipulation, "Should detect coercive manipulation patterns");
+        assert!(
+            has_manipulation,
+            "Should detect coercive manipulation patterns"
+        );
     }
 
     #[test]
@@ -1112,7 +1110,7 @@ mod tests {
     }
 
     #[test]
-    fn kids_legacy_context_detectors_do_not_run_in_core_tracker() {
+    fn core_tracker_does_not_run_domain_context_detectors() {
         let mut tracker = ConversationTracker::new(TrackerConfig {
             is_child_account: true,
             ..Default::default()
@@ -1140,14 +1138,14 @@ mod tests {
             8000,
         ));
 
-        let has_kids_legacy_threat = signals.iter().any(|signal| {
+        let has_domain_context_threat = signals.iter().any(|signal| {
             signal.threat_type == crate::types::ThreatType::Grooming
                 || signal.threat_type == crate::types::ThreatType::Bullying
                 || signal.threat_type == crate::types::ThreatType::SelfHarm
         });
         assert!(
-            !has_kids_legacy_threat,
-            "Core tracker should not emit legacy kids context threats"
+            !has_domain_context_threat,
+            "Core tracker should not emit domain context threats"
         );
     }
 
@@ -1162,6 +1160,38 @@ mod tests {
         tracker.record_events(events);
 
         assert_eq!(tracker.timeline("conv_1").unwrap().len(), 3);
+    }
+
+    #[test]
+    fn third_party_reported_hostility_does_not_trigger_group_patterns() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        let mut events = Vec::new();
+        for i in 0..5 {
+            let mut event = make_event(
+                "conv_1",
+                &format!("reporter_{i}"),
+                EventKind::Insult,
+                1_000 + i as u64 * 60_000,
+            );
+            event.context.speech_act = crate::context::events::EventSpeechAct::Report;
+            event.context.directionality = crate::context::events::EventDirectionality::ThirdParty;
+            event.context.confidence = 0.8;
+            events.push(event);
+        }
+
+        let signals = tracker.record_events(events);
+        assert!(
+            !signals
+                .iter()
+                .any(|signal| signal.reason_code == "context.group_bullying.pile_on"),
+            "Third-party reported hostility should not trigger pile-on patterns"
+        );
+        assert!(
+            !signals
+                .iter()
+                .any(|signal| signal.reason_code.starts_with("abuse.raid.")),
+            "Third-party reported hostility should not trigger raid patterns"
+        );
     }
 
     #[test]
@@ -1375,17 +1405,39 @@ mod tests {
     }
 
     #[test]
-    fn guilt_tripping_backward_compat_deserialization() {
+    fn guilt_tripping_alias_deserialization_is_rejected() {
         let json = r#"{"event_id":0,"timestamp_ms":1000,"sender_id":"x","conversation_id":"c","kind":"guild_tripping","confidence":0.8}"#;
-        let event: ContextEvent = serde_json::from_str(json).unwrap();
-        assert_eq!(event.kind, EventKind::GuiltTripping);
+        let event: Result<ContextEvent, _> = serde_json::from_str(json);
+        assert!(event.is_err(), "invalid alias should not deserialize");
     }
 
     #[test]
-    fn event_id_defaults_to_zero_on_deserialization() {
+    fn missing_event_id_deserialization_is_rejected() {
         let json = r#"{"timestamp_ms":1000,"sender_id":"x","conversation_id":"c","kind":"insult","confidence":0.8}"#;
-        let event: ContextEvent = serde_json::from_str(json).unwrap();
-        assert_eq!(event.event_id, 0);
+        let event: Result<ContextEvent, _> = serde_json::from_str(json);
+        assert!(event.is_err(), "missing event_id should not deserialize");
+    }
+
+    #[test]
+    fn event_context_roundtrips_through_tracker_state() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        let mut event = make_event("conv_1", "alice", EventKind::PropagandaNarrative, 1000);
+        event.context.stance = crate::context::events::EventStance::Endorse;
+        event.context.repeated_by_sender = true;
+        event.context.confidence = 0.8;
+        tracker.record_event(event);
+
+        let state = tracker.export_wire_state();
+        let mut restored = ConversationTracker::new(TrackerConfig::default());
+        restored.import_wire_state(state).unwrap();
+
+        let restored_event = &restored.timeline("conv_1").unwrap().all_events()[0];
+        assert_eq!(
+            restored_event.context.stance,
+            crate::context::events::EventStance::Endorse
+        );
+        assert!(restored_event.context.repeated_by_sender);
+        assert!(restored_event.context.confidence > 0.0);
     }
 
     #[test]

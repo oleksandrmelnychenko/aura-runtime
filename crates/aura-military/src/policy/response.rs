@@ -1,4 +1,6 @@
-use aura_domain::{decide_action_with_thresholds, DomainAction, DomainPolicyThresholds, DomainSignal};
+use aura_domain::{
+    decide_action_with_thresholds, DomainAction, DomainPolicyThresholds, DomainSignal,
+};
 
 pub fn decide(signals: &[DomainSignal]) -> Option<DomainAction> {
     decide_with_thresholds(signals, DomainPolicyThresholds::default())

@@ -34,7 +34,7 @@ pub enum PilotLabelInvariant {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PilotSliceTag {
-    TeenGroupChat,
+    TeenGroup,
     TeenSocialBanter,
     SocialMediaHumiliation,
     CoerciveFriendshipDynamics,
@@ -540,6 +540,7 @@ fn build_pilot_simulation_regression_bundle(
                                 ),
                                 conversation_type: spec.conversation_type,
                                 member_count: spec.member_count,
+                                server_sender_risk_hint: None,
                             },
                             observed_threats: message.observed_threats.clone(),
                         })

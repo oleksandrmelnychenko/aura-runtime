@@ -88,8 +88,8 @@
       "case_class": "hard_safety_regression",
       "label_invariant": "strict_primary",
       "acceptable_primary_threats": ["bullying"],
-      "pilot_slice_tags": ["teen_group_chat"],
-      "conversation_type": "group_chat",
+      "pilot_slice_tags": ["teen_group"],
+      "conversation_type": "group",
       "member_count": 6,
       "detection_threshold": 0.5,
       "primary_threat": "bullying",
@@ -203,8 +203,8 @@
       "case_class": "taxonomy_cleanup",
       "label_invariant": "action_level_behavior",
       "acceptable_primary_threats": ["manipulation", "threat"],
-      "pilot_slice_tags": ["teen_group_chat", "coercive_friendship_dynamics"],
-      "conversation_type": "group_chat",
+      "pilot_slice_tags": ["teen_group", "coercive_friendship_dynamics"],
+      "conversation_type": "group",
       "member_count": 6,
       "detection_threshold": 0.45,
       "primary_threat": "manipulation",
@@ -284,8 +284,8 @@
       "case_class": "taxonomy_cleanup",
       "label_invariant": "action_level_behavior",
       "acceptable_primary_threats": ["bullying", "manipulation"],
-      "pilot_slice_tags": ["teen_group_chat", "social_media_humiliation", "reputation_image_abuse"],
-      "conversation_type": "group_chat",
+      "pilot_slice_tags": ["teen_group", "social_media_humiliation", "reputation_image_abuse"],
+      "conversation_type": "group",
       "member_count": 10,
       "detection_threshold": 0.60,
       "primary_threat": "bullying",
@@ -389,8 +389,8 @@
       "default_language": "uk",
       "case_class": "ambiguous_acceptable",
       "label_invariant": "action_level_behavior",
-      "pilot_slice_tags": ["teen_group_chat"],
-      "conversation_type": "group_chat",
+      "pilot_slice_tags": ["teen_group"],
+      "conversation_type": "group",
       "member_count": 10,
       "detection_threshold": 0.70,
       "tracked_threats": ["grooming", "manipulation", "bullying"],
@@ -427,7 +427,7 @@
       "case_class": "ambiguous_acceptable",
       "label_invariant": "action_level_behavior",
       "pilot_slice_tags": ["trusted_adult_ambiguity"],
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "member_count": 8,
       "detection_threshold": 0.70,
       "tracked_threats": ["grooming", "manipulation", "bullying"],
@@ -474,3 +474,5 @@
     }
   ]
 }
+
+

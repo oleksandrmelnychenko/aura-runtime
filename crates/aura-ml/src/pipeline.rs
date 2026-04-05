@@ -2,30 +2,34 @@ use std::time::Instant;
 
 use tracing::{debug, info, warn};
 
-use crate::backend::{GateModel, SentimentBackend, ToxicityBackend};
+use crate::backend::{GateModel, IntentBackend, SafetyBackend, SentimentBackend, ToxicityBackend};
 use crate::cache::{self, InferenceCache};
 use crate::cascade::{CascadeDecision, CascadePolicy};
 use crate::dataset_adapters::{compare_rule_only_vs_rule_plus_ml, Wave1AdapterComparison};
 use crate::gate::LexiconGate;
 use crate::integrity;
-use crate::intent::{intent_calibration_for, IntentClassifier};
+use crate::intent::intent_calibration_for;
+use crate::intent::IntentClassifier;
 #[cfg(feature = "onnx")]
 use crate::manifest;
 use crate::normalize::normalize_for_ml;
-use crate::safety::{safety_calibration_for, SafetyClassifier};
+use crate::safety::safety_calibration_for;
+use crate::safety::SafetyClassifier;
 use crate::sentiment::SentimentAnalyzer;
 use crate::telemetry::InferenceTelemetry;
 #[cfg(feature = "onnx")]
 use crate::tokenizer::WordPieceTokenizer;
-use crate::toxicity::ToxicityClassifier;
 use crate::toxicity::MlError;
+use crate::toxicity::ToxicityClassifier;
 use crate::types::{CascadeTier, MlConfig, MlResult, MlUncertaintyLevel, OnDeviceProfile};
+use crate::unified::UnifiedModel;
 
 pub struct MlPipeline {
     toxicity: Box<dyn ToxicityBackend>,
     sentiment: Box<dyn SentimentBackend>,
-    safety: SafetyClassifier,
-    intent: IntentClassifier,
+    safety: Box<dyn SafetyBackend>,
+    intent: Box<dyn IntentBackend>,
+    unified: Option<UnifiedModel>,
     gate: LexiconGate,
     cascade: CascadePolicy,
     config: MlConfig,
@@ -62,12 +66,15 @@ impl MlPipeline {
             }
         }
 
+        let unified = Self::load_unified(&config);
+
         let toxicity = Self::load_toxicity(&config);
         let sentiment = Self::load_sentiment(&config);
 
         info!(
             toxicity_mode = toxicity.name(),
             sentiment_mode = sentiment.name(),
+            unified_mode = unified.as_ref().map_or("none", |u| u.name()),
             "ML pipeline initialized"
         );
 
@@ -76,7 +83,7 @@ impl MlPipeline {
         let gate = LexiconGate::new();
         let cascade = CascadePolicy {
             gate_threshold: config.cascade_gate_threshold,
-            enabled: config.cascade_enabled,
+            enabled: config.cascade_enabled && !config.cascade_force_bypass,
         };
         let cache = InferenceCache::new(config.cache_size, config.cache_ttl_secs);
         let telemetry = InferenceTelemetry::new();
@@ -86,6 +93,7 @@ impl MlPipeline {
             sentiment,
             safety,
             intent,
+            unified,
             gate,
             cascade,
             config,
@@ -180,9 +188,26 @@ impl MlPipeline {
     }
 
     fn run_deep_inference(&mut self, text: &str, decision: CascadeDecision) -> MlResult {
-        let toxicity = self.toxicity.predict(text);
-        let sentiment = self.sentiment.predict(text);
-        let safety = self.safety.predict(text);
+        let (toxicity, sentiment, safety) = if let Some(ref mut unified) = self.unified {
+            match unified.predict_all(text) {
+                Some(pred) => (
+                    Some(pred.toxicity),
+                    self.sentiment.predict(text),
+                    Some(pred.safety),
+                ),
+                None => (
+                    self.toxicity.predict(text),
+                    self.sentiment.predict(text),
+                    self.safety.predict(text),
+                ),
+            }
+        } else {
+            (
+                self.toxicity.predict(text),
+                self.sentiment.predict(text),
+                self.safety.predict(text),
+            )
+        };
         let intent = self.intent.predict(text);
 
         if safety.is_none() {
@@ -222,14 +247,21 @@ impl MlPipeline {
             }
         }
         if let Some(ref i) = intent {
-            let scores = [i.request_meeting, i.request_secret, i.request_media, i.benign];
+            let scores = [
+                i.request_meeting,
+                i.request_secret,
+                i.request_media,
+                i.benign,
+            ];
             if !integrity::validate_output_range(&scores) {
                 tracing::error!("intent output out of range: {:?}", scores);
                 invalid_outputs = true;
             }
         }
         if invalid_outputs {
-            tracing::warn!("invalid ML output scores detected; using gate-only fallback for this message");
+            tracing::warn!(
+                "invalid ML output scores detected; using gate-only fallback for this message"
+            );
             return self.run_gate_only(text, decision);
         }
 
@@ -315,7 +347,10 @@ impl MlPipeline {
         let mut combined_scores = Vec::with_capacity(texts.len());
         for (text, rule_score) in texts.iter().zip(rule_only_scores.iter().copied()) {
             let result = self.analyze_text(text);
-            let ml_score = result.safety.as_ref().map_or(0.0, |safety| safety.max_risk());
+            let ml_score = result
+                .safety
+                .as_ref()
+                .map_or(0.0, |safety| safety.max_risk());
             combined_scores.push(rule_score.max(ml_score));
         }
 
@@ -338,8 +373,15 @@ impl MlPipeline {
         self.config.on_device_profile
     }
 
+    /// Disable the cascade gate so every message gets deep ML inference.
+    /// Used by Kids domain mode where false negatives are unacceptable.
+    pub fn set_cascade_bypass(&mut self, bypass: bool) {
+        self.cascade.enabled = !bypass;
+    }
+
     pub fn is_active(&self) -> bool {
         self.config.use_fallback
+            || self.config.unified_model_path.is_some()
             || self.config.toxicity_model_path.is_some()
             || self.config.sentiment_model_path.is_some()
             || self.config.safety_model_path.is_some()
@@ -347,7 +389,8 @@ impl MlPipeline {
     }
 
     fn has_any_onnx_model_configured(config: &MlConfig) -> bool {
-        config.toxicity_model_path.is_some()
+        config.unified_model_path.is_some()
+            || config.toxicity_model_path.is_some()
             || config.sentiment_model_path.is_some()
             || config.safety_model_path.is_some()
             || config.intent_model_path.is_some()
@@ -392,8 +435,8 @@ impl MlPipeline {
         }
 
         if let Some(ref mut intent) = result.intent {
-            intent.request_meeting = (intent.request_meeting * intent_calibration.request_meeting)
-                .clamp(0.0, 1.0);
+            intent.request_meeting =
+                (intent.request_meeting * intent_calibration.request_meeting).clamp(0.0, 1.0);
             intent.request_secret =
                 (intent.request_secret * intent_calibration.request_secret).clamp(0.0, 1.0);
             intent.request_media =
@@ -450,14 +493,68 @@ impl MlPipeline {
 
     fn warmup(&mut self) {
         let start = Instant::now();
-        let _ = self.toxicity.predict("warmup");
-        let _ = self.sentiment.predict("warmup");
-        let _ = self.safety.predict("warmup");
+        if let Some(ref mut unified) = self.unified {
+            let _ = unified.predict_all("warmup");
+        } else {
+            let _ = self.toxicity.predict("warmup");
+            let _ = self.sentiment.predict("warmup");
+            let _ = self.safety.predict("warmup");
+        }
         let _ = self.intent.predict("warmup");
         info!(
             elapsed_ms = start.elapsed().as_millis(),
             "ML pipeline warmup complete"
         );
+    }
+
+    #[allow(unused_variables)]
+    fn load_unified(config: &MlConfig) -> Option<UnifiedModel> {
+        #[cfg(feature = "onnx")]
+        if let Some(ref model_path) = config.unified_model_path {
+            if let Some(ref vocab_path) = config.vocab_path {
+                // Try SentencePiece first (for XLM-R / MiniLM), then WordPiece
+                let tokenizer = if vocab_path.ends_with(".txt") && vocab_path.contains("sp_vocab") {
+                    crate::tokenizer_sp::SentencePieceTokenizer::from_vocab_file(
+                        vocab_path,
+                        config.max_seq_length,
+                    )
+                    .map(crate::tokenizer_sp::AnyTokenizer::SentencePiece)
+                    .map_err(|e| e.to_string())
+                } else {
+                    WordPieceTokenizer::from_file(vocab_path, config.max_seq_length)
+                        .map(crate::tokenizer_sp::AnyTokenizer::WordPiece)
+                        .map_err(|e| e.to_string())
+                };
+
+                match tokenizer {
+                    Ok(tok) => {
+                        match UnifiedModel::with_model(
+                            model_path,
+                            tok,
+                            config.intra_threads,
+                            config.max_seq_length,
+                        ) {
+                            Ok(mut model) => {
+                                model.set_thresholds(
+                                    config.safety_threshold,
+                                    config.toxicity_threshold,
+                                );
+                                info!(model = model.name(), "Unified multi-head model loaded");
+                                return Some(model);
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to load unified ONNX model: {e}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to load tokenizer for unified model: {e}");
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     #[allow(unused_variables)]
@@ -522,7 +619,7 @@ impl MlPipeline {
     }
 
     #[allow(unused_variables)]
-    fn load_safety(config: &MlConfig) -> SafetyClassifier {
+    fn load_safety(config: &MlConfig) -> Box<dyn SafetyBackend> {
         #[cfg(feature = "onnx")]
         if let Some(ref model_path) = config.safety_model_path {
             if let Some(ref vocab_path) = config.vocab_path {
@@ -535,7 +632,7 @@ impl MlPipeline {
                         ) {
                             Ok(mut classifier) => {
                                 classifier.set_threshold(config.safety_threshold);
-                                return classifier;
+                                return Box::new(classifier);
                             }
                             Err(e) => {
                                 tracing::warn!("Failed to load safety ONNX model: {e}");
@@ -551,11 +648,11 @@ impl MlPipeline {
 
         let mut classifier = SafetyClassifier::fallback_only();
         classifier.set_threshold(config.safety_threshold);
-        classifier
+        Box::new(classifier)
     }
 
     #[allow(unused_variables)]
-    fn load_intent(config: &MlConfig) -> IntentClassifier {
+    fn load_intent(config: &MlConfig) -> Box<dyn IntentBackend> {
         #[cfg(feature = "onnx")]
         if let Some(ref model_path) = config.intent_model_path {
             if let Some(ref vocab_path) = config.vocab_path {
@@ -568,7 +665,7 @@ impl MlPipeline {
                         ) {
                             Ok(mut classifier) => {
                                 classifier.set_threshold(config.intent_threshold);
-                                return classifier;
+                                return Box::new(classifier);
                             }
                             Err(e) => {
                                 tracing::warn!("Failed to load intent ONNX model: {e}");
@@ -584,10 +681,9 @@ impl MlPipeline {
 
         let mut classifier = IntentClassifier::fallback_only();
         classifier.set_threshold(config.intent_threshold);
-        classifier
+        Box::new(classifier)
     }
 }
-
 
 fn timestamp_ms_now() -> u64 {
     std::time::SystemTime::now()
@@ -918,7 +1014,10 @@ mod tests {
         let high_recall_result = high_recall.analyze_text(text);
 
         let balanced_self_harm = balanced_result.safety.expect("balanced safety").self_harm;
-        let high_recall_self_harm = high_recall_result.safety.expect("high-recall safety").self_harm;
+        let high_recall_self_harm = high_recall_result
+            .safety
+            .expect("high-recall safety")
+            .self_harm;
         assert!(high_recall_self_harm >= balanced_self_harm);
     }
 
@@ -933,9 +1032,8 @@ mod tests {
             ..Default::default()
         });
 
-        let result = pipeline.analyze_text(
-            "don't tell your parents, let's meet in secret and send me a photo",
-        );
+        let result = pipeline
+            .analyze_text("don't tell your parents, let's meet in secret and send me a photo");
         assert!(matches!(
             result.uncertainty,
             MlUncertaintyLevel::High | MlUncertaintyLevel::Medium

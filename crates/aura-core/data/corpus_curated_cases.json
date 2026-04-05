@@ -81,7 +81,7 @@
     {
       "id": "curated_uk_group_bullying",
       "language": "uk",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -173,7 +173,7 @@
     {
       "id": "curated_negative_en_peer_banter",
       "language": "en",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -193,7 +193,7 @@
     {
       "id": "bluff_uk_group_dogpile_wave1",
       "language": "uk",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -227,7 +227,7 @@
     {
       "id": "bluff_uk_group_project_safe_wave1",
       "language": "uk",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -338,3 +338,4 @@
     }
   ]
 }
+

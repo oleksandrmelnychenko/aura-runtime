@@ -965,10 +965,11 @@ fn build_external_curated_scenario(spec: &ExternalCuratedCaseSpec) -> ExternalCu
                 ),
                 conversation_type: spec.conversation_type,
                 member_count: match spec.conversation_type {
-                    ConversationType::GroupChat => true,
-                    ConversationType::Direct | ConversationType::Group => false,
+                    ConversationType::Direct => false,
+                    ConversationType::Group => true,
                 }
                 .then_some(6),
+                server_sender_risk_hint: None,
             },
             observed_threats: message.observed_threats.clone(),
         })

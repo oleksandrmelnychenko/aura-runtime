@@ -35,6 +35,10 @@ impl CoercionDetector {
             signals.push(signal);
         }
 
+        if let Some(signal) = self.check_screenshot_blackmail(timeline, sender_id, window_start) {
+            signals.push(signal);
+        }
+
         if let Some(signal) = self.check_debt_leverage(timeline, sender_id, window_start) {
             signals.push(signal);
         }
@@ -52,7 +56,11 @@ impl CoercionDetector {
         sender_id: &str,
         window_start: u64,
     ) -> Option<DetectionSignal> {
-        let count = timeline.count_events(sender_id, &EventKind::SuicideCoercion, window_start);
+        let count = timeline.count_matching(window_start, |event| {
+            event.sender_id == sender_id
+                && event.kind == EventKind::SuicideCoercion
+                && event.supports_coercion_inference()
+        });
 
         if count >= 1 {
             let score = if count >= 2 {
@@ -84,7 +92,11 @@ impl CoercionDetector {
         sender_id: &str,
         window_start: u64,
     ) -> Option<DetectionSignal> {
-        let count = timeline.count_events(sender_id, &EventKind::ReputationThreat, window_start);
+        let count = timeline.count_matching(window_start, |event| {
+            event.sender_id == sender_id
+                && event.kind == EventKind::ReputationThreat
+                && event.supports_coercion_inference()
+        });
 
         if count >= 2 {
             let score = (0.6 + (count as f32 - 2.0) * 0.1).min(0.85);
@@ -114,7 +126,11 @@ impl CoercionDetector {
         sender_id: &str,
         window_start: u64,
     ) -> Option<DetectionSignal> {
-        let count = timeline.count_events(sender_id, &EventKind::DebtCreation, window_start);
+        let count = timeline.count_matching(window_start, |event| {
+            event.sender_id == sender_id
+                && event.kind == EventKind::DebtCreation
+                && event.supports_coercion_inference()
+        });
 
         if count >= 2 {
             let score = (0.5 + (count as f32 - 2.0) * 0.1).min(0.8);
@@ -138,6 +154,69 @@ impl CoercionDetector {
         }
     }
 
+    fn check_screenshot_blackmail(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        window_start: u64,
+    ) -> Option<DetectionSignal> {
+        let screenshot_count = timeline.count_matching(window_start, |event| {
+            event.sender_id == sender_id
+                && event.kind == EventKind::ScreenshotThreat
+                && event.supports_coercion_inference()
+        });
+        let reputation_count = timeline.count_matching(window_start, |event| {
+            event.sender_id == sender_id
+                && event.kind == EventKind::ReputationThreat
+                && event.supports_coercion_inference()
+        });
+        let total = screenshot_count + reputation_count;
+
+        if screenshot_count == 0 || total < 2 {
+            return None;
+        }
+
+        let has_reputation = reputation_count > 0;
+        let score = if has_reputation {
+            (0.84 + (total as f32 - 2.0) * 0.04).min(0.92)
+        } else {
+            (0.78 + (screenshot_count as f32 - 2.0) * 0.04).min(0.86)
+        };
+        let reason_code = if has_reputation {
+            "conversation.manipulation.screenshot_reputation_blackmail"
+        } else {
+            "conversation.manipulation.screenshot_blackmail"
+        };
+        let explanation = if has_reputation {
+            format!(
+                "Screenshot/reputation blackmail detected: {} screenshot threat{} plus {} reputation threat{}",
+                screenshot_count,
+                if screenshot_count == 1 { "" } else { "s" },
+                reputation_count,
+                if reputation_count == 1 { "" } else { "s" }
+            )
+        } else {
+            format!(
+                "Repeated screenshot blackmail detected: {} screenshot threat{}",
+                screenshot_count,
+                if screenshot_count == 1 { "" } else { "s" }
+            )
+        };
+
+        Some(DetectionSignal::context(
+            ThreatType::Manipulation,
+            score,
+            if total >= 3 {
+                Confidence::High
+            } else {
+                Confidence::Medium
+            },
+            SignalFamily::Conversation,
+            reason_code,
+            explanation,
+        ))
+    }
+
     fn check_combined_coercion(
         &self,
         timeline: &ConversationTimeline,
@@ -150,6 +229,9 @@ impl CoercionDetector {
         let mut total = 0usize;
 
         for event in &events {
+            if !event.supports_coercion_inference() {
+                continue;
+            }
             match event.kind {
                 EventKind::SuicideCoercion => {
                     coercion_types.insert("suicide");
@@ -248,7 +330,7 @@ impl CoercionDetector {
 
 #[cfg(test)]
 mod tests {
-    use super::super::events::{ContextEvent, EventKind};
+    use super::super::events::{ContextEvent, EventDirectionality, EventKind, EventSpeechAct};
     use super::super::tracker::ConversationTimeline;
     use super::*;
 
@@ -264,9 +346,24 @@ mod tests {
                 confidence: 0.8,
                 subtype: None,
                 content_hash: None,
+                context: Default::default(),
             });
         }
         timeline
+    }
+
+    fn make_event(sender: &str, kind: EventKind, ts: u64) -> ContextEvent {
+        ContextEvent {
+            event_id: 0,
+            timestamp_ms: ts,
+            sender_id: sender.into(),
+            conversation_id: "conv_1".into(),
+            kind,
+            confidence: 0.8,
+            subtype: None,
+            content_hash: None,
+            context: Default::default(),
+        }
     }
 
     #[test]
@@ -317,6 +414,24 @@ mod tests {
             "2+ reputation threats should trigger detection"
         );
         assert!(rep.unwrap().score >= 0.6);
+    }
+
+    #[test]
+    fn repeated_screenshot_blackmail_escalates() {
+        let detector = CoercionDetector::new();
+        let timeline = make_timeline(vec![
+            ("bully", EventKind::ScreenshotThreat, 1000),
+            ("bully", EventKind::ScreenshotThreat, 2000),
+        ]);
+        let signals = detector.analyze(&timeline, "bully", 0);
+        let screenshot = signals
+            .iter()
+            .find(|s| s.reason_code == "conversation.manipulation.screenshot_blackmail");
+        assert!(
+            screenshot.is_some(),
+            "2+ screenshot threats should trigger dedicated blackmail detection"
+        );
+        assert!(screenshot.unwrap().score >= 0.62);
     }
 
     #[test]
@@ -477,5 +592,24 @@ mod tests {
                 "Should not mix senders in coercion analysis"
             );
         }
+    }
+
+    #[test]
+    fn reported_reputation_threats_do_not_trigger_coercion() {
+        let mut timeline = ConversationTimeline::new("conv_1".into(), 500);
+        for ts in [1_000, 2_000, 3_000] {
+            let mut event = make_event("reporter", EventKind::ReputationThreat, ts);
+            event.context.speech_act = EventSpeechAct::Report;
+            event.context.directionality = EventDirectionality::ThirdParty;
+            event.context.confidence = 0.8;
+            timeline.push(event);
+        }
+
+        let detector = CoercionDetector::new();
+        let signals = detector.analyze(&timeline, "reporter", 0);
+        assert!(
+            signals.is_empty(),
+            "Reported third-party threats should not count as coercion"
+        );
     }
 }

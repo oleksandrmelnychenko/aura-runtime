@@ -1,4 +1,4 @@
-use crate::types::{SentimentPrediction, ToxicityPrediction};
+use crate::types::{IntentPrediction, SafetyPrediction, SentimentPrediction, ToxicityPrediction};
 
 /// Backend trait for toxicity classification.
 pub trait ToxicityBackend: Send {
@@ -9,6 +9,18 @@ pub trait ToxicityBackend: Send {
 /// Backend trait for sentiment analysis.
 pub trait SentimentBackend: Send {
     fn predict(&mut self, text: &str) -> Option<SentimentPrediction>;
+    fn name(&self) -> &str;
+}
+
+/// Backend trait for child-safety classification.
+pub trait SafetyBackend: Send {
+    fn predict(&mut self, text: &str) -> Option<SafetyPrediction>;
+    fn name(&self) -> &str;
+}
+
+/// Backend trait for intent classification.
+pub trait IntentBackend: Send {
+    fn predict(&mut self, text: &str) -> Option<IntentPrediction>;
     fn name(&self) -> &str;
 }
 

@@ -2,10 +2,77 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::{ConversationId, SenderId};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EventSpeechAct {
+    #[default]
+    Unknown,
+    Assert,
+    Ask,
+    Quote,
+    Report,
+    Counter,
+    Support,
+    Solicit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EventStance {
+    #[default]
+    Unknown,
+    Endorse,
+    Oppose,
+    Neutral,
+    Ambiguous,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EventDirectionality {
+    #[default]
+    Unknown,
+    DirectedAtUser,
+    SelfReferential,
+    ThirdParty,
+    Broadcast,
+}
+
+/// Compact interpretation metadata persisted alongside an affirmed event.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct EventContextFrame {
+    pub speech_act: EventSpeechAct,
+    pub stance: EventStance,
+    pub directionality: EventDirectionality,
+    pub new_contact: bool,
+    pub trusted_contact: bool,
+    pub one_sided: bool,
+    pub repeated_by_sender: bool,
+    pub escalating: bool,
+    pub cross_conversation: bool,
+    pub bursty: bool,
+    pub confidence: f32,
+}
+
+impl EventContextFrame {
+    pub fn is_meaningful(&self) -> bool {
+        self.speech_act != EventSpeechAct::Unknown
+            || self.stance != EventStance::Unknown
+            || self.directionality != EventDirectionality::Unknown
+            || self.new_contact
+            || self.trusted_contact
+            || self.one_sided
+            || self.repeated_by_sender
+            || self.escalating
+            || self.cross_conversation
+            || self.bursty
+            || self.confidence > 0.0
+    }
+}
+
 /// Represents a single detected event within a conversation context.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextEvent {
-    #[serde(default)]
     pub event_id: u64,
 
     pub timestamp_ms: u64,
@@ -23,11 +90,11 @@ pub struct ContextEvent {
     /// Used by propaganda detection to differentiate narrative types
     /// (e.g., `"war_denial"`, `"brotherhood"`, `"dehumanization"`) and by
     /// military phishing to differentiate subtypes (`"phishing_diia"`, `"phishing_tck"`).
-    #[serde(default)]
     pub subtype: Option<String>,
 
-    #[serde(default)]
     pub content_hash: Option<u64>,
+
+    pub context: EventContextFrame,
 }
 
 impl ContextEvent {
@@ -48,6 +115,7 @@ impl ContextEvent {
             confidence,
             subtype: None,
             content_hash: None,
+            context: EventContextFrame::default(),
         }
     }
 
@@ -69,6 +137,117 @@ impl ContextEvent {
             confidence,
             subtype: Some(subtype.into()),
             content_hash: None,
+            context: EventContextFrame::default(),
+        }
+    }
+
+    pub fn with_context(mut self, context: EventContextFrame) -> Self {
+        self.context = context;
+        self
+    }
+
+    pub fn supports_propaganda_inference(&self) -> bool {
+        if !self.kind.is_propaganda_indicator() {
+            return false;
+        }
+
+        if !self.context.is_meaningful() {
+            return true;
+        }
+
+        !matches!(
+            self.context.stance,
+            EventStance::Neutral | EventStance::Oppose
+        )
+    }
+
+    pub fn supports_targeted_harm_inference(&self) -> bool {
+        if !self.context.is_meaningful() {
+            return true;
+        }
+
+        if matches!(
+            self.context.speech_act,
+            EventSpeechAct::Quote
+                | EventSpeechAct::Report
+                | EventSpeechAct::Counter
+                | EventSpeechAct::Support
+        ) {
+            return false;
+        }
+
+        !matches!(
+            self.context.directionality,
+            EventDirectionality::ThirdParty | EventDirectionality::SelfReferential
+        )
+    }
+
+    pub fn supports_bullying_inference(&self) -> bool {
+        self.kind.is_bullying_indicator() && self.supports_targeted_harm_inference()
+    }
+
+    pub fn supports_manipulation_inference(&self) -> bool {
+        self.kind.is_manipulation_indicator() && self.supports_targeted_harm_inference()
+    }
+
+    pub fn supports_coercion_inference(&self) -> bool {
+        matches!(
+            self.kind,
+            EventKind::SuicideCoercion
+                | EventKind::ReputationThreat
+                | EventKind::DebtCreation
+                | EventKind::ScreenshotThreat
+        ) && self.supports_targeted_harm_inference()
+    }
+
+    pub fn effective_is_hostile(&self) -> bool {
+        if self.kind.is_propaganda_indicator() && !self.supports_propaganda_inference() {
+            return false;
+        }
+        if self.kind.is_hostile() && !self.supports_targeted_harm_inference() {
+            return false;
+        }
+        self.kind.is_hostile()
+    }
+
+    pub fn effective_is_supportive(&self) -> bool {
+        self.kind.is_supportive()
+    }
+
+    pub fn effective_severity(&self) -> f32 {
+        if self.kind.is_propaganda_indicator() && !self.supports_propaganda_inference() {
+            return 0.0;
+        }
+        if self.kind.is_hostile() && !self.supports_targeted_harm_inference() {
+            return 0.0;
+        }
+        self.kind.severity()
+    }
+
+    pub fn effective_rating_delta(&self) -> f32 {
+        if self.kind.is_propaganda_indicator() && !self.supports_propaganda_inference() {
+            return 0.0;
+        }
+
+        if self.effective_is_hostile() {
+            let sev = self.effective_severity();
+            if sev >= 0.8 {
+                -7.0
+            } else if sev >= 0.6 {
+                -4.0
+            } else {
+                -2.0
+            }
+        } else if self.kind.is_grooming_only() {
+            if self.effective_severity() >= 0.8 {
+                -3.0
+            } else {
+                -1.0
+            }
+        } else if self.effective_is_supportive() {
+            3.0
+        } else {
+            0.3
         }
     }
 }
@@ -132,7 +311,6 @@ pub enum EventKind {
     Mockery,
 
     /// Guilt-based emotional manipulation.
-    #[serde(alias = "guild_tripping")]
     GuiltTripping,
 
     /// Reality-denying psychological manipulation.

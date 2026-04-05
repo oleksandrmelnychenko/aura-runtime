@@ -1,0 +1,72 @@
+{
+  "builder_name": "json",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "pii-intent-detection-multilingual",
+  "dataset_size": 6199374,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/gorkem371/pii-intent-detection-multilingual@e3a3ad944006161510767e4a779fdf2d48795f00/train.jsonl": {
+      "num_bytes": 8346732,
+      "checksum": null
+    },
+    "hf://datasets/gorkem371/pii-intent-detection-multilingual@e3a3ad944006161510767e4a779fdf2d48795f00/valid.jsonl": {
+      "num_bytes": 1464887,
+      "checksum": null
+    }
+  },
+  "download_size": 9811619,
+  "features": {
+    "context": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "entity": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "entity_type": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "is_pii": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "language": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "reason": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "confidence": {
+      "dtype": "float64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 16010993,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 5274216,
+      "num_examples": 35237,
+      "dataset_name": "pii-intent-detection-multilingual"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 925158,
+      "num_examples": 6190,
+      "dataset_name": "pii-intent-detection-multilingual"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

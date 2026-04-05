@@ -1,0 +1,62 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "phishing_email_detectionv2.0",
+  "dataset_size": 67175692,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/cybersectony/PhishingEmailDetectionv2.0@afba38f4a7ffbe89259ab68ae7c6426f944496cc/data/train-00000-of-00001.parquet": {
+      "num_bytes": 27908780,
+      "checksum": null
+    },
+    "hf://datasets/cybersectony/PhishingEmailDetectionv2.0@afba38f4a7ffbe89259ab68ae7c6426f944496cc/data/validation-00000-of-00001.parquet": {
+      "num_bytes": 3167993,
+      "checksum": null
+    },
+    "hf://datasets/cybersectony/PhishingEmailDetectionv2.0@afba38f4a7ffbe89259ab68ae7c6426f944496cc/data/test-00000-of-00001.parquet": {
+      "num_bytes": 9212615,
+      "checksum": null
+    }
+  },
+  "download_size": 40289388,
+  "features": {
+    "content": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 107465080,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 47256927,
+      "num_examples": 120000,
+      "dataset_name": "phishing_email_detectionv2.0"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 5054823,
+      "num_examples": 20000,
+      "dataset_name": "phishing_email_detectionv2.0"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 14863942,
+      "num_examples": 60000,
+      "dataset_name": "phishing_email_detectionv2.0"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

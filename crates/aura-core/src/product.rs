@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Action, AlertPriority, AnalysisResult, FollowUpAction, LatentStateKind, ThreatType, UiAction,
-    UncertaintyLevel,
+    action::should_soften_policy_for_context_summary, Action, AlertPriority, AnalysisResult,
+    FollowUpAction, LatentStateKind, ThreatType, UiAction, UncertaintyLevel,
 };
 
 pub const PRODUCT_DECISION_SURFACE_SCHEMA_VERSION: &str = "aura.product_decision_surface.v1";
@@ -96,9 +96,15 @@ pub fn build_product_decision_surface(
     rollout_mode: ProductRolloutMode,
 ) -> ProductDecisionSurface {
     let recommendation = result.recommended_action.as_ref();
-    let parent_alert = recommendation
-        .map(|recommendation| recommendation.parent_alert)
-        .unwrap_or(AlertPriority::None);
+    let context_softened =
+        should_soften_policy_for_context_summary(result.threat_type, &result.context_summary);
+    let parent_alert = if context_softened {
+        AlertPriority::None
+    } else {
+        recommendation
+            .map(|recommendation| recommendation.parent_alert)
+            .unwrap_or(AlertPriority::None)
+    };
     let follow_ups = recommendation
         .map(|recommendation| recommendation.follow_ups.clone())
         .unwrap_or_default();
@@ -123,11 +129,15 @@ pub fn build_product_decision_surface(
     let child_visible = result.action != Action::Allow || !child_ui_actions.is_empty();
     let guardian_notify = parent_alert != AlertPriority::None;
     let review_latent_states = latent_state_kinds(result);
-    let review_open = result.is_threat()
-        || result.action >= Action::Warn
-        || guardian_notify
-        || child_ui_actions.contains(&UiAction::SuggestReport)
-        || !review_latent_states.is_empty();
+    let review_open = if context_softened {
+        false
+    } else {
+        result.is_threat()
+            || result.action >= Action::Warn
+            || guardian_notify
+            || child_ui_actions.contains(&UiAction::SuggestReport)
+            || !review_latent_states.is_empty()
+    };
 
     let mut child_delivery = child_delivery_mode(rollout_mode, child_visible);
     let mut guardian_delivery = guardian_delivery_mode(rollout_mode, guardian_notify, parent_alert);
@@ -288,9 +298,10 @@ fn latent_state_kinds(result: &AnalysisResult) -> Vec<LatentStateKind> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ActionRecommendation, BehavioralTrend, CircleTier, Confidence, ContactSnapshot,
-        DetectionSignal, InferenceSummary, LatentStateEvidence, RiskBreakdown, RiskHorizon,
-        UiAction,
+        ActionRecommendation, AnalysisContextSummary, BehavioralTrend, CircleTier, Confidence,
+        ContactSnapshot, ContextDirectionality, ContextReciprocity, ContextSpeechAct,
+        ContextStance, DetectionSignal, InferenceSummary, LatentStateEvidence, RiskBreakdown,
+        RiskHorizon, UiAction,
     };
 
     use super::*;
@@ -338,8 +349,29 @@ mod tests {
                 first_seen_ms: 1_000,
                 last_seen_ms: 2_000,
                 conversation_count: 1,
+                grooming_event_count: 0,
+                bullying_event_count: 0,
+                manipulation_event_count: 0,
+                total_threat_events: 0,
             }),
             reason_codes: vec!["conversation.grooming.stage_sequence".to_string()],
+            context_markers: vec!["context.relationship.new_contact".to_string()],
+            context_summary: AnalysisContextSummary {
+                speech_act: ContextSpeechAct::Assert,
+                stance: ContextStance::Endorse,
+                directionality: ContextDirectionality::DirectedAtUser,
+                reciprocity: ContextReciprocity::OneSided,
+                relationship: crate::types::ContextRelationshipSummary {
+                    is_new_contact: true,
+                    is_trusted: false,
+                    circle_tier: CircleTier::New,
+                    trust_level: 0.2,
+                    prior_conversation_count: 1,
+                },
+                trajectory: crate::types::ContextTrajectorySummary::default(),
+                filter_applied: false,
+                confidence: 0.7,
+            },
             inference: InferenceSummary {
                 uncertainty: UncertaintyLevel::Medium,
                 risk_horizon: RiskHorizon::ShortTerm,
@@ -391,6 +423,50 @@ mod tests {
             ProductUncertaintyDisposition::RequireReview
         );
         assert_eq!(surface.child.delivery_mode, ProductDeliveryMode::MirrorOnly);
+        assert_eq!(surface.review.delivery_mode, ProductDeliveryMode::Apply);
+    }
+
+    #[test]
+    fn safe_context_suppresses_guardian_and_review_surfaces() {
+        let mut result = sample_result();
+        let context_markers = vec![
+            "context.filter.applied".to_string(),
+            "context.speech_act.quote".to_string(),
+            "context.stance.oppose".to_string(),
+        ];
+        result.context_summary = AnalysisContextSummary::from_markers(&context_markers);
+        result.context_markers = Vec::new();
+
+        let surface = build_product_decision_surface(&result, ProductRolloutMode::GuardianEnabled);
+
+        assert!(surface.child.visible);
+        assert_eq!(surface.child.delivery_mode, ProductDeliveryMode::Apply);
+        assert!(!surface.guardian.notify);
+        assert_eq!(
+            surface.guardian.delivery_mode,
+            ProductDeliveryMode::Suppress
+        );
+        assert!(!surface.review.open_review);
+        assert_eq!(surface.review.delivery_mode, ProductDeliveryMode::Suppress);
+    }
+
+    #[test]
+    fn risky_context_markers_keep_guardian_and_review_surfaces() {
+        let mut result = sample_result();
+        let context_markers = vec![
+            "context.filter.applied".to_string(),
+            "context.speech_act.quote".to_string(),
+            "context.stance.oppose".to_string(),
+            "context.relationship.new_contact".to_string(),
+        ];
+        result.context_summary = AnalysisContextSummary::from_markers(&context_markers);
+        result.context_markers = Vec::new();
+
+        let surface = build_product_decision_surface(&result, ProductRolloutMode::GuardianEnabled);
+
+        assert!(surface.guardian.notify);
+        assert_eq!(surface.guardian.delivery_mode, ProductDeliveryMode::Apply);
+        assert!(surface.review.open_review);
         assert_eq!(surface.review.delivery_mode, ProductDeliveryMode::Apply);
     }
 }

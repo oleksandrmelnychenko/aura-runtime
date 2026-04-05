@@ -1,0 +1,42 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "cyberbullying-instagram-tiktok",
+  "dataset_size": 32818,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/SSEF-HG-AC/cyberbullying-instagram-tiktok@bc5124cb392c734dc1c1e070b43ed22ea669459a/train.parquet": {
+      "num_bytes": 22367,
+      "checksum": null
+    }
+  },
+  "download_size": 22367,
+  "features": {
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 55185,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 32818,
+      "num_examples": 538,
+      "dataset_name": "cyberbullying-instagram-tiktok"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

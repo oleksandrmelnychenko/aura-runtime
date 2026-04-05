@@ -83,6 +83,9 @@ fn main() {
             path.display(),
             status_label(report.overall_status)
         );
+        for line in &report.operator_summary {
+            eprintln!("summary: {line}");
+        }
     } else {
         println!("{json}");
     }

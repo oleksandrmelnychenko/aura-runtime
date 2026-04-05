@@ -449,7 +449,8 @@ fn safety_onnx_loads() {
         return;
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
-    let classifier = aura_ml::safety::SafetyClassifier::with_model(&assets.safety_model_path, tok, 2);
+    let classifier =
+        aura_ml::safety::SafetyClassifier::with_model(&assets.safety_model_path, tok, 2);
     assert!(
         classifier.is_ok(),
         "Failed to load safety model: {:?}",
@@ -466,7 +467,8 @@ fn intent_onnx_loads() {
         return;
     };
     let tok = WordPieceTokenizer::from_file(&assets.vocab_path, 128).unwrap();
-    let classifier = aura_ml::intent::IntentClassifier::with_model(&assets.intent_model_path, tok, 2);
+    let classifier =
+        aura_ml::intent::IntentClassifier::with_model(&assets.intent_model_path, tok, 2);
     assert!(
         classifier.is_ok(),
         "Failed to load intent model: {:?}",
@@ -479,13 +481,14 @@ fn pipeline_onnx_produces_safety_and_intent_outputs() {
     if !allow_safety_intent_onnx_tests("pipeline_onnx_produces_safety_and_intent_outputs") {
         return;
     }
-    let Some(assets) = require_safety_intent_models("pipeline_onnx_produces_safety_and_intent_outputs") else {
+    let Some(assets) =
+        require_safety_intent_models("pipeline_onnx_produces_safety_and_intent_outputs")
+    else {
         return;
     };
     let mut pipeline = MlPipeline::new(onnx_safety_intent_config(assets));
-    let result = pipeline.analyze_text(
-        "don't tell your parents, let's meet in secret and send me a photo",
-    );
+    let result =
+        pipeline.analyze_text("don't tell your parents, let's meet in secret and send me a photo");
     assert!(result.safety.is_some(), "Expected safety head prediction");
     assert!(result.intent.is_some(), "Expected intent head prediction");
 }

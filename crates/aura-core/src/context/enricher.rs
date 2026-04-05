@@ -6,12 +6,13 @@ use aura_patterns::TextNormalizer;
 
 use crate::types::AnalysisMode;
 
-use super::events::{ContextEvent, EventKind};
+use super::events::EventKind;
+use super::observation::RawObservation;
 
-/// Contains the results of signal enrichment for a single message.
-pub struct EnrichmentResult {
-    /// Context events extracted from the message text.
-    pub events: Vec<ContextEvent>,
+/// Raw enricher output before tracker-ready events are materialized.
+pub struct EnrichmentObservationResult {
+    /// Event hints extracted from the message text.
+    pub observations: Vec<RawObservation>,
 
     /// Age value extracted from the message, if any.
     pub extracted_age: Option<u16>,
@@ -90,39 +91,13 @@ impl SignalEnricher {
         }
     }
 
-    /// Enriches a message by extracting context events using default parameters.
-    pub fn enrich(
+    /// Enriches a message into raw observations without materializing tracker-ready events.
+    pub fn enrich_observations_with_hash(
         &self,
         text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Vec<ContextEvent> {
-        self.enrich_full_with_hash(text, sender_id, conversation_id, timestamp_ms, None)
-            .events
-    }
-
-    /// Enriches a message with full context including conversation history and sender metadata.
-    pub fn enrich_full(
-        &self,
-        text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> EnrichmentResult {
-        self.enrich_full_with_hash(text, sender_id, conversation_id, timestamp_ms, None)
-    }
-
-    /// Enriches a message and propagates optional message fingerprint into produced events.
-    pub fn enrich_full_with_hash(
-        &self,
-        text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
         content_hash: Option<u64>,
-    ) -> EnrichmentResult {
-        let mut events = Vec::with_capacity(4);
+    ) -> EnrichmentObservationResult {
+        let mut observations = Vec::with_capacity(4);
         let lower = text.to_lowercase();
         let normalized = self.normalizer.normalize_semantic(text);
         let mut match_counts = vec![0usize; self.matcher.entries.len()];
@@ -202,16 +177,12 @@ impl SignalEnricher {
         }
 
         if probing_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::PersonalInfoRequest,
-                confidence: (probing_count as f32 * 0.3).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::PersonalInfoRequest,
+                (probing_count as f32 * 0.3).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         let threshold = if self.config.mode.is_strict() {
@@ -221,289 +192,200 @@ impl SignalEnricher {
         };
 
         if compliment_count >= threshold {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::LoveBombing,
-                confidence: (compliment_count as f32 * 0.2).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::LoveBombing,
+                (compliment_count as f32 * 0.2).min(1.0),
+                None,
+                content_hash,
+            ));
         } else if compliment_count >= 1 && is_person_directed_compliment(&lower) {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::Flattery,
-                confidence: 0.3,
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::Flattery,
+                0.3,
+                None,
+                content_hash,
+            ));
         }
 
         if urgency_count >= 2 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::PeerPressure,
-                confidence: (urgency_count as f32 * 0.25).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::PeerPressure,
+                (urgency_count as f32 * 0.25).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
-        if let Some(event) =
-            self.check_question_ratio(text, sender_id, conversation_id, timestamp_ms)
-        {
-            events.push(event);
+        if let Some(observation) = self.check_question_ratio(text, content_hash) {
+            observations.push(observation);
         }
 
         if defense_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::DefenseOfVictim,
-                confidence: (defense_count as f32 * 0.4).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::DefenseOfVictim,
+                (defense_count as f32 * 0.4).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if farewell_found {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::FarewellMessage,
-                confidence: 0.7,
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::FarewellMessage,
+                0.7,
+                None,
+                content_hash,
+            ));
         }
 
         if hopelessness_found {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::Hopelessness,
-                confidence: 0.6,
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::Hopelessness,
+                0.6,
+                None,
+                content_hash,
+            ));
         }
 
         if isolation_found {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::Exclusion,
-                confidence: 0.7,
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::Exclusion,
+                0.7,
+                None,
+                content_hash,
+            ));
         }
 
         if financial_found {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::MoneyOffer,
-                confidence: 0.6,
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::MoneyOffer,
+                0.6,
+                None,
+                content_hash,
+            ));
         }
 
         if pii_disclosure_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::PiiSelfDisclosure,
-                confidence: (pii_disclosure_count as f32 * 0.4).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::PiiSelfDisclosure,
+                (pii_disclosure_count as f32 * 0.4).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if dare_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::DareChallenge,
-                confidence: (dare_count as f32 * 0.35).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::DareChallenge,
+                (dare_count as f32 * 0.35).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if blackmail_found {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::ScreenshotThreat,
-                confidence: 0.8,
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::ScreenshotThreat,
+                0.8,
+                None,
+                content_hash,
+            ));
         }
 
         if suicide_coercion_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::SuicideCoercion,
-                confidence: (suicide_coercion_count as f32 * 0.5).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::SuicideCoercion,
+                (suicide_coercion_count as f32 * 0.5).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if false_consensus_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::FalseConsensus,
-                confidence: (false_consensus_count as f32 * 0.35).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::FalseConsensus,
+                (false_consensus_count as f32 * 0.35).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if debt_creation_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::DebtCreation,
-                confidence: (debt_creation_count as f32 * 0.4).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::DebtCreation,
+                (debt_creation_count as f32 * 0.4).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if gaslighting_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::Gaslighting,
-                confidence: (0.55 + gaslighting_count as f32 * 0.1).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::Gaslighting,
+                (0.55 + gaslighting_count as f32 * 0.1).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if reputation_threat_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::ReputationThreat,
-                confidence: (reputation_threat_count as f32 * 0.45).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::ReputationThreat,
+                (reputation_threat_count as f32 * 0.45).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if identity_erosion_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::IdentityErosion,
-                confidence: (identity_erosion_count as f32 * 0.4).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::IdentityErosion,
+                (identity_erosion_count as f32 * 0.4).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if network_poisoning_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::NetworkPoisoning,
-                confidence: (network_poisoning_count as f32 * 0.4).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::NetworkPoisoning,
+                (network_poisoning_count as f32 * 0.4).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if fake_vulnerability_count > 0 {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::FakeVulnerability,
-                confidence: (fake_vulnerability_count as f32 * 0.35).min(1.0),
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::FakeVulnerability,
+                (fake_vulnerability_count as f32 * 0.35).min(1.0),
+                None,
+                content_hash,
+            ));
         }
 
         if platform_migration_found {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::PlatformSwitch,
-                confidence: 0.7,
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::PlatformSwitch,
+                0.7,
+                None,
+                content_hash,
+            ));
         }
 
         if emotional_withdrawal_found {
-            events.push(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::Devaluation,
-                confidence: 0.5,
-                subtype: None,
-                content_hash: None,
-            });
+            observations.push(RawObservation::event(
+                EventKind::Devaluation,
+                0.5,
+                None,
+                content_hash,
+            ));
         }
 
         let extracted_age = Self::extract_age(&lower);
-        for event in &mut events {
-            event.content_hash = content_hash;
-        }
 
-        EnrichmentResult {
-            events,
+        EnrichmentObservationResult {
+            observations,
             extracted_age,
         }
     }
@@ -511,10 +393,8 @@ impl SignalEnricher {
     fn check_question_ratio(
         &self,
         text: &str,
-        sender_id: &str,
-        conversation_id: &str,
-        timestamp_ms: u64,
-    ) -> Option<ContextEvent> {
+        content_hash: Option<u64>,
+    ) -> Option<RawObservation> {
         let mut sentences = Vec::new();
         for s in text.split(|c: char| ['.', '!', '?'].contains(&c)) {
             if !s.trim().is_empty() {
@@ -535,16 +415,12 @@ impl SignalEnricher {
         let ratio = question_count as f32 / sentences.len() as f32;
 
         if ratio >= self.config.question_probe_threshold {
-            Some(ContextEvent {
-                event_id: 0,
-                timestamp_ms,
-                sender_id: sender_id.into(),
-                conversation_id: conversation_id.into(),
-                kind: EventKind::PersonalInfoRequest,
-                confidence: ratio.min(1.0),
-                subtype: None,
-                content_hash: None,
-            })
+            Some(RawObservation::event(
+                EventKind::PersonalInfoRequest,
+                ratio.min(1.0),
+                None,
+                content_hash,
+            ))
         } else {
             None
         }
@@ -929,6 +805,11 @@ fn build_enricher_matcher() -> EnricherMatcher {
         ("i have screenshots", Blackmail),
         ("i got screenshots", Blackmail),
         ("got screenshots of our chat", Blackmail),
+        ("saved all your pics and screenshots", Blackmail),
+        ("saved your pics and screenshots", Blackmail),
+        ("saved all your photos and screenshots", Blackmail),
+        ("post it to your class group", Blackmail),
+        ("post it to the class group", Blackmail),
         ("i recorded you", Blackmail),
         ("i'll post this everywhere", Blackmail),
         ("i'll show everyone", Blackmail),
@@ -1241,6 +1122,89 @@ fn build_enricher_matcher() -> EnricherMatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::events::ContextEvent;
+    use crate::context::observation::materialize_event_hints;
+    use crate::ids::{ConversationId, SenderId};
+
+    struct TestEnrichmentResult {
+        events: Vec<ContextEvent>,
+        extracted_age: Option<u16>,
+    }
+
+    trait TestEnricherExt {
+        fn enrich(
+            &self,
+            text: &str,
+            sender_id: &str,
+            conversation_id: &str,
+            timestamp_ms: u64,
+        ) -> Vec<ContextEvent>;
+
+        fn enrich_full(
+            &self,
+            text: &str,
+            sender_id: &str,
+            conversation_id: &str,
+            timestamp_ms: u64,
+        ) -> TestEnrichmentResult;
+
+        fn enrich_full_with_hash(
+            &self,
+            text: &str,
+            sender_id: &str,
+            conversation_id: &str,
+            timestamp_ms: u64,
+            content_hash: Option<u64>,
+        ) -> TestEnrichmentResult;
+    }
+
+    impl TestEnricherExt for SignalEnricher {
+        fn enrich(
+            &self,
+            text: &str,
+            sender_id: &str,
+            conversation_id: &str,
+            timestamp_ms: u64,
+        ) -> Vec<ContextEvent> {
+            self.enrich_full(text, sender_id, conversation_id, timestamp_ms)
+                .events
+        }
+
+        fn enrich_full(
+            &self,
+            text: &str,
+            sender_id: &str,
+            conversation_id: &str,
+            timestamp_ms: u64,
+        ) -> TestEnrichmentResult {
+            self.enrich_full_with_hash(text, sender_id, conversation_id, timestamp_ms, None)
+        }
+
+        fn enrich_full_with_hash(
+            &self,
+            text: &str,
+            sender_id: &str,
+            conversation_id: &str,
+            timestamp_ms: u64,
+            content_hash: Option<u64>,
+        ) -> TestEnrichmentResult {
+            let result = self.enrich_observations_with_hash(text, content_hash);
+            let sender_id = SenderId::from(sender_id);
+            let conversation_id = ConversationId::from(conversation_id);
+            let (_, event_hints) =
+                crate::context::observation::split_observations(result.observations);
+            let events = materialize_event_hints(
+                event_hints,
+                Some(timestamp_ms),
+                &sender_id,
+                &conversation_id,
+            );
+            TestEnrichmentResult {
+                events,
+                extracted_age: result.extracted_age,
+            }
+        }
+    }
 
     fn default_enricher() -> SignalEnricher {
         SignalEnricher::new(EnricherConfig {

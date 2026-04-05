@@ -416,6 +416,200 @@ pub struct ContactSnapshot {
     pub first_seen_ms: u64,
     pub last_seen_ms: u64,
     pub conversation_count: usize,
+    pub grooming_event_count: u64,
+    pub bullying_event_count: u64,
+    pub manipulation_event_count: u64,
+    pub total_threat_events: u64,
+}
+
+/// Compact typed summary of the interpreter's context decision for a single message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextSpeechAct {
+    #[default]
+    Unknown,
+    Assert,
+    Ask,
+    Quote,
+    Report,
+    Counter,
+    Support,
+    Solicit,
+}
+
+/// Compact typed summary of the interpreter's stance decision for a single message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextStance {
+    #[default]
+    Unknown,
+    Endorse,
+    Oppose,
+    Neutral,
+    Ambiguous,
+}
+
+/// Compact typed summary of how a message is directed in context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextDirectionality {
+    #[default]
+    Unknown,
+    DirectedAtUser,
+    SelfReferential,
+    ThirdParty,
+    Broadcast,
+}
+
+/// Compact typed summary of the interaction reciprocity for a single message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextReciprocity {
+    #[default]
+    Unknown,
+    OneSided,
+    Mutual,
+}
+
+/// Relationship-level context attached to the interpreted message.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct ContextRelationshipSummary {
+    #[serde(default)]
+    pub is_new_contact: bool,
+    #[serde(default)]
+    pub is_trusted: bool,
+    #[serde(default)]
+    pub circle_tier: CircleTier,
+    #[serde(default)]
+    pub trust_level: f32,
+    #[serde(default)]
+    pub prior_conversation_count: usize,
+}
+
+/// Trajectory-level context attached to the interpreted message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ContextTrajectorySummary {
+    #[serde(default)]
+    pub repeated_by_sender: bool,
+    #[serde(default)]
+    pub escalating: bool,
+    #[serde(default)]
+    pub cross_conversation: bool,
+    #[serde(default)]
+    pub bursty: bool,
+}
+
+/// Typed context summary used by inference, policy, and product layers.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct AnalysisContextSummary {
+    #[serde(default)]
+    pub speech_act: ContextSpeechAct,
+    #[serde(default)]
+    pub stance: ContextStance,
+    #[serde(default)]
+    pub directionality: ContextDirectionality,
+    #[serde(default)]
+    pub reciprocity: ContextReciprocity,
+    #[serde(default)]
+    pub relationship: ContextRelationshipSummary,
+    #[serde(default)]
+    pub trajectory: ContextTrajectorySummary,
+    #[serde(default)]
+    pub filter_applied: bool,
+    #[serde(default)]
+    pub confidence: f32,
+}
+
+impl AnalysisContextSummary {
+    pub fn is_meaningful(&self) -> bool {
+        self.speech_act != ContextSpeechAct::Unknown
+            || self.stance != ContextStance::Unknown
+            || self.directionality != ContextDirectionality::Unknown
+            || self.reciprocity != ContextReciprocity::Unknown
+            || self.relationship.is_new_contact
+            || self.relationship.is_trusted
+            || self.relationship.circle_tier != CircleTier::New
+            || self.relationship.trust_level > 0.0
+            || self.relationship.prior_conversation_count > 0
+            || self.trajectory.repeated_by_sender
+            || self.trajectory.escalating
+            || self.trajectory.cross_conversation
+            || self.trajectory.bursty
+            || self.filter_applied
+            || self.confidence > 0.0
+    }
+
+    pub fn has_safe_policy_context(&self) -> bool {
+        matches!(
+            self.speech_act,
+            ContextSpeechAct::Quote
+                | ContextSpeechAct::Report
+                | ContextSpeechAct::Counter
+                | ContextSpeechAct::Support
+        ) || matches!(self.stance, ContextStance::Oppose | ContextStance::Neutral)
+            || self.relationship.is_trusted
+    }
+
+    pub fn has_risky_policy_context(&self) -> bool {
+        matches!(self.speech_act, ContextSpeechAct::Solicit)
+            || matches!(self.stance, ContextStance::Ambiguous)
+            || matches!(
+                self.directionality,
+                ContextDirectionality::DirectedAtUser | ContextDirectionality::SelfReferential
+            )
+            || self.relationship.is_new_contact
+            || matches!(self.reciprocity, ContextReciprocity::OneSided)
+            || self.trajectory.repeated_by_sender
+            || self.trajectory.escalating
+            || self.trajectory.cross_conversation
+            || self.trajectory.bursty
+    }
+
+    pub fn should_soften_policy(&self) -> bool {
+        self.filter_applied && self.has_safe_policy_context() && !self.has_risky_policy_context()
+    }
+
+    pub fn from_markers(context_markers: &[String]) -> Self {
+        let mut summary = Self::default();
+        for marker in context_markers {
+            match marker.as_str() {
+                "context.filter.applied" => summary.filter_applied = true,
+                "context.speech_act.ask" => summary.speech_act = ContextSpeechAct::Ask,
+                "context.speech_act.quote" => summary.speech_act = ContextSpeechAct::Quote,
+                "context.speech_act.report" => summary.speech_act = ContextSpeechAct::Report,
+                "context.speech_act.counter" => summary.speech_act = ContextSpeechAct::Counter,
+                "context.speech_act.support" => summary.speech_act = ContextSpeechAct::Support,
+                "context.speech_act.solicit" => summary.speech_act = ContextSpeechAct::Solicit,
+                "context.stance.oppose" => summary.stance = ContextStance::Oppose,
+                "context.stance.neutral" => summary.stance = ContextStance::Neutral,
+                "context.stance.ambiguous" => summary.stance = ContextStance::Ambiguous,
+                "context.direction.directed_at_user" => {
+                    summary.directionality = ContextDirectionality::DirectedAtUser
+                }
+                "context.direction.self_referential" => {
+                    summary.directionality = ContextDirectionality::SelfReferential
+                }
+                "context.direction.third_party" => {
+                    summary.directionality = ContextDirectionality::ThirdParty
+                }
+                "context.relationship.new_contact" => summary.relationship.is_new_contact = true,
+                "context.relationship.trusted" => summary.relationship.is_trusted = true,
+                "context.reciprocity.one_sided" => {
+                    summary.reciprocity = ContextReciprocity::OneSided
+                }
+                "context.trajectory.repeated_sender" => {
+                    summary.trajectory.repeated_by_sender = true
+                }
+                "context.trajectory.escalating" => summary.trajectory.escalating = true,
+                "context.trajectory.cross_conversation" => {
+                    summary.trajectory.cross_conversation = true
+                }
+                "context.trajectory.bursty" => summary.trajectory.bursty = true,
+                _ => {}
+            }
+        }
+        summary
+    }
 }
 
 /// Holds the complete result of analysing a single message.
@@ -436,6 +630,10 @@ pub struct AnalysisResult {
     #[serde(default)]
     pub reason_codes: Vec<String>,
     #[serde(default)]
+    pub context_markers: Vec<String>,
+    #[serde(default)]
+    pub context_summary: AnalysisContextSummary,
+    #[serde(default)]
     pub inference: InferenceSummary,
     pub analysis_time_us: u64,
 }
@@ -455,6 +653,8 @@ impl AnalysisResult {
             risk_breakdown: RiskBreakdown::default(),
             contact_snapshot: None,
             reason_codes: Vec::new(),
+            context_markers: Vec::new(),
+            context_summary: AnalysisContextSummary::default(),
             inference: InferenceSummary::default(),
             analysis_time_us,
         }
@@ -527,8 +727,6 @@ pub enum ConversationType {
     /// One-to-one direct message.
     #[default]
     Direct,
-    /// Group chat conversation (legacy variant).
-    GroupChat,
     /// Group conversation.
     Group,
 }
@@ -579,4 +777,6 @@ pub struct MessageInput {
     pub language: Option<String>,
     pub conversation_type: ConversationType,
     pub member_count: Option<u32>,
+    /// Server-injected sender reputation hint (0.0 = unknown, 1.0 = max risk).
+    pub server_sender_risk_hint: Option<f32>,
 }

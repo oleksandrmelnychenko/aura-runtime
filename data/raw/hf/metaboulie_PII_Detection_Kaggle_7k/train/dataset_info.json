@@ -1,0 +1,111 @@
+{
+  "builder_name": "json",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "tidied-pii-detection-kaggle-7k",
+  "dataset_size": 92816706,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/metaboulie/Tidied-PII-Detection-Kaggle-7k@b25b33927bfcc06e951ad2938480d658ef5b28c1/train.json": {
+      "num_bytes": 124878536,
+      "checksum": null
+    }
+  },
+  "download_size": 124878536,
+  "features": {
+    "document": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "labels": {
+      "feature": {
+        "dtype": "string",
+        "_type": "Value"
+      },
+      "_type": "List"
+    },
+    "pii_data": {
+      "EMAIL": {
+        "feature": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "_type": "List"
+      },
+      "ID_NUM": {
+        "feature": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "_type": "List"
+      },
+      "NAME_STUDENT": {
+        "feature": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "_type": "List"
+      },
+      "PHONE_NUM": {
+        "feature": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "_type": "List"
+      },
+      "STREET_ADDRESS": {
+        "feature": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "_type": "List"
+      },
+      "USERNAME": {
+        "feature": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "_type": "List"
+      }
+    },
+    "full_text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "tokens": {
+      "feature": {
+        "dtype": "string",
+        "_type": "Value"
+      },
+      "_type": "List"
+    },
+    "thinking_tools": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "trailing_whitespace": {
+      "feature": {
+        "dtype": "bool",
+        "_type": "Value"
+      },
+      "_type": "List"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 217695242,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 92816706,
+      "num_examples": 6807,
+      "dataset_name": "tidied-pii-detection-kaggle-7k"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

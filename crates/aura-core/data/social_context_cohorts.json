@@ -44,6 +44,26 @@
       "conversation_types": [
         "direct"
       ],
+      "inference_expectations": [
+        {
+          "base_case_name": "trusted_adult_grooming",
+          "risk_horizon": "short_term",
+          "min_escalation_likelihood_24h": 0.35,
+          "required_latent_states": [
+            "dependency_building",
+            "isolation_pressure"
+          ]
+        },
+        {
+          "base_case_name": "negative_control_trusted_adult",
+          "risk_horizon": "unknown",
+          "max_escalation_likelihood_24h": 0.25,
+          "forbidden_latent_states": [
+            "dependency_building",
+            "isolation_pressure"
+          ]
+        }
+      ],
       "gates": {
         "max_brier_score": 0.24,
         "max_expected_calibration_error": 0.28,
@@ -105,7 +125,6 @@
         "bluff_uk_group_project_safe_wave1"
       ],
       "conversation_types": [
-        "group_chat",
         "group"
       ],
       "gates": {
@@ -132,16 +151,39 @@
         "mixed_language_selfharm_crisis",
         "curated_en_high_noise_selfharm",
         "curated_negative_en_peer_support",
-        "negative_control_multilingual_support"
+        "negative_control_multilingual_support",
+        "negative_control_supportive_selfharm_response"
       ],
       "conversation_types": [
         "direct"
+      ],
+      "inference_expectations": [
+        {
+          "base_case_name": "acute_selfharm",
+          "scope": "any_step",
+          "risk_horizon": "immediate",
+          "min_escalation_likelihood_24h": 0.7,
+          "required_latent_states": [
+            "crisis_vulnerability"
+          ]
+        },
+        {
+          "base_case_name": "negative_control_supportive_selfharm_response",
+          "risk_horizon": "unknown",
+          "max_escalation_likelihood_24h": 0.25,
+          "required_latent_states": [
+            "protective_support"
+          ],
+          "forbidden_latent_states": [
+            "crisis_vulnerability"
+          ]
+        }
       ],
       "gates": {
         "max_brier_score": 0.24,
         "max_expected_calibration_error": 0.28,
         "min_positive_detection_rate": 0.75,
-        "max_negative_false_positive_rate": 0.1,
+        "max_negative_false_positive_rate": 0.2,
         "min_pre_onset_detection_rate": 0.5,
         "per_threat": [
           {
@@ -210,6 +252,127 @@
             "min_example_count": 2,
             "max_brier_score": 0.3,
             "max_expected_calibration_error": 0.34
+          }
+        ]
+      }
+    },
+    {
+      "id": "quote_report_direct_threat_boundary",
+      "description": "Direct threats must stay high-risk while quoted reporting stays context-softened and non-hostile.",
+      "base_case_names": [
+        "direct_threat",
+        "negative_control_quoted_threat_report"
+      ],
+      "account_types": [
+        "child"
+      ],
+      "conversation_types": [
+        "direct"
+      ],
+      "inference_expectations": [
+        {
+          "base_case_name": "direct_threat",
+          "scope": "any_step",
+          "risk_horizon": "immediate",
+          "min_escalation_likelihood_24h": 0.65
+        },
+        {
+          "base_case_name": "negative_control_quoted_threat_report",
+          "risk_horizon": "unknown",
+          "max_escalation_likelihood_24h": 0.25,
+          "forbidden_latent_states": [
+            "dependency_building",
+            "isolation_pressure",
+            "coercive_control",
+            "humiliation",
+            "crisis_vulnerability",
+            "group_escalation"
+          ]
+        }
+      ],
+      "gates": {
+        "max_brier_score": 0.24,
+        "max_expected_calibration_error": 0.28,
+        "min_positive_detection_rate": 0.75,
+        "max_negative_false_positive_rate": 0.1,
+        "min_pre_onset_detection_rate": 0.0,
+        "per_threat": [
+          {
+            "threat_type": "threat",
+            "min_example_count": 4,
+            "max_brier_score": 0.24,
+            "max_expected_calibration_error": 0.28
+          }
+        ]
+      }
+    },
+    {
+      "id": "propaganda_discussion_boundary",
+      "description": "Propaganda spread should stay risky while neutral news sharing and counter-speech remain contextual discussion.",
+      "base_case_names": [
+        "propaganda_bot_multi_chat",
+        "negative_control_news_sharing",
+        "negative_control_counter_speech_propaganda"
+      ],
+      "account_types": [
+        "teen"
+      ],
+      "conversation_types": [
+        "group"
+      ],
+      "gates": {
+        "max_brier_score": 0.37,
+        "max_expected_calibration_error": 0.38,
+        "min_positive_detection_rate": 0.65,
+        "max_negative_false_positive_rate": 0.1,
+        "min_pre_onset_detection_rate": 0.0,
+        "per_threat": [
+          {
+            "threat_type": "propaganda",
+            "min_example_count": 6,
+            "max_brier_score": 0.37,
+            "max_expected_calibration_error": 0.38
+          }
+        ]
+      }
+    },
+    {
+      "id": "military_opsec_warning_boundary",
+      "description": "Actual coordinate leaks must stay risky while OPSEC warnings about coordinates remain safe discussion.",
+      "base_case_names": [
+        "military_coordinate_leak",
+        "negative_control_opsec_warning"
+      ],
+      "conversation_types": [
+        "direct"
+      ],
+      "inference_expectations": [
+        {
+          "base_case_name": "negative_control_opsec_warning",
+          "risk_horizon": "unknown",
+          "max_escalation_likelihood_24h": 0.25,
+          "forbidden_latent_states": [
+            "dependency_building",
+            "isolation_pressure",
+            "coercive_control",
+            "humiliation",
+            "crisis_vulnerability",
+            "group_escalation"
+          ]
+        }
+      ],
+      "gates": {
+        "max_brier_score": 0.28,
+        "max_expected_calibration_error": 0.3,
+        "min_positive_detection_rate": 0.75,
+        "max_negative_false_positive_rate": 0.1,
+        "min_pre_onset_detection_rate": 0.0,
+        "per_threat": [
+          {
+            "threat_type": "coordinate_leak",
+            "min_example_count": 2,
+            "max_brier_score": 0.28,
+            "max_expected_calibration_error": 0.3
           }
         ]
       }

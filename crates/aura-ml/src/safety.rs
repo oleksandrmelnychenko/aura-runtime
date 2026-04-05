@@ -6,8 +6,8 @@ use tracing::debug;
 use crate::tokenizer::WordPieceTokenizer;
 #[cfg(feature = "onnx")]
 use crate::toxicity::MlError;
-use crate::types::SafetyPrediction;
 use crate::types::OnDeviceProfile;
+use crate::types::SafetyPrediction;
 
 #[derive(Clone, Copy)]
 enum SafetyCategory {
@@ -299,10 +299,7 @@ fn build_fallback_matcher() -> SafetyFallbackMatcher {
     SafetyFallbackMatcher { automaton, entries }
 }
 
-pub trait SafetyBackend: Send {
-    fn predict(&mut self, text: &str) -> Option<SafetyPrediction>;
-    fn name(&self) -> &str;
-}
+pub use crate::backend::SafetyBackend;
 
 #[derive(Clone, Copy)]
 pub struct SafetyCalibration {

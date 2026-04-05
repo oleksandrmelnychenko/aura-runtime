@@ -6,12 +6,16 @@ use serde::Deserialize;
 
 use crate::{
     canonical_corpus_seed_scenarios, canonical_policy_action_expectations,
-    default_corpus_style_profiles, evaluate_policy_action_gates, evaluate_scenario_quality_gates,
-    generate_corpus_style_variants, pre_release_corpus_style_gates,
+    canonical_propaganda_scenarios, default_corpus_style_profiles, direct_threat_case,
+    evaluate_policy_action_gates, evaluate_scenario_quality_gates, generate_corpus_style_variants,
+    military_coordinate_leak_case, negative_control_counter_speech_propaganda_case,
+    negative_control_opsec_warning_case, negative_control_quoted_threat_report_case,
+    negative_control_supportive_selfharm_response_case, pre_release_corpus_style_gates,
     pre_release_policy_action_gates, run_scenario_case,
     summarize_policy_actions_with_expectation_names, summarize_scenario_runs, AccountType,
-    ConversationType, CorpusStyleProfile, PolicyActionQualityGates, PolicyActionSummary,
-    ScenarioCase, ScenarioEvaluationSummary, ScenarioGateReport, ScenarioQualityGates, ThreatType,
+    ConversationType, CorpusStyleProfile, LatentStateKind, PolicyActionQualityGates,
+    PolicyActionSummary, RiskHorizon, ScenarioCase, ScenarioEvaluationSummary, ScenarioGateReport,
+    ScenarioQualityGates, ScenarioRunResult, ThreatType,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +27,7 @@ pub struct SocialContextCohortSummary {
     pub style_profiles: Vec<String>,
     pub evaluation: ScenarioEvaluationSummary,
     pub policy: PolicyActionSummary,
+    pub inference_expectations: Vec<SocialContextInferenceExpectationSummary>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +70,8 @@ struct SocialContextCohortSpec {
     languages: Vec<String>,
     #[serde(default)]
     style_profiles: Vec<String>,
+    #[serde(default)]
+    inference_expectations: Vec<SocialContextInferenceExpectationSpec>,
     gates: SocialContextGateSpec,
 }
 
@@ -95,8 +102,60 @@ struct SocialContextThreatGateSpec {
     max_expected_calibration_error: Option<f32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SocialContextInferenceScope {
+    FinalStep,
+    AnyStep,
+}
+
+impl Default for SocialContextInferenceScope {
+    fn default() -> Self {
+        Self::FinalStep
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SocialContextInferenceExpectationSpec {
+    base_case_name: String,
+    #[serde(default)]
+    scope: SocialContextInferenceScope,
+    #[serde(default)]
+    risk_horizon: Option<RiskHorizon>,
+    #[serde(default)]
+    min_escalation_likelihood_24h: Option<f32>,
+    #[serde(default)]
+    max_escalation_likelihood_24h: Option<f32>,
+    #[serde(default)]
+    required_latent_states: Vec<LatentStateKind>,
+    #[serde(default)]
+    forbidden_latent_states: Vec<LatentStateKind>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SocialContextInferenceExpectationSummary {
+    pub base_case_name: String,
+    pub variant_count: usize,
+    pub scope: SocialContextInferenceScope,
+    pub passed: bool,
+    pub failures: Vec<String>,
+}
+
 pub fn canonical_social_context_seed_scenarios() -> Vec<crate::ScenarioCase> {
+    let mut names = BTreeSet::new();
     canonical_corpus_seed_scenarios()
+        .into_iter()
+        .chain(canonical_propaganda_scenarios())
+        .chain([
+            direct_threat_case(),
+            negative_control_quoted_threat_report_case(),
+            negative_control_supportive_selfharm_response_case(),
+            negative_control_counter_speech_propaganda_case(),
+            military_coordinate_leak_case(),
+            negative_control_opsec_warning_case(),
+        ])
+        .filter(|case| names.insert(case.name.clone()))
+        .collect()
 }
 
 pub fn default_social_context_profiles() -> Vec<CorpusStyleProfile> {
@@ -176,6 +235,8 @@ pub fn run_social_context_suite(
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
+        let inference_expectations =
+            evaluate_inference_expectations_for_cohort(cohort, &matching_indices, &prepared, &runs);
 
         cohort_summaries.push(SocialContextCohortSummary {
             cohort_id: cohort.id.clone(),
@@ -189,6 +250,7 @@ pub fn run_social_context_suite(
                 &expectation_names,
                 &expectations,
             ),
+            inference_expectations,
         });
     }
 
@@ -301,6 +363,171 @@ fn convert_gate_spec(cohort: &SocialContextCohortSpec) -> ScenarioQualityGates {
             })
             .collect(),
     }
+}
+
+fn evaluate_inference_expectations_for_cohort(
+    cohort: &SocialContextCohortSpec,
+    matching_indices: &[usize],
+    prepared: &[PreparedSocialContextCase],
+    runs: &[ScenarioRunResult],
+) -> Vec<SocialContextInferenceExpectationSummary> {
+    cohort
+        .inference_expectations
+        .iter()
+        .map(|expectation| {
+            let case_indices = matching_indices
+                .iter()
+                .copied()
+                .filter(|idx| prepared[*idx].variant.base_case_name == expectation.base_case_name)
+                .collect::<Vec<_>>();
+            let mut failures = Vec::new();
+
+            for idx in &case_indices {
+                evaluate_inference_expectation_for_run(
+                    expectation,
+                    &prepared[*idx].variant.variant_name,
+                    &runs[*idx],
+                    &mut failures,
+                );
+            }
+
+            SocialContextInferenceExpectationSummary {
+                base_case_name: expectation.base_case_name.clone(),
+                variant_count: case_indices.len(),
+                scope: expectation.scope,
+                passed: !case_indices.is_empty() && failures.is_empty(),
+                failures,
+            }
+        })
+        .collect()
+}
+
+fn evaluate_inference_expectation_for_run(
+    expectation: &SocialContextInferenceExpectationSpec,
+    variant_name: &str,
+    run: &ScenarioRunResult,
+    failures: &mut Vec<String>,
+) {
+    if let Some(expected_horizon) = expectation.risk_horizon {
+        let passed = match expectation.scope {
+            SocialContextInferenceScope::FinalStep => run
+                .step_results
+                .last()
+                .is_some_and(|result| result.inference.risk_horizon == expected_horizon),
+            SocialContextInferenceScope::AnyStep => run
+                .step_results
+                .iter()
+                .any(|result| result.inference.risk_horizon == expected_horizon),
+        };
+        if !passed {
+            failures.push(format!(
+                "{variant_name}: expected risk_horizon={expected_horizon:?} with scope={:?}, observed={}",
+                expectation.scope,
+                summarize_risk_horizons(run)
+            ));
+        }
+    }
+
+    if let Some(min) = expectation.min_escalation_likelihood_24h {
+        let actual = observed_peak_escalation(run, expectation.scope);
+        if actual < min {
+            failures.push(format!(
+                "{variant_name}: expected escalation_likelihood_24h >= {min:.2}, observed={actual:.2}"
+            ));
+        }
+    }
+
+    if let Some(max) = expectation.max_escalation_likelihood_24h {
+        let actual = observed_peak_escalation(run, expectation.scope);
+        if actual > max {
+            failures.push(format!(
+                "{variant_name}: expected escalation_likelihood_24h <= {max:.2}, observed={actual:.2}"
+            ));
+        }
+    }
+
+    for state in &expectation.required_latent_states {
+        if !run_contains_latent_state(run, expectation.scope, *state) {
+            failures.push(format!(
+                "{variant_name}: missing required latent state {state:?}, observed={}",
+                summarize_latent_states(run)
+            ));
+        }
+    }
+
+    for state in &expectation.forbidden_latent_states {
+        if run_contains_latent_state(run, expectation.scope, *state) {
+            failures.push(format!(
+                "{variant_name}: forbidden latent state {state:?} observed={}",
+                summarize_latent_states(run)
+            ));
+        }
+    }
+}
+
+fn observed_peak_escalation(run: &ScenarioRunResult, scope: SocialContextInferenceScope) -> f32 {
+    match scope {
+        SocialContextInferenceScope::FinalStep => run
+            .step_results
+            .last()
+            .map(|result| result.inference.escalation_likelihood_24h)
+            .unwrap_or(0.0),
+        SocialContextInferenceScope::AnyStep => run
+            .step_results
+            .iter()
+            .map(|result| result.inference.escalation_likelihood_24h)
+            .fold(0.0, f32::max),
+    }
+}
+
+fn run_contains_latent_state(
+    run: &ScenarioRunResult,
+    scope: SocialContextInferenceScope,
+    state: LatentStateKind,
+) -> bool {
+    match scope {
+        SocialContextInferenceScope::FinalStep => run.step_results.last().is_some_and(|result| {
+            result
+                .inference
+                .latent_states
+                .iter()
+                .any(|latent| latent.kind == state)
+        }),
+        SocialContextInferenceScope::AnyStep => run.step_results.iter().any(|result| {
+            result
+                .inference
+                .latent_states
+                .iter()
+                .any(|latent| latent.kind == state)
+        }),
+    }
+}
+
+fn summarize_risk_horizons(run: &ScenarioRunResult) -> String {
+    run.step_results
+        .iter()
+        .map(|result| format!("{:?}", result.inference.risk_horizon))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn summarize_latent_states(run: &ScenarioRunResult) -> String {
+    run.step_results
+        .iter()
+        .flat_map(|result| {
+            result
+                .inference
+                .latent_states
+                .iter()
+                .map(|latent| latent.kind)
+        })
+        .map(|kind| format!("{kind:?}"))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn variant_matches_cohort(
@@ -430,7 +657,7 @@ fn social_context_file() -> &'static SocialContextFile {
 
 fn validate_social_context_file(file: &SocialContextFile) -> Result<(), String> {
     let mut ids = BTreeSet::new();
-    let known_cases = canonical_corpus_seed_scenarios()
+    let known_cases = canonical_social_context_seed_scenarios()
         .into_iter()
         .map(|case| case.name)
         .collect::<BTreeSet<_>>();
@@ -482,7 +709,91 @@ fn validate_social_context_file(file: &SocialContextFile) -> Result<(), String> 
                 ));
             }
         }
+        validate_inference_expectations(cohort)?;
         validate_gate_spec(&cohort.id, &cohort.gates)?;
+    }
+
+    Ok(())
+}
+
+fn validate_inference_expectations(cohort: &SocialContextCohortSpec) -> Result<(), String> {
+    let mut base_case_names = BTreeSet::new();
+
+    for expectation in &cohort.inference_expectations {
+        if !cohort.base_case_names.contains(&expectation.base_case_name) {
+            return Err(format!(
+                "social context cohort {} has inference expectation for unknown base case {}",
+                cohort.id, expectation.base_case_name
+            ));
+        }
+        if !base_case_names.insert(expectation.base_case_name.clone()) {
+            return Err(format!(
+                "social context cohort {} has duplicate inference expectation for {}",
+                cohort.id, expectation.base_case_name
+            ));
+        }
+        if expectation.min_escalation_likelihood_24h.is_none()
+            && expectation.max_escalation_likelihood_24h.is_none()
+            && expectation.risk_horizon.is_none()
+            && expectation.required_latent_states.is_empty()
+            && expectation.forbidden_latent_states.is_empty()
+        {
+            return Err(format!(
+                "social context cohort {} has empty inference expectation for {}",
+                cohort.id, expectation.base_case_name
+            ));
+        }
+        validate_probability_threshold(
+            &cohort.id,
+            "inference_expectations.min_escalation_likelihood_24h",
+            expectation.min_escalation_likelihood_24h,
+        )?;
+        validate_probability_threshold(
+            &cohort.id,
+            "inference_expectations.max_escalation_likelihood_24h",
+            expectation.max_escalation_likelihood_24h,
+        )?;
+        if let (Some(min), Some(max)) = (
+            expectation.min_escalation_likelihood_24h,
+            expectation.max_escalation_likelihood_24h,
+        ) {
+            if min > max {
+                return Err(format!(
+                    "social context cohort {} has inference expectation with min_escalation_likelihood_24h > max_escalation_likelihood_24h for {}",
+                    cohort.id, expectation.base_case_name
+                ));
+            }
+        }
+
+        let mut required = BTreeSet::new();
+        for state in &expectation.required_latent_states {
+            if !required.insert(format!("{state:?}")) {
+                return Err(format!(
+                    "social context cohort {} has duplicate required latent state {:?} for {}",
+                    cohort.id, state, expectation.base_case_name
+                ));
+            }
+        }
+
+        let mut forbidden = BTreeSet::new();
+        for state in &expectation.forbidden_latent_states {
+            if !forbidden.insert(format!("{state:?}")) {
+                return Err(format!(
+                    "social context cohort {} has duplicate forbidden latent state {:?} for {}",
+                    cohort.id, state, expectation.base_case_name
+                ));
+            }
+            if expectation
+                .required_latent_states
+                .iter()
+                .any(|required_state| required_state == state)
+            {
+                return Err(format!(
+                    "social context cohort {} requires and forbids latent state {:?} for {}",
+                    cohort.id, state, expectation.base_case_name
+                ));
+            }
+        }
     }
 
     Ok(())
@@ -560,6 +871,23 @@ mod tests {
     use std::sync::OnceLock;
 
     use super::*;
+    use crate::{
+        acute_selfharm_case, negative_control_trusted_adult_case, trusted_adult_grooming_case,
+        AnalysisResult, LatentStateKind, RiskHorizon, ScenarioRunResult,
+    };
+
+    fn final_result(case: &ScenarioCase) -> AnalysisResult {
+        scenario_run(case)
+            .step_results
+            .last()
+            .cloned()
+            .expect("scenario should produce at least one result")
+    }
+
+    fn scenario_run(case: &ScenarioCase) -> ScenarioRunResult {
+        let db = PatternDatabase::default_mvp();
+        run_scenario_case(&db, case)
+    }
 
     fn cached_social_context_summary() -> &'static SocialContextSuiteSummary {
         static SUMMARY: OnceLock<SocialContextSuiteSummary> = OnceLock::new();
@@ -588,6 +916,9 @@ mod tests {
         assert!(ids.contains("school_group_social_pressure"));
         assert!(ids.contains("selfharm_disclosure_support_boundary"));
         assert!(ids.contains("image_blackmail_reputation_control"));
+        assert!(ids.contains("quote_report_direct_threat_boundary"));
+        assert!(ids.contains("propaganda_discussion_boundary"));
+        assert!(ids.contains("military_opsec_warning_boundary"));
     }
 
     #[test]
@@ -629,9 +960,222 @@ mod tests {
     }
 
     #[test]
+    fn quote_report_boundary_contains_safe_and_risky_cases() {
+        let summary = cached_social_context_summary();
+        let cohort = summary
+            .cohorts
+            .iter()
+            .find(|cohort| cohort.cohort_id == "quote_report_direct_threat_boundary")
+            .expect("quote/report boundary cohort");
+
+        assert!(cohort.base_cases.contains(&"direct_threat".to_string()));
+        assert!(cohort
+            .base_cases
+            .contains(&"negative_control_quoted_threat_report".to_string()));
+    }
+
+    #[test]
+    fn propaganda_discussion_boundary_contains_safe_and_risky_cases() {
+        let summary = cached_social_context_summary();
+        let cohort = summary
+            .cohorts
+            .iter()
+            .find(|cohort| cohort.cohort_id == "propaganda_discussion_boundary")
+            .expect("propaganda discussion boundary cohort");
+
+        assert!(cohort
+            .base_cases
+            .contains(&"propaganda_bot_multi_chat".to_string()));
+        assert!(cohort
+            .base_cases
+            .contains(&"negative_control_news_sharing".to_string()));
+        assert!(cohort
+            .base_cases
+            .contains(&"negative_control_counter_speech_propaganda".to_string()));
+    }
+
+    #[test]
+    fn military_opsec_boundary_contains_safe_and_risky_cases() {
+        let summary = cached_social_context_summary();
+        let cohort = summary
+            .cohorts
+            .iter()
+            .find(|cohort| cohort.cohort_id == "military_opsec_warning_boundary")
+            .expect("military opsec boundary cohort");
+
+        assert!(cohort
+            .base_cases
+            .contains(&"military_coordinate_leak".to_string()));
+        assert!(cohort
+            .base_cases
+            .contains(&"negative_control_opsec_warning".to_string()));
+    }
+
+    #[test]
+    fn quote_report_boundary_keeps_safe_inference_unknown_but_direct_threat_immediate() {
+        let safe = final_result(&negative_control_quoted_threat_report_case());
+        let risky = final_result(&direct_threat_case());
+
+        assert_eq!(safe.inference.risk_horizon, RiskHorizon::Unknown);
+        assert!(
+            safe.inference.escalation_likelihood_24h <= 0.25,
+            "quoted report should not keep high escalation likelihood: {:?}",
+            safe.inference
+        );
+        assert!(
+            safe.inference.latent_states.is_empty(),
+            "quoted report should not infer hostile latent states: {:?}",
+            safe.inference.latent_states
+        );
+
+        assert_eq!(risky.inference.risk_horizon, RiskHorizon::Immediate);
+        assert!(
+            risky.score >= 0.70,
+            "direct threat boundary case should still score above threshold: {:?}",
+            risky
+        );
+    }
+
+    #[test]
+    fn selfharm_support_boundary_swaps_crisis_for_protective_support() {
+        let safe = final_result(&negative_control_supportive_selfharm_response_case());
+        let risky_run = scenario_run(&acute_selfharm_case());
+
+        assert_eq!(safe.inference.risk_horizon, RiskHorizon::Unknown);
+        assert!(
+            !safe
+                .inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::CrisisVulnerability),
+            "supportive self-harm response should not keep crisis latent state: {:?}",
+            safe.inference.latent_states
+        );
+        assert!(
+            safe.inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::ProtectiveSupport),
+            "supportive self-harm response should surface protective support: {:?}",
+            safe.inference.latent_states
+        );
+
+        assert!(risky_run.step_results.iter().any(|result| {
+            result
+                .inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::CrisisVulnerability)
+        }));
+        assert!(risky_run
+            .step_results
+            .iter()
+            .any(|result| { result.inference.escalation_likelihood_24h >= 0.70 }));
+    }
+
+    #[test]
+    fn trusted_adult_boundary_preserves_grooming_inference_but_not_school_logistics() {
+        let safe = final_result(&negative_control_trusted_adult_case());
+        let risky = final_result(&trusted_adult_grooming_case());
+
+        assert_eq!(safe.inference.risk_horizon, RiskHorizon::Unknown);
+        assert!(
+            !safe.inference.latent_states.iter().any(|state| {
+                matches!(
+                    state.kind,
+                    LatentStateKind::DependencyBuilding | LatentStateKind::IsolationPressure
+                )
+            }),
+            "routine trusted-adult logistics should not infer grooming dynamics: {:?}",
+            safe.inference.latent_states
+        );
+
+        assert_eq!(risky.inference.risk_horizon, RiskHorizon::ShortTerm);
+        assert!(
+            risky
+                .inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::DependencyBuilding),
+            "trusted-adult grooming should keep dependency-building latent state: {:?}",
+            risky.inference.latent_states
+        );
+        assert!(
+            risky
+                .inference
+                .latent_states
+                .iter()
+                .any(|state| state.kind == LatentStateKind::IsolationPressure),
+            "trusted-adult grooming should keep isolation latent state: {:?}",
+            risky.inference.latent_states
+        );
+    }
+
+    #[test]
+    fn military_opsec_boundary_keeps_warning_inference_clean_but_leak_risky() {
+        let safe = final_result(&negative_control_opsec_warning_case());
+        let risky = final_result(&military_coordinate_leak_case());
+
+        assert_eq!(safe.inference.risk_horizon, RiskHorizon::Unknown);
+        assert!(
+            safe.inference.escalation_likelihood_24h <= 0.25,
+            "opsec warning should stay low-escalation: {:?}",
+            safe.inference
+        );
+        assert!(
+            !safe.inference.latent_states.iter().any(|state| {
+                matches!(
+                    state.kind,
+                    LatentStateKind::DependencyBuilding
+                        | LatentStateKind::IsolationPressure
+                        | LatentStateKind::CoerciveControl
+                        | LatentStateKind::Humiliation
+                        | LatentStateKind::CrisisVulnerability
+                        | LatentStateKind::GroupEscalation
+                )
+            }),
+            "opsec warning should not infer harmful latent states: {:?}",
+            safe.inference.latent_states
+        );
+
+        assert_eq!(risky.threat_type, ThreatType::CoordinateLeak);
+        assert!(
+            risky.score >= 0.55,
+            "military coordinate leak should remain above threshold: {:?}",
+            risky
+        );
+    }
+
+    #[test]
+    fn social_context_declarative_inference_expectations_pass() {
+        let summary = cached_social_context_summary();
+        let total_expectations = summary
+            .cohorts
+            .iter()
+            .map(|cohort| cohort.inference_expectations.len())
+            .sum::<usize>();
+
+        assert!(
+            total_expectations >= 7,
+            "expected declarative inference expectations to be loaded"
+        );
+
+        for cohort in &summary.cohorts {
+            for expectation in &cohort.inference_expectations {
+                assert!(
+                    expectation.passed,
+                    "cohort {} failed inference expectation for {}: {:?}",
+                    cohort.cohort_id, expectation.base_case_name, expectation.failures
+                );
+            }
+        }
+    }
+
+    #[test]
     fn social_context_suite_returns_reports_for_each_cohort() {
         let summary = cached_social_context_summary();
-        let (_, reports) = evaluate_social_context_suite(summary, &pre_release_social_context_gates());
+        let (_, reports) =
+            evaluate_social_context_suite(summary, &pre_release_social_context_gates());
 
         assert_eq!(reports.len(), summary.cohorts.len());
     }
@@ -650,7 +1194,8 @@ mod tests {
     #[test]
     fn social_context_pre_release_gates_pass() {
         let summary = cached_social_context_summary();
-        let (overall, cohorts) = evaluate_social_context_suite(summary, &pre_release_social_context_gates());
+        let (overall, cohorts) =
+            evaluate_social_context_suite(summary, &pre_release_social_context_gates());
 
         assert!(
             overall.passed,

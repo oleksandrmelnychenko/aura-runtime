@@ -1,0 +1,46 @@
+{
+  "builder_name": "csv",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "phishing-email-dataset",
+  "dataset_size": 51989929,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/zefang-liu/phishing-email-dataset@34085a032c123ca237f314a01a67909cdea35e34/Phishing_Email.csv": {
+      "num_bytes": 52034604,
+      "checksum": null
+    }
+  },
+  "download_size": 52034604,
+  "features": {
+    "Unnamed: 0": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "Email Text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "Email Type": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 104024533,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 51989929,
+      "num_examples": 18650,
+      "dataset_name": "phishing-email-dataset"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

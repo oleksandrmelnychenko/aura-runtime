@@ -108,9 +108,9 @@ fn main() {
         if let Some(value) = line.strip_prefix("/group ") {
             match value.trim().parse::<u32>() {
                 Ok(count) if count >= 2 => {
-                    state.conversation_type = ConversationType::GroupChat;
+                    state.conversation_type = ConversationType::Group;
                     state.member_count = Some(count);
-                    println!("conversation_type=GroupChat members={count}");
+                    println!("conversation_type=Group members={count}");
                 }
                 _ => {
                     println!("expected member count >= 2");
@@ -220,7 +220,7 @@ impl Args {
                         return Err("--members must be >= 2".to_string());
                     }
                     self.member_count = Some(count);
-                    self.conversation_type = ConversationType::GroupChat;
+                    self.conversation_type = ConversationType::Group;
                 }
                 other => {
                     return Err(format!("unknown argument: {other}"));
@@ -262,7 +262,7 @@ fn parse_protection_level(value: &str) -> Result<ProtectionLevel, String> {
 fn parse_conversation_type(value: &str) -> Result<ConversationType, String> {
     match value {
         "direct" => Ok(ConversationType::Direct),
-        "group" | "group_chat" => Ok(ConversationType::GroupChat),
+        "group" => Ok(ConversationType::Group),
         _ => Err(format!("invalid --conversation value: {value}")),
     }
 }
@@ -286,6 +286,7 @@ fn run_once(analyzer: &mut Analyzer, state: &mut SessionState, text: &str) {
         language: Some(state.language.clone()),
         conversation_type: state.conversation_type,
         member_count: state.member_count,
+        server_sender_risk_hint: None,
     };
 
     let result = analyzer.analyze_with_context(&input, state.next_timestamp_ms);

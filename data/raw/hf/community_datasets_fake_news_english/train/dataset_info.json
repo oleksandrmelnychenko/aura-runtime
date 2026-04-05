@@ -1,0 +1,53 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "fake_news_english",
+  "dataset_size": 78194,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/community-datasets/fake_news_english@7f7442a4daf4fa99c63aadd333db3d988b7288a9/data/train-00000-of-00001.parquet": {
+      "num_bytes": 43101,
+      "checksum": null
+    }
+  },
+  "download_size": 43101,
+  "features": {
+    "article_number": {
+      "dtype": "int32",
+      "_type": "Value"
+    },
+    "url_of_article": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "fake_or_satire": {
+      "names": [
+        "Satire",
+        "Fake"
+      ],
+      "_type": "ClassLabel"
+    },
+    "url_of_rebutting_article": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 121295,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 78194,
+      "num_examples": 492,
+      "dataset_name": "fake_news_english"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

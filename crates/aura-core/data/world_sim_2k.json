@@ -45,13 +45,13 @@
     {
       "id": "class_7b",
       "display_name": "7-Б Клас",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "member_count": 25
     },
     {
       "id": "hobby_group",
       "display_name": "Гурток малювання",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "member_count": 8
     },
     {
@@ -94,7 +94,7 @@
         "vika_12"
       ],
       "conversation_ids": ["class_7b"],
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "member_count": 25,
       "texts": [
         "Нагадую, сьогодні контрольна з математики на третьому уроці.",
@@ -132,7 +132,7 @@
         "dasha_12"
       ],
       "conversation_ids": ["hobby_group"],
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "member_count": 8,
       "texts": [
         "На сьогоднішньому занятті малюємо пейзаж гуашшю.",
@@ -203,7 +203,7 @@
       "day_repeats": 5,
       "sender_ids": ["dasha_12", "lera_12", "vika_12", "sofi_12"],
       "conversation_ids": ["class_7b"],
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "member_count": 25,
       "texts": [
         "Олена тупа, всі це знають.",
@@ -302,3 +302,4 @@
     }
   ]
 }
+

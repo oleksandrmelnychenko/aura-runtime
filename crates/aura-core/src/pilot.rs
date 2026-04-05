@@ -83,6 +83,8 @@ pub struct ShadowModeDecision {
     pub action: Action,
     pub score: f32,
     pub reason_codes: Vec<String>,
+    #[serde(default)]
+    pub context_markers: Vec<String>,
     pub top_threat_scores: Vec<AuditThreatScore>,
     pub risk_breakdown: RiskBreakdown,
     pub inference: InferenceSummary,
@@ -185,6 +187,7 @@ pub fn build_shadow_mode_event(input: ShadowModeEventInput<'_>) -> ShadowModeEve
     );
     let recommendation = input.result.recommended_action.as_ref();
     let top_threat_scores = audit_record.top_threat_scores.clone();
+    let product_surface = build_product_decision_surface(input.result, ProductRolloutMode::Shadow);
 
     ShadowModeEvent {
         request_id: input.request_id.to_string(),
@@ -203,6 +206,7 @@ pub fn build_shadow_mode_event(input: ShadowModeEventInput<'_>) -> ShadowModeEve
             action: input.result.action,
             score: input.result.score,
             reason_codes: input.result.reason_codes.clone(),
+            context_markers: input.result.context_markers.clone(),
             top_threat_scores,
             risk_breakdown: input.result.risk_breakdown.clone(),
             inference: input.result.inference.clone(),
@@ -231,24 +235,12 @@ pub fn build_shadow_mode_event(input: ShadowModeEventInput<'_>) -> ShadowModeEve
                 }
             }),
             mirror: ShadowModeMirror {
-                would_surface_to_child: input.result.action != Action::Allow
-                    || recommendation
-                        .map(|recommendation| !recommendation.ui_actions.is_empty())
-                        .unwrap_or(false),
-                would_alert_guardian: recommendation
-                    .map(|recommendation| recommendation.parent_alert != AlertPriority::None)
-                    .unwrap_or(false),
-                would_open_review: input.result.is_threat()
-                    || input.result.action >= Action::Warn
-                    || recommendation
-                        .map(|recommendation| recommendation.parent_alert >= AlertPriority::High)
-                        .unwrap_or(false),
+                would_surface_to_child: product_surface.child.visible,
+                would_alert_guardian: product_surface.guardian.notify,
+                would_open_review: product_surface.review.open_review,
                 would_block_message: input.result.action == Action::Block,
             },
-            product_surface: build_product_decision_surface(
-                input.result,
-                ProductRolloutMode::Shadow,
-            ),
+            product_surface,
         },
     }
 }
@@ -298,8 +290,8 @@ fn enum_key<T: Serialize>(value: &T) -> String {
 mod tests {
     use super::*;
     use crate::{
-        ActionRecommendation, BehavioralTrend, CircleTier, ContactSnapshot, DetectionSignal,
-        FollowUpAction, RiskBreakdown, UiAction,
+        ActionRecommendation, AnalysisContextSummary, BehavioralTrend, CircleTier, ContactSnapshot,
+        DetectionSignal, FollowUpAction, RiskBreakdown, UiAction,
     };
 
     fn sample_result() -> AnalysisResult {
@@ -344,11 +336,23 @@ mod tests {
                 first_seen_ms: 1_000,
                 last_seen_ms: 2_000,
                 conversation_count: 1,
+                grooming_event_count: 0,
+                bullying_event_count: 0,
+                manipulation_event_count: 0,
+                total_threat_events: 0,
             }),
             reason_codes: vec![
                 "conversation.grooming.stage_sequence".to_string(),
                 "conversation.grooming.new_contact_flattery".to_string(),
             ],
+            context_markers: vec![
+                "context.relationship.new_contact".to_string(),
+                "context.trajectory.repeated_sender".to_string(),
+            ],
+            context_summary: AnalysisContextSummary::from_markers(&[
+                "context.relationship.new_contact".to_string(),
+                "context.trajectory.repeated_sender".to_string(),
+            ]),
             inference: InferenceSummary::default(),
             analysis_time_us: 420,
         }
@@ -386,6 +390,13 @@ mod tests {
         assert_eq!(
             event.decision.product_surface.child.delivery_mode,
             crate::ProductDeliveryMode::MirrorOnly
+        );
+        assert_eq!(
+            event.decision.context_markers,
+            vec![
+                "context.relationship.new_contact".to_string(),
+                "context.trajectory.repeated_sender".to_string(),
+            ]
         );
     }
 
@@ -430,5 +441,38 @@ mod tests {
         assert!(!json.contains("olena_owner"));
         assert!(!json.contains("coach_realistic"));
         assert!(!json.contains("conv_secret"));
+    }
+
+    #[test]
+    fn shadow_mode_mirror_respects_context_softened_product_surface() {
+        let mut result = sample_result();
+        let context_markers = vec![
+            "context.filter.applied".to_string(),
+            "context.speech_act.quote".to_string(),
+            "context.stance.oppose".to_string(),
+        ];
+        result.context_summary = AnalysisContextSummary::from_markers(&context_markers);
+        result.context_markers = Vec::new();
+        result.recommended_action.as_mut().unwrap().parent_alert = AlertPriority::None;
+
+        let event = build_shadow_mode_event(ShadowModeEventInput {
+            request_id: "shadow_req_2",
+            sequence: 2,
+            timestamp_ms: 2_000,
+            sender_id: "coach_realistic",
+            conversation_id: "conv_secret",
+            language: "uk",
+            conversation_type: ConversationType::Direct,
+            member_count: None,
+            expectation: None,
+            protection_level: ProtectionLevel::High,
+            result: &result,
+        });
+
+        assert!(event.decision.mirror.would_surface_to_child);
+        assert!(!event.decision.mirror.would_alert_guardian);
+        assert!(!event.decision.mirror.would_open_review);
+        assert!(!event.decision.product_surface.guardian.notify);
+        assert!(!event.decision.product_surface.review.open_review);
     }
 }

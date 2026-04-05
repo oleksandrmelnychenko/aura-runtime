@@ -214,7 +214,10 @@ mod tests {
             domain_mode: DomainMode::None,
             ..AuraConfig::default()
         };
-        assert_eq!(config.effective_domain_module(), Some(AuraDomainModule::Kids));
+        assert_eq!(
+            config.effective_domain_module(),
+            Some(AuraDomainModule::Kids)
+        );
     }
 
     #[test]

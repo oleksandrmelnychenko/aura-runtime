@@ -181,6 +181,13 @@ enum BehavioralTrend {
   BEHAVIORAL_TREND_ROLE_REVERSAL = 5;
 }
 
+enum AgeSource {
+  AGE_SOURCE_UNSPECIFIED = 0;
+  AGE_SOURCE_USER_REPORTED = 1;
+  AGE_SOURCE_PARENT_VERIFIED = 2;
+  AGE_SOURCE_ML_INFERRED = 3;
+}
+
 enum UncertaintyLevel {
   UNCERTAINTY_LEVEL_UNSPECIFIED = 0;
   UNCERTAINTY_LEVEL_LOW = 1;
@@ -210,8 +217,7 @@ enum LatentStateKind {
 enum ConversationType {
   CONVERSATION_TYPE_UNSPECIFIED = 0;
   CONVERSATION_TYPE_DIRECT = 1;
-  CONVERSATION_TYPE_GROUP_CHAT = 2;
-  CONVERSATION_TYPE_GROUP = 3;
+  CONVERSATION_TYPE_GROUP = 2;
 }
 
 enum ContentType {
@@ -307,6 +313,9 @@ message MessageInput {
   optional string language = 6;
   ConversationType conversation_type = 7;
   optional uint32 member_count = 8;
+  // Server-injected sender reputation hint (0.0 = unknown, 1.0 = max risk).
+  // Allows the server to feed cross-user reputation signals back to the client.
+  optional float server_sender_risk_hint = 9;
 }
 
 message AnalyzeContextRequest {
@@ -380,6 +389,12 @@ message KidsMemoryExplainability {
   // True when at least one observed reason is part of the mandatory
   // guardian-escalation KIDS memory contract.
   bool mandatory_guardian_escalation = 2;
+  // Cumulative risk score for this conversation from kids memory tracking.
+  float conversation_risk_score = 3;
+  // Kids-specific sender risk from cross-conversation tracking.
+  float sender_risk_score = 4;
+  // Number of messages that contributed to this escalation decision.
+  uint32 escalation_message_count = 5;
 }
 
 message ProductChildSurface {
@@ -490,6 +505,29 @@ message MarkContactTrustedRequest {
   string sender_id = 1;
 }
 
+enum GuardianVerdict {
+  GUARDIAN_VERDICT_UNSPECIFIED = 0;
+  // Guardian confirms contact is safe (e.g., known family member).
+  GUARDIAN_VERDICT_TRUSTED = 1;
+  // Guardian requests immediate block of this contact.
+  GUARDIAN_VERDICT_BLOCK = 2;
+  // Guardian wants continued monitoring with lower escalation threshold.
+  GUARDIAN_VERDICT_MONITOR = 3;
+  // Guardian marks the escalation as a false positive.
+  GUARDIAN_VERDICT_FALSE_POSITIVE = 4;
+}
+
+message GuardianFeedbackRequest {
+  string sender_id = 1;
+  string conversation_id = 2;
+  GuardianVerdict verdict = 3;
+}
+
+message GuardianFeedbackResponse {
+  bool ok = 1;
+  optional string message = 2;
+}
+
 message StatusResponse {
   bool ok = 1;
   optional string message = 2;
@@ -594,6 +632,7 @@ message ContactProfileState {
   repeated uint64 message_fingerprints = 30;
   repeated NarrativeTimelineEntry narrative_timeline = 31;
   repeated WeeklyPropagandaCount weekly_propaganda_counts = 32;
+  AgeSource age_source = 33;
 }
 
 message ContactProfilerState {
@@ -604,4 +643,41 @@ message TrackerState {
   uint32 schema_version = 1;
   repeated ConversationTimelineState timelines = 2;
   ContactProfilerState contact_profiler = 3;
+  // Kids domain memory state for export/import (conversation + sender tracking).
+  KidsMemoryState kids_memory = 4;
+}
+
+// Per-message risk snapshot within kids conversation memory.
+message KidsMessageRiskSnapshot {
+  optional string sender_id = 1;
+  bool has_grooming = 2;
+  bool has_manipulation = 3;
+  bool has_bullying = 4;
+  bool has_self_harm = 5;
+  bool has_blackmail_or_sextortion = 6;
+  // ML safety scores at the time of this message (0.0 if ML was not available).
+  float ml_grooming = 7;
+  float ml_bullying = 8;
+  float ml_self_harm = 9;
+  float ml_manipulation = 10;
+}
+
+// Per-conversation risk memory in kids module.
+message KidsConversationMemoryState {
+  string conversation_id = 1;
+  repeated KidsMessageRiskSnapshot entries = 2;
+  uint64 message_index = 3;
+}
+
+// Per-sender cross-conversation risk memory in kids module.
+message KidsSenderMemoryState {
+  string sender_id = 1;
+  uint64 event_index = 2;
+  repeated string recent_high_risk_conversations = 3;
+}
+
+// Full kids memory state for export/import.
+message KidsMemoryState {
+  repeated KidsConversationMemoryState conversations = 1;
+  repeated KidsSenderMemoryState senders = 2;
 }

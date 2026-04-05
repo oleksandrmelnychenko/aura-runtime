@@ -208,7 +208,7 @@
       "age_band": "teen",
       "relationship": "group_peer",
       "account_type": "teen",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -384,7 +384,7 @@
       "default_language": "uk",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -436,7 +436,7 @@
       "age_band": "teen",
       "relationship": "group_peer",
       "account_type": "teen",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -553,7 +553,7 @@
       "default_language": "en",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -1577,7 +1577,7 @@
       "default_language": "uk",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -1628,7 +1628,7 @@
       "default_language": "uk",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -1679,7 +1679,7 @@
       "default_language": "ru",
       "age_band": "teen",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -1730,7 +1730,7 @@
       "default_language": "ru",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -1781,7 +1781,7 @@
       "default_language": "en",
       "age_band": "teen",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -1828,7 +1828,7 @@
       "default_language": "en",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -1875,7 +1875,7 @@
       "default_language": "uk",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -1908,7 +1908,7 @@
       "default_language": "uk",
       "age_band": "teen",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -1941,7 +1941,7 @@
       "default_language": "ru",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -1974,7 +1974,7 @@
       "default_language": "ru",
       "age_band": "teen",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -2007,7 +2007,7 @@
       "default_language": "en",
       "age_band": "teen",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -2037,7 +2037,7 @@
       "default_language": "en",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -2067,7 +2067,7 @@
       "default_language": "uk",
       "age_band": "child",
       "relationship": "group_peer",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -2101,7 +2101,7 @@
       "age_band": "teen",
       "relationship": "group_peer",
       "account_type": "teen",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "primary_threat": "bullying",
       "tracked_threats": [
         "bullying"
@@ -2142,7 +2142,7 @@
       "age_band": "teen",
       "relationship": "group_peer",
       "account_type": "teen",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "tracked_threats": [
         "bullying",
         "manipulation"
@@ -2278,3 +2278,4 @@
     }
   ]
 }
+

@@ -76,9 +76,7 @@ pub fn validate_file_hash(path: &Path, expected_sha256: &str) -> Result<(), Mani
     let data = fs::read(path)
         .map_err(|e| ManifestError::FileReadFailed(path_str.clone(), e.to_string()))?;
 
-    let mut hasher = Sha256::new();
-    hasher.update(&data);
-    let actual = format!("{:x}", hasher.finalize());
+    let actual = sha256_hex(&data);
 
     if actual != expected_sha256 {
         return Err(ManifestError::HashMismatch(
@@ -89,6 +87,19 @@ pub fn validate_file_hash(path: &Path, expected_sha256: &str) -> Result<(), Mani
     }
 
     Ok(())
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        output.push_str(&format!("{byte:02x}"));
+    }
+
+    output
 }
 
 /// Validates all models listed in a manifest file against their expected hashes.
@@ -185,9 +196,7 @@ mod tests {
         let mut f = fs::File::create(&file_path).unwrap();
         f.write_all(b"test model content").unwrap();
 
-        let mut hasher = Sha256::new();
-        hasher.update(b"test model content");
-        let expected = format!("{:x}", hasher.finalize());
+        let expected = sha256_hex(b"test model content");
 
         assert!(validate_file_hash(&file_path, &expected).is_ok());
         let _ = fs::remove_file(&file_path);

@@ -1,6 +1,6 @@
 use crate::types::{
-    Action, ActionRecommendation, AlertPriority, FollowUpAction, InferenceSummary, LatentStateKind,
-    ProtectionLevel, RiskHorizon, ThreatType, UiAction,
+    Action, ActionRecommendation, AlertPriority, AnalysisContextSummary, FollowUpAction,
+    InferenceSummary, LatentStateKind, ProtectionLevel, RiskHorizon, ThreatType, UiAction,
 };
 
 /// Determines the appropriate action based on a threat score and protection level.
@@ -573,6 +573,47 @@ pub fn augment_recommendation_for_inference(
     recommendation.ui_actions.dedup();
 }
 
+pub fn should_soften_policy_for_context_summary(
+    threat_type: ThreatType,
+    context_summary: &AnalysisContextSummary,
+) -> bool {
+    threat_type != ThreatType::None && context_summary.should_soften_policy()
+}
+
+pub fn should_soften_policy_for_context(
+    threat_type: ThreatType,
+    context_markers: &[String],
+) -> bool {
+    let context_summary = AnalysisContextSummary::from_markers(context_markers);
+    should_soften_policy_for_context_summary(threat_type, &context_summary)
+}
+
+pub fn soften_recommendation_for_context_summary(
+    recommendation: &mut ActionRecommendation,
+    threat_type: ThreatType,
+    context_summary: &AnalysisContextSummary,
+) {
+    if !should_soften_policy_for_context_summary(threat_type, context_summary) {
+        return;
+    }
+
+    recommendation.parent_alert = AlertPriority::None;
+    recommendation
+        .ui_actions
+        .retain(|action| *action != UiAction::EscalateToGuardian);
+    recommendation.ui_actions.sort();
+    recommendation.ui_actions.dedup();
+}
+
+pub fn soften_recommendation_for_context(
+    recommendation: &mut ActionRecommendation,
+    threat_type: ThreatType,
+    context_markers: &[String],
+) {
+    let context_summary = AnalysisContextSummary::from_markers(context_markers);
+    soften_recommendation_for_context_summary(recommendation, threat_type, &context_summary);
+}
+
 fn recommendation(
     parent_alert: AlertPriority,
     follow_ups: Vec<FollowUpAction>,
@@ -666,6 +707,97 @@ fn ui_actions_for(
     actions.sort();
     actions.dedup();
     actions
+}
+
+/// Escalates action and recommendation based on the sender's accumulated threat history.
+///
+/// A sender with repeated grooming/bullying/manipulation events should trigger progressively
+/// stronger recommendations so the app can take appropriate enforcement action.
+pub fn escalate_by_contact_history(
+    action: &mut Action,
+    recommendation: &mut ActionRecommendation,
+    threat_type: ThreatType,
+    snapshot: &crate::types::ContactSnapshot,
+) {
+    if snapshot.is_trusted {
+        return;
+    }
+
+    let relevant_count = match threat_type {
+        ThreatType::Grooming => snapshot.grooming_event_count,
+        ThreatType::Bullying => snapshot.bullying_event_count,
+        ThreatType::Manipulation => snapshot.manipulation_event_count,
+        _ => snapshot.total_threat_events,
+    };
+
+    // Tier 1: 3+ events from same contact → suggest block + escalate alert
+    if relevant_count >= 3 {
+        if !recommendation
+            .ui_actions
+            .contains(&UiAction::SuggestBlockContact)
+        {
+            recommendation
+                .ui_actions
+                .push(UiAction::SuggestBlockContact);
+        }
+        recommendation.parent_alert = recommendation.parent_alert.max(AlertPriority::High);
+    }
+
+    // Tier 2: 5+ events → recommend block action + guardian escalation
+    if relevant_count >= 5 {
+        *action = (*action).max(Action::Warn);
+        recommendation.parent_alert = recommendation.parent_alert.max(AlertPriority::Urgent);
+        if !recommendation
+            .ui_actions
+            .contains(&UiAction::EscalateToGuardian)
+        {
+            recommendation.ui_actions.push(UiAction::EscalateToGuardian);
+        }
+        if !recommendation
+            .follow_ups
+            .contains(&FollowUpAction::BlockSuggested)
+        {
+            recommendation
+                .follow_ups
+                .push(FollowUpAction::BlockSuggested);
+        }
+    }
+
+    // Tier 3: 10+ events → strong block recommendation
+    if relevant_count >= 10 {
+        *action = Action::Block;
+        if !recommendation.ui_actions.contains(&UiAction::SuggestReport) {
+            recommendation.ui_actions.push(UiAction::SuggestReport);
+        }
+    }
+
+    // Worsening trend amplifier: if contact is getting worse, escalate faster
+    match snapshot.trend {
+        crate::types::BehavioralTrend::RapidWorsening => {
+            if relevant_count >= 2 {
+                recommendation.parent_alert = recommendation.parent_alert.max(AlertPriority::High);
+                if !recommendation
+                    .ui_actions
+                    .contains(&UiAction::SuggestBlockContact)
+                {
+                    recommendation
+                        .ui_actions
+                        .push(UiAction::SuggestBlockContact);
+                }
+            }
+        }
+        crate::types::BehavioralTrend::GradualWorsening => {
+            if relevant_count >= 3 {
+                recommendation.parent_alert = recommendation.parent_alert.max(AlertPriority::High);
+            }
+        }
+        crate::types::BehavioralTrend::Stable
+        | crate::types::BehavioralTrend::Improving
+        | crate::types::BehavioralTrend::RoleReversal => {}
+    }
+
+    recommendation.ui_actions.sort();
+    recommendation.ui_actions.dedup();
 }
 
 fn is_reportable_reason_code(reason_code: &str) -> bool {
@@ -1105,6 +1237,61 @@ mod tests {
 
         assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
         assert!(rec.ui_actions.contains(&UiAction::SlowDownConversation));
+    }
+
+    #[test]
+    fn safe_context_softens_guardian_recommendation() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Grooming, 0.7, ProtectionLevel::High);
+        assert_eq!(rec.parent_alert, AlertPriority::High);
+        assert!(rec.ui_actions.contains(&UiAction::EscalateToGuardian));
+
+        soften_recommendation_for_context(
+            &mut rec,
+            ThreatType::Grooming,
+            &[
+                "context.filter.applied".to_string(),
+                "context.speech_act.quote".to_string(),
+                "context.stance.oppose".to_string(),
+            ],
+        );
+
+        assert_eq!(rec.parent_alert, AlertPriority::None);
+        assert!(!rec.ui_actions.contains(&UiAction::EscalateToGuardian));
+        assert!(rec.ui_actions.contains(&UiAction::SuggestBlockContact));
+    }
+
+    #[test]
+    fn typed_safe_context_softens_guardian_recommendation() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Grooming, 0.7, ProtectionLevel::High);
+        let context_summary = crate::types::AnalysisContextSummary::from_markers(&[
+            "context.filter.applied".to_string(),
+            "context.speech_act.quote".to_string(),
+            "context.stance.oppose".to_string(),
+        ]);
+
+        soften_recommendation_for_context_summary(&mut rec, ThreatType::Grooming, &context_summary);
+
+        assert_eq!(rec.parent_alert, AlertPriority::None);
+        assert!(!rec.ui_actions.contains(&UiAction::EscalateToGuardian));
+    }
+
+    #[test]
+    fn risky_context_does_not_soften_guardian_recommendation() {
+        let (_, mut rec) = decide_action_v2(ThreatType::Grooming, 0.7, ProtectionLevel::High);
+
+        soften_recommendation_for_context(
+            &mut rec,
+            ThreatType::Grooming,
+            &[
+                "context.filter.applied".to_string(),
+                "context.speech_act.quote".to_string(),
+                "context.stance.oppose".to_string(),
+                "context.relationship.new_contact".to_string(),
+            ],
+        );
+
+        assert_eq!(rec.parent_alert, AlertPriority::High);
+        assert!(rec.ui_actions.contains(&UiAction::EscalateToGuardian));
     }
 
     #[test]

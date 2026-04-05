@@ -1,0 +1,42 @@
+{
+  "builder_name": "csv",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "fake-news",
+  "dataset_size": 111764818,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/mrm8488/fake-news@4a27e480fbc2be2e93bee409de87c1dd5bde41b0/fake_news.csv": {
+      "num_bytes": 111451199,
+      "checksum": null
+    }
+  },
+  "download_size": 111451199,
+  "features": {
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 223216017,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 111764818,
+      "num_examples": 44898,
+      "dataset_name": "fake-news"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

@@ -1,0 +1,400 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "phishing-url",
+  "dataset_size": 8972740,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/pirocheto/phishing-url@1375d450d4540205ac11781b807249c9509739cd/data/train.parquet": {
+      "num_bytes": 788989,
+      "checksum": null
+    },
+    "hf://datasets/pirocheto/phishing-url@1375d450d4540205ac11781b807249c9509739cd/data/test.parquet": {
+      "num_bytes": 430668,
+      "checksum": null
+    }
+  },
+  "download_size": 1219657,
+  "features": {
+    "url": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "length_url": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "length_hostname": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "ip": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_dots": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_hyphens": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_at": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_qm": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_and": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_or": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_eq": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_underscore": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_tilde": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_percent": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_slash": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_star": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_colon": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_comma": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_semicolumn": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_dollar": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_space": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_www": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_com": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_dslash": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "http_in_path": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "https_token": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "ratio_digits_url": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "ratio_digits_host": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "punycode": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "port": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "tld_in_path": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "tld_in_subdomain": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "abnormal_subdomain": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_subdomains": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "prefix_suffix": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "random_domain": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "shortening_service": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "path_extension": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_redirection": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_external_redirection": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "length_words_raw": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "char_repeat": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "shortest_words_raw": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "shortest_word_host": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "shortest_word_path": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "longest_words_raw": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "longest_word_host": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "longest_word_path": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "avg_words_raw": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "avg_word_host": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "avg_word_path": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "phish_hints": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "domain_in_brand": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "brand_in_subdomain": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "brand_in_path": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "suspecious_tld": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "statistical_report": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_hyperlinks": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "ratio_intHyperlinks": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "ratio_extHyperlinks": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "ratio_nullHyperlinks": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "nb_extCSS": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "ratio_intRedirection": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "ratio_extRedirection": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "ratio_intErrors": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "ratio_extErrors": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "login_form": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "external_favicon": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "links_in_tags": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "submit_email": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "ratio_intMedia": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "ratio_extMedia": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "sfh": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "iframe": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "popup_window": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "safe_anchor": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "onmouseover": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "right_clic": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "empty_title": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "domain_in_title": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "domain_with_copyright": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "whois_registered_domain": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "domain_registration_length": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "domain_age": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "web_traffic": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "dns_record": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "google_index": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "page_rank": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "status": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 10192397,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 6010967,
+      "num_examples": 7658,
+      "dataset_name": "phishing-url"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 2961773,
+      "num_examples": 3772,
+      "dataset_name": "phishing-url"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

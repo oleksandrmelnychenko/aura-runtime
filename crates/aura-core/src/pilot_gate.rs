@@ -72,6 +72,7 @@ impl Default for PilotGateConfig {
 pub struct PilotReleaseSnapshot {
     pub schema_version: Option<String>,
     pub overall_status: String,
+    pub social_context_inference: Option<PilotSocialContextInferenceSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +95,13 @@ pub struct PilotShadowSnapshot {
     pub finding_count: usize,
     pub raw_text_present: bool,
     pub raw_identifier_fields_present: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PilotSocialContextInferenceSnapshot {
+    pub passed: bool,
+    pub total_expectations: usize,
+    pub failed_expectations: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,9 +169,9 @@ pub fn parse_pilot_release_snapshot(json: &str) -> Result<PilotReleaseSnapshot, 
     Ok(PilotReleaseSnapshot {
         schema_version: value
             .get("schema_version")
-            .and_then(|value| value.as_str())
-            .map(ToOwned::to_owned),
+            .and_then(parse_release_schema_version),
         overall_status: overall_status.to_string(),
+        social_context_inference: parse_social_context_inference_snapshot(&value),
     })
 }
 
@@ -216,8 +224,8 @@ pub fn parse_pilot_review_signoffs(json: &str) -> Result<Vec<PilotReviewSignoff>
 }
 
 pub fn parse_kids_memory_health_snapshot(json: &str) -> Result<KidsMemoryHealthSnapshot, String> {
-    let value: serde_json::Value =
-        serde_json::from_str(json).map_err(|err| format!("invalid kids memory health json: {err}"))?;
+    let value: serde_json::Value = serde_json::from_str(json)
+        .map_err(|err| format!("invalid kids memory health json: {err}"))?;
     let overall_status = value
         .get("overall_status")
         .and_then(|value| value.as_str())
@@ -253,7 +261,9 @@ pub fn parse_kids_memory_health_snapshot(json: &str) -> Result<KidsMemoryHealthS
     })
 }
 
-pub fn parse_kids_preprod_dry_run_snapshot(json: &str) -> Result<KidsPreprodDryRunSnapshot, String> {
+pub fn parse_kids_preprod_dry_run_snapshot(
+    json: &str,
+) -> Result<KidsPreprodDryRunSnapshot, String> {
     let value: serde_json::Value = serde_json::from_str(json)
         .map_err(|err| format!("invalid kids preprod dry-run json: {err}"))?;
     let overall_status = value
@@ -303,6 +313,25 @@ pub fn run_pilot_gate(
                 format!("release report status was {}", release.overall_status),
             )
         });
+        if let Some(inference) = release.social_context_inference.as_ref() {
+            checks.push(if inference.passed {
+                pass_check(
+                    "release_social_context_inference",
+                    format!(
+                        "social-context inference expectations passed ({}/{})",
+                        inference.total_expectations, inference.total_expectations
+                    ),
+                )
+            } else {
+                fail_check(
+                    "release_social_context_inference",
+                    format!(
+                        "social-context inference expectations failed ({}/{})",
+                        inference.failed_expectations, inference.total_expectations
+                    ),
+                )
+            });
+        }
     }
 
     if config.require_pilot_regression_pass {
@@ -579,6 +608,33 @@ fn area_key(area: PilotReviewArea) -> &'static str {
     }
 }
 
+fn parse_release_schema_version(value: &serde_json::Value) -> Option<String> {
+    value.as_str().map(ToOwned::to_owned).or_else(|| {
+        value
+            .as_u64()
+            .map(|version| format!("aura.release_report.v{version}"))
+    })
+}
+
+fn parse_social_context_inference_snapshot(
+    value: &serde_json::Value,
+) -> Option<PilotSocialContextInferenceSnapshot> {
+    let suite = value
+        .get("suites")
+        .and_then(|value| value.as_array())
+        .and_then(|suites| {
+            suites.iter().find(|suite| {
+                suite.get("suite_id").and_then(|value| value.as_str()) == Some("social_context")
+            })
+        })?;
+    let inference = suite.get("social_context_inference")?;
+    Some(PilotSocialContextInferenceSnapshot {
+        passed: inference.get("passed")?.as_bool()?,
+        total_expectations: inference.get("total_expectations")?.as_u64()? as usize,
+        failed_expectations: inference.get("failed_expectations")?.as_u64()? as usize,
+    })
+}
+
 fn pass_check(check_id: impl Into<String>, summary: impl Into<String>) -> PilotGateCheck {
     PilotGateCheck {
         check_id: check_id.into(),
@@ -611,6 +667,11 @@ mod tests {
         PilotReleaseSnapshot {
             schema_version: Some("aura.release_report.v3".to_string()),
             overall_status: "pass".to_string(),
+            social_context_inference: Some(PilotSocialContextInferenceSnapshot {
+                passed: true,
+                total_expectations: 8,
+                failed_expectations: 0,
+            }),
         }
     }
 
@@ -700,6 +761,10 @@ mod tests {
             approved_signoffs(),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Pass);
+        assert!(report.checks.iter().any(|check| {
+            check.check_id == "release_social_context_inference"
+                && check.status == PilotGateStatus::Pass
+        }));
     }
 
     #[test]
@@ -784,5 +849,64 @@ mod tests {
             .iter()
             .any(|check| check.check_id == "kids_preprod_dry_run"
                 && check.status == PilotGateStatus::Fail));
+    }
+
+    #[test]
+    fn parse_pilot_release_snapshot_reads_social_context_inference() {
+        let json = r#"{
+            "schema_version": 3,
+            "overall_status": "pass",
+            "suites": [
+                {
+                    "suite_id": "social_context",
+                    "social_context_inference": {
+                        "passed": false,
+                        "total_expectations": 6,
+                        "failed_expectations": 2
+                    }
+                }
+            ]
+        }"#;
+
+        let snapshot = parse_pilot_release_snapshot(json).expect("release snapshot");
+
+        assert_eq!(
+            snapshot.schema_version.as_deref(),
+            Some("aura.release_report.v3")
+        );
+        assert_eq!(
+            snapshot.social_context_inference,
+            Some(PilotSocialContextInferenceSnapshot {
+                passed: false,
+                total_expectations: 6,
+                failed_expectations: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn pilot_gate_fails_when_release_social_context_inference_fails() {
+        let mut release = release_snapshot();
+        release.social_context_inference = Some(PilotSocialContextInferenceSnapshot {
+            passed: false,
+            total_expectations: 8,
+            failed_expectations: 1,
+        });
+
+        let report = run_pilot_gate(
+            PilotGateConfig::default(),
+            release,
+            regression_snapshot(),
+            vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            None,
+            None,
+            approved_signoffs(),
+        );
+
+        assert_eq!(report.overall_status, PilotGateStatus::Fail);
+        assert!(report.checks.iter().any(|check| {
+            check.check_id == "release_social_context_inference"
+                && check.status == PilotGateStatus::Fail
+        }));
     }
 }

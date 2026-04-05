@@ -67,7 +67,7 @@
     {
       "id": "class_7b",
       "display_name": "7-Б Клас",
-      "conversation_type": "group_chat",
+      "conversation_type": "group",
       "member_count": 8
     },
     {
@@ -230,3 +230,4 @@
     }
   ]
 }
+

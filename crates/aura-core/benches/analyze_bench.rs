@@ -1,7 +1,8 @@
 use aura_core::types::AccountType;
 use aura_core::{Analyzer, AuraConfig, ContentType, ConversationType, MessageInput};
 use aura_patterns::PatternDatabase;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 fn make_input(text: &str) -> MessageInput {
     MessageInput {
@@ -13,6 +14,7 @@ fn make_input(text: &str) -> MessageInput {
         language: Some("en".to_string()),
         conversation_type: ConversationType::Direct,
         member_count: None,
+        server_sender_risk_hint: None,
     }
 }
 
@@ -26,6 +28,7 @@ fn make_child_input(text: &str, sender: &str, conv: &str) -> MessageInput {
         language: Some("en".to_string()),
         conversation_type: ConversationType::Direct,
         member_count: None,
+        server_sender_risk_hint: None,
     }
 }
 

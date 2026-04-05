@@ -18,13 +18,16 @@
       "any_groups": [
         [
           "our position",
-          "наша позиція"
+          "наша позиція",
+          "наша позиция"
         ],
         [
           "brigade",
           "батальйон",
+          "батальон",
           "unit",
-          "підрозділ"
+          "підрозділ",
+          "подразделение"
         ]
       ]
     },
@@ -40,7 +43,8 @@
       "any_groups": [
         [
           "callsign",
-          "позивний"
+          "позивний",
+          "позывной"
         ],
         [
           "commander",
@@ -62,14 +66,156 @@
           "moving now",
           "departing in 10 minutes",
           "виїжджаємо зараз",
-          "виходимо через 10 хв"
+          "виходимо через 10 хв",
+          "выезжаем сейчас",
+          "выходим через 10 мин"
         ],
         [
           "grid",
           "точка збору",
+          "точка сбора",
           "route",
           "маршрут"
         ]
+      ]
+    },
+    {
+      "threat_key": "opsec_supply_status",
+      "reason_code": "military.opsec.supply_status",
+      "score": 0.84,
+      "threat_type": "opsec_violation",
+      "severity": "high",
+      "priority": 93,
+      "all_of": [],
+      "any_of": [
+        "supply delivery tomorrow",
+        "ammo resupply at",
+        "завтра підвіз бк",
+        "завтра подвоз бк",
+        "підвезуть боєкомплект",
+        "подвезут боекомплект",
+        "паливо закінчується",
+        "топливо заканчивается",
+        "fuel running low"
+      ]
+    },
+    {
+      "threat_key": "opsec_equipment_listing",
+      "reason_code": "military.opsec.equipment_listing",
+      "score": 0.87,
+      "threat_type": "opsec_violation",
+      "severity": "high",
+      "priority": 95,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "we have",
+          "у нас є",
+          "у нас имеется",
+          "we got",
+          "отримали",
+          "получили"
+        ],
+        [
+          "javelin",
+          "джавелін",
+          "джавелин",
+          "nlaw",
+          "stinger",
+          "стінгер",
+          "стингер",
+          "himars",
+          "хаймарс",
+          "patriot",
+          "патріот",
+          "патриот",
+          "gepard",
+          "гепард",
+          "leopard",
+          "леопард",
+          "bradley",
+          "бредлі",
+          "бредли",
+          "marder",
+          "мардер"
+        ]
+      ]
+    },
+    {
+      "threat_key": "opsec_personnel_strength",
+      "reason_code": "military.opsec.personnel_strength",
+      "score": 0.85,
+      "threat_type": "opsec_violation",
+      "severity": "high",
+      "priority": 94,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "we have people",
+          "у нас людей",
+          "у нас людей",
+          "personal strength",
+          "особовий склад",
+          "личный состав",
+          "штатна чисельність",
+          "штатная численность"
+        ],
+        [
+          "left",
+          "залишилось",
+          "осталось",
+          "wounded",
+          "поранених",
+          "раненых",
+          "killed",
+          "загиблих",
+          "погибших"
+        ]
+      ]
+    },
+    {
+      "threat_key": "opsec_night_vision",
+      "reason_code": "military.opsec.night_vision",
+      "score": 0.82,
+      "threat_type": "opsec_violation",
+      "severity": "medium",
+      "priority": 90,
+      "all_of": [],
+      "any_of": [
+        "night vision count",
+        "тепловізорів у нас",
+        "тепловизоров у нас",
+        "пнв на підрозділ",
+        "пнв на подразделение",
+        "thermal imagers we have",
+        "наших нічників",
+        "наших ночников",
+        "our nvg"
+      ]
+    },
+    {
+      "threat_key": "opsec_comms_frequency",
+      "reason_code": "military.opsec.comms_frequency",
+      "score": 0.90,
+      "threat_type": "opsec_violation",
+      "severity": "high",
+      "priority": 97,
+      "all_of": [],
+      "any_of": [
+        "our frequency is",
+        "наша частота",
+        "наша частота",
+        "radio channel",
+        "радіоканал",
+        "радиоканал",
+        "switch to freq",
+        "перейдіть на частоту",
+        "перейдите на частоту",
+        "encryption key",
+        "ключ шифрування",
+        "ключ шифрования"
       ]
     }
   ],
@@ -103,12 +249,15 @@
           "your command abandoned you",
           "nobody will evacuate you",
           "вас кинули командири",
-          "вас ніхто не евакуює"
+          "вас ніхто не евакуює",
+          "вас бросили командиры",
+          "вас никто не эвакуирует"
         ],
         [
           "volga",
           "lay down your weapons",
-          "складайте зброю"
+          "складайте зброю",
+          "складывайте оружие"
         ]
       ]
     },
@@ -125,9 +274,12 @@
         "nobody will evacuate you",
         "вас кинули командири",
         "вас ніхто не евакуює",
+        "вас бросили командиры",
+        "вас никто не эвакуирует",
         "volga",
         "lay down your weapons",
-        "складайте зброю"
+        "складайте зброю",
+        "складывайте оружие"
       ]
     },
     {
@@ -142,7 +294,109 @@
         "your family is in danger because of command",
         "we know where your family lives",
         "твоя сім'я в небезпеці через командування",
-        "ми знаємо де живе твоя сім'я"
+        "ми знаємо де живе твоя сім'я",
+        "твоя семья в опасности из-за командования",
+        "мы знаем где живёт твоя семья"
+      ]
+    },
+    {
+      "threat_key": "psyops_fake_news",
+      "reason_code": "military.psyops.fake_news",
+      "score": 0.82,
+      "threat_type": "psyops",
+      "severity": "medium",
+      "priority": 84,
+      "all_of": [],
+      "any_of": [
+        "ukraine has already surrendered",
+        "kyiv has fallen",
+        "україна вже здалась",
+        "украина уже сдалась",
+        "київ пав",
+        "киев пал",
+        "zelensky fled the country",
+        "зеленський втік з країни",
+        "зеленский сбежал из страны"
+      ]
+    },
+    {
+      "threat_key": "psyops_demoralization",
+      "reason_code": "military.psyops.demoralization",
+      "score": 0.83,
+      "threat_type": "psyops",
+      "severity": "medium",
+      "priority": 85,
+      "all_of": [],
+      "any_of": [
+        "war is already lost",
+        "війна вже програна",
+        "война уже проиграна",
+        "you are fighting for nothing",
+        "ви воюєте задарма",
+        "вы воюете зря",
+        "your generals sold you out",
+        "ваші генерали вас продали",
+        "ваши генералы вас продали"
+      ]
+    },
+    {
+      "threat_key": "psyops_surrender_leaflet",
+      "reason_code": "military.psyops.surrender_leaflet",
+      "score": 0.86,
+      "threat_type": "psyops",
+      "severity": "high",
+      "priority": 90,
+      "all_of": [],
+      "any_of": [
+        "safe corridor for surrender",
+        "безпечний коридор для здачі",
+        "безопасный коридор для сдачи",
+        "guaranteed safety upon surrender",
+        "гарантуємо безпеку при здачі",
+        "гарантируем безопасность при сдаче",
+        "humanitarian corridor open",
+        "гуманітарний коридор відкрито",
+        "гуманитарный коридор открыт"
+      ]
+    },
+    {
+      "threat_key": "psyops_ethnic_division",
+      "reason_code": "military.psyops.ethnic_division",
+      "score": 0.84,
+      "threat_type": "psyops",
+      "severity": "medium",
+      "priority": 86,
+      "all_of": [],
+      "any_of": [
+        "russians and ukrainians are brothers",
+        "русские и украинцы братья",
+        "росіяни та українці брати",
+        "this is not your war",
+        "це не ваша війна",
+        "это не ваша война",
+        "you are fighting your own people",
+        "ви воюєте проти своїх",
+        "вы воюете против своих"
+      ]
+    },
+    {
+      "threat_key": "psyops_fake_ceasefire",
+      "reason_code": "military.psyops.fake_ceasefire",
+      "score": 0.85,
+      "threat_type": "psyops",
+      "severity": "high",
+      "priority": 88,
+      "all_of": [],
+      "any_of": [
+        "ceasefire declared",
+        "перемир'я оголошено",
+        "перемирие объявлено",
+        "stop fighting immediately",
+        "припиніть вогонь негайно",
+        "прекратите огонь немедленно",
+        "agreement has been signed",
+        "угоду підписано",
+        "соглашение подписано"
       ]
     }
   ],
@@ -159,7 +413,9 @@
         "diia security update",
         "tck verification",
         "оновлення безпеки дія",
-        "верифікація тцк"
+        "верифікація тцк",
+        "обновление безопасности дия",
+        "верификация тцк"
       ]
     },
     {
@@ -174,7 +430,9 @@
         "send your unit position",
         "how many soldiers are there",
         "скинь координати підрозділу",
-        "скільки у вас людей"
+        "скільки у вас людей",
+        "скинь координаты подразделения",
+        "сколько у вас людей"
       ]
     },
     {
@@ -190,13 +448,15 @@
         [
           "urgent school bulletin",
           "official update channel",
-          "термінове оновлення"
+          "термінове оновлення",
+          "срочное обновление"
         ],
         [
           "secure-login",
           "verify account",
           "update-password",
-          "підтвердіть акаунт"
+          "підтвердіть акаунт",
+          "подтвердите аккаунт"
         ]
       ]
     },
@@ -214,13 +474,111 @@
           "urgent order from command",
           "priority directive",
           "терміновий наказ від командування",
-          "пріоритетне розпорядження"
+          "пріоритетне розпорядження",
+          "срочный приказ от командования",
+          "приоритетное распоряжение"
         ],
         [
           "confirm credentials",
           "send one-time code",
           "підтвердіть облікові дані",
-          "надішліть одноразовий код"
+          "надішліть одноразовий код",
+          "подтвердите учётные данные",
+          "отправьте одноразовый код"
+        ]
+      ]
+    },
+    {
+      "threat_key": "social_eng_diia_phishing_variant",
+      "reason_code": "military.social_eng.diia_phishing_variant",
+      "score": 0.91,
+      "threat_type": "military_social_eng",
+      "severity": "high",
+      "priority": 93,
+      "all_of": [],
+      "any_of": [
+        "diia app requires immediate update",
+        "your diia account is locked",
+        "додаток дія потребує оновлення",
+        "ваш акаунт дія заблоковано",
+        "приложение дия требует обновления",
+        "ваш аккаунт дия заблокирован",
+        "diya verification required",
+        "верифікація через дію обов'язкова",
+        "верификация через дию обязательна"
+      ]
+    },
+    {
+      "threat_key": "social_eng_fake_tcc_summons",
+      "reason_code": "military.social_eng.fake_tcc_summons",
+      "score": 0.89,
+      "threat_type": "military_social_eng",
+      "severity": "high",
+      "priority": 91,
+      "all_of": [],
+      "any_of": [
+        "you have a tcc summons",
+        "electronic summons from tcc",
+        "повістка від тцк",
+        "електронна повістка тцк",
+        "повестка от тцк",
+        "электронная повестка тцк",
+        "tcc notice click here",
+        "повідомлення тцк перейдіть за посиланням",
+        "уведомление тцк перейдите по ссылке"
+      ]
+    },
+    {
+      "threat_key": "social_eng_fake_mobilization_exemption",
+      "reason_code": "military.social_eng.fake_mobilization_exemption",
+      "score": 0.88,
+      "threat_type": "military_social_eng",
+      "severity": "high",
+      "priority": 90,
+      "all_of": [],
+      "any_of": [
+        "exemption from mobilization",
+        "buy mobilization exemption",
+        "звільнення від мобілізації",
+        "купити звільнення від мобілізації",
+        "освобождение от мобилизации",
+        "купить освобождение от мобилизации",
+        "guaranteed deferral",
+        "гарантована відстрочка",
+        "гарантированная отсрочка"
+      ]
+    },
+    {
+      "threat_key": "social_eng_crypto_scam_soldiers",
+      "reason_code": "military.social_eng.crypto_scam_soldiers",
+      "score": 0.86,
+      "threat_type": "military_social_eng",
+      "severity": "high",
+      "priority": 89,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "exclusive crypto for soldiers",
+          "crypto investment for military",
+          "крипта для військових",
+          "криптоінвестиції для бійців",
+          "крипта для военных",
+          "криптоинвестиции для бойцов",
+          "special military token",
+          "спеціальний військовий токен",
+          "специальный военный токен"
+        ],
+        [
+          "guaranteed profit",
+          "гарантований прибуток",
+          "гарантированная прибыль",
+          "send usdt",
+          "надішліть usdt",
+          "отправьте usdt",
+          "connect wallet",
+          "підключіть гаманець",
+          "подключите кошелёк"
         ]
       ]
     }

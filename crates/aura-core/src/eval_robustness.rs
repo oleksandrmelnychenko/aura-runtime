@@ -435,6 +435,7 @@ mod tests {
                     language: Some("en".to_string()),
                     conversation_type: ConversationType::Direct,
                     member_count: None,
+                    server_sender_risk_hint: None,
                 },
                 observed_threats: vec![ThreatType::Grooming],
             }],

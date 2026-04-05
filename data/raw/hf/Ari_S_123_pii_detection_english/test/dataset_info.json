@@ -1,0 +1,117 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "pii-detection-english-consolidated",
+  "dataset_size": 50757193,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/Ari-S-123/pii-detection-english-consolidated@a3c2add092a3bfaa7dd541fdfa1185b5777f0749/data/train-00000-of-00001.parquet": {
+      "num_bytes": 15473486,
+      "checksum": null
+    },
+    "hf://datasets/Ari-S-123/pii-detection-english-consolidated@a3c2add092a3bfaa7dd541fdfa1185b5777f0749/data/test-00000-of-00001.parquet": {
+      "num_bytes": 3927629,
+      "checksum": null
+    }
+  },
+  "download_size": 19401115,
+  "features": {
+    "source_text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "privacy_mask": {
+      "feature": {
+        "end": {
+          "dtype": "int64",
+          "_type": "Value"
+        },
+        "label": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "label_index": {
+          "dtype": "int64",
+          "_type": "Value"
+        },
+        "start": {
+          "dtype": "int64",
+          "_type": "Value"
+        },
+        "value": {
+          "dtype": "string",
+          "_type": "Value"
+        }
+      },
+      "_type": "List"
+    },
+    "feature_dimension": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "seed_pii_type": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "seed_pii_value": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "seed_pii_locale": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "scenario": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "type_variant": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "generation_id": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "data_source": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "language": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "region": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "script": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 70158308,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 40623724,
+      "num_examples": 125327,
+      "dataset_name": "pii-detection-english-consolidated"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 10133469,
+      "num_examples": 31361,
+      "dataset_name": "pii-detection-english-consolidated"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

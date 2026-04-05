@@ -100,6 +100,29 @@ def release_status(payload: dict | None) -> str | None:
     return payload.get("overall_status")
 
 
+def release_operator_summary(payload: dict | None) -> list[str]:
+    if payload is None:
+        return []
+    summary = payload.get("operator_summary", [])
+    return summary if isinstance(summary, list) else []
+
+
+def social_context_inference_snapshot(payload: dict | None) -> dict | None:
+    if payload is None:
+        return None
+    suites = payload.get("suites", [])
+    if not isinstance(suites, list):
+        return None
+    for suite in suites:
+        if not isinstance(suite, dict):
+            continue
+        if suite.get("suite_id") != "social_context":
+            continue
+        inference = suite.get("social_context_inference")
+        return inference if isinstance(inference, dict) else None
+    return None
+
+
 def soak_status(payload: dict | None) -> str | None:
     if payload is None:
         return None
@@ -167,6 +190,11 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["ffi_soak_status"] != "pass":
         return "fail"
+    if (
+        summary["ffi_smoke_status"] == "blocked"
+        and summary.get("ffi_smoke_mode") == "local_stub_no_compiler"
+    ):
+        return "blocked"
     if summary["ffi_smoke_status"] not in (None, "pass"):
         return "fail"
     if summary["dataset_evidence_status"] != "pass":
@@ -202,6 +230,17 @@ def attach_payload_details(
     if release_payload is not None:
         artifacts["release_report"]["observed_status"] = release_payload.get("overall_status")
         artifacts["release_report"]["schema_version"] = release_payload.get("schema_version")
+        artifacts["release_report"]["operator_summary"] = release_operator_summary(
+            release_payload
+        )
+        inference = social_context_inference_snapshot(release_payload)
+        if inference is not None:
+            artifacts["release_report"]["social_context_inference"] = {
+                "passed": inference.get("passed"),
+                "total_expectations": inference.get("total_expectations"),
+                "passed_expectations": inference.get("passed_expectations"),
+                "failed_expectations": inference.get("failed_expectations"),
+            }
     if contract_payload is not None:
         artifacts["contract_evidence"]["runtime_release_version"] = contract_payload.get(
             "runtime_release_version"
@@ -219,7 +258,9 @@ def attach_payload_details(
         )
     if smoke_payload is not None and "ffi_smoke" in artifacts:
         artifacts["ffi_smoke"]["observed_status"] = smoke_payload.get("status")
+        artifacts["ffi_smoke"]["mode"] = smoke_payload.get("mode")
         artifacts["ffi_smoke"]["compiler"] = smoke_payload.get("compiler")
+        artifacts["ffi_smoke"]["note"] = smoke_payload.get("note")
     if dataset_payload is not None:
         artifacts["dataset_evidence"]["observed_status"] = dataset_payload.get("status")
         artifacts["dataset_evidence"]["dataset_count"] = len(dataset_payload.get("datasets", []))
@@ -361,6 +402,7 @@ def main() -> int:
         if contract_payload is not None
         else []
     )
+    release_inference = social_context_inference_snapshot(release_payload)
     summary = {
         "runtime_release_version": (
             contract_payload.get("runtime_release_version") if contract_payload else None
@@ -379,6 +421,16 @@ def main() -> int:
         "release_report_status": release_status(release_payload),
         "release_report_schema_version": (
             release_payload.get("schema_version") if release_payload else None
+        ),
+        "release_operator_summary": release_operator_summary(release_payload),
+        "release_social_context_inference_passed": (
+            release_inference.get("passed") if release_inference else None
+        ),
+        "release_social_context_inference_total_expectations": (
+            release_inference.get("total_expectations") if release_inference else None
+        ),
+        "release_social_context_inference_failed_expectations": (
+            release_inference.get("failed_expectations") if release_inference else None
         ),
         "ffi_request_limit_count": len(request_limits),
         "ffi_import_context_max_bytes": next(
@@ -399,6 +451,9 @@ def main() -> int:
             soak_payload.get("failure_summary") if soak_payload else None
         ),
         "ffi_smoke_status": smoke_status(smoke_payload),
+        "ffi_smoke_mode": smoke_payload.get("mode") if smoke_payload else None,
+        "ffi_smoke_compiler": smoke_payload.get("compiler") if smoke_payload else None,
+        "ffi_smoke_note": smoke_payload.get("note") if smoke_payload else None,
         "dataset_evidence_status": dataset_status(dataset_payload),
         "dataset_count": len(dataset_payload.get("datasets", [])) if dataset_payload else None,
         "audit_evidence_status": audit_status(audit_payload),

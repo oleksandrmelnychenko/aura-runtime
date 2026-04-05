@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use getrandom::getrandom;
+use getrandom::fill;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -40,6 +40,8 @@ pub struct AuditRecord {
     pub primary_score: f32,
     pub top_threat_scores: Vec<AuditThreatScore>,
     pub reason_codes: Vec<String>,
+    #[serde(default)]
+    pub context_markers: Vec<String>,
     pub ui_actions: Vec<UiAction>,
     pub parent_alert: AlertPriority,
     pub follow_ups: Vec<FollowUpAction>,
@@ -105,8 +107,12 @@ struct SaltState {
     epoch: u32,
 }
 
-static SALT_STATE: std::sync::LazyLock<RwLock<SaltState>> =
-    std::sync::LazyLock::new(|| RwLock::new(SaltState { salt: resolve_initial_salt(), epoch: 0 }));
+static SALT_STATE: std::sync::LazyLock<RwLock<SaltState>> = std::sync::LazyLock::new(|| {
+    RwLock::new(SaltState {
+        salt: resolve_initial_salt(),
+        epoch: 0,
+    })
+});
 
 fn current_salt_state() -> SaltStateSnapshot {
     let guard = SALT_STATE
@@ -134,7 +140,7 @@ fn resolve_initial_salt() -> Vec<u8> {
 
 fn generate_random_salt() -> Vec<u8> {
     let mut salt = [0u8; 32];
-    if getrandom(&mut salt).is_ok() {
+    if fill(&mut salt).is_ok() {
         return salt.to_vec();
     }
 
@@ -176,6 +182,7 @@ impl AuditRecord {
             primary_score: result.score,
             top_threat_scores: top_threat_scores(result),
             reason_codes: result.reason_codes.clone(),
+            context_markers: context_markers(result),
             ui_actions: ui_actions(recommendation),
             parent_alert: parent_alert(recommendation),
             follow_ups: follow_ups(recommendation),
@@ -210,6 +217,21 @@ fn top_threat_scores(result: &AnalysisResult) -> Vec<AuditThreatScore> {
     scores
 }
 
+fn context_markers(result: &AnalysisResult) -> Vec<String> {
+    if !result.context_markers.is_empty() {
+        return result.context_markers.clone();
+    }
+
+    let mut markers = Vec::new();
+    for code in &result.reason_codes {
+        if !code.starts_with("context.") || markers.iter().any(|existing| existing == code) {
+            continue;
+        }
+        markers.push(code.clone());
+    }
+    markers
+}
+
 fn ui_actions(recommendation: Option<&ActionRecommendation>) -> Vec<UiAction> {
     recommendation
         .map(|recommendation| recommendation.ui_actions.clone())
@@ -231,7 +253,10 @@ fn follow_ups(recommendation: Option<&ActionRecommendation>) -> Vec<FollowUpActi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Action, Confidence, ContactSnapshot, DetectionSignal, RiskBreakdown, ThreatType};
+    use crate::{
+        Action, AnalysisContextSummary, Confidence, ContactSnapshot, DetectionSignal,
+        RiskBreakdown, ThreatType,
+    };
 
     fn sample_result() -> AnalysisResult {
         AnalysisResult {
@@ -275,11 +300,23 @@ mod tests {
                 first_seen_ms: 1_000,
                 last_seen_ms: 2_000,
                 conversation_count: 1,
+                grooming_event_count: 0,
+                bullying_event_count: 0,
+                manipulation_event_count: 0,
+                total_threat_events: 0,
             }),
             reason_codes: vec![
                 "conversation.grooming.stage_sequence".to_string(),
                 "conversation.grooming.new_contact_flattery".to_string(),
             ],
+            context_markers: vec![
+                "context.relationship.new_contact".to_string(),
+                "context.trajectory.repeated_sender".to_string(),
+            ],
+            context_summary: AnalysisContextSummary::from_markers(&[
+                "context.relationship.new_contact".to_string(),
+                "context.trajectory.repeated_sender".to_string(),
+            ]),
             inference: Default::default(),
             analysis_time_us: 420,
         }
@@ -309,7 +346,7 @@ mod tests {
         let record = AuditRecord::from_analysis_result(
             "req_1",
             10_000,
-            "0.1.0",
+            "0.2.0",
             "aura.messenger.v1",
             2,
             ProtectionLevel::High,
@@ -335,7 +372,7 @@ mod tests {
         let record = AuditRecord::from_analysis_result(
             "req_2",
             20_000,
-            "0.1.0",
+            "0.2.0",
             "aura.messenger.v1",
             2,
             ProtectionLevel::High,
@@ -345,6 +382,7 @@ mod tests {
         );
 
         assert_eq!(record.reason_codes.len(), 2);
+        assert_eq!(record.context_markers.len(), 2);
         assert_eq!(record.ui_actions.len(), 2);
         assert_eq!(record.parent_alert, AlertPriority::High);
         assert_eq!(record.top_threat_scores.len(), 2);
@@ -354,5 +392,36 @@ mod tests {
         );
         assert_eq!(record.contact_trend, Some(BehavioralTrend::RapidWorsening));
         assert_eq!(record.contact_circle_tier, Some(CircleTier::New));
+    }
+
+    #[test]
+    fn audit_record_preserves_context_markers_separately_from_reason_codes() {
+        let mut result = sample_result();
+        result.reason_codes = vec!["conversation.grooming.stage_sequence".to_string()];
+        result.context_markers = vec![
+            "context.relationship.new_contact".to_string(),
+            "context.trajectory.repeated_sender".to_string(),
+        ];
+
+        let record = AuditRecord::from_analysis_result(
+            "req_3",
+            30_000,
+            "0.2.0",
+            "aura.messenger.v1",
+            2,
+            ProtectionLevel::High,
+            Some("coach_realistic"),
+            Some("conv_secret"),
+            &result,
+        );
+
+        assert_eq!(record.reason_codes.len(), 1);
+        assert_eq!(
+            record.context_markers,
+            vec![
+                "context.relationship.new_contact".to_string(),
+                "context.trajectory.repeated_sender".to_string(),
+            ]
+        );
     }
 }

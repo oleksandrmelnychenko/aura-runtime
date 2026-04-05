@@ -223,8 +223,11 @@ python ci/run_promotion_rehearsal.py --target staging
 
 This writes a full local evidence bundle under `artifacts/promotion-rehearsal/`.
 If no C compiler is installed locally, the rehearsal records a clearly labeled
-`ffi_smoke` stub, the manifest will not go green locally, and the real compile
-is left to GitHub Actions on `ubuntu-latest`.
+`ffi_smoke` stub, the manifest is reported as `blocked` locally rather than
+`fail`, and the real compile is left to GitHub Actions on `ubuntu-latest`. The generated
+`promotion-rehearsal-summary.json` also mirrors compact release signals such as
+`release_operator_summary`, social-context inference expectation counters, and
+the explicit local blocker reason.
 
 ## Release Discipline
 
