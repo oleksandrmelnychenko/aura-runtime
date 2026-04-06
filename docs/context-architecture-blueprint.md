@@ -4,6 +4,9 @@
 
 This document freezes the target architecture for AURA's context-aware messenger pipeline.
 
+For the higher-level deployment split between on-device and remote runtime, see
+[`agent-relay-split-blueprint.md`](./agent-relay-split-blueprint.md).
+
 The system is no longer missing context entirely. The repo already has:
 
 - a universal interpreter in [`context/interpretation.rs`](../crates/aura-core/src/context/interpretation.rs)

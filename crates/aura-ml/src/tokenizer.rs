@@ -53,8 +53,8 @@ impl TokenizedInput {
 
         let mut token_type_ids = vec![0i64; max_len];
         let seg_b_start = ids_a.len() + 1;
-        for i in seg_b_start..real_len {
-            token_type_ids[i] = 1;
+        for slot in &mut token_type_ids[seg_b_start..real_len] {
+            *slot = 1;
         }
 
         Self {

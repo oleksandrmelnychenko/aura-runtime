@@ -153,14 +153,8 @@ impl UnifiedModel {
         let encoded = tokenizer.encode(text);
         let seq_len = encoded.input_ids.len().min(self.max_seq_length);
 
-        let input_ids_vec: Vec<i64> = encoded.input_ids[..seq_len]
-            .iter()
-            .map(|&x| x as i64)
-            .collect();
-        let attention_mask_vec: Vec<i64> = encoded.attention_mask[..seq_len]
-            .iter()
-            .map(|&x| x as i64)
-            .collect();
+        let input_ids_vec: Vec<i64> = encoded.input_ids[..seq_len].to_vec();
+        let attention_mask_vec: Vec<i64> = encoded.attention_mask[..seq_len].to_vec();
 
         let input_ids = ort::value::Tensor::from_array(
             ndarray::Array2::from_shape_vec((1, seq_len), input_ids_vec)

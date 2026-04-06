@@ -108,10 +108,7 @@ impl Analyzer {
         }
 
         let mut raw_observations = Vec::with_capacity(12);
-        let content_hash = match input.text.as_ref() {
-            Some(text) => Some(content_fingerprint_u64(text)),
-            None => None,
-        };
+        let content_hash = input.text.as_ref().map(|text| content_fingerprint_u64(text));
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);

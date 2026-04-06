@@ -1,0 +1,9 @@
+[package]
+name = "aura-contracts"
+version.workspace = true
+edition.workspace = true
+description = "Shared typed contracts for AURA Agent and AURA Relay"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

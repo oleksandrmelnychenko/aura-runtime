@@ -357,6 +357,7 @@ impl NarrativeId {
     }
 }
 
+#[allow(clippy::match_like_matches_macro)]
 fn is_propaganda_source_subtype(subtype: &str) -> bool {
     match subtype {
         "state_media" => true,
@@ -498,10 +499,10 @@ impl PropagandaDetector {
             min_events: if strict { 1 } else { 2 },
             window_ms: 7 * 24 * 60 * 60 * 1000,
             burst_window_ms: 30 * 60 * 1000,
-            burst_threshold: if strict { 2 } else { 2 },
+            burst_threshold: 2,
             hammering_threshold: 5,
             velocity_threshold: 9.0,
-            min_velocity_events: if strict { 5 } else { 5 },
+            min_velocity_events: 5,
             min_radicalization_events: if strict { 8 } else { 10 },
             min_copy_paste_events: if strict { 10 } else { 12 },
         }
@@ -1223,6 +1224,7 @@ impl PropagandaDetector {
                     continue;
                 }
 
+                #[allow(clippy::match_like_matches_macro)]
                 let is_propaganda_event = match event.kind {
                     EventKind::PropagandaNarrative | EventKind::SuspiciousSource => true,
                     _ => false,

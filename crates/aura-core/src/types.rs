@@ -1,64 +1,15 @@
 //! Core domain types for the AURA analysis engine.
+//!
+//! Canonical shared enums (`ThreatType`, `Confidence`, `ProtectionLevel`,
+//! `AccountType`, `ConversationType`) live in `aura-contracts` and are
+//! re-exported here for backwards compatibility.
 
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{ConversationId, SenderId};
 
-/// Represents the category of threat detected in a message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ThreatType {
-    /// No threat detected.
-    None,
-    /// Bullying or harassment behaviour.
-    Bullying,
-    /// Child grooming behaviour.
-    Grooming,
-    /// Sexually explicit content.
-    Explicit,
-    /// Direct threat of violence or harm.
-    Threat,
-    /// Self-harm or suicidal ideation signals.
-    SelfHarm,
-    /// Unsolicited bulk or promotional messaging.
-    Spam,
-    /// Fraudulent or deceptive scheme.
-    Scam,
-    /// Credential or identity theft attempt via links.
-    Phishing,
-    /// Psychological manipulation or coercion.
-    Manipulation,
-    /// Not-safe-for-work media content.
-    Nsfw,
-    /// Hate speech targeting protected groups.
-    HateSpeech,
-    /// Disclosure of someone's private information.
-    Doxxing,
-    /// Personally identifiable information leakage.
-    PiiLeakage,
-    /// Propaganda or disinformation content.
-    Propaganda,
-    /// OPSEC violation — leaking military operational information.
-    OpsecViolation,
-    /// Enemy psychological operations targeting the user.
-    Psyops,
-    /// Social engineering attempt targeting military personnel.
-    MilitarySocialEng,
-    /// Geographic coordinate or location leak in military context.
-    CoordinateLeak,
-}
-
-/// Represents the confidence level of a detection result.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Confidence {
-    /// Low confidence; signal may be a false positive.
-    Low,
-    /// Moderate confidence in the detection.
-    Medium,
-    /// High confidence in the detection.
-    High,
-}
+// ── Canonical shared enums (source: aura-contracts) ─────────────────
+pub use aura_contracts::{AccountType, Confidence, ProtectionLevel, ThreatType};
 
 /// Represents the enforcement action to apply to a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -74,33 +25,6 @@ pub enum Action {
     Warn,
     /// Blocks the message from being delivered.
     Block,
-}
-
-/// Represents the protection strictness level configured by the user or policy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum ProtectionLevel {
-    /// Protection is disabled.
-    Off,
-    /// Minimal filtering; only high-confidence threats are acted on.
-    Low,
-    /// Balanced filtering suitable for most users.
-    #[default]
-    Medium,
-    /// Strict filtering; used for child accounts.
-    High,
-}
-
-/// Represents the age category of the account holder.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AccountType {
-    /// User aged 18 or older.
-    Adult,
-    /// User aged 13-17.
-    Teen,
-    /// User aged under 13.
-    Child,
 }
 
 /// Account-level domain mode selection that runs on top of base Aura.
@@ -720,16 +644,7 @@ pub struct ActionRecommendation {
     pub reason_codes: Vec<String>,
 }
 
-/// Represents the type of conversation a message belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum ConversationType {
-    /// One-to-one direct message.
-    #[default]
-    Direct,
-    /// Group conversation.
-    Group,
-}
+pub use aura_contracts::ConversationType;
 
 /// Controls detection strictness for enrichment and grooming analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

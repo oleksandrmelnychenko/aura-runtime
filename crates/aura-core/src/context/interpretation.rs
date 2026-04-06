@@ -112,6 +112,7 @@ impl ContextInterpreter {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn interpret_raw(
         &self,
         input: &MessageInput,
@@ -179,6 +180,7 @@ impl ContextInterpreter {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn derive_frame(
         &self,
         input: &MessageInput,

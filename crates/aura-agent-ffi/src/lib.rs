@@ -11,22 +11,23 @@ use std::os::raw::c_char;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use aura_core::context::contact::{
+use aura_agent_core::AgentRuntime;
+use aura_agent_core::context::contact::{
     AgeSource as CoreAgeSource, BehavioralSnapshotState as CoreBehavioralSnapshotState,
     ContactProfileState as CoreContactProfileState,
     ContactProfilerWireState as CoreContactProfilerWireState,
 };
-use aura_core::context::events::{
+use aura_agent_core::context::events::{
     ContextEvent as CoreContextEvent, EventContextFrame as CoreEventContextFrame,
     EventKind as CoreEventKind,
 };
-use aura_core::context::tracker::{
+use aura_agent_core::context::tracker::{
     ConversationTimelineState as CoreConversationTimelineState,
     TrackerWireState as CoreTrackerWireState,
 };
-use aura_core::{
+use aura_agent_core::{
     build_product_decision_surface, build_shadow_mode_event, config::CulturalContext, Action,
-    AlertPriority, Analyzer, AuraConfig, MessageInput, ProductRolloutMode, ShadowModeBundle,
+    AlertPriority, AuraConfig, MessageInput, ProductRolloutMode, ShadowModeBundle,
     ShadowModeEventInput, ShadowModeExpectation, ShadowModeFinding,
 };
 use aura_patterns::PatternDatabase;
@@ -74,7 +75,7 @@ fn clear_last_error() {
 }
 
 struct AuraInstance {
-    analyzer: Analyzer,
+    analyzer: AgentRuntime,
     pattern_db: PatternDatabase,
     last_pattern_reload_attempt: Option<Instant>,
     pattern_reload_failures: u32,
@@ -104,7 +105,7 @@ fn build_instance(config: AuraConfig) -> Result<*mut c_void, String> {
         .map_err(|e| format!("config validation failed: {e}"))?;
 
     let pattern_db = load_pattern_db(&config);
-    let analyzer = Analyzer::new(config, &pattern_db);
+    let analyzer = AgentRuntime::new(config, &pattern_db);
     let instance = Box::new(Mutex::new(AuraInstance {
         analyzer,
         pattern_db,
@@ -266,7 +267,7 @@ fn apply_config_update(instance: &mut AuraInstance, config: AuraConfig) {
 }
 
 fn contact_profile_to_proto(
-    profile: &aura_core::context::contact::ContactProfile,
+    profile: &aura_agent_core::context::contact::ContactProfile,
     is_new_contact: bool,
 ) -> proto::ContactProfile {
     proto::ContactProfile {
@@ -290,7 +291,7 @@ fn contact_profile_to_proto(
 }
 
 fn conversation_summary_to_proto(
-    tracker: &aura_core::ConversationTracker,
+    tracker: &aura_agent_core::ConversationTracker,
 ) -> proto::ConversationSummaryResponse {
     let mut conversations = Vec::new();
 
@@ -373,7 +374,7 @@ pub unsafe extern "C" fn aura_analyze(
     };
 
     match with_instance(handle, |instance| {
-        let result = instance.analyzer.analyze(&input);
+        let result = instance.analyzer.analyze_local(&input);
         write_proto_message(
             out,
             &analysis_result_to_proto(
@@ -428,7 +429,7 @@ pub unsafe extern "C" fn aura_analyze_context(
     match with_instance(handle, |instance| {
         let result = instance
             .analyzer
-            .analyze_with_context(&input, request.timestamp_ms);
+            .analyze_local_with_context(&input, request.timestamp_ms);
         write_proto_message(
             out,
             &analysis_result_to_proto(
@@ -494,8 +495,8 @@ pub unsafe extern "C" fn aura_analyze_batch(
         let mut results = Vec::with_capacity(items.len());
         for (input, timestamp_ms) in items {
             let result = match timestamp_ms {
-                Some(ts) => instance.analyzer.analyze_with_context(&input, ts),
-                None => instance.analyzer.analyze(&input),
+                Some(ts) => instance.analyzer.analyze_local_with_context(&input, ts),
+                None => instance.analyzer.analyze_local(&input),
             };
             results.push(analysis_result_to_proto(
                 &result,
@@ -567,7 +568,7 @@ pub unsafe extern "C" fn aura_build_shadow_bundle(
         for (index, item) in items.into_iter().enumerate() {
             let result = instance
                 .analyzer
-                .analyze_with_context(&item.input, item.timestamp_ms);
+                .analyze_local_with_context(&item.input, item.timestamp_ms);
             let event = build_shadow_mode_event(ShadowModeEventInput {
                 request_id: &item.request_id,
                 sequence: index + 1,
@@ -796,9 +797,9 @@ pub unsafe extern "C" fn aura_import_context(
     }) {
         Ok(()) => {
             if let Some(kids_state) = kids_state {
-                aura_kids::pipeline::import_kids_memory(&kids_state);
+                aura_agent_core::aura_kids::pipeline::import_kids_memory(&kids_state);
             } else {
-                aura_kids::pipeline::clear_kids_memory();
+                aura_agent_core::aura_kids::pipeline::clear_kids_memory();
             }
             true
         }
@@ -1010,11 +1011,11 @@ pub unsafe extern "C" fn aura_guardian_feedback(
     };
 
     let verdict = match proto::GuardianVerdict::try_from(request.verdict) {
-        Ok(proto::GuardianVerdict::Trusted) => aura_kids::pipeline::GuardianVerdict::Trusted,
-        Ok(proto::GuardianVerdict::Block) => aura_kids::pipeline::GuardianVerdict::Block,
-        Ok(proto::GuardianVerdict::Monitor) => aura_kids::pipeline::GuardianVerdict::Monitor,
+        Ok(proto::GuardianVerdict::Trusted) => aura_agent_core::aura_kids::pipeline::GuardianVerdict::Trusted,
+        Ok(proto::GuardianVerdict::Block) => aura_agent_core::aura_kids::pipeline::GuardianVerdict::Block,
+        Ok(proto::GuardianVerdict::Monitor) => aura_agent_core::aura_kids::pipeline::GuardianVerdict::Monitor,
         Ok(proto::GuardianVerdict::FalsePositive) => {
-            aura_kids::pipeline::GuardianVerdict::FalsePositive
+            aura_agent_core::aura_kids::pipeline::GuardianVerdict::FalsePositive
         }
         Ok(proto::GuardianVerdict::Unspecified) | Err(_) => {
             set_last_error("unspecified or invalid guardian verdict".to_string());
@@ -1023,7 +1024,7 @@ pub unsafe extern "C" fn aura_guardian_feedback(
     };
 
     match with_instance(handle, |_instance| {
-        aura_kids::pipeline::apply_guardian_feedback(
+        aura_agent_core::aura_kids::pipeline::apply_guardian_feedback(
             &request.sender_id,
             &request.conversation_id,
             verdict,
@@ -1090,17 +1091,17 @@ pub unsafe extern "C" fn aura_quick_check(
 
     match with_instance(handle, |instance| {
         let input = MessageInput {
-            content_type: aura_core::ContentType::Text,
+            content_type: aura_agent_core::ContentType::Text,
             text: Some(text),
             image_data: None,
-            sender_id: aura_core::SenderId::from("notification"),
-            conversation_id: aura_core::ConversationId::from("notification"),
+            sender_id: aura_agent_core::SenderId::from("notification"),
+            conversation_id: aura_agent_core::ConversationId::from("notification"),
             language: None,
-            conversation_type: aura_core::ConversationType::Direct,
+            conversation_type: aura_agent_core::ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
         };
-        let result = instance.analyzer.analyze(&input);
+        let result = instance.analyzer.analyze_local(&input);
         let safe = match result.action {
             Action::Allow | Action::Mark => true,
             Action::Blur | Action::Warn | Action::Block => false,
@@ -1376,8 +1377,8 @@ fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
         content_type: content_type_from_proto(message.content_type),
         text: message.text,
         image_data: message.image_data,
-        sender_id: aura_core::SenderId::from(non_empty_or(message.sender_id, "unknown")),
-        conversation_id: aura_core::ConversationId::from(non_empty_or(
+        sender_id: aura_agent_core::SenderId::from(non_empty_or(message.sender_id, "unknown")),
+        conversation_id: aura_agent_core::ConversationId::from(non_empty_or(
             message.conversation_id,
             "unknown",
         )),
@@ -1396,25 +1397,25 @@ fn shadow_mode_expectation_from_proto(
             .unwrap_or(proto::ThreatType::Unspecified)
         {
             proto::ThreatType::Unspecified => None,
-            proto::ThreatType::None => Some(aura_core::ThreatType::None),
-            proto::ThreatType::Bullying => Some(aura_core::ThreatType::Bullying),
-            proto::ThreatType::Grooming => Some(aura_core::ThreatType::Grooming),
-            proto::ThreatType::Explicit => Some(aura_core::ThreatType::Explicit),
-            proto::ThreatType::Threat => Some(aura_core::ThreatType::Threat),
-            proto::ThreatType::SelfHarm => Some(aura_core::ThreatType::SelfHarm),
-            proto::ThreatType::Spam => Some(aura_core::ThreatType::Spam),
-            proto::ThreatType::Scam => Some(aura_core::ThreatType::Scam),
-            proto::ThreatType::Phishing => Some(aura_core::ThreatType::Phishing),
-            proto::ThreatType::Manipulation => Some(aura_core::ThreatType::Manipulation),
-            proto::ThreatType::Nsfw => Some(aura_core::ThreatType::Nsfw),
-            proto::ThreatType::HateSpeech => Some(aura_core::ThreatType::HateSpeech),
-            proto::ThreatType::Doxxing => Some(aura_core::ThreatType::Doxxing),
-            proto::ThreatType::PiiLeakage => Some(aura_core::ThreatType::PiiLeakage),
-            proto::ThreatType::Propaganda => Some(aura_core::ThreatType::Propaganda),
-            proto::ThreatType::OpsecViolation => Some(aura_core::ThreatType::OpsecViolation),
-            proto::ThreatType::Psyops => Some(aura_core::ThreatType::Psyops),
-            proto::ThreatType::MilitarySocialEng => Some(aura_core::ThreatType::MilitarySocialEng),
-            proto::ThreatType::CoordinateLeak => Some(aura_core::ThreatType::CoordinateLeak),
+            proto::ThreatType::None => Some(aura_agent_core::ThreatType::None),
+            proto::ThreatType::Bullying => Some(aura_agent_core::ThreatType::Bullying),
+            proto::ThreatType::Grooming => Some(aura_agent_core::ThreatType::Grooming),
+            proto::ThreatType::Explicit => Some(aura_agent_core::ThreatType::Explicit),
+            proto::ThreatType::Threat => Some(aura_agent_core::ThreatType::Threat),
+            proto::ThreatType::SelfHarm => Some(aura_agent_core::ThreatType::SelfHarm),
+            proto::ThreatType::Spam => Some(aura_agent_core::ThreatType::Spam),
+            proto::ThreatType::Scam => Some(aura_agent_core::ThreatType::Scam),
+            proto::ThreatType::Phishing => Some(aura_agent_core::ThreatType::Phishing),
+            proto::ThreatType::Manipulation => Some(aura_agent_core::ThreatType::Manipulation),
+            proto::ThreatType::Nsfw => Some(aura_agent_core::ThreatType::Nsfw),
+            proto::ThreatType::HateSpeech => Some(aura_agent_core::ThreatType::HateSpeech),
+            proto::ThreatType::Doxxing => Some(aura_agent_core::ThreatType::Doxxing),
+            proto::ThreatType::PiiLeakage => Some(aura_agent_core::ThreatType::PiiLeakage),
+            proto::ThreatType::Propaganda => Some(aura_agent_core::ThreatType::Propaganda),
+            proto::ThreatType::OpsecViolation => Some(aura_agent_core::ThreatType::OpsecViolation),
+            proto::ThreatType::Psyops => Some(aura_agent_core::ThreatType::Psyops),
+            proto::ThreatType::MilitarySocialEng => Some(aura_agent_core::ThreatType::MilitarySocialEng),
+            proto::ThreatType::CoordinateLeak => Some(aura_agent_core::ThreatType::CoordinateLeak),
         };
         let expect_min_action = match proto::Action::try_from(expectation.expect_min_action)
             .unwrap_or(proto::Action::Unspecified)
@@ -1462,7 +1463,7 @@ fn shadow_mode_findings_for_event(
     request_id: &str,
     timestamp_ms: u64,
     expectation: Option<&ShadowModeExpectation>,
-    result: &aura_core::AnalysisResult,
+    result: &aura_agent_core::AnalysisResult,
 ) -> Vec<ShadowModeFinding> {
     let mut findings = Vec::new();
     let Some(expectation) = expectation else {
@@ -1530,47 +1531,47 @@ fn shadow_mode_findings_for_event(
     findings
 }
 
-fn threat_label(value: aura_core::ThreatType) -> &'static str {
+fn threat_label(value: aura_agent_core::ThreatType) -> &'static str {
     match value {
-        aura_core::ThreatType::None => "none",
-        aura_core::ThreatType::Bullying => "bullying",
-        aura_core::ThreatType::Grooming => "grooming",
-        aura_core::ThreatType::Explicit => "explicit",
-        aura_core::ThreatType::Threat => "threat",
-        aura_core::ThreatType::SelfHarm => "self_harm",
-        aura_core::ThreatType::Spam => "spam",
-        aura_core::ThreatType::Scam => "scam",
-        aura_core::ThreatType::Phishing => "phishing",
-        aura_core::ThreatType::Manipulation => "manipulation",
-        aura_core::ThreatType::Nsfw => "nsfw",
-        aura_core::ThreatType::HateSpeech => "hate_speech",
-        aura_core::ThreatType::Doxxing => "doxxing",
-        aura_core::ThreatType::PiiLeakage => "pii_leakage",
-        aura_core::ThreatType::Propaganda => "propaganda",
-        aura_core::ThreatType::OpsecViolation => "opsec_violation",
-        aura_core::ThreatType::Psyops => "psyops",
-        aura_core::ThreatType::MilitarySocialEng => "military_social_eng",
-        aura_core::ThreatType::CoordinateLeak => "coordinate_leak",
+        aura_agent_core::ThreatType::None => "none",
+        aura_agent_core::ThreatType::Bullying => "bullying",
+        aura_agent_core::ThreatType::Grooming => "grooming",
+        aura_agent_core::ThreatType::Explicit => "explicit",
+        aura_agent_core::ThreatType::Threat => "threat",
+        aura_agent_core::ThreatType::SelfHarm => "self_harm",
+        aura_agent_core::ThreatType::Spam => "spam",
+        aura_agent_core::ThreatType::Scam => "scam",
+        aura_agent_core::ThreatType::Phishing => "phishing",
+        aura_agent_core::ThreatType::Manipulation => "manipulation",
+        aura_agent_core::ThreatType::Nsfw => "nsfw",
+        aura_agent_core::ThreatType::HateSpeech => "hate_speech",
+        aura_agent_core::ThreatType::Doxxing => "doxxing",
+        aura_agent_core::ThreatType::PiiLeakage => "pii_leakage",
+        aura_agent_core::ThreatType::Propaganda => "propaganda",
+        aura_agent_core::ThreatType::OpsecViolation => "opsec_violation",
+        aura_agent_core::ThreatType::Psyops => "psyops",
+        aura_agent_core::ThreatType::MilitarySocialEng => "military_social_eng",
+        aura_agent_core::ThreatType::CoordinateLeak => "coordinate_leak",
     }
 }
 
-fn action_label(value: aura_core::Action) -> &'static str {
+fn action_label(value: aura_agent_core::Action) -> &'static str {
     match value {
-        aura_core::Action::Allow => "allow",
-        aura_core::Action::Mark => "mark",
-        aura_core::Action::Blur => "blur",
-        aura_core::Action::Warn => "warn",
-        aura_core::Action::Block => "block",
+        aura_agent_core::Action::Allow => "allow",
+        aura_agent_core::Action::Mark => "mark",
+        aura_agent_core::Action::Blur => "blur",
+        aura_agent_core::Action::Warn => "warn",
+        aura_agent_core::Action::Block => "block",
     }
 }
 
-fn alert_label(value: aura_core::AlertPriority) -> &'static str {
+fn alert_label(value: aura_agent_core::AlertPriority) -> &'static str {
     match value {
-        aura_core::AlertPriority::None => "none",
-        aura_core::AlertPriority::Low => "low",
-        aura_core::AlertPriority::Medium => "medium",
-        aura_core::AlertPriority::High => "high",
-        aura_core::AlertPriority::Urgent => "urgent",
+        aura_agent_core::AlertPriority::None => "none",
+        aura_agent_core::AlertPriority::Low => "low",
+        aura_agent_core::AlertPriority::Medium => "medium",
+        aura_agent_core::AlertPriority::High => "high",
+        aura_agent_core::AlertPriority::Urgent => "urgent",
     }
 }
 
@@ -1614,13 +1615,13 @@ fn kids_memory_explainability_to_proto(
         return None;
     }
     let conversation_risk_score = conversation_id
-        .map(aura_kids::pipeline::conversation_risk_score)
+        .map(aura_agent_core::aura_kids::pipeline::conversation_risk_score)
         .unwrap_or(0.0);
     let sender_risk_score = sender_id
-        .map(aura_kids::pipeline::sender_cross_risk_score)
+        .map(aura_agent_core::aura_kids::pipeline::sender_cross_risk_score)
         .unwrap_or(0.0);
     let escalation_message_count = conversation_id
-        .map(aura_kids::pipeline::conversation_escalation_message_count)
+        .map(aura_agent_core::aura_kids::pipeline::conversation_escalation_message_count)
         .unwrap_or(0);
     Some(proto::KidsMemoryExplainability {
         reason_codes: reason_codes.clone(),
@@ -1632,7 +1633,7 @@ fn kids_memory_explainability_to_proto(
 }
 
 fn analysis_result_to_proto(
-    result: &aura_core::AnalysisResult,
+    result: &aura_agent_core::AnalysisResult,
     conversation_id: Option<&str>,
     sender_id: Option<&str>,
 ) -> proto::AnalysisResult {
@@ -1679,7 +1680,7 @@ fn analysis_result_to_proto(
 }
 
 fn product_decision_surface_to_proto(
-    surface: &aura_core::ProductDecisionSurface,
+    surface: &aura_agent_core::ProductDecisionSurface,
 ) -> proto::ProductDecisionSurface {
     proto::ProductDecisionSurface {
         schema_version: surface.schema_version.clone(),
@@ -1697,7 +1698,7 @@ fn product_decision_surface_to_proto(
 }
 
 fn product_child_surface_to_proto(
-    surface: &aura_core::ProductChildSurface,
+    surface: &aura_agent_core::ProductChildSurface,
 ) -> proto::ProductChildSurface {
     proto::ProductChildSurface {
         delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
@@ -1713,7 +1714,7 @@ fn product_child_surface_to_proto(
 }
 
 fn product_guardian_surface_to_proto(
-    surface: &aura_core::ProductGuardianSurface,
+    surface: &aura_agent_core::ProductGuardianSurface,
 ) -> proto::ProductGuardianSurface {
     proto::ProductGuardianSurface {
         delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
@@ -1729,7 +1730,7 @@ fn product_guardian_surface_to_proto(
 }
 
 fn product_review_surface_to_proto(
-    surface: &aura_core::ProductReviewSurface,
+    surface: &aura_agent_core::ProductReviewSurface,
 ) -> proto::ProductReviewSurface {
     proto::ProductReviewSurface {
         delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
@@ -1744,7 +1745,7 @@ fn product_review_surface_to_proto(
     }
 }
 
-fn detection_signal_to_proto(signal: &aura_core::DetectionSignal) -> proto::DetectionSignal {
+fn detection_signal_to_proto(signal: &aura_agent_core::DetectionSignal) -> proto::DetectionSignal {
     proto::DetectionSignal {
         threat_type: proto_threat_type(signal.threat_type) as i32,
         score: signal.score,
@@ -1758,7 +1759,7 @@ fn detection_signal_to_proto(signal: &aura_core::DetectionSignal) -> proto::Dete
 }
 
 fn action_recommendation_to_proto(
-    recommendation: &aura_core::ActionRecommendation,
+    recommendation: &aura_agent_core::ActionRecommendation,
 ) -> proto::ActionRecommendation {
     proto::ActionRecommendation {
         parent_alert: proto_alert_priority(recommendation.parent_alert) as i32,
@@ -1777,7 +1778,7 @@ fn action_recommendation_to_proto(
     }
 }
 
-fn contact_snapshot_to_proto(snapshot: &aura_core::ContactSnapshot) -> proto::ContactSnapshot {
+fn contact_snapshot_to_proto(snapshot: &aura_agent_core::ContactSnapshot) -> proto::ContactSnapshot {
     proto::ContactSnapshot {
         sender_id: snapshot.sender_id.to_string(),
         rating: snapshot.rating,
@@ -1792,7 +1793,7 @@ fn contact_snapshot_to_proto(snapshot: &aura_core::ContactSnapshot) -> proto::Co
     }
 }
 
-fn risk_breakdown_to_proto(breakdown: &aura_core::RiskBreakdown) -> proto::RiskBreakdown {
+fn risk_breakdown_to_proto(breakdown: &aura_agent_core::RiskBreakdown) -> proto::RiskBreakdown {
     proto::RiskBreakdown {
         content: breakdown.content,
         conversation: breakdown.conversation,
@@ -1801,7 +1802,7 @@ fn risk_breakdown_to_proto(breakdown: &aura_core::RiskBreakdown) -> proto::RiskB
     }
 }
 
-fn inference_summary_to_proto(summary: &aura_core::InferenceSummary) -> proto::InferenceSummary {
+fn inference_summary_to_proto(summary: &aura_agent_core::InferenceSummary) -> proto::InferenceSummary {
     proto::InferenceSummary {
         uncertainty: proto_uncertainty_level(summary.uncertainty) as i32,
         risk_horizon: proto_risk_horizon(summary.risk_horizon) as i32,
@@ -1816,7 +1817,7 @@ fn inference_summary_to_proto(summary: &aura_core::InferenceSummary) -> proto::I
 }
 
 fn latent_state_evidence_to_proto(
-    evidence: &aura_core::LatentStateEvidence,
+    evidence: &aura_agent_core::LatentStateEvidence,
 ) -> proto::LatentStateEvidence {
     proto::LatentStateEvidence {
         kind: proto_latent_state_kind(evidence.kind) as i32,
@@ -1826,7 +1827,7 @@ fn latent_state_evidence_to_proto(
 }
 
 fn protected_identifier_to_proto(
-    identifier: &aura_core::ProtectedIdentifier,
+    identifier: &aura_agent_core::ProtectedIdentifier,
 ) -> proto::ProtectedIdentifier {
     proto::ProtectedIdentifier {
         token: identifier.token.clone(),
@@ -1834,14 +1835,14 @@ fn protected_identifier_to_proto(
     }
 }
 
-fn audit_threat_score_to_proto(score: &aura_core::AuditThreatScore) -> proto::AuditThreatScore {
+fn audit_threat_score_to_proto(score: &aura_agent_core::AuditThreatScore) -> proto::AuditThreatScore {
     proto::AuditThreatScore {
         threat_type: proto_threat_type(score.threat_type) as i32,
         score: score.score,
     }
 }
 
-fn audit_record_to_proto(record: &aura_core::AuditRecord) -> proto::AuditRecord {
+fn audit_record_to_proto(record: &aura_agent_core::AuditRecord) -> proto::AuditRecord {
     proto::AuditRecord {
         schema_version: record.schema_version.clone(),
         event_timestamp_ms: record.event_timestamp_ms,
@@ -1891,7 +1892,7 @@ fn audit_record_to_proto(record: &aura_core::AuditRecord) -> proto::AuditRecord 
 }
 
 fn kids_memory_reason_counts_from_events(
-    events: &[aura_core::ShadowModeEvent],
+    events: &[aura_agent_core::ShadowModeEvent],
 ) -> std::collections::HashMap<String, u64> {
     let mut counts = std::collections::HashMap::new();
     for event in events {
@@ -1905,7 +1906,7 @@ fn kids_memory_reason_counts_from_events(
 }
 
 fn shadow_mode_privacy_to_proto(
-    privacy: &aura_core::ShadowModePrivacy,
+    privacy: &aura_agent_core::ShadowModePrivacy,
 ) -> proto::ShadowModePrivacy {
     proto::ShadowModePrivacy {
         identifier_scheme: privacy.identifier_scheme.clone(),
@@ -1915,7 +1916,7 @@ fn shadow_mode_privacy_to_proto(
 }
 
 fn shadow_mode_summary_to_proto(
-    summary: &aura_core::ShadowModeSummary,
+    summary: &aura_agent_core::ShadowModeSummary,
     kids_memory_reason_counts: std::collections::HashMap<String, u64>,
 ) -> proto::ShadowModeSummary {
     proto::ShadowModeSummary {
@@ -1943,7 +1944,7 @@ fn shadow_mode_summary_to_proto(
 }
 
 fn shadow_mode_expectation_to_proto(
-    expectation: &aura_core::ShadowModeExpectation,
+    expectation: &aura_agent_core::ShadowModeExpectation,
 ) -> proto::ShadowModeExpectation {
     proto::ShadowModeExpectation {
         expect_threat: expectation
@@ -1961,7 +1962,7 @@ fn shadow_mode_expectation_to_proto(
     }
 }
 
-fn shadow_mode_mirror_to_proto(mirror: &aura_core::ShadowModeMirror) -> proto::ShadowModeMirror {
+fn shadow_mode_mirror_to_proto(mirror: &aura_agent_core::ShadowModeMirror) -> proto::ShadowModeMirror {
     proto::ShadowModeMirror {
         would_surface_to_child: mirror.would_surface_to_child,
         would_alert_guardian: mirror.would_alert_guardian,
@@ -1971,7 +1972,7 @@ fn shadow_mode_mirror_to_proto(mirror: &aura_core::ShadowModeMirror) -> proto::S
 }
 
 fn shadow_mode_contact_summary_to_proto(
-    contact: &aura_core::ShadowModeContactSummary,
+    contact: &aura_agent_core::ShadowModeContactSummary,
 ) -> proto::ShadowModeContactSummary {
     proto::ShadowModeContactSummary {
         sender_token: Some(protected_identifier_to_proto(&contact.sender_token)),
@@ -1986,7 +1987,7 @@ fn shadow_mode_contact_summary_to_proto(
 }
 
 fn shadow_mode_decision_to_proto(
-    decision: &aura_core::ShadowModeDecision,
+    decision: &aura_agent_core::ShadowModeDecision,
 ) -> proto::ShadowModeDecision {
     proto::ShadowModeDecision {
         threat_type: proto_threat_type(decision.threat_type) as i32,
@@ -2024,7 +2025,7 @@ fn shadow_mode_decision_to_proto(
 }
 
 fn shadow_mode_finding_to_proto(
-    finding: &aura_core::ShadowModeFinding,
+    finding: &aura_agent_core::ShadowModeFinding,
 ) -> proto::ShadowModeFinding {
     proto::ShadowModeFinding {
         severity: finding.severity.clone(),
@@ -2035,7 +2036,7 @@ fn shadow_mode_finding_to_proto(
     }
 }
 
-fn shadow_mode_event_to_proto(event: &aura_core::ShadowModeEvent) -> proto::ShadowModeEvent {
+fn shadow_mode_event_to_proto(event: &aura_agent_core::ShadowModeEvent) -> proto::ShadowModeEvent {
     proto::ShadowModeEvent {
         request_id: event.request_id.clone(),
         sequence: event.sequence as u64,
@@ -2054,7 +2055,7 @@ fn shadow_mode_event_to_proto(event: &aura_core::ShadowModeEvent) -> proto::Shad
     }
 }
 
-fn shadow_mode_bundle_to_proto(bundle: &aura_core::ShadowModeBundle) -> proto::ShadowModeBundle {
+fn shadow_mode_bundle_to_proto(bundle: &aura_agent_core::ShadowModeBundle) -> proto::ShadowModeBundle {
     let kids_memory_reason_counts = kids_memory_reason_counts_from_events(&bundle.events);
     proto::ShadowModeBundle {
         schema_version: bundle.schema_version.clone(),
@@ -2086,7 +2087,7 @@ fn shadow_mode_bundle_to_proto(bundle: &aura_core::ShadowModeBundle) -> proto::S
 }
 
 fn tracker_state_to_proto(state: &CoreTrackerWireState) -> proto::TrackerState {
-    let kids = aura_kids::pipeline::export_kids_memory();
+    let kids = aura_agent_core::aura_kids::pipeline::export_kids_memory();
     proto::TrackerState {
         schema_version: state.schema_version,
         timelines: state
@@ -2105,7 +2106,7 @@ fn tracker_state_to_proto(state: &CoreTrackerWireState) -> proto::TrackerState {
 
 struct ImportTrackerState {
     core_state: CoreTrackerWireState,
-    kids_state: Option<aura_kids::pipeline::ExportedKidsMemoryState>,
+    kids_state: Option<aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState>,
 }
 
 fn tracker_state_from_proto(state: proto::TrackerState) -> Result<ImportTrackerState, String> {
@@ -2130,7 +2131,7 @@ fn tracker_state_from_proto(state: proto::TrackerState) -> Result<ImportTrackerS
 }
 
 fn kids_memory_state_to_proto(
-    state: &aura_kids::pipeline::ExportedKidsMemoryState,
+    state: &aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState,
 ) -> proto::KidsMemoryState {
     proto::KidsMemoryState {
         conversations: state
@@ -2171,19 +2172,19 @@ fn kids_memory_state_to_proto(
 
 fn kids_memory_state_from_proto(
     state: &proto::KidsMemoryState,
-) -> aura_kids::pipeline::ExportedKidsMemoryState {
-    aura_kids::pipeline::ExportedKidsMemoryState {
+) -> aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState {
+    aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState {
         conversations: state
             .conversations
             .iter()
-            .map(|conv| aura_kids::pipeline::ExportedConversationMemory {
+            .map(|conv| aura_agent_core::aura_kids::pipeline::ExportedConversationMemory {
                 conversation_id: conv.conversation_id.clone(),
                 message_index: conv.message_index,
                 last_activity_index: conv.message_index,
                 entries: conv
                     .entries
                     .iter()
-                    .map(|snap| aura_kids::pipeline::ExportedMessageSnapshot {
+                    .map(|snap| aura_agent_core::aura_kids::pipeline::ExportedMessageSnapshot {
                         sender_id: snap.sender_id.clone(),
                         has_grooming: snap.has_grooming,
                         has_manipulation: snap.has_manipulation,
@@ -2201,7 +2202,7 @@ fn kids_memory_state_from_proto(
         senders: state
             .senders
             .iter()
-            .map(|sender| aura_kids::pipeline::ExportedSenderMemory {
+            .map(|sender| aura_agent_core::aura_kids::pipeline::ExportedSenderMemory {
                 sender_id: sender.sender_id.clone(),
                 event_index: sender.event_index,
                 last_activity_index: sender.event_index,
@@ -2225,7 +2226,7 @@ fn conversation_timeline_state_from_proto(
     state: proto::ConversationTimelineState,
 ) -> Result<CoreConversationTimelineState, String> {
     Ok(CoreConversationTimelineState {
-        conversation_id: aura_core::ConversationId::from(state.conversation_id),
+        conversation_id: aura_agent_core::ConversationId::from(state.conversation_id),
         conversation_type: conversation_type_from_proto(state.conversation_type),
         events: state
             .events
@@ -2252,8 +2253,8 @@ fn context_event_from_proto(event: proto::ContextEvent) -> Result<CoreContextEve
     Ok(CoreContextEvent {
         event_id: event.event_id,
         timestamp_ms: event.timestamp_ms,
-        sender_id: aura_core::SenderId::from(event.sender_id),
-        conversation_id: aura_core::ConversationId::from(event.conversation_id),
+        sender_id: aura_agent_core::SenderId::from(event.sender_id),
+        conversation_id: aura_agent_core::ConversationId::from(event.conversation_id),
         kind: event_kind_from_proto(event.kind)?,
         confidence: event.confidence,
         subtype: if event.subtype.is_empty() {
@@ -2438,11 +2439,11 @@ fn contact_profile_state_from_proto(
 
     let mut propaganda_conversations = Vec::with_capacity(state.propaganda_conversations.len());
     for conversation_id in state.propaganda_conversations {
-        propaganda_conversations.push(aura_core::ConversationId::from(conversation_id));
+        propaganda_conversations.push(aura_agent_core::ConversationId::from(conversation_id));
     }
 
     Ok(CoreContactProfileState {
-        sender_id: aura_core::SenderId::from(state.sender_id),
+        sender_id: aura_agent_core::SenderId::from(state.sender_id),
         first_seen_ms: state.first_seen_ms,
         last_seen_ms: state.last_seen_ms,
         total_messages: state.total_messages,
@@ -2450,7 +2451,7 @@ fn contact_profile_state_from_proto(
         conversations: state
             .conversations
             .into_iter()
-            .map(aura_core::ConversationId::from)
+            .map(aura_agent_core::ConversationId::from)
             .collect(),
         grooming_event_count: state.grooming_event_count,
         bullying_event_count: state.bullying_event_count,
@@ -2522,32 +2523,32 @@ fn behavioral_snapshot_state_from_proto(
     }
 }
 
-fn protection_level_from_proto(value: i32) -> aura_core::ProtectionLevel {
+fn protection_level_from_proto(value: i32) -> aura_agent_core::ProtectionLevel {
     match proto::ProtectionLevel::try_from(value).unwrap_or(proto::ProtectionLevel::Medium) {
-        proto::ProtectionLevel::Off => aura_core::ProtectionLevel::Off,
-        proto::ProtectionLevel::Low => aura_core::ProtectionLevel::Low,
+        proto::ProtectionLevel::Off => aura_agent_core::ProtectionLevel::Off,
+        proto::ProtectionLevel::Low => aura_agent_core::ProtectionLevel::Low,
         proto::ProtectionLevel::Medium | proto::ProtectionLevel::Unspecified => {
-            aura_core::ProtectionLevel::Medium
+            aura_agent_core::ProtectionLevel::Medium
         }
-        proto::ProtectionLevel::High => aura_core::ProtectionLevel::High,
+        proto::ProtectionLevel::High => aura_agent_core::ProtectionLevel::High,
     }
 }
 
-fn account_type_from_proto(value: i32) -> aura_core::AccountType {
+fn account_type_from_proto(value: i32) -> aura_agent_core::AccountType {
     match proto::AccountType::try_from(value).unwrap_or(proto::AccountType::Adult) {
         proto::AccountType::Adult | proto::AccountType::Unspecified => {
-            aura_core::AccountType::Adult
+            aura_agent_core::AccountType::Adult
         }
-        proto::AccountType::Teen => aura_core::AccountType::Teen,
-        proto::AccountType::Child => aura_core::AccountType::Child,
+        proto::AccountType::Teen => aura_agent_core::AccountType::Teen,
+        proto::AccountType::Child => aura_agent_core::AccountType::Child,
     }
 }
 
-fn domain_mode_from_proto(value: i32) -> aura_core::DomainMode {
+fn domain_mode_from_proto(value: i32) -> aura_agent_core::DomainMode {
     match proto::DomainMode::try_from(value).unwrap_or(proto::DomainMode::Unspecified) {
-        proto::DomainMode::Unspecified | proto::DomainMode::None => aura_core::DomainMode::None,
-        proto::DomainMode::Kids => aura_core::DomainMode::Kids,
-        proto::DomainMode::Military => aura_core::DomainMode::Military,
+        proto::DomainMode::Unspecified | proto::DomainMode::None => aura_agent_core::DomainMode::None,
+        proto::DomainMode::Kids => aura_agent_core::DomainMode::Kids,
+        proto::DomainMode::Military => aura_agent_core::DomainMode::Military,
     }
 }
 
@@ -2570,235 +2571,235 @@ fn cultural_context_from_proto(context: Option<proto::CulturalContext>) -> Cultu
     }
 }
 
-fn content_type_from_proto(value: i32) -> aura_core::ContentType {
+fn content_type_from_proto(value: i32) -> aura_agent_core::ContentType {
     match proto::ContentType::try_from(value).unwrap_or(proto::ContentType::Text) {
-        proto::ContentType::Image => aura_core::ContentType::Image,
-        proto::ContentType::Voice => aura_core::ContentType::Voice,
-        proto::ContentType::Video => aura_core::ContentType::Video,
-        proto::ContentType::Url => aura_core::ContentType::Url,
-        _ => aura_core::ContentType::Text,
+        proto::ContentType::Image => aura_agent_core::ContentType::Image,
+        proto::ContentType::Voice => aura_agent_core::ContentType::Voice,
+        proto::ContentType::Video => aura_agent_core::ContentType::Video,
+        proto::ContentType::Url => aura_agent_core::ContentType::Url,
+        _ => aura_agent_core::ContentType::Text,
     }
 }
 
-fn conversation_type_from_proto(value: i32) -> aura_core::ConversationType {
+fn conversation_type_from_proto(value: i32) -> aura_agent_core::ConversationType {
     match proto::ConversationType::try_from(value).unwrap_or(proto::ConversationType::Direct) {
-        proto::ConversationType::Group => aura_core::ConversationType::Group,
-        _ => aura_core::ConversationType::Direct,
+        proto::ConversationType::Group => aura_agent_core::ConversationType::Group,
+        _ => aura_agent_core::ConversationType::Direct,
     }
 }
 
-fn proto_conversation_type(value: aura_core::ConversationType) -> proto::ConversationType {
+fn proto_conversation_type(value: aura_agent_core::ConversationType) -> proto::ConversationType {
     match value {
-        aura_core::ConversationType::Direct => proto::ConversationType::Direct,
-        aura_core::ConversationType::Group => proto::ConversationType::Group,
+        aura_agent_core::ConversationType::Direct => proto::ConversationType::Direct,
+        aura_agent_core::ConversationType::Group => proto::ConversationType::Group,
     }
 }
 
-fn proto_threat_type(value: aura_core::ThreatType) -> proto::ThreatType {
+fn proto_threat_type(value: aura_agent_core::ThreatType) -> proto::ThreatType {
     match value {
-        aura_core::ThreatType::None => proto::ThreatType::None,
-        aura_core::ThreatType::Bullying => proto::ThreatType::Bullying,
-        aura_core::ThreatType::Grooming => proto::ThreatType::Grooming,
-        aura_core::ThreatType::Explicit => proto::ThreatType::Explicit,
-        aura_core::ThreatType::Threat => proto::ThreatType::Threat,
-        aura_core::ThreatType::SelfHarm => proto::ThreatType::SelfHarm,
-        aura_core::ThreatType::Spam => proto::ThreatType::Spam,
-        aura_core::ThreatType::Scam => proto::ThreatType::Scam,
-        aura_core::ThreatType::Phishing => proto::ThreatType::Phishing,
-        aura_core::ThreatType::Manipulation => proto::ThreatType::Manipulation,
-        aura_core::ThreatType::Nsfw => proto::ThreatType::Nsfw,
-        aura_core::ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
-        aura_core::ThreatType::Doxxing => proto::ThreatType::Doxxing,
-        aura_core::ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
-        aura_core::ThreatType::Propaganda => proto::ThreatType::Propaganda,
-        aura_core::ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
-        aura_core::ThreatType::Psyops => proto::ThreatType::Psyops,
-        aura_core::ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
-        aura_core::ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
+        aura_agent_core::ThreatType::None => proto::ThreatType::None,
+        aura_agent_core::ThreatType::Bullying => proto::ThreatType::Bullying,
+        aura_agent_core::ThreatType::Grooming => proto::ThreatType::Grooming,
+        aura_agent_core::ThreatType::Explicit => proto::ThreatType::Explicit,
+        aura_agent_core::ThreatType::Threat => proto::ThreatType::Threat,
+        aura_agent_core::ThreatType::SelfHarm => proto::ThreatType::SelfHarm,
+        aura_agent_core::ThreatType::Spam => proto::ThreatType::Spam,
+        aura_agent_core::ThreatType::Scam => proto::ThreatType::Scam,
+        aura_agent_core::ThreatType::Phishing => proto::ThreatType::Phishing,
+        aura_agent_core::ThreatType::Manipulation => proto::ThreatType::Manipulation,
+        aura_agent_core::ThreatType::Nsfw => proto::ThreatType::Nsfw,
+        aura_agent_core::ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
+        aura_agent_core::ThreatType::Doxxing => proto::ThreatType::Doxxing,
+        aura_agent_core::ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
+        aura_agent_core::ThreatType::Propaganda => proto::ThreatType::Propaganda,
+        aura_agent_core::ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
+        aura_agent_core::ThreatType::Psyops => proto::ThreatType::Psyops,
+        aura_agent_core::ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
+        aura_agent_core::ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
     }
 }
 
-fn proto_confidence(value: aura_core::Confidence) -> proto::Confidence {
+fn proto_confidence(value: aura_agent_core::Confidence) -> proto::Confidence {
     match value {
-        aura_core::Confidence::Low => proto::Confidence::Low,
-        aura_core::Confidence::Medium => proto::Confidence::Medium,
-        aura_core::Confidence::High => proto::Confidence::High,
+        aura_agent_core::Confidence::Low => proto::Confidence::Low,
+        aura_agent_core::Confidence::Medium => proto::Confidence::Medium,
+        aura_agent_core::Confidence::High => proto::Confidence::High,
     }
 }
 
-fn proto_action(value: aura_core::Action) -> proto::Action {
+fn proto_action(value: aura_agent_core::Action) -> proto::Action {
     match value {
-        aura_core::Action::Allow => proto::Action::Allow,
-        aura_core::Action::Mark => proto::Action::Mark,
-        aura_core::Action::Blur => proto::Action::Blur,
-        aura_core::Action::Warn => proto::Action::Warn,
-        aura_core::Action::Block => proto::Action::Block,
+        aura_agent_core::Action::Allow => proto::Action::Allow,
+        aura_agent_core::Action::Mark => proto::Action::Mark,
+        aura_agent_core::Action::Blur => proto::Action::Blur,
+        aura_agent_core::Action::Warn => proto::Action::Warn,
+        aura_agent_core::Action::Block => proto::Action::Block,
     }
 }
 
-fn proto_detection_layer(value: aura_core::DetectionLayer) -> proto::DetectionLayer {
+fn proto_detection_layer(value: aura_agent_core::DetectionLayer) -> proto::DetectionLayer {
     match value {
-        aura_core::DetectionLayer::PatternMatching => proto::DetectionLayer::PatternMatching,
-        aura_core::DetectionLayer::MlClassification => proto::DetectionLayer::MlClassification,
-        aura_core::DetectionLayer::ContextAnalysis => proto::DetectionLayer::ContextAnalysis,
+        aura_agent_core::DetectionLayer::PatternMatching => proto::DetectionLayer::PatternMatching,
+        aura_agent_core::DetectionLayer::MlClassification => proto::DetectionLayer::MlClassification,
+        aura_agent_core::DetectionLayer::ContextAnalysis => proto::DetectionLayer::ContextAnalysis,
     }
 }
 
-fn proto_signal_family(value: aura_core::SignalFamily) -> proto::SignalFamily {
+fn proto_signal_family(value: aura_agent_core::SignalFamily) -> proto::SignalFamily {
     match value {
-        aura_core::SignalFamily::Content => proto::SignalFamily::Content,
-        aura_core::SignalFamily::Conversation => proto::SignalFamily::Conversation,
-        aura_core::SignalFamily::Link => proto::SignalFamily::Link,
-        aura_core::SignalFamily::Abuse => proto::SignalFamily::Abuse,
+        aura_agent_core::SignalFamily::Content => proto::SignalFamily::Content,
+        aura_agent_core::SignalFamily::Conversation => proto::SignalFamily::Conversation,
+        aura_agent_core::SignalFamily::Link => proto::SignalFamily::Link,
+        aura_agent_core::SignalFamily::Abuse => proto::SignalFamily::Abuse,
     }
 }
 
-fn proto_alert_priority(value: aura_core::AlertPriority) -> proto::AlertPriority {
+fn proto_alert_priority(value: aura_agent_core::AlertPriority) -> proto::AlertPriority {
     match value {
-        aura_core::AlertPriority::None => proto::AlertPriority::None,
-        aura_core::AlertPriority::Low => proto::AlertPriority::Low,
-        aura_core::AlertPriority::Medium => proto::AlertPriority::Medium,
-        aura_core::AlertPriority::High => proto::AlertPriority::High,
-        aura_core::AlertPriority::Urgent => proto::AlertPriority::Urgent,
+        aura_agent_core::AlertPriority::None => proto::AlertPriority::None,
+        aura_agent_core::AlertPriority::Low => proto::AlertPriority::Low,
+        aura_agent_core::AlertPriority::Medium => proto::AlertPriority::Medium,
+        aura_agent_core::AlertPriority::High => proto::AlertPriority::High,
+        aura_agent_core::AlertPriority::Urgent => proto::AlertPriority::Urgent,
     }
 }
 
-fn proto_follow_up_action(value: aura_core::FollowUpAction) -> proto::FollowUpAction {
+fn proto_follow_up_action(value: aura_agent_core::FollowUpAction) -> proto::FollowUpAction {
     match value {
-        aura_core::FollowUpAction::MonitorConversation => {
+        aura_agent_core::FollowUpAction::MonitorConversation => {
             proto::FollowUpAction::MonitorConversation
         }
-        aura_core::FollowUpAction::BlockSuggested => proto::FollowUpAction::BlockSuggested,
-        aura_core::FollowUpAction::ReviewContactProfile => {
+        aura_agent_core::FollowUpAction::BlockSuggested => proto::FollowUpAction::BlockSuggested,
+        aura_agent_core::FollowUpAction::ReviewContactProfile => {
             proto::FollowUpAction::ReviewContactProfile
         }
-        aura_core::FollowUpAction::ReportToAuthorities => {
+        aura_agent_core::FollowUpAction::ReportToAuthorities => {
             proto::FollowUpAction::ReportToAuthorities
         }
     }
 }
 
-fn proto_product_rollout_mode(value: aura_core::ProductRolloutMode) -> proto::ProductRolloutMode {
+fn proto_product_rollout_mode(value: aura_agent_core::ProductRolloutMode) -> proto::ProductRolloutMode {
     match value {
-        aura_core::ProductRolloutMode::Shadow => proto::ProductRolloutMode::Shadow,
-        aura_core::ProductRolloutMode::StagingPilot => proto::ProductRolloutMode::StagingPilot,
-        aura_core::ProductRolloutMode::GuardianEnabled => {
+        aura_agent_core::ProductRolloutMode::Shadow => proto::ProductRolloutMode::Shadow,
+        aura_agent_core::ProductRolloutMode::StagingPilot => proto::ProductRolloutMode::StagingPilot,
+        aura_agent_core::ProductRolloutMode::GuardianEnabled => {
             proto::ProductRolloutMode::GuardianEnabled
         }
     }
 }
 
 fn proto_product_delivery_mode(
-    value: aura_core::ProductDeliveryMode,
+    value: aura_agent_core::ProductDeliveryMode,
 ) -> proto::ProductDeliveryMode {
     match value {
-        aura_core::ProductDeliveryMode::Suppress => proto::ProductDeliveryMode::Suppress,
-        aura_core::ProductDeliveryMode::MirrorOnly => proto::ProductDeliveryMode::MirrorOnly,
-        aura_core::ProductDeliveryMode::Apply => proto::ProductDeliveryMode::Apply,
+        aura_agent_core::ProductDeliveryMode::Suppress => proto::ProductDeliveryMode::Suppress,
+        aura_agent_core::ProductDeliveryMode::MirrorOnly => proto::ProductDeliveryMode::MirrorOnly,
+        aura_agent_core::ProductDeliveryMode::Apply => proto::ProductDeliveryMode::Apply,
     }
 }
 
 fn proto_product_child_intervention(
-    value: aura_core::ProductChildIntervention,
+    value: aura_agent_core::ProductChildIntervention,
 ) -> proto::ProductChildIntervention {
     match value {
-        aura_core::ProductChildIntervention::None => proto::ProductChildIntervention::None,
-        aura_core::ProductChildIntervention::Mark => proto::ProductChildIntervention::Mark,
-        aura_core::ProductChildIntervention::Blur => proto::ProductChildIntervention::Blur,
-        aura_core::ProductChildIntervention::Warn => proto::ProductChildIntervention::Warn,
-        aura_core::ProductChildIntervention::Block => proto::ProductChildIntervention::Block,
+        aura_agent_core::ProductChildIntervention::None => proto::ProductChildIntervention::None,
+        aura_agent_core::ProductChildIntervention::Mark => proto::ProductChildIntervention::Mark,
+        aura_agent_core::ProductChildIntervention::Blur => proto::ProductChildIntervention::Blur,
+        aura_agent_core::ProductChildIntervention::Warn => proto::ProductChildIntervention::Warn,
+        aura_agent_core::ProductChildIntervention::Block => proto::ProductChildIntervention::Block,
     }
 }
 
 fn proto_product_review_urgency(
-    value: aura_core::ProductReviewUrgency,
+    value: aura_agent_core::ProductReviewUrgency,
 ) -> proto::ProductReviewUrgency {
     match value {
-        aura_core::ProductReviewUrgency::None => proto::ProductReviewUrgency::None,
-        aura_core::ProductReviewUrgency::Standard => proto::ProductReviewUrgency::Standard,
-        aura_core::ProductReviewUrgency::High => proto::ProductReviewUrgency::High,
-        aura_core::ProductReviewUrgency::Urgent => proto::ProductReviewUrgency::Urgent,
+        aura_agent_core::ProductReviewUrgency::None => proto::ProductReviewUrgency::None,
+        aura_agent_core::ProductReviewUrgency::Standard => proto::ProductReviewUrgency::Standard,
+        aura_agent_core::ProductReviewUrgency::High => proto::ProductReviewUrgency::High,
+        aura_agent_core::ProductReviewUrgency::Urgent => proto::ProductReviewUrgency::Urgent,
     }
 }
 
 fn proto_product_uncertainty_disposition(
-    value: aura_core::ProductUncertaintyDisposition,
+    value: aura_agent_core::ProductUncertaintyDisposition,
 ) -> proto::ProductUncertaintyDisposition {
     match value {
-        aura_core::ProductUncertaintyDisposition::Normal => {
+        aura_agent_core::ProductUncertaintyDisposition::Normal => {
             proto::ProductUncertaintyDisposition::Normal
         }
-        aura_core::ProductUncertaintyDisposition::MirrorOnly => {
+        aura_agent_core::ProductUncertaintyDisposition::MirrorOnly => {
             proto::ProductUncertaintyDisposition::MirrorOnly
         }
-        aura_core::ProductUncertaintyDisposition::RequireReview => {
+        aura_agent_core::ProductUncertaintyDisposition::RequireReview => {
             proto::ProductUncertaintyDisposition::RequireReview
         }
-        aura_core::ProductUncertaintyDisposition::GuardianPriority => {
+        aura_agent_core::ProductUncertaintyDisposition::GuardianPriority => {
             proto::ProductUncertaintyDisposition::GuardianPriority
         }
     }
 }
 
-fn proto_ui_action(value: aura_core::UiAction) -> proto::UiAction {
+fn proto_ui_action(value: aura_agent_core::UiAction) -> proto::UiAction {
     match value {
-        aura_core::UiAction::WarnBeforeSend => proto::UiAction::WarnBeforeSend,
-        aura_core::UiAction::WarnBeforeDisplay => proto::UiAction::WarnBeforeDisplay,
-        aura_core::UiAction::BlurUntilTap => proto::UiAction::BlurUntilTap,
-        aura_core::UiAction::ConfirmBeforeOpenLink => proto::UiAction::ConfirmBeforeOpenLink,
-        aura_core::UiAction::SuggestBlockContact => proto::UiAction::SuggestBlockContact,
-        aura_core::UiAction::SuggestReport => proto::UiAction::SuggestReport,
-        aura_core::UiAction::RestrictUnknownContact => proto::UiAction::RestrictUnknownContact,
-        aura_core::UiAction::SlowDownConversation => proto::UiAction::SlowDownConversation,
-        aura_core::UiAction::ShowCrisisSupport => proto::UiAction::ShowCrisisSupport,
-        aura_core::UiAction::EscalateToGuardian => proto::UiAction::EscalateToGuardian,
+        aura_agent_core::UiAction::WarnBeforeSend => proto::UiAction::WarnBeforeSend,
+        aura_agent_core::UiAction::WarnBeforeDisplay => proto::UiAction::WarnBeforeDisplay,
+        aura_agent_core::UiAction::BlurUntilTap => proto::UiAction::BlurUntilTap,
+        aura_agent_core::UiAction::ConfirmBeforeOpenLink => proto::UiAction::ConfirmBeforeOpenLink,
+        aura_agent_core::UiAction::SuggestBlockContact => proto::UiAction::SuggestBlockContact,
+        aura_agent_core::UiAction::SuggestReport => proto::UiAction::SuggestReport,
+        aura_agent_core::UiAction::RestrictUnknownContact => proto::UiAction::RestrictUnknownContact,
+        aura_agent_core::UiAction::SlowDownConversation => proto::UiAction::SlowDownConversation,
+        aura_agent_core::UiAction::ShowCrisisSupport => proto::UiAction::ShowCrisisSupport,
+        aura_agent_core::UiAction::EscalateToGuardian => proto::UiAction::EscalateToGuardian,
     }
 }
 
-fn proto_protection_level(value: aura_core::ProtectionLevel) -> proto::ProtectionLevel {
+fn proto_protection_level(value: aura_agent_core::ProtectionLevel) -> proto::ProtectionLevel {
     match value {
-        aura_core::ProtectionLevel::Off => proto::ProtectionLevel::Off,
-        aura_core::ProtectionLevel::Low => proto::ProtectionLevel::Low,
-        aura_core::ProtectionLevel::Medium => proto::ProtectionLevel::Medium,
-        aura_core::ProtectionLevel::High => proto::ProtectionLevel::High,
+        aura_agent_core::ProtectionLevel::Off => proto::ProtectionLevel::Off,
+        aura_agent_core::ProtectionLevel::Low => proto::ProtectionLevel::Low,
+        aura_agent_core::ProtectionLevel::Medium => proto::ProtectionLevel::Medium,
+        aura_agent_core::ProtectionLevel::High => proto::ProtectionLevel::High,
     }
 }
 
-fn circle_tier_from_proto(value: i32) -> aura_core::CircleTier {
+fn circle_tier_from_proto(value: i32) -> aura_agent_core::CircleTier {
     match proto::CircleTier::try_from(value).unwrap_or(proto::CircleTier::New) {
-        proto::CircleTier::Inner => aura_core::CircleTier::Inner,
-        proto::CircleTier::Regular => aura_core::CircleTier::Regular,
-        proto::CircleTier::Occasional => aura_core::CircleTier::Occasional,
-        _ => aura_core::CircleTier::New,
+        proto::CircleTier::Inner => aura_agent_core::CircleTier::Inner,
+        proto::CircleTier::Regular => aura_agent_core::CircleTier::Regular,
+        proto::CircleTier::Occasional => aura_agent_core::CircleTier::Occasional,
+        _ => aura_agent_core::CircleTier::New,
     }
 }
 
-fn proto_circle_tier(value: aura_core::CircleTier) -> proto::CircleTier {
+fn proto_circle_tier(value: aura_agent_core::CircleTier) -> proto::CircleTier {
     match value {
-        aura_core::CircleTier::Inner => proto::CircleTier::Inner,
-        aura_core::CircleTier::Regular => proto::CircleTier::Regular,
-        aura_core::CircleTier::Occasional => proto::CircleTier::Occasional,
-        aura_core::CircleTier::New => proto::CircleTier::New,
+        aura_agent_core::CircleTier::Inner => proto::CircleTier::Inner,
+        aura_agent_core::CircleTier::Regular => proto::CircleTier::Regular,
+        aura_agent_core::CircleTier::Occasional => proto::CircleTier::Occasional,
+        aura_agent_core::CircleTier::New => proto::CircleTier::New,
     }
 }
 
-fn behavioral_trend_from_proto(value: i32) -> aura_core::BehavioralTrend {
+fn behavioral_trend_from_proto(value: i32) -> aura_agent_core::BehavioralTrend {
     match proto::BehavioralTrend::try_from(value).unwrap_or(proto::BehavioralTrend::Stable) {
-        proto::BehavioralTrend::Improving => aura_core::BehavioralTrend::Improving,
-        proto::BehavioralTrend::GradualWorsening => aura_core::BehavioralTrend::GradualWorsening,
-        proto::BehavioralTrend::RapidWorsening => aura_core::BehavioralTrend::RapidWorsening,
-        proto::BehavioralTrend::RoleReversal => aura_core::BehavioralTrend::RoleReversal,
-        _ => aura_core::BehavioralTrend::Stable,
+        proto::BehavioralTrend::Improving => aura_agent_core::BehavioralTrend::Improving,
+        proto::BehavioralTrend::GradualWorsening => aura_agent_core::BehavioralTrend::GradualWorsening,
+        proto::BehavioralTrend::RapidWorsening => aura_agent_core::BehavioralTrend::RapidWorsening,
+        proto::BehavioralTrend::RoleReversal => aura_agent_core::BehavioralTrend::RoleReversal,
+        _ => aura_agent_core::BehavioralTrend::Stable,
     }
 }
 
-fn proto_behavioral_trend(value: aura_core::BehavioralTrend) -> proto::BehavioralTrend {
+fn proto_behavioral_trend(value: aura_agent_core::BehavioralTrend) -> proto::BehavioralTrend {
     match value {
-        aura_core::BehavioralTrend::Stable => proto::BehavioralTrend::Stable,
-        aura_core::BehavioralTrend::Improving => proto::BehavioralTrend::Improving,
-        aura_core::BehavioralTrend::GradualWorsening => proto::BehavioralTrend::GradualWorsening,
-        aura_core::BehavioralTrend::RapidWorsening => proto::BehavioralTrend::RapidWorsening,
-        aura_core::BehavioralTrend::RoleReversal => proto::BehavioralTrend::RoleReversal,
+        aura_agent_core::BehavioralTrend::Stable => proto::BehavioralTrend::Stable,
+        aura_agent_core::BehavioralTrend::Improving => proto::BehavioralTrend::Improving,
+        aura_agent_core::BehavioralTrend::GradualWorsening => proto::BehavioralTrend::GradualWorsening,
+        aura_agent_core::BehavioralTrend::RapidWorsening => proto::BehavioralTrend::RapidWorsening,
+        aura_agent_core::BehavioralTrend::RoleReversal => proto::BehavioralTrend::RoleReversal,
     }
 }
 
@@ -2818,36 +2819,36 @@ fn proto_age_source(value: CoreAgeSource) -> proto::AgeSource {
     }
 }
 
-fn proto_uncertainty_level(value: aura_core::UncertaintyLevel) -> proto::UncertaintyLevel {
+fn proto_uncertainty_level(value: aura_agent_core::UncertaintyLevel) -> proto::UncertaintyLevel {
     match value {
-        aura_core::UncertaintyLevel::Low => proto::UncertaintyLevel::Low,
-        aura_core::UncertaintyLevel::Medium => proto::UncertaintyLevel::Medium,
-        aura_core::UncertaintyLevel::High => proto::UncertaintyLevel::High,
+        aura_agent_core::UncertaintyLevel::Low => proto::UncertaintyLevel::Low,
+        aura_agent_core::UncertaintyLevel::Medium => proto::UncertaintyLevel::Medium,
+        aura_agent_core::UncertaintyLevel::High => proto::UncertaintyLevel::High,
     }
 }
 
-fn proto_risk_horizon(value: aura_core::RiskHorizon) -> proto::RiskHorizon {
+fn proto_risk_horizon(value: aura_agent_core::RiskHorizon) -> proto::RiskHorizon {
     match value {
-        aura_core::RiskHorizon::Unknown => proto::RiskHorizon::Unknown,
-        aura_core::RiskHorizon::Immediate => proto::RiskHorizon::Immediate,
-        aura_core::RiskHorizon::ShortTerm => proto::RiskHorizon::ShortTerm,
-        aura_core::RiskHorizon::Sustained => proto::RiskHorizon::Sustained,
+        aura_agent_core::RiskHorizon::Unknown => proto::RiskHorizon::Unknown,
+        aura_agent_core::RiskHorizon::Immediate => proto::RiskHorizon::Immediate,
+        aura_agent_core::RiskHorizon::ShortTerm => proto::RiskHorizon::ShortTerm,
+        aura_agent_core::RiskHorizon::Sustained => proto::RiskHorizon::Sustained,
     }
 }
 
-fn proto_latent_state_kind(value: aura_core::LatentStateKind) -> proto::LatentStateKind {
+fn proto_latent_state_kind(value: aura_agent_core::LatentStateKind) -> proto::LatentStateKind {
     match value {
-        aura_core::LatentStateKind::DependencyBuilding => {
+        aura_agent_core::LatentStateKind::DependencyBuilding => {
             proto::LatentStateKind::DependencyBuilding
         }
-        aura_core::LatentStateKind::IsolationPressure => proto::LatentStateKind::IsolationPressure,
-        aura_core::LatentStateKind::CoerciveControl => proto::LatentStateKind::CoerciveControl,
-        aura_core::LatentStateKind::Humiliation => proto::LatentStateKind::Humiliation,
-        aura_core::LatentStateKind::CrisisVulnerability => {
+        aura_agent_core::LatentStateKind::IsolationPressure => proto::LatentStateKind::IsolationPressure,
+        aura_agent_core::LatentStateKind::CoerciveControl => proto::LatentStateKind::CoerciveControl,
+        aura_agent_core::LatentStateKind::Humiliation => proto::LatentStateKind::Humiliation,
+        aura_agent_core::LatentStateKind::CrisisVulnerability => {
             proto::LatentStateKind::CrisisVulnerability
         }
-        aura_core::LatentStateKind::ProtectiveSupport => proto::LatentStateKind::ProtectiveSupport,
-        aura_core::LatentStateKind::GroupEscalation => proto::LatentStateKind::GroupEscalation,
+        aura_agent_core::LatentStateKind::ProtectiveSupport => proto::LatentStateKind::ProtectiveSupport,
+        aura_agent_core::LatentStateKind::GroupEscalation => proto::LatentStateKind::GroupEscalation,
     }
 }
 
@@ -3007,7 +3008,7 @@ mod tests {
     fn domain_mode_defaults_to_none_for_core_only_config() {
         let config = aura_config_from_proto(proto_config(proto::AccountType::Adult, true))
             .expect("config must decode");
-        assert_eq!(config.domain_mode, aura_core::DomainMode::None);
+        assert_eq!(config.domain_mode, aura_agent_core::DomainMode::None);
     }
 
     #[test]
@@ -3015,7 +3016,7 @@ mod tests {
         let mut proto = proto_config(proto::AccountType::Adult, true);
         proto.domain_mode = proto::DomainMode::Military as i32;
         let config = aura_config_from_proto(proto).expect("config must decode");
-        assert_eq!(config.domain_mode, aura_core::DomainMode::Military);
+        assert_eq!(config.domain_mode, aura_agent_core::DomainMode::Military);
     }
 
     #[test]
@@ -3023,7 +3024,7 @@ mod tests {
         let mut proto = proto_config(proto::AccountType::Adult, true);
         proto.domain_mode = proto::DomainMode::Unspecified as i32;
         let config = aura_config_from_proto(proto).expect("config must decode");
-        assert_eq!(config.domain_mode, aura_core::DomainMode::None);
+        assert_eq!(config.domain_mode, aura_agent_core::DomainMode::None);
     }
 
     fn proto_message(text: &str, sender_id: &str, conversation_id: &str) -> proto::MessageInput {
@@ -4392,7 +4393,7 @@ mod tests {
             );
 
             let mut state = export_context(handle).state.expect("missing state");
-            state.schema_version = aura_core::context::tracker::TRACKER_STATE_VERSION + 1;
+            state.schema_version = aura_agent_core::context::tracker::TRACKER_STATE_VERSION + 1;
             let request = proto::ImportContextRequest { state: Some(state) };
             let bytes = encode_proto(&request);
 

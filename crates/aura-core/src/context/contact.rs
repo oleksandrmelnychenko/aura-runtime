@@ -824,12 +824,11 @@ impl ContactProfiler {
             if !profile
                 .propaganda_conversations
                 .contains(&event.conversation_id)
+                && profile.propaganda_conversations.len() < 50
             {
-                if profile.propaganda_conversations.len() < 50 {
-                    profile
-                        .propaganda_conversations
-                        .push(event.conversation_id.clone());
-                }
+                profile
+                    .propaganda_conversations
+                    .push(event.conversation_id.clone());
             }
 
             if event.kind == EventKind::SuspiciousSource {

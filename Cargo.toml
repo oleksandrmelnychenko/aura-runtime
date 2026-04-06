@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/aura-contracts",
+    "crates/aura-agent-core",
+    "crates/aura-agent-policy",
     "crates/aura-core",
     "crates/aura-domain",
     "crates/aura-kids",
@@ -8,7 +11,17 @@ members = [
     "crates/aura-patterns",
     "crates/aura-ml",
     "crates/aura-proto",
-    "crates/aura-ffi",
+    "crates/aura-agent-ffi",
+    "crates/aura-relay-api",
+    "crates/aura-relay-context",
+    "crates/aura-relay-inference",
+    "crates/aura-relay-intake",
+    "crates/aura-relay-ml",
+    "crates/aura-relay-observability",
+    "crates/aura-relay-policy",
+    "crates/aura-relay-risk",
+    "crates/aura-relay-store",
+    "crates/aura-wire-relay",
 ]
 
 [workspace.package]
@@ -32,12 +45,60 @@ protoc-bin-vendored = "3"
 sha2 = "0.11"
 regex = "1"
 
+# ── Release profiles ─────────────────────────────────────────────────
+
+# Default release: maximum size reduction for mobile Agent builds.
+# Use: cargo build --release -p aura-agent-ffi
 [profile.release]
 lto = "fat"
 codegen-units = 1
 strip = "symbols"
+opt-level = "s"
+panic = "abort"
 
+# Release with debug info preserved for profiling and crash analysis.
+# Use: cargo build --profile release-with-debug -p aura-agent-ffi
 [profile.release-with-debug]
 inherits = "release"
 debug = true
 strip = "none"
+opt-level = 2
+
+# Relay server build: speed-optimized, not size-optimized.
+# Use: cargo build --profile relay -p aura-relay-api
+[profile.relay]
+inherits = "release"
+opt-level = 3
+strip = "none"
+debug = 1
+panic = "unwind"
+
+# ── Per-crate build overrides ────────────────────────────────────────
+
+# Dependencies get full optimisation even in dev builds for faster test runs.
+[profile.dev.package."*"]
+opt-level = 1
+
+# ONNX runtime always wants max speed regardless of profile.
+[profile.release.package.ort]
+opt-level = 3
+
+[profile.release.package.ort-sys]
+opt-level = 3
+
+# Pattern matching is hot-path — max speed even in size-optimised agent builds.
+[profile.release.package.aura-patterns]
+opt-level = 3
+
+[profile.release.package.aho-corasick]
+opt-level = 3
+
+# Relay crates: speed over size.
+[profile.relay.package.aura-relay-inference]
+opt-level = 3
+
+[profile.relay.package.aura-relay-risk]
+opt-level = 3
+
+[profile.relay.package.aura-relay-ml]
+opt-level = 3

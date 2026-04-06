@@ -143,15 +143,15 @@ fn collapse_spaced_chars(text: &str) -> String {
             if !result.is_empty() {
                 result.push(' ');
             }
-            for i in run_start..run_end {
-                result.push_str(words[i]);
+            for word in &words[run_start..run_end] {
+                result.push_str(word);
             }
         } else {
-            for i in run_start..run_end.max(run_start + 1) {
+            for word in &words[run_start..run_end.max(run_start + 1)] {
                 if !result.is_empty() {
                     result.push(' ');
                 }
-                result.push_str(words[i]);
+                result.push_str(word);
                 if run_len == 0 {
                     run_end = run_start + 1;
                 }

@@ -1,0 +1,19 @@
+[package]
+name = "aura-agent-ffi"
+version.workspace = true
+edition.workspace = true
+description = "C FFI surface for AURA Agent runtime (Android NDK, iOS, Desktop)"
+
+[features]
+default = []
+onnx = ["aura-agent-core/onnx"]
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+aura-agent-core = { path = "../aura-agent-core" }
+aura-proto = { path = "../aura-proto" }
+aura-patterns = { path = "../aura-patterns" }
+prost.workspace = true
+tracing.workspace = true

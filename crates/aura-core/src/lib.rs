@@ -1,7 +1,25 @@
 //! Core analysis engine for the AURA intelligent protection system.
 //!
-//! Provides message analysis, conversation context tracking, threat detection,
-//! and evaluation infrastructure for child safety in messaging applications.
+//! **Transitional crate.** This crate is being decomposed into:
+//!
+//! - `aura-contracts` — canonical shared types (ThreatType, Confidence, etc.)
+//! - `aura-agent-core` — on-device runtime orchestration
+//! - `aura-agent-policy` — action decisions, product surfacing, shadow/pilot
+//! - `aura-relay-*` — server-side inference and intelligence
+//!
+//! New code should go into the appropriate target crate, not here.
+//! Existing code will migrate incrementally.
+//!
+//! ## Module migration plan
+//!
+//! | Module | Target crate |
+//! |---|---|
+//! | `types` (shared enums) | `aura-contracts` (done) |
+//! | `action`, `product`, `pilot`, `pilot_gate` | `aura-agent-policy` |
+//! | `analyzer`, `context`, `domain_runtime` | `aura-agent-core` |
+//! | `audit` | shared or agent-policy |
+//! | `config`, `ids`, `error` | `aura-contracts` or `aura-agent-core` |
+//! | `eval*`, `dataset_manifest` | `aura-eval` (future) |
 
 pub mod action;
 pub mod analyzer;

@@ -170,11 +170,7 @@ impl SentencePieceTokenizer {
         best_score[0] = 0.0;
 
         for end in 1..=n {
-            let search_start = if end > max_piece_len {
-                end - max_piece_len
-            } else {
-                0
-            };
+            let search_start = end.saturating_sub(max_piece_len);
 
             for start in (search_start..end).rev() {
                 let piece: String = chars[start..end].iter().collect();

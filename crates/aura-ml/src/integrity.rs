@@ -52,7 +52,7 @@ impl IntegritySpotChecker {
     /// verify individual blocks, providing O(1) verification per check.
     pub fn from_file_bytes(data: &[u8], check_interval: u64) -> Self {
         let block_size = 4096;
-        let total_blocks = (data.len() + block_size - 1) / block_size;
+        let total_blocks = data.len().div_ceil(block_size);
 
         let mut full_hasher = Sha256::new();
         full_hasher.update(data);
@@ -86,7 +86,7 @@ impl IntegritySpotChecker {
     /// performed this call, and whether it passed.
     pub fn maybe_check(&mut self, model_data: &[u8]) -> Option<bool> {
         self.checks_performed += 1;
-        if self.checks_performed % self.check_interval != 0 {
+        if !self.checks_performed.is_multiple_of(self.check_interval) {
             return None;
         }
 

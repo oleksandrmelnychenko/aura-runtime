@@ -259,8 +259,8 @@ impl UrlChecker {
 
         let base_clean = base.rsplit('.').next().unwrap_or(base);
 
-        let is_media = LEGITIMATE_MEDIA.iter().any(|m| *m == base_clean);
-        let is_suspect_tld = DOPPELGANGER_TLDS.iter().any(|t| *t == tld_with_dot);
+        let is_media = LEGITIMATE_MEDIA.contains(&base_clean);
+        let is_suspect_tld = DOPPELGANGER_TLDS.contains(&tld_with_dot);
 
         if is_media && is_suspect_tld {
             Some(SuspiciousUrl {

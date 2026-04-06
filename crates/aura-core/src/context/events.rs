@@ -867,6 +867,7 @@ impl EventKind {
     }
 
     /// Returns true if this event indicates propaganda or disinformation.
+    #[allow(clippy::match_like_matches_macro)]
     pub fn is_propaganda_indicator(&self) -> bool {
         match self {
             Self::PropagandaNarrative | Self::SuspiciousSource | Self::MilitaryDisinfo => true,

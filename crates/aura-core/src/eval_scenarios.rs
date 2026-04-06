@@ -316,7 +316,7 @@ fn propaganda_nocturnal_bot_case() -> ScenarioCase {
                 observed_threats: vec![ThreatType::Propaganda],
             },
             ScenarioStep {
-                timestamp_ms: base + 24 * hour + 1 * hour,
+                timestamp_ms: base + 25 * hour,
                 input: group_msg_lang("\u{041D}\u{0410}\u{0422}\u{041E} \u{043D}\u{0430}\u{0441} \u{043E}\u{0431}\u{043C}\u{0430}\u{043D}\u{044E}\u{0454}!", "night_bot", "nocturnal_1", "uk"),
                 observed_threats: vec![ThreatType::Propaganda],
             },

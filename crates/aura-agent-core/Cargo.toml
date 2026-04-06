@@ -1,20 +1,18 @@
 [package]
-name = "aura-ffi"
+name = "aura-agent-core"
 version.workspace = true
 edition.workspace = true
-description = "C FFI bindings for AURA Core (Android NDK, iOS, Desktop)"
+description = "On-device Agent runtime for AURA"
 
 [features]
 default = []
 onnx = ["aura-core/onnx"]
 
-[lib]
-crate-type = ["cdylib", "staticlib"]
-
 [dependencies]
+aura-contracts = { path = "../aura-contracts" }
 aura-core = { path = "../aura-core" }
 aura-kids = { path = "../aura-kids" }
-aura-proto = { path = "../aura-proto" }
 aura-patterns = { path = "../aura-patterns" }
-prost.workspace = true
+serde.workspace = true
+thiserror.workspace = true
 tracing.workspace = true

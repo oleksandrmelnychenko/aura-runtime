@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 const PROTO_RELATIVE_PATH: &str = "proto/aura/messenger/v1/messenger.proto";
 const FFI_HEADER_RELATIVE_PATH: &str = "include/aura_ffi.h";
 const FFI_SMOKE_SOURCE_RELATIVE_PATH: &str = "ci/ffi_header_smoke.c";
-const FFI_SOURCE_RELATIVE_PATH: &str = "crates/aura-ffi/src/lib.rs";
+const FFI_SOURCE_RELATIVE_PATH: &str = "crates/aura-agent-ffi/src/lib.rs";
 
 struct CliArgs {
     output: Option<PathBuf>,
@@ -299,7 +299,7 @@ fn parse_usize_constant(source: &str, constant_name: &str) -> Result<usize, Stri
         .lines()
         .map(str::trim)
         .find_map(|line| line.strip_prefix(&prefix))
-        .ok_or_else(|| format!("missing constant {constant_name} in aura-ffi source"))?
+        .ok_or_else(|| format!("missing constant {constant_name} in aura-agent-ffi source"))?
         .trim_end_matches(';')
         .trim();
 

@@ -9,6 +9,7 @@ default = []
 onnx = ["aura-ml/onnx"]
 
 [dependencies]
+aura-contracts = { path = "../aura-contracts" }
 aura-domain = { path = "../aura-domain" }
 aura-kids = { path = "../aura-kids" }
 aura-military = { path = "../aura-military" }

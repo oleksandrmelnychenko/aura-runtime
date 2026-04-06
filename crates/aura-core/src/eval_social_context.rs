@@ -102,17 +102,12 @@ struct SocialContextThreatGateSpec {
     max_expected_calibration_error: Option<f32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SocialContextInferenceScope {
+    #[default]
     FinalStep,
     AnyStep,
-}
-
-impl Default for SocialContextInferenceScope {
-    fn default() -> Self {
-        Self::FinalStep
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
