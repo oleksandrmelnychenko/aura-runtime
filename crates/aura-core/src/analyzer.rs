@@ -1248,6 +1248,16 @@ impl Analyzer {
             });
         }
 
+        let has_high_risk_grooming = signals.iter().any(is_high_risk_grooming_signal);
+        if friendly_context && !has_high_risk_grooming {
+            signals.retain(|signal| {
+                !(signal.threat_type == ThreatType::Grooming
+                    && signal.layer == DetectionLayer::ContextAnalysis
+                    && signal.reason_code.starts_with("conversation.timing.")
+                    && signal.score <= 0.50)
+            });
+        }
+
         let safe_gaming_banter = input.conversation_type != ConversationType::Direct
             && is_lightweight_competitive_banter_message(text);
         if safe_gaming_banter {
@@ -6477,6 +6487,61 @@ mod tests {
             "Trust should decay after sustained hostility: {} (was {})",
             profile.trust_level,
             trust_before
+        );
+    }
+
+    #[test]
+    fn trusted_family_late_night_affection_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let sender = "mom";
+        let conv = "family_dm";
+        analyzer.mark_contact_trusted(sender);
+
+        let start = 23 * 60 * 60 * 1000;
+        let mut last = AnalysisResult::clean(0);
+        for i in 0..4 {
+            last = analyzer.analyze_with_context(
+                &child_input("Love you, honey", sender, conv),
+                start + i * 10 * 60 * 1000,
+            );
+        }
+
+        assert_ne!(last.threat_type, ThreatType::Grooming, "{last:?}");
+        assert!(
+            crate::predicted_score_for_threat(&last, ThreatType::Grooming) < 0.50,
+            "trusted family affection should not accumulate timing-only grooming: {last:?}"
+        );
+        assert!(
+            !last
+                .reason_codes
+                .iter()
+                .any(|code| code == "conversation.timing.late_night_minor_contact"),
+            "trusted family timing signal should be suppressed: {last:?}"
+        );
+    }
+
+    #[test]
+    fn trusted_adult_secrecy_still_detects_grooming() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let sender = "coach";
+        let conv = "coach_dm";
+        analyzer.mark_contact_trusted(sender);
+
+        let result = analyzer.analyze_with_context(
+            &child_input(
+                "Don't tell your parents about our chats. They would not understand our bond.",
+                sender,
+                conv,
+            ),
+            12 * 60 * 60 * 1000,
+        );
+
+        assert_eq!(result.threat_type, ThreatType::Grooming, "{result:?}");
+        assert!(
+            crate::predicted_score_for_threat(&result, ThreatType::Grooming) >= 0.55,
+            "trusted status must not suppress secrecy grooming: {result:?}"
         );
     }
 

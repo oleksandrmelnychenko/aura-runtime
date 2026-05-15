@@ -1068,7 +1068,7 @@ impl ContactProfiler {
     pub fn is_new_contact(&self, sender_id: &str) -> bool {
         match self.profiles.get(sender_id) {
             None => true,
-            Some(p) => p.relationship_age_ms() < 48 * 60 * 60 * 1000,
+            Some(p) => !p.is_trusted && p.relationship_age_ms() < 48 * 60 * 60 * 1000,
         }
     }
 
@@ -1112,10 +1112,13 @@ impl ContactProfiler {
 
     /// Marks the given sender as fully trusted.
     pub fn mark_trusted(&mut self, sender_id: &str) {
-        if let Some(profile) = self.profiles.get_mut(sender_id) {
-            profile.trust_level = 1.0;
-            profile.is_trusted = true;
-        }
+        self.ensure_capacity_for_sender(sender_id);
+        let profile = self
+            .profiles
+            .entry(SenderId::from(sender_id))
+            .or_insert_with(|| ContactProfile::new(SenderId::from(sender_id), 0));
+        profile.trust_level = 1.0;
+        profile.is_trusted = true;
     }
 
     /// Sets the inferred age for a sender if not already set and the value is valid (5-99).
@@ -2754,6 +2757,17 @@ mod tests {
         let profile = profiler.profile("uncle").unwrap();
         assert_eq!(profile.trust_level, 1.0);
         assert!(profile.is_trusted);
+    }
+
+    #[test]
+    fn mark_trusted_creates_profile_before_first_message() {
+        let mut profiler = ContactProfiler::new();
+        profiler.mark_trusted("mom");
+
+        let profile = profiler.profile("mom").unwrap();
+        assert_eq!(profile.trust_level, 1.0);
+        assert!(profile.is_trusted);
+        assert!(!profiler.is_new_contact("mom"));
     }
 
     #[test]

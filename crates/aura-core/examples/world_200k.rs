@@ -862,6 +862,20 @@ fn format_top_breakdown(counts: &HashMap<String, usize>, total: usize, limit: us
         .join(", ")
 }
 
+fn mark_known_safe_contacts(analyzer: &mut Analyzer, child: &ChildProfile) {
+    for conv in &child.conversations {
+        let known_safe_contact = conv.id.starts_with("family_dm_")
+            || conv.id.starts_with("friend_dm_")
+            || conv.id.starts_with("class_group_");
+        if !known_safe_contact {
+            continue;
+        }
+        for participant in &conv.participants {
+            analyzer.mark_contact_trusted(participant);
+        }
+    }
+}
+
 fn main() {
     let mut scale = 1.0_f64;
     let mut seed = 42u64;
@@ -939,6 +953,7 @@ fn main() {
             ..AuraConfig::default()
         };
         let mut analyzer = Analyzer::new(config, &db);
+        mark_known_safe_contacts(&mut analyzer, child);
 
         let mut child_threats = 0usize;
         let mut child_blocks = 0usize;
