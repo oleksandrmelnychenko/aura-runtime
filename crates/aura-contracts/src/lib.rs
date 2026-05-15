@@ -7,7 +7,8 @@ pub mod observation;
 pub mod relay;
 
 pub use common::{
-    AccountType, Confidence, ConversationType, DetectionLayer, ProtectionLevel, ThreatType,
+    AccountType, Confidence, ConversationType, DetectionLayer, ProtectionLevel,
+    RelationshipTrustSource, SenderRelationship, ThreatType,
 };
 pub use context::{
     Directionality, RelationshipTag, SpeechAct, Stance, ThreatContextFrame, TrajectoryTag,

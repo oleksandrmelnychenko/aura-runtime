@@ -208,6 +208,8 @@ fn analyze_for_relay_response_round_trip() {
             }],
             recent_message_window: Vec::new(),
             server_sender_risk_hint: Some(0.4),
+            sender_relationship: proto::SenderRelationship::UnknownAdult as i32,
+            relationship_trust_source: proto::RelationshipTrustSource::ServerReputation as i32,
             privacy_mode: proto::RelayPrivacyMode::MetadataOnly as i32,
             capabilities: Some(proto::RelayAgentCapabilities {
                 local_context_interpreter: true,
@@ -240,10 +242,48 @@ fn analyze_for_relay_response_round_trip() {
     assert!(relay_request.text.is_empty());
     assert_eq!(relay_request.sender_token.as_deref(), Some("snd_token"));
     assert_eq!(relay_request.local_safety_telemetry.len(), 1);
+    assert_eq!(
+        relay_request.sender_relationship,
+        proto::SenderRelationship::UnknownAdult as i32
+    );
+    assert_eq!(
+        relay_request.relationship_trust_source,
+        proto::RelationshipTrustSource::ServerReputation as i32
+    );
     assert_eq!(relay_request.auth.unwrap().alg, "hmac-sha256-v1");
     assert_eq!(
         relay_request.protected_account_attestation.unwrap().key_id,
         "acct-attest-key-1"
+    );
+}
+
+#[test]
+fn message_input_relationship_metadata_round_trip() {
+    let original = proto::MessageInput {
+        content_type: proto::ContentType::Text as i32,
+        text: Some("hello".to_string()),
+        image_data: None,
+        sender_id: "sender_1".to_string(),
+        conversation_id: "conv_1".to_string(),
+        language: Some("en".to_string()),
+        conversation_type: proto::ConversationType::Direct as i32,
+        member_count: None,
+        server_sender_risk_hint: Some(0.2),
+        sender_relationship: proto::SenderRelationship::Teacher as i32,
+        relationship_trust_source: proto::RelationshipTrustSource::SchoolDirectory as i32,
+    };
+
+    let bytes = original.encode_to_vec();
+    let decoded = proto::MessageInput::decode(bytes.as_slice()).expect("decode message input");
+
+    assert_eq!(decoded, original);
+    assert_eq!(
+        decoded.sender_relationship,
+        proto::SenderRelationship::Teacher as i32
+    );
+    assert_eq!(
+        decoded.relationship_trust_source,
+        proto::RelationshipTrustSource::SchoolDirectory as i32
     );
 }
 

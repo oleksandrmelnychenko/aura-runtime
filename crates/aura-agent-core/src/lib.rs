@@ -370,6 +370,8 @@ impl AgentRuntime {
                 timestamp_ms,
             ),
             server_sender_risk_hint: input.server_sender_risk_hint,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
             privacy_mode: self.relay_policy.privacy_mode,
             capabilities: AgentCapabilities {
                 local_context_interpreter: true,
@@ -388,7 +390,7 @@ impl AgentRuntime {
         request
     }
 
-    fn sign_relay_request_if_configured(&self, request: &mut AgentAnalyzeRequest) {
+    pub fn sign_relay_request_if_configured(&self, request: &mut AgentAnalyzeRequest) {
         let Some(key) = self.relay_request_auth_key.as_ref() else {
             return;
         };

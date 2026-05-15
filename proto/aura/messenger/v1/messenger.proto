@@ -222,6 +222,35 @@ enum ConversationType {
   CONVERSATION_TYPE_GROUP = 2;
 }
 
+enum SenderRelationship {
+  SENDER_RELATIONSHIP_UNSPECIFIED = 0;
+  SENDER_RELATIONSHIP_UNKNOWN = 1;
+  SENDER_RELATIONSHIP_PARENT = 2;
+  SENDER_RELATIONSHIP_GUARDIAN = 3;
+  SENDER_RELATIONSHIP_FAMILY = 4;
+  SENDER_RELATIONSHIP_SIBLING = 5;
+  SENDER_RELATIONSHIP_PEER = 6;
+  SENDER_RELATIONSHIP_TEACHER = 7;
+  SENDER_RELATIONSHIP_COACH = 8;
+  SENDER_RELATIONSHIP_AUTHORITY = 9;
+  SENDER_RELATIONSHIP_SERVICE = 10;
+  SENDER_RELATIONSHIP_UNKNOWN_ADULT = 11;
+  SENDER_RELATIONSHIP_UNKNOWN_PEER = 12;
+}
+
+enum RelationshipTrustSource {
+  RELATIONSHIP_TRUST_SOURCE_UNSPECIFIED = 0;
+  RELATIONSHIP_TRUST_SOURCE_UNKNOWN = 1;
+  RELATIONSHIP_TRUST_SOURCE_USER_VERIFIED = 2;
+  RELATIONSHIP_TRUST_SOURCE_GUARDIAN_VERIFIED = 3;
+  RELATIONSHIP_TRUST_SOURCE_PLATFORM_VERIFIED = 4;
+  RELATIONSHIP_TRUST_SOURCE_ADDRESS_BOOK = 5;
+  RELATIONSHIP_TRUST_SOURCE_SCHOOL_DIRECTORY = 6;
+  RELATIONSHIP_TRUST_SOURCE_SERVER_REPUTATION = 7;
+  RELATIONSHIP_TRUST_SOURCE_LOCAL_HEURISTIC = 8;
+  RELATIONSHIP_TRUST_SOURCE_SELF_DECLARED = 9;
+}
+
 enum ContentType {
   CONTENT_TYPE_UNSPECIFIED = 0;
   CONTENT_TYPE_TEXT = 1;
@@ -404,6 +433,10 @@ message MessageInput {
   // Server-injected sender reputation hint (0.0 = unknown, 1.0 = max risk).
   // Allows the server to feed cross-user reputation signals back to the client.
   optional float server_sender_risk_hint = 9;
+  // Coarse, privacy-preserving sender relationship category.
+  SenderRelationship sender_relationship = 10;
+  // Source used to derive sender_relationship. Self-declared data is not trust.
+  RelationshipTrustSource relationship_trust_source = 11;
 }
 
 message AnalyzeContextRequest {
@@ -489,6 +522,10 @@ message RelayAnalyzeRequest {
   optional string conversation_token = 19;
   RelayRequestAuth auth = 20;
   ProtectedAccountTokenAttestation protected_account_attestation = 21;
+  // Coarse, privacy-preserving sender relationship category.
+  SenderRelationship sender_relationship = 22;
+  // Source used to derive sender_relationship. Self-declared data is not trust.
+  RelationshipTrustSource relationship_trust_source = 23;
 }
 
 message AnalyzeForRelayResponse {

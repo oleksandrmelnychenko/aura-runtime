@@ -15,11 +15,11 @@ use aura_agent_core::aura_contracts::{
     AgentAnalyzeRequest as RelayAnalyzeRequestContract, ClientSafetyTelemetryEvent,
     DetectionLayer as RelayDetectionLayer,
     ProtectedAccountTokenAttestation as ProtectedAccountTokenAttestationContract,
-    RelayAnalyzeResponse as RelayAnalyzeResponseContract, RelayPrivacyMode,
-    RelayRequestAuth as RelayRequestAuthContract, RelayResponseAuth as RelayResponseAuthContract,
-    RemoteFinding as RelayRemoteFindingContract,
+    RelationshipTrustSource, RelayAnalyzeResponse as RelayAnalyzeResponseContract,
+    RelayPrivacyMode, RelayRequestAuth as RelayRequestAuthContract,
+    RelayResponseAuth as RelayResponseAuthContract, RemoteFinding as RelayRemoteFindingContract,
     RemoteInferenceSummary as RelayRemoteInferenceSummaryContract, RiskHorizon as RelayRiskHorizon,
-    SafetyTelemetryAction, SafetyTelemetrySeverity, SafetyTelemetrySurface,
+    SafetyTelemetryAction, SafetyTelemetrySeverity, SafetyTelemetrySurface, SenderRelationship,
     PROTECTED_ACCOUNT_TOKEN_ATTESTATION_ALG,
 };
 use aura_agent_core::context::contact::{
@@ -536,19 +536,28 @@ pub unsafe extern "C" fn aura_analyze_for_relay(
         set_last_error("missing message in analyze_for_relay request");
         return false;
     };
+    let sender_relationship = sender_relationship_from_proto(message.sender_relationship);
+    let relationship_trust_source =
+        relationship_trust_source_from_proto(message.relationship_trust_source);
     let input = message_input_from_proto(message);
 
     match with_instance(handle, |instance| {
         let envelope = instance
             .analyzer
             .analyze_for_relay(&input, request.timestamp_ms);
+        let mut relay_request = envelope.relay_request;
+        if let Some(request) = relay_request.as_mut() {
+            request.sender_relationship = sender_relationship;
+            request.relationship_trust_source = relationship_trust_source;
+            instance.analyzer.sign_relay_request_if_configured(request);
+        }
         let response = proto::AnalyzeForRelayResponse {
             local_result: Some(analysis_result_to_proto(
                 &envelope.local_result,
                 Some(input.conversation_id.0.as_str()),
                 Some(input.sender_id.0.as_str()),
             )),
-            relay_request: envelope.relay_request.as_ref().map(relay_request_to_proto),
+            relay_request: relay_request.as_ref().map(relay_request_to_proto),
         };
         write_proto_message(out, &response)
     }) {
@@ -2251,6 +2260,10 @@ fn relay_request_to_proto(request: &RelayAnalyzeRequestContract) -> proto::Relay
             })
             .collect(),
         server_sender_risk_hint: request.server_sender_risk_hint,
+        sender_relationship: proto_sender_relationship(request.sender_relationship) as i32,
+        relationship_trust_source: proto_relationship_trust_source(
+            request.relationship_trust_source,
+        ) as i32,
         privacy_mode: proto_relay_privacy_mode(request.privacy_mode) as i32,
         capabilities: Some(proto::RelayAgentCapabilities {
             local_context_interpreter: request.capabilities.local_context_interpreter,
@@ -3313,6 +3326,90 @@ fn proto_conversation_type(value: aura_agent_core::ConversationType) -> proto::C
     }
 }
 
+fn sender_relationship_from_proto(value: i32) -> SenderRelationship {
+    match proto::SenderRelationship::try_from(value)
+        .unwrap_or(proto::SenderRelationship::Unspecified)
+    {
+        proto::SenderRelationship::Parent => SenderRelationship::Parent,
+        proto::SenderRelationship::Guardian => SenderRelationship::Guardian,
+        proto::SenderRelationship::Family => SenderRelationship::Family,
+        proto::SenderRelationship::Sibling => SenderRelationship::Sibling,
+        proto::SenderRelationship::Peer => SenderRelationship::Peer,
+        proto::SenderRelationship::Teacher => SenderRelationship::Teacher,
+        proto::SenderRelationship::Coach => SenderRelationship::Coach,
+        proto::SenderRelationship::Authority => SenderRelationship::Authority,
+        proto::SenderRelationship::Service => SenderRelationship::Service,
+        proto::SenderRelationship::UnknownAdult => SenderRelationship::UnknownAdult,
+        proto::SenderRelationship::UnknownPeer => SenderRelationship::UnknownPeer,
+        proto::SenderRelationship::Unspecified | proto::SenderRelationship::Unknown => {
+            SenderRelationship::Unknown
+        }
+    }
+}
+
+fn proto_sender_relationship(value: SenderRelationship) -> proto::SenderRelationship {
+    match value {
+        SenderRelationship::Unknown => proto::SenderRelationship::Unknown,
+        SenderRelationship::Parent => proto::SenderRelationship::Parent,
+        SenderRelationship::Guardian => proto::SenderRelationship::Guardian,
+        SenderRelationship::Family => proto::SenderRelationship::Family,
+        SenderRelationship::Sibling => proto::SenderRelationship::Sibling,
+        SenderRelationship::Peer => proto::SenderRelationship::Peer,
+        SenderRelationship::Teacher => proto::SenderRelationship::Teacher,
+        SenderRelationship::Coach => proto::SenderRelationship::Coach,
+        SenderRelationship::Authority => proto::SenderRelationship::Authority,
+        SenderRelationship::Service => proto::SenderRelationship::Service,
+        SenderRelationship::UnknownAdult => proto::SenderRelationship::UnknownAdult,
+        SenderRelationship::UnknownPeer => proto::SenderRelationship::UnknownPeer,
+    }
+}
+
+fn relationship_trust_source_from_proto(value: i32) -> RelationshipTrustSource {
+    match proto::RelationshipTrustSource::try_from(value)
+        .unwrap_or(proto::RelationshipTrustSource::Unspecified)
+    {
+        proto::RelationshipTrustSource::UserVerified => RelationshipTrustSource::UserVerified,
+        proto::RelationshipTrustSource::GuardianVerified => {
+            RelationshipTrustSource::GuardianVerified
+        }
+        proto::RelationshipTrustSource::PlatformVerified => {
+            RelationshipTrustSource::PlatformVerified
+        }
+        proto::RelationshipTrustSource::AddressBook => RelationshipTrustSource::AddressBook,
+        proto::RelationshipTrustSource::SchoolDirectory => RelationshipTrustSource::SchoolDirectory,
+        proto::RelationshipTrustSource::ServerReputation => {
+            RelationshipTrustSource::ServerReputation
+        }
+        proto::RelationshipTrustSource::LocalHeuristic => RelationshipTrustSource::LocalHeuristic,
+        proto::RelationshipTrustSource::SelfDeclared => RelationshipTrustSource::SelfDeclared,
+        proto::RelationshipTrustSource::Unspecified | proto::RelationshipTrustSource::Unknown => {
+            RelationshipTrustSource::Unknown
+        }
+    }
+}
+
+fn proto_relationship_trust_source(
+    value: RelationshipTrustSource,
+) -> proto::RelationshipTrustSource {
+    match value {
+        RelationshipTrustSource::Unknown => proto::RelationshipTrustSource::Unknown,
+        RelationshipTrustSource::UserVerified => proto::RelationshipTrustSource::UserVerified,
+        RelationshipTrustSource::GuardianVerified => {
+            proto::RelationshipTrustSource::GuardianVerified
+        }
+        RelationshipTrustSource::PlatformVerified => {
+            proto::RelationshipTrustSource::PlatformVerified
+        }
+        RelationshipTrustSource::AddressBook => proto::RelationshipTrustSource::AddressBook,
+        RelationshipTrustSource::SchoolDirectory => proto::RelationshipTrustSource::SchoolDirectory,
+        RelationshipTrustSource::ServerReputation => {
+            proto::RelationshipTrustSource::ServerReputation
+        }
+        RelationshipTrustSource::LocalHeuristic => proto::RelationshipTrustSource::LocalHeuristic,
+        RelationshipTrustSource::SelfDeclared => proto::RelationshipTrustSource::SelfDeclared,
+    }
+}
+
 fn proto_relay_privacy_mode(value: RelayPrivacyMode) -> proto::RelayPrivacyMode {
     match value {
         RelayPrivacyMode::MetadataOnly => proto::RelayPrivacyMode::MetadataOnly,
@@ -4266,6 +4363,41 @@ mod tests {
     }
 
     #[test]
+    fn analyze_for_relay_preserves_relationship_metadata() {
+        unsafe {
+            let mut config = proto_config(proto::AccountType::Child, true);
+            let mut policy = metadata_only_relay_policy();
+            policy.request_auth_key = Some(relay_request_auth_key_proto());
+            config.relay_policy = Some(policy);
+            let handle = init_handle(config);
+            let mut message = proto_message("i will kill you", "sender_1", "conv_1");
+            message.sender_relationship = proto::SenderRelationship::UnknownAdult as i32;
+            message.relationship_trust_source =
+                proto::RelationshipTrustSource::ServerReputation as i32;
+
+            let response = analyze_for_relay_response(handle, message, 1_700_000_123_456);
+            let relay_request = response.relay_request.expect("missing relay request");
+
+            assert_eq!(
+                relay_request.sender_relationship,
+                proto::SenderRelationship::UnknownAdult as i32
+            );
+            assert_eq!(
+                relay_request.relationship_trust_source,
+                proto::RelationshipTrustSource::ServerReputation as i32
+            );
+            let contract = relay_request_contract_from_proto(relay_request);
+            assert!(aura_agent_core::aura_contracts::verify_relay_request_auth(
+                &contract,
+                "relay-req-key-1",
+                &relay_request_auth_secret()
+            ));
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
     fn analyze_for_relay_signs_request_when_auth_key_configured() {
         unsafe {
             let mut config = proto_config(proto::AccountType::Child, true);
@@ -4800,6 +4932,10 @@ mod tests {
                 )
                 .collect(),
             server_sender_risk_hint: request.server_sender_risk_hint,
+            sender_relationship: sender_relationship_from_proto(request.sender_relationship),
+            relationship_trust_source: relationship_trust_source_from_proto(
+                request.relationship_trust_source,
+            ),
             privacy_mode: relay_privacy_mode_from_proto(request.privacy_mode),
             capabilities: request
                 .capabilities
@@ -4995,6 +5131,8 @@ mod tests {
             conversation_type: proto::ConversationType::Direct as i32,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: proto::SenderRelationship::Unspecified as i32,
+            relationship_trust_source: proto::RelationshipTrustSource::Unspecified as i32,
         }
     }
 
