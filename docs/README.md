@@ -9,6 +9,7 @@ Status: synchronized with runtime and policy behavior on March 25, 2026.
 
 - [Phase 2 Production Roadmap](./phase-2-production-roadmap.md)
 - [Phase 3 Pilot Readiness Roadmap](./phase-3-pilot-readiness-roadmap.md)
+- [Server, Client, and Feature Backlog](./server-client-feature-backlog.md)
 - [Product Integration Contract](./product-integration-contract.md)
 - [Pilot Operations](./pilot-operations.md)
 - [Release Criteria](./release-criteria.md)
