@@ -215,6 +215,16 @@ def apply_manifest_summary(summary: dict, manifest: dict) -> None:
     summary["pilot_shadow_status"] = manifest_summary.get("pilot_shadow_status")
     summary["pilot_regression_status"] = manifest_summary.get("pilot_regression_status")
     summary["pilot_gate_status"] = manifest_summary.get("pilot_gate_status")
+    summary["world_lifecycle_status"] = manifest_summary.get("world_lifecycle_status")
+    summary["world_lifecycle_total_worlds"] = manifest_summary.get(
+        "world_lifecycle_total_worlds"
+    )
+    summary["world_lifecycle_total_events"] = manifest_summary.get(
+        "world_lifecycle_total_events"
+    )
+    summary["world_lifecycle_finding_count"] = manifest_summary.get(
+        "world_lifecycle_finding_count"
+    )
 
 
 def apply_release_report_summary(summary: dict, release_payload: dict) -> None:
@@ -267,6 +277,17 @@ def print_rehearsal_summary(summary: dict, summary_path: Path) -> None:
             file=sys.stderr,
         )
 
+    lifecycle_status = summary.get("world_lifecycle_status")
+    if lifecycle_status is not None:
+        print(
+            "world lifecycle suite: "
+            f"status={lifecycle_status} "
+            f"worlds={summary.get('world_lifecycle_total_worlds')} "
+            f"events={summary.get('world_lifecycle_total_events')} "
+            f"findings={summary.get('world_lifecycle_finding_count')}",
+            file=sys.stderr,
+        )
+
     for line in summary.get("release_operator_summary", []):
         print(f"release summary: {line}", file=sys.stderr)
 
@@ -290,6 +311,7 @@ def main() -> int:
         "contract_evidence": output_dir / "contract-evidence.json",
         "dataset_evidence": output_dir / "dataset-evidence.json",
         "audit_evidence": output_dir / "audit-evidence.json",
+        "world_lifecycle_report": output_dir / "world-lifecycle-suite-report.json",
         "pilot_shadow_bundle": output_dir / "pilot-shadow-bundle.json",
         "pilot_shadow_bundle_2": output_dir / "pilot-shadow-bundle-2.json",
         "pilot_regression_report": output_dir / "pilot-regression-report.json",
@@ -326,6 +348,10 @@ def main() -> int:
         "pilot_shadow_status": None,
         "pilot_regression_status": None,
         "pilot_gate_status": None,
+        "world_lifecycle_status": None,
+        "world_lifecycle_total_worlds": None,
+        "world_lifecycle_total_events": None,
+        "world_lifecycle_finding_count": None,
         "manifest_path": paths["manifest"].as_posix(),
         "manifest_evidence_status": None,
     }
@@ -406,6 +432,25 @@ def main() -> int:
                 "--",
                 "--output",
                 paths["audit_evidence"].as_posix(),
+            ]
+        )
+        record_and_require(
+            [
+                "cargo",
+                "run",
+                "--quiet",
+                "--example",
+                "world_sim",
+                "-p",
+                "aura-core",
+                "--",
+                "--input",
+                "crates/aura-core/data/world_lifecycle_suite",
+                "--summary-only",
+                "--output",
+                paths["world_lifecycle_report"].as_posix(),
+                "--redact-text",
+                "--require-clean",
             ]
         )
         record_and_require(
@@ -562,6 +607,8 @@ def main() -> int:
             paths["pilot_shadow_bundle"].as_posix(),
             "--pilot-regression-report",
             paths["pilot_regression_report"].as_posix(),
+            "--world-lifecycle-report",
+            paths["world_lifecycle_report"].as_posix(),
             *(
                 ["--pilot-gate-report", paths["pilot_gate_report"].as_posix()]
                 if args.pilot_review_signoffs

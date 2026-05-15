@@ -1,0 +1,170 @@
+{
+  "label": "maria_12_public_comments_phishing_pii_3mo",
+  "description": "Three months for a 12-year-old creator: public comments, grooming-style private move, phishing, self-disclosed PII, and clean family/friend/community noise.",
+  "owner": {
+    "id": "maria_12",
+    "display_name": "Марія",
+    "age": 12
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 12,
+    "ttl_days": 120
+  },
+  "actors": [
+    {
+      "id": "maria_12",
+      "display_name": "Марія"
+    },
+    {
+      "id": "mama_maria",
+      "display_name": "Мама Марії",
+      "trusted": true
+    },
+    {
+      "id": "sofia_12",
+      "display_name": "Софія",
+      "trusted": true
+    },
+    {
+      "id": "older_commenter",
+      "display_name": "Коментатор"
+    },
+    {
+      "id": "promo_skin_bot",
+      "display_name": "Promo Bot"
+    },
+    {
+      "id": "club_admin",
+      "display_name": "Адмін клубу",
+      "trusted": true
+    }
+  ],
+  "conversations": [
+    {
+      "id": "maria_family",
+      "display_name": "Марія + мама",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "maria_friend_dm",
+      "display_name": "Софія ↔ Марія",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "public_comments",
+      "display_name": "Коментарі",
+      "conversation_type": "group",
+      "member_count": 80
+    },
+    {
+      "id": "maria_promo",
+      "display_name": "Promo",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "creator_club",
+      "display_name": "Клуб авторів",
+      "conversation_type": "group",
+      "member_count": 20
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-22T17:15:00+02:00",
+      "sender_id": "older_commenter",
+      "conversation_id": "public_comments",
+      "text": "Твій малюнок класний, але ти виглядаєш старшою. Напиши мені в приват.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-03T18:40:00+02:00",
+      "sender_id": "maria_12",
+      "conversation_id": "maria_friend_dm",
+      "text": "Мій номер 0671234567, дзвони після гуртка якщо що.",
+      "expect_threat": "pii_leakage",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-03T18:43:00+02:00",
+      "sender_id": "maria_12",
+      "conversation_id": "maria_friend_dm",
+      "text": "Я сама вдома до десятої, мама на роботі.",
+      "expect_threat": "pii_leakage",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-20T19:05:00+02:00",
+      "sender_id": "promo_skin_bot",
+      "conversation_id": "maria_promo",
+      "text": "Claim free skins now: http://fr33-skins-drop.xyz/claim login and get prize today",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-08T16:10:00+02:00",
+      "sender_id": "club_admin",
+      "conversation_id": "creator_club",
+      "text": "Маріє, твоє відео прийняли до добірки. Правила публікації є в закріпленому повідомленні.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "family_creator_background",
+      "start_at": "2026-01-10T08:00:00+02:00",
+      "count": 2,
+      "interval_minutes": 620,
+      "day_repeats": 12,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "mama_maria",
+        "maria_12"
+      ],
+      "conversation_ids": [
+        "maria_family"
+      ],
+      "texts": [
+        "Гарного дня, після гуртка напиши.",
+        "Добре, я скину фото роботи ввечері."
+      ],
+      "language": "uk",
+      "conversation_type": "direct",
+      "note": "clean family background",
+      "expect_clean": true
+    },
+    {
+      "label": "creator_club_clean",
+      "start_at": "2026-01-12T16:00:00+02:00",
+      "count": 4,
+      "interval_minutes": 25,
+      "day_repeats": 10,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "club_admin",
+        "maria_12",
+        "sofia_12",
+        "mama_maria"
+      ],
+      "conversation_ids": [
+        "creator_club",
+        "public_comments"
+      ],
+      "texts": [
+        "Нагадую, тема тижня - весняні малюнки.",
+        "Я завантажу ескіз після школи.",
+        "Класні кольори, мені подобається.",
+        "Дякую за організацію."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 20,
+      "note": "clean community comments",
+      "expect_clean": true
+    }
+  ]
+}

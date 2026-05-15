@@ -34,6 +34,42 @@ fn main() {
         .clone()
         .unwrap_or_else(|| PathBuf::from(DEFAULT_WORLD_PATH));
 
+    if input_path.is_dir() {
+        if args.shadow_output.is_some() || args.shadow_output_proto.is_some() {
+            eprintln!("error: shadow output is only supported for a single world input");
+            std::process::exit(2);
+        }
+
+        let suite_report =
+            run_world_suite(&input_path, args.repeat_multiplier).unwrap_or_else(|err| {
+                eprintln!("error: failed to run simulation suite: {err}");
+                std::process::exit(1);
+            });
+
+        if !args.summary_only {
+            for report in &suite_report.reports {
+                print_event_log(report);
+                print_summary(report, args.top_contacts);
+                println!();
+            }
+        }
+        print_suite_summary(&suite_report);
+
+        if let Some(path) = args.output.as_deref() {
+            write_json_report(&suite_report, path, "suite report", args.redact_text);
+        }
+
+        if args.require_clean && suite_report.total_findings != 0 {
+            eprintln!(
+                "simulation suite produced {} finding(s); --require-clean expects zero",
+                suite_report.total_findings
+            );
+            std::process::exit(1);
+        }
+
+        return;
+    }
+
     let world = load_world(&input_path).unwrap_or_else(|err| {
         eprintln!("error: failed to load simulation world: {err}");
         std::process::exit(1);
@@ -50,25 +86,17 @@ fn main() {
     }
     print_summary(&report, args.top_contacts);
 
-    if let Some(path) = args.output {
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).expect("create output directory");
-            }
-        }
-        let json = serde_json::to_string_pretty(&report).expect("serializable world sim report");
-        fs::write(&path, json).expect("write world sim report");
-        println!();
-        println!("Wrote JSON report to {}", path.display());
+    if let Some(path) = args.output.as_deref() {
+        write_json_report(&report, path, "JSON report", args.redact_text);
     }
 
     if args.shadow_output.is_some() || args.shadow_output_proto.is_some() {
         let shadow_bundle = build_shadow_bundle(&report, &input_path);
-        if let Some(path) = args.shadow_output {
-            write_shadow_bundle_json(&shadow_bundle, &path);
+        if let Some(path) = args.shadow_output.as_deref() {
+            write_shadow_bundle_json(&shadow_bundle, path);
         }
-        if let Some(path) = args.shadow_output_proto {
-            write_shadow_bundle_proto(&shadow_bundle, &path);
+        if let Some(path) = args.shadow_output_proto.as_deref() {
+            write_shadow_bundle_proto(&shadow_bundle, path);
         }
     }
 
@@ -91,6 +119,7 @@ struct Args {
     top_contacts: usize,
     repeat_multiplier: usize,
     require_clean: bool,
+    redact_text: bool,
     help: bool,
 }
 
@@ -131,6 +160,7 @@ impl Args {
                         .parse::<usize>()
                         .map_err(|_| format!("invalid --top-contacts value: {raw}"))?;
                 }
+                "--redact-text" => self.redact_text = true,
                 "--help" | "-h" => self.help = true,
                 other => return Err(format!("unknown argument: {other}")),
             }
@@ -152,7 +182,7 @@ fn print_help() {
     println!("  cargo run --example world_sim -p aura-core -- [options]");
     println!();
     println!("Options:");
-    println!("  --input <path>         simulation world JSON (default: {DEFAULT_WORLD_PATH})");
+    println!("  --input <path>         simulation world JSON or suite directory (default: {DEFAULT_WORLD_PATH})");
     println!("  --output <path>        write machine-readable JSON report");
     println!("  --shadow-output <path> write plaintext-free shadow replay bundle");
     println!("  --shadow-output-proto <path> write protobuf shadow replay bundle");
@@ -160,6 +190,7 @@ fn print_help() {
     println!("  --top-contacts <n>     number of risky contacts to print (default: 8)");
     println!("  --repeat-multiplier <n> scale generated_batches day_repeats by n (default: 1)");
     println!("  --require-clean        exit non-zero if simulation produced findings");
+    println!("  --redact-text          replace event text in JSON reports with a redaction marker");
     println!("  --help                 show this message");
 }
 
@@ -242,6 +273,8 @@ struct WorldEvent {
     #[serde(default)]
     note: Option<String>,
     #[serde(default)]
+    expect_clean: bool,
+    #[serde(default)]
     expect_threat: Option<aura_core::ThreatType>,
     #[serde(default)]
     expect_min_action: Option<Action>,
@@ -270,6 +303,8 @@ struct GeneratedBatch {
     member_count: Option<u32>,
     #[serde(default)]
     note: Option<String>,
+    #[serde(default)]
+    expect_clean: bool,
     #[serde(default)]
     expect_threat: Option<aura_core::ThreatType>,
     #[serde(default)]
@@ -310,6 +345,23 @@ struct WorldSimReport {
 }
 
 #[derive(Debug, Serialize)]
+struct WorldSuiteReport {
+    schema_version: &'static str,
+    label: String,
+    input_path: String,
+    total_worlds: usize,
+    total_events: usize,
+    threat_events: usize,
+    warn_events: usize,
+    block_events: usize,
+    total_findings: usize,
+    action_counts: BTreeMap<String, usize>,
+    threat_counts: BTreeMap<String, usize>,
+    alert_counts: BTreeMap<String, usize>,
+    reports: Vec<WorldSimReport>,
+}
+
+#[derive(Debug, Serialize)]
 struct OwnerReport {
     id: String,
     display_name: String,
@@ -336,6 +388,7 @@ struct EventOutcome {
 
 #[derive(Debug, Clone, Serialize)]
 struct EventExpectation {
+    expect_clean: bool,
     expect_threat: Option<aura_core::ThreatType>,
     expect_min_action: Option<Action>,
     expect_min_alert: Option<AlertPriority>,
@@ -422,6 +475,86 @@ struct ResolvedEventSeed {
     text: String,
 }
 
+fn run_world_suite(input_dir: &Path, repeat_multiplier: usize) -> Result<WorldSuiteReport, String> {
+    let input_paths = load_suite_paths(input_dir)?;
+    let mut reports = Vec::with_capacity(input_paths.len());
+
+    for input_path in input_paths {
+        let world = load_world(&input_path)?;
+        let report = run_world_simulation(&world, &input_path, repeat_multiplier)?;
+        reports.push(report);
+    }
+
+    let mut action_counts = BTreeMap::new();
+    let mut threat_counts = BTreeMap::new();
+    let mut alert_counts = BTreeMap::new();
+    let mut total_events = 0;
+    let mut threat_events = 0;
+    let mut warn_events = 0;
+    let mut block_events = 0;
+    let mut total_findings = 0;
+
+    for report in &reports {
+        total_events += report.total_events;
+        threat_events += report.threat_events;
+        warn_events += report.warn_events;
+        block_events += report.block_events;
+        total_findings += report.findings.len();
+        merge_counts(&mut action_counts, &report.action_counts);
+        merge_counts(&mut threat_counts, &report.threat_counts);
+        merge_counts(&mut alert_counts, &report.alert_counts);
+    }
+
+    Ok(WorldSuiteReport {
+        schema_version: "world_suite.v1",
+        label: input_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("world_suite")
+            .to_string(),
+        input_path: input_dir.display().to_string(),
+        total_worlds: reports.len(),
+        total_events,
+        threat_events,
+        warn_events,
+        block_events,
+        total_findings,
+        action_counts,
+        threat_counts,
+        alert_counts,
+        reports,
+    })
+}
+
+fn load_suite_paths(input_dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut input_paths = fs::read_dir(input_dir)
+        .map_err(|err| format!("read suite directory {}: {err}", input_dir.display()))?
+        .map(|entry| {
+            entry
+                .map(|entry| entry.path())
+                .map_err(|err| format!("read suite directory entry: {err}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    input_paths.retain(|path| {
+        path.is_file()
+            && path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+    });
+    input_paths.sort();
+
+    if input_paths.is_empty() {
+        return Err(format!(
+            "suite directory {} does not contain any JSON worlds",
+            input_dir.display()
+        ));
+    }
+
+    Ok(input_paths)
+}
+
 fn load_world(path: &Path) -> Result<SimulationWorld, String> {
     let raw = fs::read_to_string(path).map_err(|err| format!("read {}: {err}", path.display()))?;
     let mut world: SimulationWorld =
@@ -457,6 +590,7 @@ fn run_world_simulation(
         .unwrap_or_else(|| "uk".to_string());
     config.enabled = world.config.enabled.unwrap_or(true);
     config.account_holder_age = world.config.account_holder_age.or(world.owner.age);
+    config.protected_account_id = Some(world.owner.id.clone());
     config.ttl_days = world.config.ttl_days.unwrap_or(30);
     config.timezone_offset_minutes = world.config.timezone_offset_minutes.unwrap_or(120);
     config
@@ -631,6 +765,7 @@ fn event_seed_from_event(event: &WorldEvent) -> Result<ResolvedEventSeed, String
         language: event.language.clone(),
         note: event.note.clone(),
         expectation: expectation_from_parts(
+            event.expect_clean,
             event.expect_threat,
             event.expect_min_action,
             event.expect_min_alert,
@@ -729,6 +864,7 @@ fn expand_generated_batch(
                 language: batch.language.clone(),
                 note,
                 expectation: expectation_from_parts(
+                    batch.expect_clean,
                     batch.expect_threat,
                     batch.expect_min_action,
                     batch.expect_min_alert,
@@ -742,12 +878,18 @@ fn expand_generated_batch(
 }
 
 fn expectation_from_parts(
+    expect_clean: bool,
     expect_threat: Option<aura_core::ThreatType>,
     expect_min_action: Option<Action>,
     expect_min_alert: Option<AlertPriority>,
 ) -> Option<EventExpectation> {
-    if expect_threat.is_some() || expect_min_action.is_some() || expect_min_alert.is_some() {
+    if expect_clean
+        || expect_threat.is_some()
+        || expect_min_action.is_some()
+        || expect_min_alert.is_some()
+    {
         Some(EventExpectation {
+            expect_clean,
             expect_threat,
             expect_min_action,
             expect_min_alert,
@@ -1022,6 +1164,50 @@ fn print_summary(report: &WorldSimReport, top_contacts: usize) {
     }
 }
 
+fn print_suite_summary(report: &WorldSuiteReport) {
+    println!("Suite Summary");
+    println!(
+        "  worlds={} events={} threat_events={} warn_events={} block_events={} findings={}",
+        report.total_worlds,
+        report.total_events,
+        report.threat_events,
+        report.warn_events,
+        report.block_events,
+        report.total_findings
+    );
+    println!("  action_counts={}", format_counts(&report.action_counts));
+    println!("  threat_counts={}", format_counts(&report.threat_counts));
+    println!("  alert_counts={}", format_counts(&report.alert_counts));
+    println!();
+
+    println!("World Results");
+    for world in &report.reports {
+        println!(
+            "  {}: events={} threats={} warn={} block={} findings={}",
+            world.label,
+            world.total_events,
+            world.threat_events,
+            world.warn_events,
+            world.block_events,
+            world.findings.len()
+        );
+        if !world.threat_counts.is_empty() {
+            println!("    threats={}", format_counts(&world.threat_counts));
+        }
+        if !world.findings.is_empty() {
+            for finding in world.findings.iter().take(3) {
+                println!(
+                    "    finding [{}] {} / {}: {}",
+                    finding.at, finding.conversation_id, finding.sender_id, finding.message
+                );
+            }
+            if world.findings.len() > 3 {
+                println!("    ... {} more finding(s)", world.findings.len() - 3);
+            }
+        }
+    }
+}
+
 fn build_shadow_bundle(report: &WorldSimReport, input_path: &Path) -> ShadowModeBundle {
     let events = report
         .event_log
@@ -1076,6 +1262,44 @@ fn build_shadow_bundle(report: &WorldSimReport, input_path: &Path) -> ShadowMode
         findings,
         events,
     )
+}
+
+fn write_json_report<T: Serialize>(report: &T, output_path: &Path, label: &str, redact_text: bool) {
+    if let Some(parent) = output_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).expect("create output directory");
+        }
+    }
+    let json = if redact_text {
+        let mut value = serde_json::to_value(report).expect("serializable world sim report");
+        redact_text_fields(&mut value);
+        serde_json::to_string_pretty(&value).expect("serializable redacted world sim report")
+    } else {
+        serde_json::to_string_pretty(report).expect("serializable world sim report")
+    };
+    fs::write(output_path, json).expect("write world sim report");
+    println!();
+    println!("Wrote {label} to {}", output_path.display());
+}
+
+fn redact_text_fields(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                if key == "text" {
+                    *value = serde_json::Value::String("[redacted]".to_string());
+                } else {
+                    redact_text_fields(value);
+                }
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                redact_text_fields(value);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn write_shadow_bundle_json(bundle: &ShadowModeBundle, output_path: &Path) {
@@ -1733,6 +1957,12 @@ fn bump_count(map: &mut BTreeMap<String, usize>, key: String) {
     *map.entry(key).or_default() += 1;
 }
 
+fn merge_counts(target: &mut BTreeMap<String, usize>, source: &BTreeMap<String, usize>) {
+    for (key, value) in source {
+        *target.entry(key.clone()).or_default() += *value;
+    }
+}
+
 fn format_counts(map: &BTreeMap<String, usize>) -> String {
     if map.is_empty() {
         return "-".to_string();
@@ -1754,6 +1984,23 @@ fn evaluate_findings(world: &SimulationWorld, outcome: &EventOutcome) -> Vec<Sim
     let mut findings = Vec::new();
 
     if let Some(expectation) = &outcome.expectation {
+        if expectation.expect_clean
+            && (outcome.result.is_threat() || outcome.result.action != Action::Allow)
+        {
+            findings.push(SimulationFinding {
+                severity: FindingSeverity::Warning,
+                event_sequence: outcome.sequence,
+                at: outcome.at.clone(),
+                sender_id: outcome.sender_id.clone(),
+                conversation_id: outcome.conversation_id.clone(),
+                message: format!(
+                    "expected clean allow but runtime returned threat='{}' action='{}'",
+                    enum_key(&outcome.result.threat_type),
+                    enum_key(&outcome.result.action)
+                ),
+            });
+        }
+
         if let Some(expected_threat) = expectation.expect_threat {
             let threat_present = outcome.result.threat_type == expected_threat
                 || outcome
@@ -1818,12 +2065,32 @@ fn evaluate_findings(world: &SimulationWorld, outcome: &EventOutcome) -> Vec<Sim
         }
     }
 
+    if outcome.sender_id == world.owner.id {
+        if let Some(code) = outcome
+            .result
+            .reason_codes
+            .iter()
+            .find(|code| code.starts_with("conversation.contact."))
+        {
+            findings.push(SimulationFinding {
+                severity: FindingSeverity::Warning,
+                event_sequence: outcome.sequence,
+                at: outcome.at.clone(),
+                sender_id: outcome.sender_id.clone(),
+                conversation_id: outcome.conversation_id.clone(),
+                message: format!(
+                    "owner-authored message triggered contact-risk reason code: {code}"
+                ),
+            });
+        }
+    }
+
     if outcome.sender_id == world.owner.id
         && outcome
             .result
             .reason_codes
             .iter()
-            .any(|code| code == "conversation.contact.new_risky_contact")
+            .any(|code| code == "conversation.timing.late_night_minor_contact")
     {
         findings.push(SimulationFinding {
             severity: FindingSeverity::Warning,
@@ -1831,10 +2098,258 @@ fn evaluate_findings(world: &SimulationWorld, outcome: &EventOutcome) -> Vec<Sim
             at: outcome.at.clone(),
             sender_id: outcome.sender_id.clone(),
             conversation_id: outcome.conversation_id.clone(),
-            message: "owner-authored message triggered 'conversation.contact.new_risky_contact'"
-                .to_string(),
+            message:
+                "owner-authored message triggered 'conversation.timing.late_night_minor_contact'"
+                    .to_string(),
         });
     }
 
     findings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn expect_clean_allows_clean_owner_event() {
+        let world = test_world(vec![WorldEvent {
+            at: "2026-01-01T12:00:00Z".to_string(),
+            sender_id: "child".to_string(),
+            conversation_id: "family".to_string(),
+            text: "I finished homework and I am home.".to_string(),
+            language: Some("en".to_string()),
+            conversation_type: Some(ConversationType::Direct),
+            member_count: None,
+            note: None,
+            expect_clean: true,
+            expect_threat: None,
+            expect_min_action: None,
+            expect_min_alert: None,
+        }]);
+
+        let report = run_world_simulation(&world, Path::new("unit-clean.json"), 1)
+            .expect("clean world should run");
+
+        assert!(report.findings.is_empty(), "{:?}", report.findings);
+        assert_eq!(report.total_events, 1);
+        assert_eq!(report.action_counts.get("allow"), Some(&1));
+    }
+
+    #[test]
+    fn expect_clean_flags_risky_runtime_result() {
+        let world = test_world(vec![WorldEvent {
+            at: "2026-01-01T12:00:00Z".to_string(),
+            sender_id: "peer".to_string(),
+            conversation_id: "class_chat".to_string(),
+            text: "you're pathetic, kill yourself loser".to_string(),
+            language: Some("en".to_string()),
+            conversation_type: Some(ConversationType::Group),
+            member_count: Some(12),
+            note: None,
+            expect_clean: true,
+            expect_threat: None,
+            expect_min_action: None,
+            expect_min_alert: None,
+        }]);
+
+        let report = run_world_simulation(&world, Path::new("unit-risky-clean.json"), 1)
+            .expect("risky world should run");
+
+        assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
+        assert!(
+            report.findings[0].message.contains("expected clean allow"),
+            "{:?}",
+            report.findings[0]
+        );
+    }
+
+    #[test]
+    fn suite_directory_aggregates_json_worlds() {
+        let dir = unique_temp_dir("suite_aggregates");
+        fs::create_dir_all(&dir).expect("create temp suite dir");
+        fs::write(dir.join("ignore.txt"), "not a world").expect("write ignored file");
+        fs::write(dir.join("a_world.json"), suite_world_json("a_world"))
+            .expect("write first world");
+        fs::write(dir.join("b_world.json"), suite_world_json("b_world"))
+            .expect("write second world");
+
+        let report = run_world_suite(&dir, 1).expect("suite should run");
+        fs::remove_dir_all(&dir).expect("cleanup temp suite dir");
+
+        assert_eq!(report.total_worlds, 2);
+        assert_eq!(report.total_events, 2);
+        assert_eq!(report.total_findings, 0);
+        assert_eq!(report.action_counts.get("allow"), Some(&2));
+        assert_eq!(
+            report
+                .reports
+                .iter()
+                .map(|report| report.label.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a_world", "b_world"]
+        );
+    }
+
+    #[test]
+    fn suite_directory_rejects_empty_json_set() {
+        let dir = unique_temp_dir("suite_empty");
+        fs::create_dir_all(&dir).expect("create temp suite dir");
+        fs::write(dir.join("ignore.txt"), "not a world").expect("write ignored file");
+
+        let err = run_world_suite(&dir, 1).expect_err("empty suite should fail");
+        fs::remove_dir_all(&dir).expect("cleanup temp suite dir");
+
+        assert!(err.contains("does not contain any JSON worlds"), "{err}");
+    }
+
+    #[test]
+    fn redacted_json_report_removes_event_text() {
+        let world = test_world(vec![WorldEvent {
+            at: "2026-01-01T12:00:00Z".to_string(),
+            sender_id: "child".to_string(),
+            conversation_id: "family".to_string(),
+            text: "I finished homework and I am home.".to_string(),
+            language: Some("en".to_string()),
+            conversation_type: Some(ConversationType::Direct),
+            member_count: None,
+            note: None,
+            expect_clean: true,
+            expect_threat: None,
+            expect_min_action: None,
+            expect_min_alert: None,
+        }]);
+        let report = run_world_simulation(&world, Path::new("unit-redacted.json"), 1)
+            .expect("world should run");
+        let path = unique_temp_dir("redacted_report").with_extension("json");
+
+        write_json_report(&report, &path, "unit report", true);
+        let json = fs::read_to_string(&path).expect("read redacted report");
+        fs::remove_file(&path).expect("cleanup redacted report");
+
+        assert!(!json.contains("I finished homework"), "{json}");
+        assert!(json.contains("[redacted]"), "{json}");
+    }
+
+    #[test]
+    fn redact_text_fields_recurses_into_nested_suite_reports() {
+        let mut value = serde_json::json!({
+            "reports": [
+                {
+                    "event_log": [
+                        { "text": "raw nested text", "result": { "text": "raw result text" } }
+                    ]
+                }
+            ],
+            "summary": { "text": "raw summary text" }
+        });
+
+        redact_text_fields(&mut value);
+
+        let json = serde_json::to_string(&value).expect("serialize redacted value");
+        assert!(!json.contains("raw nested text"), "{json}");
+        assert!(!json.contains("raw result text"), "{json}");
+        assert!(!json.contains("raw summary text"), "{json}");
+        assert_eq!(json.matches("[redacted]").count(), 3);
+    }
+
+    fn test_world(events: Vec<WorldEvent>) -> SimulationWorld {
+        SimulationWorld {
+            label: "unit_world".to_string(),
+            description: None,
+            owner: WorldOwner {
+                id: "child".to_string(),
+                display_name: "Child".to_string(),
+                age: Some(13),
+            },
+            config: WorldConfigOverrides {
+                language: Some("en".to_string()),
+                account_holder_age: Some(13),
+                timezone_offset_minutes: Some(0),
+                ..WorldConfigOverrides::default()
+            },
+            actors: vec![
+                WorldActor {
+                    id: "child".to_string(),
+                    display_name: Some("Child".to_string()),
+                    trusted: false,
+                },
+                WorldActor {
+                    id: "peer".to_string(),
+                    display_name: Some("Peer".to_string()),
+                    trusted: false,
+                },
+            ],
+            conversations: vec![
+                WorldConversation {
+                    id: "family".to_string(),
+                    display_name: Some("Family".to_string()),
+                    conversation_type: Some(ConversationType::Direct),
+                    member_count: None,
+                },
+                WorldConversation {
+                    id: "class_chat".to_string(),
+                    display_name: Some("Class Chat".to_string()),
+                    conversation_type: Some(ConversationType::Group),
+                    member_count: Some(12),
+                },
+            ],
+            events,
+            generated_batches: Vec::new(),
+        }
+    }
+
+    fn suite_world_json(label: &str) -> String {
+        format!(
+            r#"{{
+  "label": "{label}",
+  "owner": {{
+    "id": "child",
+    "display_name": "Child",
+    "age": 13
+  }},
+  "config": {{
+    "language": "en",
+    "account_holder_age": 13,
+    "timezone_offset_minutes": 0
+  }},
+  "actors": [
+    {{
+      "id": "child",
+      "display_name": "Child"
+    }}
+  ],
+  "conversations": [
+    {{
+      "id": "family",
+      "display_name": "Family",
+      "conversation_type": "direct"
+    }}
+  ],
+  "events": [
+    {{
+      "at": "2026-01-01T12:00:00Z",
+      "sender_id": "child",
+      "conversation_id": "family",
+      "text": "I finished homework and I am home.",
+      "language": "en",
+      "expect_clean": true
+    }}
+  ]
+}}"#
+        )
+    }
+
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        env::temp_dir().join(format!(
+            "aura_world_sim_{label}_{}_{}",
+            std::process::id(),
+            nanos
+        ))
+    }
 }

@@ -1,0 +1,199 @@
+{
+  "label": "andrii_14_peer_blackmail_recovery_4mo",
+  "description": "Four months for a 14-year-old: peer control, screenshot blackmail, isolation language, clean gaming/class background, and later parent-supported recovery.",
+  "owner": {
+    "id": "andrii_14_owner",
+    "display_name": "Андрій",
+    "age": 14
+  },
+  "config": {
+    "account_type": "teen",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 14,
+    "ttl_days": 170
+  },
+  "actors": [
+    {
+      "id": "andrii_14_owner",
+      "display_name": "Андрій"
+    },
+    {
+      "id": "mama_andrii",
+      "display_name": "Мама Андрія",
+      "trusted": true
+    },
+    {
+      "id": "friend_marko",
+      "display_name": "Марко",
+      "trusted": true
+    },
+    {
+      "id": "controller_peer",
+      "display_name": "Ілля"
+    },
+    {
+      "id": "class_peer",
+      "display_name": "Катя"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "andrii_family",
+      "display_name": "Андрій + мама",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "andrii_class",
+      "display_name": "8-А клас",
+      "conversation_type": "group",
+      "member_count": 28
+    },
+    {
+      "id": "controller_dm",
+      "display_name": "Ілля ↔ Андрій",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "marko_dm",
+      "display_name": "Марко ↔ Андрій",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "gaming_8a",
+      "display_name": "8-А gaming",
+      "conversation_type": "group",
+      "member_count": 10
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-25T19:20:00+02:00",
+      "sender_id": "controller_peer",
+      "conversation_id": "controller_dm",
+      "text": "Після всього що я для тебе зробив ти мені винен.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-01T19:25:00+02:00",
+      "sender_id": "controller_peer",
+      "conversation_id": "controller_dm",
+      "text": "Твої друзі такі дитячі, тільки я тебе реально розумію.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-15T20:05:00+02:00",
+      "sender_id": "controller_peer",
+      "conversation_id": "controller_dm",
+      "text": "Якщо не скинеш відповіді з математики, я покажу всім той скрін.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-02-22T20:10:00+02:00",
+      "sender_id": "controller_peer",
+      "conversation_id": "controller_dm",
+      "text": "Якщо не зробиш це, я всім покажу.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-05T18:30:00+02:00",
+      "sender_id": "friend_marko",
+      "conversation_id": "marko_dm",
+      "text": "Це виглядає як тиск. Можеш показати мамі або класному керівнику, я підтримаю.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-03-06T08:00:00+02:00",
+      "sender_id": "mama_andrii",
+      "conversation_id": "andrii_family",
+      "text": "Дякую що розповів. Ми не будемо відповідати під тиском і разом заблокуємо цей контакт.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "class_clean_background",
+      "start_at": "2026-01-12T10:00:00+02:00",
+      "count": 4,
+      "interval_minutes": 18,
+      "day_repeats": 14,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "class_peer",
+        "andrii_14_owner",
+        "friend_marko",
+        "class_peer"
+      ],
+      "conversation_ids": [
+        "andrii_class"
+      ],
+      "texts": [
+        "Хто має фото дошки з хімії?",
+        "Я можу скинути після уроків.",
+        "Давайте без сварок, просто переробимо слайди.",
+        "Завтра контрольна чи самостійна?"
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 28,
+      "note": "clean class background",
+      "expect_clean": true
+    },
+    {
+      "label": "gaming_clean_background",
+      "start_at": "2026-01-15T18:30:00+02:00",
+      "count": 4,
+      "interval_minutes": 20,
+      "day_repeats": 12,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "andrii_14_owner",
+        "friend_marko",
+        "class_peer",
+        "controller_peer"
+      ],
+      "conversation_ids": [
+        "gaming_8a"
+      ],
+      "texts": [
+        "Хто сьогодні грає після домашки?",
+        "Я буду о восьмій.",
+        "Давайте спокійно, просто тренуємось.",
+        "Можемо пройти квест командою."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 10,
+      "note": "clean gaming background",
+      "expect_clean": true
+    },
+    {
+      "label": "family_recovery_background",
+      "start_at": "2026-03-08T08:00:00+02:00",
+      "count": 2,
+      "interval_minutes": 600,
+      "day_repeats": 8,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "mama_andrii",
+        "andrii_14_owner"
+      ],
+      "conversation_ids": [
+        "andrii_family"
+      ],
+      "texts": [
+        "Як ти сьогодні почуваєшся?",
+        "Краще, дякую що допомогла."
+      ],
+      "language": "uk",
+      "conversation_type": "direct",
+      "note": "clean recovery support",
+      "expect_clean": true
+    }
+  ]
+}

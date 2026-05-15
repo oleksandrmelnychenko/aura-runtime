@@ -55,6 +55,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to KIDS pre-prod dry-run matrix report JSON.",
     )
+    parser.add_argument(
+        "--community-surface-report",
+        default=None,
+        help="Optional path to community surface simulation gate JSON.",
+    )
+    parser.add_argument(
+        "--world-lifecycle-report",
+        default=None,
+        help="Optional path to world lifecycle simulation suite JSON.",
+    )
     return parser.parse_args()
 
 
@@ -181,6 +191,41 @@ def kids_preprod_dry_run_status(payload: dict | None) -> str | None:
     return payload.get("overall_status")
 
 
+def community_surface_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    gates = payload.get("gates", {})
+    findings = payload.get("findings", [])
+    if gates.get("passed") is not True:
+        return "fail"
+    if isinstance(findings, list) and findings:
+        return "findings_present"
+    return "pass"
+
+
+def world_lifecycle_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != "world_suite.v1":
+        return "invalid_schema"
+    reports = payload.get("reports")
+    if not isinstance(reports, list):
+        return "invalid_schema"
+    if payload.get("total_worlds") != len(reports):
+        return "invalid_summary"
+    if payload.get("total_findings") != 0:
+        return "findings_present"
+    for report in reports:
+        if not isinstance(report, dict):
+            return "invalid_schema"
+        findings = report.get("findings", [])
+        if not isinstance(findings, list):
+            return "invalid_schema"
+        if findings:
+            return "findings_present"
+    return "pass"
+
+
 def evidence_status(artifacts: dict, summary: dict) -> str:
     if any(meta["required"] and not meta["exists"] for meta in artifacts.values()):
         return "blocked"
@@ -211,6 +256,10 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["kids_preprod_dry_run_status"] not in (None, "pass"):
         return "fail"
+    if summary["community_surface_status"] not in (None, "pass"):
+        return "fail"
+    if summary["world_lifecycle_status"] not in (None, "pass"):
+        return "fail"
     return "pass"
 
 
@@ -226,6 +275,8 @@ def attach_payload_details(
     pilot_regression_payload: dict | None,
     pilot_gate_payload: dict | None,
     kids_preprod_dry_run_payload: dict | None,
+    community_surface_payload: dict | None,
+    world_lifecycle_payload: dict | None,
 ) -> None:
     if release_payload is not None:
         artifacts["release_report"]["observed_status"] = release_payload.get("overall_status")
@@ -338,6 +389,41 @@ def attach_payload_details(
         else:
             artifacts["kids_preprod_dry_run_report"]["checks_failed"] = None
             artifacts["kids_preprod_dry_run_report"]["checks_passed"] = None
+    if community_surface_payload is not None:
+        artifacts["community_surface_report"]["observed_status"] = community_surface_status(
+            community_surface_payload
+        )
+        artifacts["community_surface_report"]["schema_version"] = community_surface_payload.get(
+            "schema_version"
+        )
+        artifacts["community_surface_report"]["total_events"] = community_surface_payload.get(
+            "total_events"
+        )
+        artifacts["community_surface_report"]["finding_count"] = len(
+            community_surface_payload.get("findings", [])
+        )
+        artifacts["community_surface_report"]["gates_passed"] = (
+            community_surface_payload.get("gates", {}).get("passed")
+        )
+    if world_lifecycle_payload is not None:
+        artifacts["world_lifecycle_report"]["observed_status"] = world_lifecycle_status(
+            world_lifecycle_payload
+        )
+        artifacts["world_lifecycle_report"]["schema_version"] = world_lifecycle_payload.get(
+            "schema_version"
+        )
+        artifacts["world_lifecycle_report"]["total_worlds"] = world_lifecycle_payload.get(
+            "total_worlds"
+        )
+        artifacts["world_lifecycle_report"]["total_events"] = world_lifecycle_payload.get(
+            "total_events"
+        )
+        artifacts["world_lifecycle_report"]["threat_events"] = world_lifecycle_payload.get(
+            "threat_events"
+        )
+        artifacts["world_lifecycle_report"]["finding_count"] = world_lifecycle_payload.get(
+            "total_findings"
+        )
 
 
 def main() -> int:
@@ -361,6 +447,14 @@ def main() -> int:
         args.kids_preprod_dry_run_report,
         required=args.kids_preprod_dry_run_report is not None,
     ) if args.kids_preprod_dry_run_report else (None, None)
+    community_surface_payload, community_surface_artifact = load_json_artifact(
+        args.community_surface_report,
+        required=args.community_surface_report is not None,
+    ) if args.community_surface_report else (None, None)
+    world_lifecycle_payload, world_lifecycle_artifact = load_json_artifact(
+        args.world_lifecycle_report,
+        required=args.world_lifecycle_report is not None,
+    ) if args.world_lifecycle_report else (None, None)
     smoke_payload, smoke_artifact = load_json_artifact(
         args.ffi_smoke, required=args.ffi_smoke is not None
     ) if args.ffi_smoke else (None, None)
@@ -380,6 +474,10 @@ def main() -> int:
         artifacts["pilot_gate_report"] = pilot_gate_artifact
     if kids_preprod_dry_run_artifact is not None:
         artifacts["kids_preprod_dry_run_report"] = kids_preprod_dry_run_artifact
+    if community_surface_artifact is not None:
+        artifacts["community_surface_report"] = community_surface_artifact
+    if world_lifecycle_artifact is not None:
+        artifacts["world_lifecycle_report"] = world_lifecycle_artifact
     if smoke_artifact is not None:
         artifacts["ffi_smoke"] = smoke_artifact
 
@@ -395,6 +493,8 @@ def main() -> int:
         pilot_regression_payload=pilot_regression_payload,
         pilot_gate_payload=pilot_gate_payload,
         kids_preprod_dry_run_payload=kids_preprod_dry_run_payload,
+        community_surface_payload=community_surface_payload,
+        world_lifecycle_payload=world_lifecycle_payload,
     )
 
     request_limits = (
@@ -537,6 +637,58 @@ def main() -> int:
             if kids_preprod_dry_run_payload
             and isinstance(kids_preprod_dry_run_payload.get("checks"), dict)
             else None
+        ),
+        "community_surface_status": community_surface_status(community_surface_payload),
+        "community_surface_schema_version": (
+            community_surface_payload.get("schema_version")
+            if community_surface_payload
+            else None
+        ),
+        "community_surface_total_events": (
+            community_surface_payload.get("total_events")
+            if community_surface_payload
+            else None
+        ),
+        "community_surface_detect_rate": (
+            community_surface_payload.get("total", {}).get("detect_rate")
+            if community_surface_payload
+            else None
+        ),
+        "community_surface_fp_rate": (
+            community_surface_payload.get("total", {}).get("fp_rate")
+            if community_surface_payload
+            else None
+        ),
+        "community_surface_finding_count": (
+            len(community_surface_payload.get("findings", []))
+            if community_surface_payload
+            else None
+        ),
+        "community_surface_scenario_count": (
+            len(community_surface_payload.get("by_scenario", []))
+            if community_surface_payload
+            else None
+        ),
+        "community_surface_text_variant_count": (
+            len(community_surface_payload.get("by_text_variant", []))
+            if community_surface_payload
+            else None
+        ),
+        "world_lifecycle_status": world_lifecycle_status(world_lifecycle_payload),
+        "world_lifecycle_schema_version": (
+            world_lifecycle_payload.get("schema_version") if world_lifecycle_payload else None
+        ),
+        "world_lifecycle_total_worlds": (
+            world_lifecycle_payload.get("total_worlds") if world_lifecycle_payload else None
+        ),
+        "world_lifecycle_total_events": (
+            world_lifecycle_payload.get("total_events") if world_lifecycle_payload else None
+        ),
+        "world_lifecycle_threat_events": (
+            world_lifecycle_payload.get("threat_events") if world_lifecycle_payload else None
+        ),
+        "world_lifecycle_finding_count": (
+            world_lifecycle_payload.get("total_findings") if world_lifecycle_payload else None
         ),
         "ffi_export_count": (
             len(contract_payload.get("abi", {}).get("exported_functions", []))

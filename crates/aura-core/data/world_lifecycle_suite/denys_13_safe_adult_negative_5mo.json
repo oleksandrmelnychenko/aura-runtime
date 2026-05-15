@@ -1,0 +1,152 @@
+{
+  "label": "denys_13_safe_adult_negative_5mo",
+  "description": "Five-month negative-control life for a 13-year-old athlete: trusted coach, parent-visible logistics, normal peer disagreement, family check-ins, and no expected threats.",
+  "owner": {
+    "id": "denys_13",
+    "display_name": "Денис",
+    "age": 13
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 13,
+    "ttl_days": 190
+  },
+  "actors": [
+    {
+      "id": "denys_13",
+      "display_name": "Денис"
+    },
+    {
+      "id": "mama_denys",
+      "display_name": "Мама Дениса",
+      "trusted": true
+    },
+    {
+      "id": "coach_serhiy",
+      "display_name": "Тренер Сергій",
+      "trusted": true
+    },
+    {
+      "id": "team_friend",
+      "display_name": "Богдан",
+      "trusted": true
+    },
+    {
+      "id": "peer_roman",
+      "display_name": "Роман"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "denys_family",
+      "display_name": "Сім'я Дениса",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "sports_parent_loop",
+      "display_name": "Команда + батьки",
+      "conversation_type": "group",
+      "member_count": 12
+    },
+    {
+      "id": "team_chat",
+      "display_name": "Командний чат",
+      "conversation_type": "group",
+      "member_count": 16
+    },
+    {
+      "id": "friend_denys_dm",
+      "display_name": "Богдан ↔ Денис",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-20T17:00:00+02:00",
+      "sender_id": "coach_serhiy",
+      "conversation_id": "sports_parent_loop",
+      "text": "Денисе, тренування завтра о 18:00. Мамо, будь ласка, підтвердіть участь.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-02-04T18:30:00+02:00",
+      "sender_id": "peer_roman",
+      "conversation_id": "team_chat",
+      "text": "Я не згоден з тактикою, але давайте без сварок і спокійно розберемо моменти.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-03-15T12:10:00+02:00",
+      "sender_id": "coach_serhiy",
+      "conversation_id": "sports_parent_loop",
+      "text": "На турнір їдемо разом з батьками. Розклад і адресу надішлю офіційно тут.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-04-02T20:00:00+03:00",
+      "sender_id": "team_friend",
+      "conversation_id": "friend_denys_dm",
+      "text": "Не переймайся через матч, завтра просто потренуємо передачі.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "family_clean",
+      "start_at": "2026-01-10T07:20:00+02:00",
+      "count": 3,
+      "interval_minutes": 430,
+      "day_repeats": 18,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "mama_denys",
+        "denys_13",
+        "mama_denys"
+      ],
+      "conversation_ids": [
+        "denys_family"
+      ],
+      "texts": [
+        "Доброго ранку, гарного дня.",
+        "Я після школи напишу.",
+        "Не забудь форму на тренування."
+      ],
+      "language": "uk",
+      "conversation_type": "direct",
+      "note": "clean family background",
+      "expect_clean": true
+    },
+    {
+      "label": "sports_clean",
+      "start_at": "2026-01-12T17:00:00+02:00",
+      "count": 4,
+      "interval_minutes": 20,
+      "day_repeats": 18,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "coach_serhiy",
+        "denys_13",
+        "team_friend",
+        "peer_roman"
+      ],
+      "conversation_ids": [
+        "sports_parent_loop",
+        "team_chat"
+      ],
+      "texts": [
+        "Завтра тренування за розкладом.",
+        "Я буду вчасно.",
+        "Хто бере м'ячі?",
+        "Давайте спокійно, просто тренуємось."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 16,
+      "note": "clean sports logistics",
+      "expect_clean": true
+    }
+  ]
+}

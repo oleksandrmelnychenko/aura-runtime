@@ -1,0 +1,194 @@
+{
+  "label": "ira_15_artist_slow_grooming_6mo",
+  "description": "Six months for a 15-year-old artist: normal portfolio/community activity, older mentor-like contact, private-channel pressure, secrecy, parent deception, dependency building, and parent-visible safe art logistics.",
+  "owner": {
+    "id": "ira_15",
+    "display_name": "Іра",
+    "age": 15
+  },
+  "config": {
+    "account_type": "teen",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 15,
+    "ttl_days": 220
+  },
+  "actors": [
+    {
+      "id": "ira_15",
+      "display_name": "Іра"
+    },
+    {
+      "id": "mama_ira",
+      "display_name": "Мама Іри",
+      "trusted": true
+    },
+    {
+      "id": "mentor_art_24",
+      "display_name": "Артем"
+    },
+    {
+      "id": "natalia_15",
+      "display_name": "Наталя",
+      "trusted": true
+    },
+    {
+      "id": "art_teacher",
+      "display_name": "Викладачка мистецтва",
+      "trusted": true
+    },
+    {
+      "id": "commenter_older",
+      "display_name": "Коментатор"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "ira_family",
+      "display_name": "Іра + мама",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "art_club_group",
+      "display_name": "Арт-гурток",
+      "conversation_type": "group",
+      "member_count": 18
+    },
+    {
+      "id": "portfolio_comments",
+      "display_name": "Коментарі портфоліо",
+      "conversation_type": "group",
+      "member_count": 50
+    },
+    {
+      "id": "mentor_art_dm",
+      "display_name": "Артем ↔ Іра",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "mentor_backup_dm",
+      "display_name": "Новий акаунт Артема",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "art_parent_loop",
+      "display_name": "Гурток + батьки",
+      "conversation_type": "group",
+      "member_count": 4
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-18T17:20:00+02:00",
+      "sender_id": "commenter_older",
+      "conversation_id": "portfolio_comments",
+      "text": "Твій малюнок класний, але ти виглядаєш старшою. Напиши мені в приват.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-02T20:15:00+02:00",
+      "sender_id": "mentor_art_24",
+      "conversation_id": "mentor_art_dm",
+      "text": "Тільки не кажи мамі, вона не зрозуміє, що ми просто спілкуємось.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-02-16T21:30:00+02:00",
+      "sender_id": "mentor_art_24",
+      "conversation_id": "mentor_art_dm",
+      "text": "Давай перейдемо в інший додаток, тут батьки можуть побачити повідомлення.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-05T20:45:00+02:00",
+      "sender_id": "mentor_art_24",
+      "conversation_id": "mentor_art_dm",
+      "text": "Якщо батьки питають, кажи що я однокласник.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-24T21:10:00+02:00",
+      "sender_id": "mentor_art_24",
+      "conversation_id": "mentor_art_dm",
+      "text": "Ти можеш довіряти тільки мені, інші тебе не розуміють.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-04-08T19:30:00+03:00",
+      "sender_id": "art_teacher",
+      "conversation_id": "art_parent_loop",
+      "text": "Іро, твоя робота у фіналі. Мамо, розклад виставки надішлю в батьківський чат.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-05-12T21:15:00+03:00",
+      "sender_id": "mentor_art_24",
+      "conversation_id": "mentor_backup_dm",
+      "text": "Іро, я знайшов тебе тут. Пам'ятаєш наш секрет?",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "family_portfolio_background",
+      "start_at": "2026-01-10T08:00:00+02:00",
+      "count": 2,
+      "interval_minutes": 600,
+      "day_repeats": 20,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "mama_ira",
+        "ira_15"
+      ],
+      "conversation_ids": [
+        "ira_family"
+      ],
+      "texts": [
+        "Гарного дня, напиши після гуртка.",
+        "Добре, після занять скину фото роботи."
+      ],
+      "language": "uk",
+      "conversation_type": "direct",
+      "note": "clean family background",
+      "expect_clean": true
+    },
+    {
+      "label": "art_club_clean_noise",
+      "start_at": "2026-01-12T16:00:00+02:00",
+      "count": 4,
+      "interval_minutes": 25,
+      "day_repeats": 18,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "art_teacher",
+        "ira_15",
+        "natalia_15",
+        "mama_ira"
+      ],
+      "conversation_ids": [
+        "art_club_group",
+        "art_parent_loop"
+      ],
+      "texts": [
+        "Завтра беремо акварель і папір A3.",
+        "Я дороблю ескіз до заняття.",
+        "Мені подобається композиція, можна додати світло.",
+        "Дякую, підтверджую участь."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 18,
+      "note": "clean art logistics and peer critique",
+      "expect_clean": true
+    }
+  ]
+}

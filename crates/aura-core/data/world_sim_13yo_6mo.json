@@ -1,0 +1,486 @@
+{
+  "label": "sofia_13_six_month_lifecycle",
+  "description": "Six months for one protected 13-year-old account: normal family and school life, peer conflict, older-contact grooming, cross-surface repeat offender behavior, phishing, PII leakage, manipulation, self-harm spillover, and parent-visible safe adult logistics.",
+  "owner": {
+    "id": "sofia_13",
+    "display_name": "Софія",
+    "age": 13
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 13,
+    "ttl_days": 220
+  },
+  "actors": [
+    {
+      "id": "sofia_13",
+      "display_name": "Софія"
+    },
+    {
+      "id": "mama_sofia",
+      "display_name": "Мама Софії",
+      "trusted": true
+    },
+    {
+      "id": "tato_sofia",
+      "display_name": "Тато Софії",
+      "trusted": true
+    },
+    {
+      "id": "maria_13",
+      "display_name": "Марія",
+      "trusted": true
+    },
+    {
+      "id": "nazar_13",
+      "display_name": "Назар"
+    },
+    {
+      "id": "vika_13",
+      "display_name": "Віка"
+    },
+    {
+      "id": "dasha_13",
+      "display_name": "Даша"
+    },
+    {
+      "id": "andrii_14",
+      "display_name": "Андрій"
+    },
+    {
+      "id": "max_19",
+      "display_name": "Макс"
+    },
+    {
+      "id": "coach_iryna",
+      "display_name": "Тренерка Ірина",
+      "trusted": true
+    },
+    {
+      "id": "fake_teen_17",
+      "display_name": "Денис"
+    },
+    {
+      "id": "skin_drop_bot",
+      "display_name": "SkinDrop Bot"
+    },
+    {
+      "id": "unknown_commenter",
+      "display_name": "Коментатор"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "family_dm",
+      "display_name": "Сімейний чат",
+      "conversation_type": "group",
+      "member_count": 3
+    },
+    {
+      "id": "maria_dm",
+      "display_name": "Марія ↔ Софія",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "class_7a",
+      "display_name": "7-А клас",
+      "conversation_type": "group",
+      "member_count": 27
+    },
+    {
+      "id": "gaming_group",
+      "display_name": "Gaming Squad",
+      "conversation_type": "group",
+      "member_count": 14
+    },
+    {
+      "id": "max_gaming_dm",
+      "display_name": "Макс ↔ Софія",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "art_club",
+      "display_name": "Арт-гурток",
+      "conversation_type": "group",
+      "member_count": 11
+    },
+    {
+      "id": "coach_parent_loop",
+      "display_name": "Тренерка + батьки",
+      "conversation_type": "group",
+      "member_count": 4
+    },
+    {
+      "id": "fake_teen_dm",
+      "display_name": "Денис ↔ Софія",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "public_art_comments",
+      "display_name": "Коментарі до малюнків",
+      "conversation_type": "group",
+      "member_count": 80
+    },
+    {
+      "id": "backup_dm",
+      "display_name": "Новий акаунт Макса",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "promo_dm",
+      "display_name": "Promo messages",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "private_notes",
+      "display_name": "Особисті нотатки",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-12T09:15:00+02:00",
+      "sender_id": "dasha_13",
+      "conversation_id": "class_7a",
+      "text": "Ніхто тебе тут не хоче в команді, ти все псуєш.",
+      "note": "Early mild peer hostility in the class group.",
+      "expect_threat": "bullying",
+      "expect_min_action": "blur"
+    },
+    {
+      "at": "2026-01-12T09:18:00+02:00",
+      "sender_id": "vika_13",
+      "conversation_id": "class_7a",
+      "text": "Та вона реально всіх дістала, хай краще мовчить.",
+      "note": "Second sender joins the social exclusion pile-on.",
+      "expect_threat": "bullying",
+      "expect_min_action": "blur"
+    },
+    {
+      "at": "2026-01-12T09:21:00+02:00",
+      "sender_id": "nazar_13",
+      "conversation_id": "class_7a",
+      "text": "Завтра в школі тобі кінець, зрозуміла?",
+      "note": "Peer threat after bullying pile-on.",
+      "expect_threat": "threat",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-01-17T19:40:00+02:00",
+      "sender_id": "max_19",
+      "conversation_id": "gaming_group",
+      "text": "Софія, ти дуже круто граєш, не часто бачу таких спокійних гравців у твоєму віці."
+    },
+    {
+      "at": "2026-01-18T21:30:00+02:00",
+      "sender_id": "max_19",
+      "conversation_id": "max_gaming_dm",
+      "text": "Я можу подарувати тобі рідкісний скін, тільки не роби з цього шум.",
+      "note": "Older contact starts gift-based private attention.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-01-22T22:10:00+02:00",
+      "sender_id": "max_19",
+      "conversation_id": "max_gaming_dm",
+      "text": "Ти дуже доросла для 13, з тобою можна говорити як з рівною.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-01-29T22:35:00+02:00",
+      "sender_id": "max_19",
+      "conversation_id": "max_gaming_dm",
+      "text": "Це наш маленький секрет, не розказуй батькам про наші чати.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-02-08T21:50:00+02:00",
+      "sender_id": "max_19",
+      "conversation_id": "max_gaming_dm",
+      "text": "Давай перейдемо в інший додаток, тут батьки можуть побачити повідомлення.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-02-15T18:20:00+02:00",
+      "sender_id": "sofia_13",
+      "conversation_id": "maria_dm",
+      "text": "Мій номер 0671234567, дзвони після гуртка якщо що.",
+      "note": "Owner shares phone number with a trusted peer.",
+      "expect_threat": "pii_leakage",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-15T18:22:00+02:00",
+      "sender_id": "sofia_13",
+      "conversation_id": "maria_dm",
+      "text": "Я сама вдома до десятої, мама на роботі.",
+      "expect_threat": "pii_leakage",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-21T20:05:00+02:00",
+      "sender_id": "skin_drop_bot",
+      "conversation_id": "promo_dm",
+      "text": "Claim free skins now: http://fr33-skins-drop.xyz/claim login and get prize today",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-03T20:30:00+02:00",
+      "sender_id": "coach_iryna",
+      "conversation_id": "coach_parent_loop",
+      "text": "Софіє, завтра тренування о 16:00. Мамо, будь ласка, підтвердіть, що зручно.",
+      "note": "Parent-visible trusted adult logistics; should stay safe."
+    },
+    {
+      "at": "2026-03-11T21:10:00+02:00",
+      "sender_id": "fake_teen_17",
+      "conversation_id": "fake_teen_dm",
+      "text": "Привіт, я Денис, мені 15, теж з району. Ти гарно малюєш.",
+      "note": "New older contact presenting as a teen."
+    },
+    {
+      "at": "2026-03-14T22:40:00+02:00",
+      "sender_id": "fake_teen_17",
+      "conversation_id": "fake_teen_dm",
+      "text": "Тільки не кажи мамі, вона не зрозуміє, що ми просто спілкуємось.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-03-24T19:05:00+02:00",
+      "sender_id": "andrii_14",
+      "conversation_id": "class_7a",
+      "text": "Якщо не скинеш відповіді з математики, я покажу всім той скрін.",
+      "note": "Peer coercion with screenshot pressure.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-04-06T11:45:00+03:00",
+      "sender_id": "dasha_13",
+      "conversation_id": "class_7a",
+      "text": "Софія, після твого виступу всі будуть сміятися з тебе.",
+      "expect_threat": "bullying",
+      "expect_min_action": "blur"
+    },
+    {
+      "at": "2026-04-06T11:47:00+03:00",
+      "sender_id": "vika_13",
+      "conversation_id": "class_7a",
+      "text": "Так, хай більше не виходить до дошки, ніхто не хоче це бачити."
+    },
+    {
+      "at": "2026-04-06T22:05:00+03:00",
+      "sender_id": "sofia_13",
+      "conversation_id": "private_notes",
+      "text": "Після сьогоднішнього дня я відчуваю себе зайвою всюди."
+    },
+    {
+      "at": "2026-04-06T22:12:00+03:00",
+      "sender_id": "sofia_13",
+      "conversation_id": "private_notes",
+      "text": "Не хочу більше жити.",
+      "note": "Self-harm crisis after peer bullying.",
+      "expect_threat": "self_harm",
+      "expect_min_action": "warn",
+      "expect_min_alert": "urgent"
+    },
+    {
+      "at": "2026-05-02T17:30:00+03:00",
+      "sender_id": "unknown_commenter",
+      "conversation_id": "public_art_comments",
+      "text": "Твій малюнок класний, але ти виглядаєш старшою. Напиши мені в приват.",
+      "note": "Public comment surface with contact move request.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-05-04T21:15:00+03:00",
+      "sender_id": "max_19",
+      "conversation_id": "public_art_comments",
+      "text": "Софі, я знайшов тебе тут. Пам'ятаєш наш секрет?",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-05-07T22:45:00+03:00",
+      "sender_id": "max_19",
+      "conversation_id": "backup_dm",
+      "text": "Не ігноруй мене. Якщо батьки питають, кажи що я однокласник.",
+      "note": "Same sender reappears in a new conversation id.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-05-10T23:10:00+03:00",
+      "sender_id": "max_19",
+      "conversation_id": "backup_dm",
+      "text": "Ти можеш довіряти тільки мені, інші тебе не розуміють.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-06-03T20:00:00+03:00",
+      "sender_id": "mama_sofia",
+      "conversation_id": "family_dm",
+      "text": "Я бачу, що останні тижні були важкі. Ми поруч, і можемо разом заблокувати неприємні контакти.",
+      "note": "Protective family support after risky contact escalation."
+    },
+    {
+      "at": "2026-06-18T18:30:00+03:00",
+      "sender_id": "coach_iryna",
+      "conversation_id": "coach_parent_loop",
+      "text": "Софіє, твоя робота пройшла у фінал. Мамо, я надішлю офіційний розклад у батьківський чат.",
+      "note": "Safe adult support with parent-visible context."
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "weekly_family_checkins",
+      "start_at": "2026-01-12T07:20:00+02:00",
+      "count": 3,
+      "interval_minutes": 420,
+      "day_repeats": 24,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "mama_sofia",
+        "sofia_13",
+        "tato_sofia"
+      ],
+      "conversation_ids": [
+        "family_dm"
+      ],
+      "texts": [
+        "Доброго ранку, гарного дня в школі.",
+        "Я після уроків напишу, як доберусь.",
+        "Ввечері можемо разом подивитись домашку."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 3,
+      "note": "clean family background",
+      "expect_clean": true
+    },
+    {
+      "label": "weekly_best_friend_chat",
+      "start_at": "2026-01-13T16:10:00+02:00",
+      "count": 4,
+      "interval_minutes": 12,
+      "day_repeats": 24,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "maria_13",
+        "sofia_13"
+      ],
+      "conversation_ids": [
+        "maria_dm"
+      ],
+      "texts": [
+        "Ти йдеш завтра на гурток?",
+        "Так, хочу домалювати портрет.",
+        "Після уроків можемо зробити математику разом.",
+        "Домовились, я принесу конспект."
+      ],
+      "language": "uk",
+      "conversation_type": "direct",
+      "note": "clean trusted peer background",
+      "expect_clean": true
+    },
+    {
+      "label": "weekly_class_noise",
+      "start_at": "2026-01-14T10:00:00+02:00",
+      "count": 5,
+      "interval_minutes": 18,
+      "day_repeats": 24,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "nazar_13",
+        "vika_13",
+        "dasha_13",
+        "sofia_13",
+        "andrii_14"
+      ],
+      "conversation_ids": [
+        "class_7a"
+      ],
+      "texts": [
+        "Хто сьогодні чергує після уроків?",
+        "Не забудьте про презентацію з історії.",
+        "У кого є фото дошки з біології?",
+        "Я можу скинути конспект після уроків.",
+        "Фізкультура буде на вулиці чи в залі?"
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 27,
+      "note": "clean class background",
+      "expect_clean": true
+    },
+    {
+      "label": "gaming_group_background",
+      "start_at": "2026-01-18T18:00:00+02:00",
+      "count": 4,
+      "interval_minutes": 20,
+      "day_repeats": 20,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "sofia_13",
+        "nazar_13",
+        "andrii_14",
+        "maria_13"
+      ],
+      "conversation_ids": [
+        "gaming_group"
+      ],
+      "texts": [
+        "Хто сьогодні грає після домашки?",
+        "Я буду десь о восьмій.",
+        "Давайте спокійно, просто тренуємось.",
+        "Можемо пройти квест командою."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 14,
+      "note": "clean gaming background",
+      "expect_clean": true
+    },
+    {
+      "label": "parent_visible_coach_logistics",
+      "start_at": "2026-03-04T15:30:00+02:00",
+      "count": 3,
+      "interval_minutes": 30,
+      "day_repeats": 12,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "coach_iryna",
+        "mama_sofia",
+        "sofia_13"
+      ],
+      "conversation_ids": [
+        "coach_parent_loop"
+      ],
+      "texts": [
+        "Нагадую, заняття завтра о 16:00, батьки можуть бути присутні.",
+        "Дякую, підтверджую, Софія буде.",
+        "Добре, я візьму альбом і фарби."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 4,
+      "note": "safe parent-visible adult logistics",
+      "expect_clean": true
+    }
+  ]
+}

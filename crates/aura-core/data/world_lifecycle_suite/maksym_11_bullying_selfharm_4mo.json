@@ -1,0 +1,228 @@
+{
+  "label": "maksym_11_bullying_selfharm_4mo",
+  "description": "Four months for an 11-year-old: class pile-on, peer threat, homework blackmail, later public humiliation, self-harm spillover, and clean family/teacher support.",
+  "owner": {
+    "id": "maksym_11",
+    "display_name": "Максим",
+    "age": 11
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 11,
+    "ttl_days": 160
+  },
+  "actors": [
+    {
+      "id": "maksym_11",
+      "display_name": "Максим"
+    },
+    {
+      "id": "mama_maksym",
+      "display_name": "Мама Максима",
+      "trusted": true
+    },
+    {
+      "id": "teacher_anna",
+      "display_name": "Вчителька Анна",
+      "trusted": true
+    },
+    {
+      "id": "oleh_11",
+      "display_name": "Олег"
+    },
+    {
+      "id": "vika_11",
+      "display_name": "Віка"
+    },
+    {
+      "id": "sasha_12",
+      "display_name": "Саша"
+    },
+    {
+      "id": "friend_petro",
+      "display_name": "Петро",
+      "trusted": true
+    }
+  ],
+  "conversations": [
+    {
+      "id": "maksym_family",
+      "display_name": "Сім'я Максима",
+      "conversation_type": "group",
+      "member_count": 2
+    },
+    {
+      "id": "class_5b",
+      "display_name": "5-Б клас",
+      "conversation_type": "group",
+      "member_count": 26
+    },
+    {
+      "id": "petro_dm",
+      "display_name": "Петро ↔ Максим",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "teacher_parent_loop",
+      "display_name": "Вчителька + батьки",
+      "conversation_type": "group",
+      "member_count": 3
+    },
+    {
+      "id": "private_notes_maksym",
+      "display_name": "Особисті нотатки",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-15T10:00:00+02:00",
+      "sender_id": "oleh_11",
+      "conversation_id": "class_5b",
+      "text": "Ніхто тебе тут не хоче в команді, ти все псуєш.",
+      "expect_threat": "bullying",
+      "expect_min_action": "blur"
+    },
+    {
+      "at": "2026-01-15T10:03:00+02:00",
+      "sender_id": "vika_11",
+      "conversation_id": "class_5b",
+      "text": "Та він реально всіх дістав, хай краще мовчить.",
+      "expect_threat": "bullying",
+      "expect_min_action": "blur"
+    },
+    {
+      "at": "2026-01-15T10:06:00+02:00",
+      "sender_id": "sasha_12",
+      "conversation_id": "class_5b",
+      "text": "Завтра в школі тобі кінець, зрозумів?",
+      "expect_threat": "threat",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-02-02T18:15:00+02:00",
+      "sender_id": "sasha_12",
+      "conversation_id": "class_5b",
+      "text": "Якщо не скинеш відповіді з математики, я покажу всім той скрін.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-11T11:45:00+02:00",
+      "sender_id": "oleh_11",
+      "conversation_id": "class_5b",
+      "text": "Максиме, після твого виступу всі будуть сміятися з тебе.",
+      "expect_threat": "bullying",
+      "expect_min_action": "blur"
+    },
+    {
+      "at": "2026-03-11T22:10:00+02:00",
+      "sender_id": "maksym_11",
+      "conversation_id": "private_notes_maksym",
+      "text": "Не хочу більше жити.",
+      "expect_threat": "self_harm",
+      "expect_min_action": "warn",
+      "expect_min_alert": "urgent"
+    },
+    {
+      "at": "2026-03-12T07:30:00+02:00",
+      "sender_id": "mama_maksym",
+      "conversation_id": "maksym_family",
+      "text": "Максиме, ми поруч. Я напишу вчительці і разом розберемося без тиску.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-03-12T08:10:00+02:00",
+      "sender_id": "teacher_anna",
+      "conversation_id": "teacher_parent_loop",
+      "text": "Дякую, я перегляну ситуацію в класі. Прошу всіх батьків тримати комунікацію тут.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "family_checkins",
+      "start_at": "2026-01-09T07:30:00+02:00",
+      "count": 3,
+      "interval_minutes": 420,
+      "day_repeats": 14,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "mama_maksym",
+        "maksym_11",
+        "mama_maksym"
+      ],
+      "conversation_ids": [
+        "maksym_family"
+      ],
+      "texts": [
+        "Доброго ранку, гарного дня.",
+        "Я після уроків напишу.",
+        "Ввечері подивимось домашку."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 2,
+      "note": "clean family background",
+      "expect_clean": true
+    },
+    {
+      "label": "class_background",
+      "start_at": "2026-01-20T10:00:00+02:00",
+      "count": 5,
+      "interval_minutes": 16,
+      "day_repeats": 12,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "friend_petro",
+        "maksym_11",
+        "vika_11",
+        "oleh_11",
+        "sasha_12"
+      ],
+      "conversation_ids": [
+        "class_5b"
+      ],
+      "texts": [
+        "Хто має фото домашнього завдання?",
+        "Я можу скинути після уроків.",
+        "Не забудьте про малюнок на завтра.",
+        "Давайте без сварок, просто переробимо слайди.",
+        "Фізкультура буде в залі."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 26,
+      "note": "clean class background after incidents",
+      "expect_clean": true
+    },
+    {
+      "label": "teacher_parent_logistics",
+      "start_at": "2026-02-05T15:00:00+02:00",
+      "count": 2,
+      "interval_minutes": 30,
+      "day_repeats": 8,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "teacher_anna",
+        "mama_maksym"
+      ],
+      "conversation_ids": [
+        "teacher_parent_loop"
+      ],
+      "texts": [
+        "Нагадую, завтра контрольна з математики.",
+        "Дякую, Максим підготується."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 3,
+      "note": "clean teacher-parent logistics",
+      "expect_clean": true
+    }
+  ]
+}
