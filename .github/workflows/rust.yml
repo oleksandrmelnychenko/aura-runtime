@@ -19,9 +19,12 @@ env:
   AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
   AURA_KIDS_MEMORY_HEALTH_PATH: artifacts/kids-memory-health.json
   AURA_KIDS_PREPROD_DRY_RUN_PATH: artifacts/kids-preprod-dry-run-matrix.json
+  AURA_COMMUNITY_SURFACE_REPORT_PATH: artifacts/community-surface-report.json
+  AURA_WORLD_LIFECYCLE_REPORT_PATH: artifacts/world-lifecycle-suite-report.json
   AURA_PILOT_GATE_REPORT_PATH: artifacts/pilot-gate-report.json
   AURA_PILOT_REVIEW_SIGNOFFS_PATH: docs/pilot-review-signoffs.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
+  AURA_WORLD_LIFECYCLE_INPUT: crates/aura-core/data/world_lifecycle_suite
   AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
 
 jobs:
@@ -33,6 +36,8 @@ jobs:
     - uses: actions/checkout@v4
     - name: Lint Domain Lexicons
       run: python3 ci/lint_lexicons.py
+    - name: Run CI Helper Tests
+      run: python3 -m unittest ci.test_generate_evidence_manifest
     - name: Audit Dependencies
       run: |
         cargo install cargo-audit --quiet 2>/dev/null || true
@@ -43,6 +48,20 @@ jobs:
       run: cargo clippy --workspace --all-features --all-targets -- -D warnings
     - name: Run tests
       run: cargo test --workspace --all-features --all-targets --verbose
+    - name: Run Community Surface Gate
+      run: |
+        cargo run --quiet --example community_surface_sim -p aura-core -- \
+          --profile ci \
+          --json "$AURA_COMMUNITY_SURFACE_REPORT_PATH" \
+          --fail-on-gate
+    - name: Run World Lifecycle Gate
+      run: |
+        cargo run --quiet --example world_sim -p aura-core -- \
+          --input "$AURA_WORLD_LIFECYCLE_INPUT" \
+          --summary-only \
+          --output "$AURA_WORLD_LIFECYCLE_REPORT_PATH" \
+          --redact-text \
+          --require-clean
     - name: Run FFI State Sync Soak
       run: python3 ci/run_ffi_soak.py --output "$AURA_FFI_SOAK_EVIDENCE_PATH" --iterations 2 --label rust-ci
     - name: Generate Release Report
@@ -159,6 +178,8 @@ jobs:
           --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           $PILOT_GATE_ARGS \
           $KIDS_PREPROD_ARGS \
+          --community-surface-report "$AURA_COMMUNITY_SURFACE_REPORT_PATH" \
+          --world-lifecycle-report "$AURA_WORLD_LIFECYCLE_REPORT_PATH" \
           --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
     - name: Summarize Rust CI
       if: ${{ always() }}
@@ -190,6 +211,10 @@ jobs:
                     "pilot_shadow_finding_count": "missing",
                     "pilot_regression_status": "missing",
                     "pilot_regression_scenario_count": "missing",
+                    "world_lifecycle_status": "missing",
+                    "world_lifecycle_total_worlds": "missing",
+                    "world_lifecycle_total_events": "missing",
+                    "world_lifecycle_finding_count": "missing",
                 },
             }
         )
@@ -214,6 +239,14 @@ jobs:
             summary.write(f"- pilot_gate_shadow_runs: `{summary_data.get('pilot_gate_shadow_run_count', 'missing')}`\n")
             summary.write(f"- kids_preprod_dry_run: `{summary_data.get('kids_preprod_dry_run_status', 'missing')}`\n")
             summary.write(f"- kids_preprod_dry_run_checks_failed: `{summary_data.get('kids_preprod_dry_run_checks_failed', 'missing')}`\n")
+            summary.write(f"- community_surface: `{summary_data.get('community_surface_status', 'missing')}`\n")
+            summary.write(f"- community_surface_total_events: `{summary_data.get('community_surface_total_events', 'missing')}`\n")
+            summary.write(f"- community_surface_findings: `{summary_data.get('community_surface_finding_count', 'missing')}`\n")
+            summary.write(f"- community_surface_scenarios: `{summary_data.get('community_surface_scenario_count', 'missing')}`\n")
+            summary.write(f"- world_lifecycle: `{summary_data.get('world_lifecycle_status', 'missing')}`\n")
+            summary.write(f"- world_lifecycle_worlds: `{summary_data.get('world_lifecycle_total_worlds', 'missing')}`\n")
+            summary.write(f"- world_lifecycle_total_events: `{summary_data.get('world_lifecycle_total_events', 'missing')}`\n")
+            summary.write(f"- world_lifecycle_findings: `{summary_data.get('world_lifecycle_finding_count', 'missing')}`\n")
             summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
             summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
             summary.write(f"- ffi_state_sync_attempts: `{summary_data['ffi_soak_attempts_run']}`\n")
@@ -274,6 +307,20 @@ jobs:
       with:
         name: aura-pilot-gate-report
         path: ${{ env.AURA_PILOT_GATE_REPORT_PATH }}
+        if-no-files-found: warn
+    - name: Upload Community Surface Report
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-community-surface-report
+        path: ${{ env.AURA_COMMUNITY_SURFACE_REPORT_PATH }}
+        if-no-files-found: warn
+    - name: Upload World Lifecycle Suite Report
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-world-lifecycle-suite-report
+        path: ${{ env.AURA_WORLD_LIFECYCLE_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload Evidence Manifest
       if: ${{ always() }}
