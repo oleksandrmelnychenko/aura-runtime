@@ -2869,6 +2869,19 @@ mod tests {
         }
     }
 
+    fn child_input_with_relationship(
+        text: &str,
+        sender: &str,
+        conversation: &str,
+        relationship: SenderRelationship,
+        trust_source: RelationshipTrustSource,
+    ) -> MessageInput {
+        let mut input = child_input(text, sender, conversation);
+        input.sender_relationship = relationship;
+        input.relationship_trust_source = trust_source;
+        input
+    }
+
     fn child_config() -> AuraConfig {
         AuraConfig {
             account_type: AccountType::Child,
@@ -6633,6 +6646,121 @@ mod tests {
             crate::predicted_score_for_threat(&result, ThreatType::Grooming) >= 0.55,
             "trusted status must not suppress secrecy grooming: {result:?}"
         );
+    }
+
+    #[test]
+    fn unknown_adult_minor_metadata_boosts_existing_grooming_signal() {
+        let db = PatternDatabase::default_mvp();
+        let text = "Don't tell your parents about our chats.";
+        let sender = "unknown_adult";
+        let conv = "adult_dm";
+
+        let mut baseline_analyzer = Analyzer::new(child_config(), &db);
+        let baseline =
+            baseline_analyzer.analyze_with_context(&child_input(text, sender, conv), 1000);
+
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let result = analyzer.analyze_with_context(
+            &child_input_with_relationship(
+                text,
+                sender,
+                conv,
+                SenderRelationship::UnknownAdult,
+                RelationshipTrustSource::ServerReputation,
+            ),
+            1000,
+        );
+
+        let baseline_score = crate::predicted_score_for_threat(&baseline, ThreatType::Grooming);
+        let result_score = crate::predicted_score_for_threat(&result, ThreatType::Grooming);
+        assert!(
+            result_score >= (baseline_score + 0.07).min(1.0),
+            "unknown adult metadata should boost existing grooming signal: baseline={baseline:?} result={result:?}"
+        );
+        assert!(result
+            .context_markers
+            .contains(&"context.relationship.unknown_adult_minor".to_string()));
+        assert!(result
+            .reason_codes
+            .contains(&"context.relationship.unknown_adult_minor".to_string()));
+    }
+
+    #[test]
+    fn relationship_metadata_alone_does_not_create_threat() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+
+        let result = analyzer.analyze_with_context(
+            &child_input_with_relationship(
+                "Remember your homework for tomorrow.",
+                "teacher_1",
+                "school_dm",
+                SenderRelationship::UnknownAdult,
+                RelationshipTrustSource::ServerReputation,
+            ),
+            1000,
+        );
+
+        assert_eq!(result.threat_type, ThreatType::None, "{result:?}");
+        assert!(result
+            .context_markers
+            .contains(&"context.relationship.unknown_adult_minor".to_string()));
+        assert!(
+            !result
+                .reason_codes
+                .contains(&"context.relationship.unknown_adult_minor".to_string()),
+            "relationship metadata alone should not create threat reason codes: {result:?}"
+        );
+    }
+
+    #[test]
+    fn self_declared_privileged_relationship_is_not_local_trust() {
+        let db = test_db();
+        let mut analyzer = Analyzer::new(teen_kids_config(), &db);
+
+        let result = analyzer.analyze_with_context(
+            &child_input_with_relationship(
+                "I am your teacher and they dont really like u.",
+                "fake_teacher",
+                "teen_dm",
+                SenderRelationship::Teacher,
+                RelationshipTrustSource::SelfDeclared,
+            ),
+            1000,
+        );
+
+        assert_eq!(result.threat_type, ThreatType::Manipulation, "{result:?}");
+        assert!(result
+            .context_markers
+            .contains(&"context.relationship.self_declared_untrusted".to_string()));
+        assert!(result
+            .reason_codes
+            .contains(&"context.relationship.self_declared_privileged_claim".to_string()));
+    }
+
+    #[test]
+    fn verified_guardian_metadata_does_not_suppress_grooming_signal() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+
+        let result = analyzer.analyze_with_context(
+            &child_input_with_relationship(
+                "Don't tell your parents about our chats. They would not understand our bond.",
+                "guardian_1",
+                "family_dm",
+                SenderRelationship::Guardian,
+                RelationshipTrustSource::GuardianVerified,
+            ),
+            1000,
+        );
+
+        assert_eq!(result.threat_type, ThreatType::Grooming, "{result:?}");
+        assert!(result
+            .context_markers
+            .contains(&"context.relationship.verified_family_context".to_string()));
+        assert!(!result
+            .reason_codes
+            .contains(&"context.relationship.self_declared_privileged_claim".to_string()));
     }
 
     #[test]

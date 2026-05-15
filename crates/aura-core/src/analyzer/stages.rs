@@ -65,7 +65,9 @@ impl Analyzer {
         );
         let interpretation_context = interpretation.analysis_context_summary();
         let interpretation_reason_codes = interpretation.diagnostic_reason_codes();
-        let signals = interpretation.adjusted_signals;
+        let mut signals = interpretation.adjusted_signals;
+        let relationship_metadata_context =
+            apply_relationship_metadata_context(input, self.config.account_type, &mut signals);
 
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
@@ -77,6 +79,10 @@ impl Analyzer {
             analysis_time_us,
         );
         result.context_markers = interpretation_reason_codes.clone();
+        append_context_markers(
+            &mut result.context_markers,
+            &relationship_metadata_context.context_markers,
+        );
         result.context_summary = interpretation_context;
         result.action = merge_domain_output_effects(
             &mut result.reason_codes,
@@ -84,6 +90,10 @@ impl Analyzer {
             domain_output.as_ref(),
         );
         append_reason_codes(&mut result.reason_codes, &interpretation_reason_codes);
+        append_reason_codes(
+            &mut result.reason_codes,
+            &relationship_metadata_context.reason_codes,
+        );
         if let Some(recommendation) = result.recommended_action.as_mut() {
             recommendation.reason_codes = result.reason_codes.clone();
             crate::action::soften_recommendation_for_context_summary(
@@ -291,6 +301,8 @@ impl Analyzer {
         );
         apply_context_signal_filters(&interpretation_context, &mut signals);
         apply_contextual_corroboration_boost(&interpretation_context, &mut signals);
+        let relationship_metadata_context =
+            apply_relationship_metadata_context(input, self.config.account_type, &mut signals);
 
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
@@ -302,6 +314,10 @@ impl Analyzer {
             analysis_time_us,
         );
         result.context_markers = interpretation_reason_codes.clone();
+        append_context_markers(
+            &mut result.context_markers,
+            &relationship_metadata_context.context_markers,
+        );
         result.context_summary = interpretation_context;
         result.contact_snapshot = self
             .context_tracker
@@ -329,6 +345,10 @@ impl Analyzer {
             domain_output.as_ref(),
         );
         append_reason_codes(&mut result.reason_codes, &interpretation_reason_codes);
+        append_reason_codes(
+            &mut result.reason_codes,
+            &relationship_metadata_context.reason_codes,
+        );
         if let Some(recommendation) = result.recommended_action.as_mut() {
             recommendation.reason_codes = result.reason_codes.clone();
         }
@@ -827,6 +847,14 @@ fn append_reason_codes(reason_codes: &mut Vec<String>, extras: &[String]) {
     }
 }
 
+fn append_context_markers(context_markers: &mut Vec<String>, extras: &[String]) {
+    for extra in extras {
+        if !context_markers.iter().any(|existing| existing == extra) {
+            context_markers.push(extra.clone());
+        }
+    }
+}
+
 fn push_reason_code(reason_codes: &mut Vec<String>, extra: &str) -> bool {
     if reason_codes.iter().any(|existing| existing == extra) {
         return true;
@@ -853,15 +881,165 @@ fn context_reason_priority(code: &str) -> Option<u8> {
     {
         return Some(1);
     }
-    if matches!(
-        code,
-        "context.relationship.new_contact"
-            | "context.relationship.trusted"
-            | "context.reciprocity.one_sided"
-    ) {
+    if code.starts_with("context.relationship.") || matches!(code, "context.reciprocity.one_sided")
+    {
         return Some(2);
     }
     None
+}
+
+#[derive(Default)]
+struct RelationshipMetadataContext {
+    context_markers: Vec<String>,
+    reason_codes: Vec<String>,
+}
+
+fn apply_relationship_metadata_context(
+    input: &MessageInput,
+    account_type: AccountType,
+    signals: &mut [DetectionSignal],
+) -> RelationshipMetadataContext {
+    if input.sender_relationship == SenderRelationship::Unknown {
+        return RelationshipMetadataContext::default();
+    }
+
+    let mut context = RelationshipMetadataContext::default();
+    context.context_markers.push(format!(
+        "context.relationship.sender.{}",
+        sender_relationship_marker(input.sender_relationship)
+    ));
+    context.context_markers.push(format!(
+        "context.relationship.source.{}",
+        relationship_trust_source_marker(input.relationship_trust_source)
+    ));
+
+    let minor_account = matches!(account_type, AccountType::Child | AccountType::Teen);
+    let has_relevant_signal = signals.iter().any(relationship_sensitive_signal);
+    let mut score_boost = 0.0_f32;
+
+    if minor_account && input.sender_relationship == SenderRelationship::UnknownAdult {
+        context
+            .context_markers
+            .push("context.relationship.unknown_adult_minor".to_string());
+        if has_relevant_signal {
+            context
+                .reason_codes
+                .push("context.relationship.unknown_adult_minor".to_string());
+            score_boost += 0.08;
+        }
+    }
+
+    if input.relationship_trust_source == RelationshipTrustSource::SelfDeclared {
+        context
+            .context_markers
+            .push("context.relationship.self_declared_untrusted".to_string());
+        if privileged_relationship_claim(input.sender_relationship) {
+            context
+                .context_markers
+                .push("context.relationship.self_declared_privileged_claim".to_string());
+            if minor_account && has_relevant_signal {
+                context
+                    .reason_codes
+                    .push("context.relationship.self_declared_privileged_claim".to_string());
+                score_boost += 0.05;
+            }
+        }
+    }
+
+    if verified_relationship_source(input.relationship_trust_source)
+        && trusted_family_or_guardian_relationship(input.sender_relationship)
+    {
+        context
+            .context_markers
+            .push("context.relationship.verified_family_context".to_string());
+    }
+
+    if score_boost > 0.0 {
+        for signal in signals
+            .iter_mut()
+            .filter(|signal| relationship_sensitive_signal(signal))
+        {
+            signal.score = (signal.score + score_boost).min(1.0);
+        }
+    }
+
+    context
+}
+
+fn relationship_sensitive_signal(signal: &DetectionSignal) -> bool {
+    signal.score > 0.0
+        && matches!(
+            signal.threat_type,
+            ThreatType::Grooming
+                | ThreatType::Manipulation
+                | ThreatType::Explicit
+                | ThreatType::Threat
+                | ThreatType::Doxxing
+                | ThreatType::PiiLeakage
+        )
+}
+
+fn privileged_relationship_claim(relationship: SenderRelationship) -> bool {
+    matches!(
+        relationship,
+        SenderRelationship::Parent
+            | SenderRelationship::Guardian
+            | SenderRelationship::Teacher
+            | SenderRelationship::Coach
+            | SenderRelationship::Authority
+    )
+}
+
+fn trusted_family_or_guardian_relationship(relationship: SenderRelationship) -> bool {
+    matches!(
+        relationship,
+        SenderRelationship::Parent
+            | SenderRelationship::Guardian
+            | SenderRelationship::Family
+            | SenderRelationship::Sibling
+    )
+}
+
+fn verified_relationship_source(source: RelationshipTrustSource) -> bool {
+    matches!(
+        source,
+        RelationshipTrustSource::UserVerified
+            | RelationshipTrustSource::GuardianVerified
+            | RelationshipTrustSource::PlatformVerified
+            | RelationshipTrustSource::AddressBook
+            | RelationshipTrustSource::SchoolDirectory
+    )
+}
+
+fn sender_relationship_marker(relationship: SenderRelationship) -> &'static str {
+    match relationship {
+        SenderRelationship::Unknown => "unknown",
+        SenderRelationship::Parent => "parent",
+        SenderRelationship::Guardian => "guardian",
+        SenderRelationship::Family => "family",
+        SenderRelationship::Sibling => "sibling",
+        SenderRelationship::Peer => "peer",
+        SenderRelationship::Teacher => "teacher",
+        SenderRelationship::Coach => "coach",
+        SenderRelationship::Authority => "authority",
+        SenderRelationship::Service => "service",
+        SenderRelationship::UnknownAdult => "unknown_adult",
+        SenderRelationship::UnknownPeer => "unknown_peer",
+    }
+}
+
+fn relationship_trust_source_marker(source: RelationshipTrustSource) -> &'static str {
+    match source {
+        RelationshipTrustSource::Unknown => "unknown",
+        RelationshipTrustSource::UserVerified => "user_verified",
+        RelationshipTrustSource::GuardianVerified => "guardian_verified",
+        RelationshipTrustSource::PlatformVerified => "platform_verified",
+        RelationshipTrustSource::AddressBook => "address_book",
+        RelationshipTrustSource::SchoolDirectory => "school_directory",
+        RelationshipTrustSource::ServerReputation => "server_reputation",
+        RelationshipTrustSource::LocalHeuristic => "local_heuristic",
+        RelationshipTrustSource::SelfDeclared => "self_declared",
+    }
 }
 
 fn apply_context_signal_filters(
