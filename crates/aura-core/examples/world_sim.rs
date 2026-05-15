@@ -2620,6 +2620,77 @@ mod tests {
     }
 
     #[test]
+    fn two_year_dense_fixture_passes_quality_gates() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("data/world_lifecycle_suite/sofia_13_to_15_dense_2y.json");
+        let world = load_world(&path).expect("two-year dense fixture should load");
+        let report =
+            run_world_simulation(&world, &path, 1).expect("two-year dense fixture should run");
+
+        assert_eq!(report.label, "sofia_13_to_15_dense_2y");
+        assert!(
+            world.actors.len() >= 50,
+            "fixture should include many actors: {}",
+            world.actors.len()
+        );
+        assert!(
+            report.total_events >= 6_500,
+            "fixture should keep dense two-year volume: {}",
+            report.total_events
+        );
+        assert!(
+            report.conversations.len() >= 20,
+            "fixture should cover many conversations: {}",
+            report.conversations.len()
+        );
+        assert!(report.findings.is_empty(), "{:?}", report.findings);
+        assert_eq!(report.metrics.overall.false_negative_events, 0);
+        assert_eq!(report.metrics.overall.false_positive_events, 0);
+        assert_eq!(report.metrics.overall.positive_recall, Some(1.0));
+        assert_eq!(report.metrics.overall.clean_false_positive_rate, Some(0.0));
+        assert!(
+            report
+                .threat_counts
+                .get("grooming")
+                .copied()
+                .unwrap_or_default()
+                >= 10,
+            "{:?}",
+            report.threat_counts
+        );
+        assert_eq!(report.threat_counts.get("doxxing"), Some(&1));
+        assert_eq!(report.threat_counts.get("phishing"), Some(&3));
+
+        for clean_conversation_id in [
+            "family_group",
+            "coach_parent_loop",
+            "language_club",
+            "volunteer_group",
+        ] {
+            let conversation = report
+                .conversations
+                .iter()
+                .find(|conversation| conversation.conversation_id == clean_conversation_id)
+                .expect("clean conversation should be present");
+            assert_eq!(
+                conversation.threat_messages, 0,
+                "{clean_conversation_id} should stay clean"
+            );
+        }
+
+        assert!(report.metrics.by_relationship.iter().any(|slice| {
+            slice.slice_id == "unknown_adult"
+                && slice.counts.labeled_positive_events >= 10
+                && slice.counts.positive_recall == Some(1.0)
+        }));
+        assert!(report.metrics.by_relationship.iter().any(|slice| {
+            slice.slice_id == "peer"
+                && slice.counts.labeled_clean_events > 2_000
+                && slice.counts.clean_false_positive_rate == Some(0.0)
+        }));
+    }
+
+    #[test]
     fn metric_gates_report_recall_and_clean_fp_failures() {
         let metrics = MetricAccumulator {
             labeled_positive_events: 2,
