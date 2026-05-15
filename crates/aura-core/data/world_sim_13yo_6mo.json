@@ -22,54 +22,78 @@
     {
       "id": "mama_sofia",
       "display_name": "Мама Софії",
-      "trusted": true
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
     },
     {
       "id": "tato_sofia",
       "display_name": "Тато Софії",
-      "trusted": true
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
     },
     {
       "id": "maria_13",
       "display_name": "Марія",
-      "trusted": true
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
     },
     {
       "id": "nazar_13",
-      "display_name": "Назар"
+      "display_name": "Назар",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
     },
     {
       "id": "vika_13",
-      "display_name": "Віка"
+      "display_name": "Віка",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
     },
     {
       "id": "dasha_13",
-      "display_name": "Даша"
+      "display_name": "Даша",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
     },
     {
       "id": "andrii_14",
-      "display_name": "Андрій"
+      "display_name": "Андрій",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
     },
     {
       "id": "max_19",
-      "display_name": "Макс"
+      "display_name": "Макс",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
     },
     {
       "id": "coach_iryna",
       "display_name": "Тренерка Ірина",
-      "trusted": true
+      "trusted": true,
+      "sender_relationship": "coach",
+      "relationship_trust_source": "school_directory"
     },
     {
       "id": "fake_teen_17",
-      "display_name": "Денис"
+      "display_name": "Денис",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "self_declared"
     },
     {
       "id": "skin_drop_bot",
-      "display_name": "SkinDrop Bot"
+      "display_name": "SkinDrop Bot",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
     },
     {
       "id": "unknown_commenter",
-      "display_name": "Коментатор"
+      "display_name": "Коментатор",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "local_heuristic"
     }
   ],
   "conversations": [

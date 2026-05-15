@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 
 use aura_core::{
     build_shadow_mode_event, AccountType, Action, AlertPriority, AnalysisResult, Analyzer,
-    AuraConfig, ContactSnapshot, ConversationType, ProtectionLevel, ShadowModeBundle,
-    ShadowModeEventInput, ShadowModeExpectation, ShadowModeFinding,
+    AuraConfig, ContactSnapshot, ConversationType, ProtectionLevel, RelationshipTrustSource,
+    SenderRelationship, ShadowModeBundle, ShadowModeEventInput, ShadowModeExpectation,
+    ShadowModeFinding,
 };
 use aura_patterns::PatternDatabase;
 use aura_proto::messenger::v1 as proto;
@@ -245,6 +246,10 @@ struct WorldActor {
     display_name: Option<String>,
     #[serde(default)]
     trusted: bool,
+    #[serde(default)]
+    sender_relationship: SenderRelationship,
+    #[serde(default)]
+    relationship_trust_source: RelationshipTrustSource,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -270,6 +275,10 @@ struct WorldEvent {
     conversation_type: Option<ConversationType>,
     #[serde(default)]
     member_count: Option<u32>,
+    #[serde(default)]
+    sender_relationship: Option<SenderRelationship>,
+    #[serde(default)]
+    relationship_trust_source: Option<RelationshipTrustSource>,
     #[serde(default)]
     note: Option<String>,
     #[serde(default)]
@@ -301,6 +310,10 @@ struct GeneratedBatch {
     conversation_type: Option<ConversationType>,
     #[serde(default)]
     member_count: Option<u32>,
+    #[serde(default)]
+    sender_relationship: Option<SenderRelationship>,
+    #[serde(default)]
+    relationship_trust_source: Option<RelationshipTrustSource>,
     #[serde(default)]
     note: Option<String>,
     #[serde(default)]
@@ -380,6 +393,8 @@ struct EventOutcome {
     language: String,
     conversation_type: ConversationType,
     member_count: Option<u32>,
+    sender_relationship: SenderRelationship,
+    relationship_trust_source: RelationshipTrustSource,
     note: Option<String>,
     expectation: Option<EventExpectation>,
     text: String,
@@ -454,6 +469,8 @@ struct ResolvedEvent {
     conversation_name: String,
     conversation_type: ConversationType,
     member_count: Option<u32>,
+    sender_relationship: SenderRelationship,
+    relationship_trust_source: RelationshipTrustSource,
     language: String,
     note: Option<String>,
     expectation: Option<EventExpectation>,
@@ -469,6 +486,8 @@ struct ResolvedEventSeed {
     conversation_id: String,
     conversation_type: Option<ConversationType>,
     member_count: Option<u32>,
+    sender_relationship: Option<SenderRelationship>,
+    relationship_trust_source: Option<RelationshipTrustSource>,
     language: Option<String>,
     note: Option<String>,
     expectation: Option<EventExpectation>,
@@ -567,6 +586,8 @@ fn load_world(path: &Path) -> Result<SimulationWorld, String> {
             id: world.owner.id.clone(),
             display_name: Some(world.owner.display_name.clone()),
             trusted: false,
+            sender_relationship: SenderRelationship::Unknown,
+            relationship_trust_source: RelationshipTrustSource::Unknown,
         });
     }
     Ok(world)
@@ -651,8 +672,8 @@ fn run_world_simulation(
             conversation_type: event.conversation_type,
             member_count: event.member_count,
             server_sender_risk_hint: None,
-            sender_relationship: Default::default(),
-            relationship_trust_source: Default::default(),
+            sender_relationship: event.sender_relationship,
+            relationship_trust_source: event.relationship_trust_source,
         };
 
         let result = analyzer.analyze_with_context(&input, event.timestamp_ms);
@@ -672,6 +693,8 @@ fn run_world_simulation(
             language: event.language.clone(),
             conversation_type: event.conversation_type,
             member_count: event.member_count,
+            sender_relationship: event.sender_relationship,
+            relationship_trust_source: event.relationship_trust_source,
             note: event.note.clone(),
             expectation: event.expectation.clone(),
             text: event.text.clone(),
@@ -764,6 +787,8 @@ fn event_seed_from_event(event: &WorldEvent) -> Result<ResolvedEventSeed, String
         conversation_id: event.conversation_id.clone(),
         conversation_type: event.conversation_type,
         member_count: event.member_count,
+        sender_relationship: event.sender_relationship,
+        relationship_trust_source: event.relationship_trust_source,
         language: event.language.clone(),
         note: event.note.clone(),
         expectation: expectation_from_parts(
@@ -863,6 +888,8 @@ fn expand_generated_batch(
                 .clone(),
                 conversation_type: batch.conversation_type,
                 member_count: batch.member_count,
+                sender_relationship: batch.sender_relationship,
+                relationship_trust_source: batch.relationship_trust_source,
                 language: batch.language.clone(),
                 note,
                 expectation: expectation_from_parts(
@@ -927,6 +954,14 @@ fn resolve_seed(
     let member_count = seed
         .member_count
         .or_else(|| conversation.and_then(|conversation| conversation.member_count));
+    let sender_relationship = seed
+        .sender_relationship
+        .or_else(|| actor.map(|actor| actor.sender_relationship))
+        .unwrap_or_default();
+    let relationship_trust_source = seed
+        .relationship_trust_source
+        .or_else(|| actor.map(|actor| actor.relationship_trust_source))
+        .unwrap_or_default();
 
     Ok(ResolvedEvent {
         source_index: index,
@@ -938,6 +973,8 @@ fn resolve_seed(
         conversation_name,
         conversation_type,
         member_count,
+        sender_relationship,
+        relationship_trust_source,
         language: seed.language.unwrap_or_else(|| {
             world
                 .config
@@ -2124,6 +2161,8 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: Some(ConversationType::Direct),
             member_count: None,
+            sender_relationship: None,
+            relationship_trust_source: None,
             note: None,
             expect_clean: true,
             expect_threat: None,
@@ -2149,6 +2188,8 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: Some(ConversationType::Group),
             member_count: Some(12),
+            sender_relationship: None,
+            relationship_trust_source: None,
             note: None,
             expect_clean: true,
             expect_threat: None,
@@ -2165,6 +2206,99 @@ mod tests {
             "{:?}",
             report.findings[0]
         );
+    }
+
+    #[test]
+    fn actor_relationship_metadata_is_passed_to_analyzer() {
+        let mut world = test_world(vec![WorldEvent {
+            at: "2026-01-01T22:00:00Z".to_string(),
+            sender_id: "stranger".to_string(),
+            conversation_id: "stranger_dm".to_string(),
+            text: "Don't tell your parents about our chats.".to_string(),
+            language: Some("en".to_string()),
+            conversation_type: Some(ConversationType::Direct),
+            member_count: None,
+            sender_relationship: None,
+            relationship_trust_source: None,
+            note: None,
+            expect_clean: false,
+            expect_threat: Some(aura_core::ThreatType::Grooming),
+            expect_min_action: Some(Action::Mark),
+            expect_min_alert: None,
+        }]);
+        world.actors.push(WorldActor {
+            id: "stranger".to_string(),
+            display_name: Some("Stranger".to_string()),
+            trusted: false,
+            sender_relationship: SenderRelationship::UnknownAdult,
+            relationship_trust_source: RelationshipTrustSource::ServerReputation,
+        });
+
+        let report = run_world_simulation(&world, Path::new("unit-relationship.json"), 1)
+            .expect("relationship world should run");
+        let outcome = &report.event_log[0];
+
+        assert!(report.findings.is_empty(), "{:?}", report.findings);
+        assert_eq!(
+            outcome.sender_relationship,
+            SenderRelationship::UnknownAdult
+        );
+        assert_eq!(
+            outcome.relationship_trust_source,
+            RelationshipTrustSource::ServerReputation
+        );
+        assert!(outcome
+            .result
+            .context_markers
+            .contains(&"context.relationship.unknown_adult_minor".to_string()));
+        assert!(outcome
+            .result
+            .reason_codes
+            .contains(&"context.relationship.unknown_adult_minor".to_string()));
+    }
+
+    #[test]
+    fn six_month_fixture_stays_clean_with_relationship_metadata() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data/world_sim_13yo_6mo.json");
+        let world = load_world(&path).expect("six-month fixture should load");
+        let report = run_world_simulation(&world, &path, 1).expect("six-month fixture should run");
+
+        assert_eq!(report.label, "sofia_13_six_month_lifecycle");
+        assert!(
+            report.total_events >= 400,
+            "fixture should keep substantial background volume: {}",
+            report.total_events
+        );
+        assert!(report.findings.is_empty(), "{:?}", report.findings);
+        assert!(
+            report
+                .threat_counts
+                .get("grooming")
+                .copied()
+                .unwrap_or_default()
+                >= 8,
+            "{:?}",
+            report.threat_counts
+        );
+
+        let coach_loop = report
+            .conversations
+            .iter()
+            .find(|conversation| conversation.conversation_id == "coach_parent_loop")
+            .expect("fixture should include parent-visible coach loop");
+        assert_eq!(
+            coach_loop.threat_messages, 0,
+            "verified parent-visible adult logistics should stay clean"
+        );
+
+        assert!(report.event_log.iter().any(|event| {
+            event.sender_id == "max_19"
+                && event.sender_relationship == SenderRelationship::UnknownAdult
+                && event
+                    .result
+                    .context_markers
+                    .contains(&"context.relationship.unknown_adult_minor".to_string())
+        }));
     }
 
     #[test]
@@ -2216,6 +2350,8 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: Some(ConversationType::Direct),
             member_count: None,
+            sender_relationship: None,
+            relationship_trust_source: None,
             note: None,
             expect_clean: true,
             expect_threat: None,
@@ -2276,11 +2412,15 @@ mod tests {
                     id: "child".to_string(),
                     display_name: Some("Child".to_string()),
                     trusted: false,
+                    sender_relationship: SenderRelationship::Unknown,
+                    relationship_trust_source: RelationshipTrustSource::Unknown,
                 },
                 WorldActor {
                     id: "peer".to_string(),
                     display_name: Some("Peer".to_string()),
                     trusted: false,
+                    sender_relationship: SenderRelationship::Peer,
+                    relationship_trust_source: RelationshipTrustSource::UserVerified,
                 },
             ],
             conversations: vec![
