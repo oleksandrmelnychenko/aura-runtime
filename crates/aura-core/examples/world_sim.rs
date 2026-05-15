@@ -67,6 +67,7 @@ fn main() {
             );
             std::process::exit(1);
         }
+        fail_on_metric_gate_violations(&suite_report.metrics.overall, &args, "simulation suite");
 
         return;
     }
@@ -108,6 +109,7 @@ fn main() {
         );
         std::process::exit(1);
     }
+    fail_on_metric_gate_violations(&report.metrics.overall, &args, "simulation");
 }
 
 #[derive(Debug, Default)]
@@ -120,6 +122,8 @@ struct Args {
     top_contacts: usize,
     repeat_multiplier: usize,
     require_clean: bool,
+    min_labeled_recall: Option<f64>,
+    max_clean_fp_rate: Option<f64>,
     redact_text: bool,
     help: bool,
 }
@@ -146,6 +150,13 @@ impl Args {
                 }
                 "--summary-only" => self.summary_only = true,
                 "--require-clean" => self.require_clean = true,
+                "--min-labeled-recall" => {
+                    self.min_labeled_recall =
+                        Some(parse_rate_arg(&mut args, "--min-labeled-recall")?)
+                }
+                "--max-clean-fp-rate" => {
+                    self.max_clean_fp_rate = Some(parse_rate_arg(&mut args, "--max-clean-fp-rate")?)
+                }
                 "--repeat-multiplier" => {
                     let raw = next_arg(&mut args, "--repeat-multiplier")?;
                     self.repeat_multiplier = raw
@@ -178,6 +189,20 @@ where
         .ok_or_else(|| format!("missing value for {flag}"))
 }
 
+fn parse_rate_arg<I>(args: &mut I, flag: &str) -> Result<f64, String>
+where
+    I: Iterator<Item = String>,
+{
+    let raw = next_arg(args, flag)?;
+    let value = raw
+        .parse::<f64>()
+        .map_err(|_| format!("invalid {flag} value: {raw}"))?;
+    if !(0.0..=1.0).contains(&value) {
+        return Err(format!("{flag} must be between 0.0 and 1.0, got {raw}"));
+    }
+    Ok(value)
+}
+
 fn print_help() {
     println!("Usage:");
     println!("  cargo run --example world_sim -p aura-core -- [options]");
@@ -191,6 +216,10 @@ fn print_help() {
     println!("  --top-contacts <n>     number of risky contacts to print (default: 8)");
     println!("  --repeat-multiplier <n> scale generated_batches day_repeats by n (default: 1)");
     println!("  --require-clean        exit non-zero if simulation produced findings");
+    println!("  --min-labeled-recall <rate> fail if labeled positive recall is below rate");
+    println!(
+        "  --max-clean-fp-rate <rate> fail if clean labeled false-positive rate is above rate"
+    );
     println!("  --redact-text          replace event text in JSON reports with a redaction marker");
     println!("  --help                 show this message");
 }
@@ -351,6 +380,7 @@ struct WorldSimReport {
     action_counts: BTreeMap<String, usize>,
     threat_counts: BTreeMap<String, usize>,
     alert_counts: BTreeMap<String, usize>,
+    metrics: WorldMetricsReport,
     findings: Vec<SimulationFinding>,
     event_log: Vec<EventOutcome>,
     conversations: Vec<ConversationSummary>,
@@ -371,6 +401,7 @@ struct WorldSuiteReport {
     action_counts: BTreeMap<String, usize>,
     threat_counts: BTreeMap<String, usize>,
     alert_counts: BTreeMap<String, usize>,
+    metrics: WorldMetricsReport,
     reports: Vec<WorldSimReport>,
 }
 
@@ -440,6 +471,47 @@ struct ContactRiskSummary {
     inferred_age: Option<u16>,
     is_trusted: bool,
     snapshot: ContactSnapshot,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WorldMetricsReport {
+    overall: WorldMetricCounts,
+    by_relationship: Vec<WorldMetricSlice>,
+    by_surface: Vec<WorldMetricSlice>,
+    by_language: Vec<WorldMetricSlice>,
+    by_expected_threat: Vec<WorldMetricSlice>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WorldMetricSlice {
+    slice_id: String,
+    counts: WorldMetricCounts,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+struct WorldMetricCounts {
+    labeled_events: usize,
+    labeled_positive_events: usize,
+    labeled_clean_events: usize,
+    true_positive_events: usize,
+    false_negative_events: usize,
+    wrong_threat_events: usize,
+    true_negative_events: usize,
+    false_positive_events: usize,
+    positive_precision: Option<f64>,
+    positive_recall: Option<f64>,
+    clean_false_positive_rate: Option<f64>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MetricAccumulator {
+    labeled_positive_events: usize,
+    labeled_clean_events: usize,
+    true_positive_events: usize,
+    false_negative_events: usize,
+    wrong_threat_events: usize,
+    true_negative_events: usize,
+    false_positive_events: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -523,6 +595,7 @@ fn run_world_suite(input_dir: &Path, repeat_multiplier: usize) -> Result<WorldSu
         merge_counts(&mut threat_counts, &report.threat_counts);
         merge_counts(&mut alert_counts, &report.alert_counts);
     }
+    let metrics = build_metrics_report(reports.iter().flat_map(|report| report.event_log.iter()));
 
     Ok(WorldSuiteReport {
         schema_version: "world_suite.v1",
@@ -541,6 +614,7 @@ fn run_world_suite(input_dir: &Path, repeat_multiplier: usize) -> Result<WorldSu
         action_counts,
         threat_counts,
         alert_counts,
+        metrics,
         reports,
     })
 }
@@ -735,6 +809,7 @@ fn run_world_simulation(
         &actor_lookup,
         analyzer.context_tracker().contact_profiler(),
     );
+    let metrics = build_metrics_report(event_log.iter());
 
     let started_at = resolved_events
         .first()
@@ -765,6 +840,7 @@ fn run_world_simulation(
         action_counts,
         threat_counts,
         alert_counts,
+        metrics,
         findings,
         event_log,
         conversations,
@@ -1082,6 +1158,130 @@ fn build_contact_summaries(
         .collect()
 }
 
+fn build_metrics_report<'a, I>(events: I) -> WorldMetricsReport
+where
+    I: IntoIterator<Item = &'a EventOutcome>,
+{
+    let mut overall = MetricAccumulator::default();
+    let mut by_relationship = BTreeMap::<String, MetricAccumulator>::new();
+    let mut by_surface = BTreeMap::<String, MetricAccumulator>::new();
+    let mut by_language = BTreeMap::<String, MetricAccumulator>::new();
+    let mut by_expected_threat = BTreeMap::<String, MetricAccumulator>::new();
+
+    for event in events {
+        if !event_has_metric_label(event) {
+            continue;
+        }
+
+        overall.observe(event);
+        by_relationship
+            .entry(enum_key(&event.sender_relationship))
+            .or_default()
+            .observe(event);
+        by_surface
+            .entry(enum_key(&event.conversation_type))
+            .or_default()
+            .observe(event);
+        by_language
+            .entry(event.language.clone())
+            .or_default()
+            .observe(event);
+
+        if let Some(expected_threat) = event
+            .expectation
+            .as_ref()
+            .and_then(|expectation| expectation.expect_threat)
+        {
+            by_expected_threat
+                .entry(enum_key(&expected_threat))
+                .or_default()
+                .observe(event);
+        }
+    }
+
+    WorldMetricsReport {
+        overall: overall.finish(),
+        by_relationship: finish_metric_slices(by_relationship),
+        by_surface: finish_metric_slices(by_surface),
+        by_language: finish_metric_slices(by_language),
+        by_expected_threat: finish_metric_slices(by_expected_threat),
+    }
+}
+
+impl MetricAccumulator {
+    fn observe(&mut self, event: &EventOutcome) {
+        let Some(expectation) = &event.expectation else {
+            return;
+        };
+
+        if let Some(expected_threat) = expectation.expect_threat {
+            self.labeled_positive_events += 1;
+            if result_contains_threat(&event.result, expected_threat) {
+                self.true_positive_events += 1;
+            } else {
+                self.false_negative_events += 1;
+                if event.result.is_threat() {
+                    self.wrong_threat_events += 1;
+                }
+            }
+        }
+
+        if expectation.expect_clean {
+            self.labeled_clean_events += 1;
+            if clean_expectation_violated(event) {
+                self.false_positive_events += 1;
+            } else {
+                self.true_negative_events += 1;
+            }
+        }
+    }
+
+    fn finish(self) -> WorldMetricCounts {
+        let labeled_events = self.labeled_positive_events + self.labeled_clean_events;
+        let positive_predictions =
+            self.true_positive_events + self.false_positive_events + self.wrong_threat_events;
+
+        WorldMetricCounts {
+            labeled_events,
+            labeled_positive_events: self.labeled_positive_events,
+            labeled_clean_events: self.labeled_clean_events,
+            true_positive_events: self.true_positive_events,
+            false_negative_events: self.false_negative_events,
+            wrong_threat_events: self.wrong_threat_events,
+            true_negative_events: self.true_negative_events,
+            false_positive_events: self.false_positive_events,
+            positive_precision: rate(self.true_positive_events, positive_predictions),
+            positive_recall: rate(self.true_positive_events, self.labeled_positive_events),
+            clean_false_positive_rate: rate(self.false_positive_events, self.labeled_clean_events),
+        }
+    }
+}
+
+fn finish_metric_slices(slices: BTreeMap<String, MetricAccumulator>) -> Vec<WorldMetricSlice> {
+    slices
+        .into_iter()
+        .map(|(slice_id, accumulator)| WorldMetricSlice {
+            slice_id,
+            counts: accumulator.finish(),
+        })
+        .collect()
+}
+
+fn event_has_metric_label(event: &EventOutcome) -> bool {
+    event
+        .expectation
+        .as_ref()
+        .is_some_and(|expectation| expectation.expect_clean || expectation.expect_threat.is_some())
+}
+
+fn rate(numerator: usize, denominator: usize) -> Option<f64> {
+    if denominator == 0 {
+        None
+    } else {
+        Some(numerator as f64 / denominator as f64)
+    }
+}
+
 fn print_event_log(report: &WorldSimReport) {
     println!("Simulation: {}", report.label);
     if let Some(description) = &report.description {
@@ -1143,6 +1343,9 @@ fn print_summary(report: &WorldSimReport, top_contacts: usize) {
     println!("  threat_counts={}", format_counts(&report.threat_counts));
     println!("  alert_counts={}", format_counts(&report.alert_counts));
     println!("  findings={}", report.findings.len());
+    println!();
+
+    print_metrics_summary(&report.metrics);
     println!();
 
     println!("Conversation Summary");
@@ -1217,6 +1420,7 @@ fn print_suite_summary(report: &WorldSuiteReport) {
     println!("  action_counts={}", format_counts(&report.action_counts));
     println!("  threat_counts={}", format_counts(&report.threat_counts));
     println!("  alert_counts={}", format_counts(&report.alert_counts));
+    print_metric_counts("  metrics", &report.metrics.overall);
     println!();
 
     println!("World Results");
@@ -1233,6 +1437,7 @@ fn print_suite_summary(report: &WorldSuiteReport) {
         if !world.threat_counts.is_empty() {
             println!("    threats={}", format_counts(&world.threat_counts));
         }
+        print_metric_counts("    metrics", &world.metrics.overall);
         if !world.findings.is_empty() {
             for finding in world.findings.iter().take(3) {
                 println!(
@@ -1245,6 +1450,97 @@ fn print_suite_summary(report: &WorldSuiteReport) {
             }
         }
     }
+}
+
+fn print_metrics_summary(metrics: &WorldMetricsReport) {
+    println!("Quality Metrics");
+    print_metric_counts("  overall", &metrics.overall);
+    print_metric_rows("  by_relationship", &metrics.by_relationship);
+    print_metric_rows("  by_surface", &metrics.by_surface);
+    print_metric_rows("  by_language", &metrics.by_language);
+    print_metric_rows("  by_expected_threat", &metrics.by_expected_threat);
+}
+
+fn print_metric_rows(label: &str, rows: &[WorldMetricSlice]) {
+    if rows.is_empty() {
+        println!("{label}: -");
+        return;
+    }
+
+    println!("{label}:");
+    for row in rows {
+        print_metric_counts(&format!("    {}", row.slice_id), &row.counts);
+    }
+}
+
+fn print_metric_counts(label: &str, counts: &WorldMetricCounts) {
+    println!(
+        "{label}: labeled={} pos={} clean={} tp={} fn={} wrong={} fp={} recall={} precision={} clean_fp={}",
+        counts.labeled_events,
+        counts.labeled_positive_events,
+        counts.labeled_clean_events,
+        counts.true_positive_events,
+        counts.false_negative_events,
+        counts.wrong_threat_events,
+        counts.false_positive_events,
+        format_rate(counts.positive_recall),
+        format_rate(counts.positive_precision),
+        format_rate(counts.clean_false_positive_rate)
+    );
+}
+
+fn format_rate(rate: Option<f64>) -> String {
+    rate.map(|value| format!("{:.1}%", value * 100.0))
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn fail_on_metric_gate_violations(metrics: &WorldMetricCounts, args: &Args, label: &str) {
+    let failures = metric_gate_violations(metrics, args);
+    if failures.is_empty() {
+        return;
+    }
+
+    eprintln!("{label} failed quality metric gate(s):");
+    for failure in failures {
+        eprintln!("  - {failure}");
+    }
+    std::process::exit(1);
+}
+
+fn metric_gate_violations(metrics: &WorldMetricCounts, args: &Args) -> Vec<String> {
+    let mut failures = Vec::new();
+
+    if let Some(min_recall) = args.min_labeled_recall {
+        match metrics.positive_recall {
+            Some(actual) if actual < min_recall => failures.push(format!(
+                "positive recall {} is below required {}",
+                format_rate(Some(actual)),
+                format_rate(Some(min_recall))
+            )),
+            None => failures.push(
+                "positive recall is unavailable because there are no labeled positive events"
+                    .to_string(),
+            ),
+            _ => {}
+        }
+    }
+
+    if let Some(max_fp_rate) = args.max_clean_fp_rate {
+        match metrics.clean_false_positive_rate {
+            Some(actual) if actual > max_fp_rate => failures.push(format!(
+                "clean false-positive rate {} is above allowed {}",
+                format_rate(Some(actual)),
+                format_rate(Some(max_fp_rate))
+            )),
+            None => failures.push(
+                "clean false-positive rate is unavailable because there are no labeled clean events"
+                    .to_string(),
+            ),
+            _ => {}
+        }
+    }
+
+    failures
 }
 
 fn build_shadow_bundle(report: &WorldSimReport, input_path: &Path) -> ShadowModeBundle {
@@ -2019,13 +2315,23 @@ fn enum_key<T: Serialize>(value: &T) -> String {
         .to_string()
 }
 
+fn clean_expectation_violated(outcome: &EventOutcome) -> bool {
+    outcome.result.is_threat() || outcome.result.action != Action::Allow
+}
+
+fn result_contains_threat(result: &AnalysisResult, expected_threat: aura_core::ThreatType) -> bool {
+    result.threat_type == expected_threat
+        || result
+            .detected_threats
+            .iter()
+            .any(|(threat, _)| *threat == expected_threat)
+}
+
 fn evaluate_findings(world: &SimulationWorld, outcome: &EventOutcome) -> Vec<SimulationFinding> {
     let mut findings = Vec::new();
 
     if let Some(expectation) = &outcome.expectation {
-        if expectation.expect_clean
-            && (outcome.result.is_threat() || outcome.result.action != Action::Allow)
-        {
+        if expectation.expect_clean && clean_expectation_violated(outcome) {
             findings.push(SimulationFinding {
                 severity: FindingSeverity::Warning,
                 event_sequence: outcome.sequence,
@@ -2041,13 +2347,7 @@ fn evaluate_findings(world: &SimulationWorld, outcome: &EventOutcome) -> Vec<Sim
         }
 
         if let Some(expected_threat) = expectation.expect_threat {
-            let threat_present = outcome.result.threat_type == expected_threat
-                || outcome
-                    .result
-                    .detected_threats
-                    .iter()
-                    .any(|(threat, _)| *threat == expected_threat);
-            if !threat_present {
+            if !result_contains_threat(&outcome.result, expected_threat) {
                 findings.push(SimulationFinding {
                     severity: FindingSeverity::Warning,
                     event_sequence: outcome.sequence,
@@ -2255,6 +2555,9 @@ mod tests {
             .result
             .reason_codes
             .contains(&"context.relationship.unknown_adult_minor".to_string()));
+        assert_eq!(report.metrics.overall.labeled_positive_events, 1);
+        assert_eq!(report.metrics.overall.true_positive_events, 1);
+        assert_eq!(report.metrics.overall.positive_recall, Some(1.0));
     }
 
     #[test]
@@ -2299,6 +2602,56 @@ mod tests {
                     .context_markers
                     .contains(&"context.relationship.unknown_adult_minor".to_string())
         }));
+
+        assert_eq!(report.metrics.overall.false_negative_events, 0);
+        assert_eq!(report.metrics.overall.false_positive_events, 0);
+        assert_eq!(report.metrics.overall.positive_recall, Some(1.0));
+        assert_eq!(report.metrics.overall.clean_false_positive_rate, Some(0.0));
+        assert!(report.metrics.by_relationship.iter().any(|slice| {
+            slice.slice_id == "unknown_adult"
+                && slice.counts.labeled_positive_events >= 5
+                && slice.counts.positive_recall == Some(1.0)
+        }));
+        assert!(report.metrics.by_surface.iter().any(|slice| {
+            slice.slice_id == "group"
+                && slice.counts.labeled_clean_events > 100
+                && slice.counts.clean_false_positive_rate == Some(0.0)
+        }));
+    }
+
+    #[test]
+    fn metric_gates_report_recall_and_clean_fp_failures() {
+        let metrics = MetricAccumulator {
+            labeled_positive_events: 2,
+            labeled_clean_events: 2,
+            true_positive_events: 1,
+            false_negative_events: 1,
+            wrong_threat_events: 0,
+            true_negative_events: 1,
+            false_positive_events: 1,
+        }
+        .finish();
+        let args = Args {
+            min_labeled_recall: Some(0.75),
+            max_clean_fp_rate: Some(0.25),
+            ..Args::default()
+        };
+
+        let failures = metric_gate_violations(&metrics, &args);
+
+        assert_eq!(failures.len(), 2, "{failures:?}");
+        assert!(
+            failures
+                .iter()
+                .any(|failure| failure.contains("positive recall")),
+            "{failures:?}"
+        );
+        assert!(
+            failures
+                .iter()
+                .any(|failure| failure.contains("clean false-positive rate")),
+            "{failures:?}"
+        );
     }
 
     #[test]
