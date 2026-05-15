@@ -35,8 +35,8 @@ pub use aura_core::{
     ContextReciprocity, ContextSpeechAct, ContextStance, ConversationId, ConversationTracker,
     ConversationType, DetectionLayer, DetectionSignal, DomainMode, FollowUpAction,
     InferenceSummary, LatentStateEvidence, LatentStateKind, MessageInput, ProtectionLevel,
-    ReasonCode, RiskBreakdown, RiskHorizon, SenderId, SignalFamily, ThreatType, UiAction,
-    UncertaintyLevel,
+    ReasonCode, RelationshipTrustSource, RiskBreakdown, RiskHorizon, SenderId, SenderRelationship,
+    SignalFamily, ThreatType, UiAction, UncertaintyLevel,
 };
 
 // Product surface
@@ -370,8 +370,8 @@ impl AgentRuntime {
                 timestamp_ms,
             ),
             server_sender_risk_hint: input.server_sender_risk_hint,
-            sender_relationship: Default::default(),
-            relationship_trust_source: Default::default(),
+            sender_relationship: input.sender_relationship,
+            relationship_trust_source: input.relationship_trust_source,
             privacy_mode: self.relay_policy.privacy_mode,
             capabilities: AgentCapabilities {
                 local_context_interpreter: true,
@@ -390,7 +390,7 @@ impl AgentRuntime {
         request
     }
 
-    pub fn sign_relay_request_if_configured(&self, request: &mut AgentAnalyzeRequest) {
+    fn sign_relay_request_if_configured(&self, request: &mut AgentAnalyzeRequest) {
         let Some(key) = self.relay_request_auth_key.as_ref() else {
             return;
         };
@@ -804,7 +804,7 @@ fn map_detection_signal(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aura_core::{ContentType, ConversationType};
+    use aura_core::{ContentType, ConversationType, RelationshipTrustSource, SenderRelationship};
 
     fn make_input(text: &str) -> MessageInput {
         MessageInput {
@@ -817,6 +817,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: Some(0.2),
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         }
     }
 
@@ -831,6 +833,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         }
     }
 
@@ -1095,6 +1099,54 @@ mod tests {
     }
 
     #[test]
+    fn relay_request_carries_native_relationship_metadata_before_signing() {
+        let pattern_db = PatternDatabase::default_mvp();
+        let config = AuraConfig::default();
+        let mut runtime = AgentRuntime::new(config, &pattern_db)
+            .with_relay_policy(AgentRelayPolicy {
+                enabled: true,
+                score_threshold: 0.0,
+                privacy_mode: RelayPrivacyMode::MetadataOnly,
+                protected_account_id: Some("child_account_1".to_string()),
+                ..AgentRelayPolicy::default()
+            })
+            .with_relay_request_auth_key(
+                "relay-req-key-1",
+                b"relay request auth test secret".to_vec(),
+            );
+        let mut input = make_input("hello there");
+        input.sender_relationship = SenderRelationship::UnknownAdult;
+        input.relationship_trust_source = RelationshipTrustSource::ServerReputation;
+
+        let request = runtime
+            .analyze_for_relay(&input, 1_700_000_123_456)
+            .relay_request
+            .expect("relay request should be emitted");
+
+        assert_eq!(
+            request.sender_relationship,
+            SenderRelationship::UnknownAdult
+        );
+        assert_eq!(
+            request.relationship_trust_source,
+            RelationshipTrustSource::ServerReputation
+        );
+        assert!(aura_contracts::verify_relay_request_auth(
+            &request,
+            "relay-req-key-1",
+            b"relay request auth test secret"
+        ));
+
+        let mut tampered = request.clone();
+        tampered.relationship_trust_source = RelationshipTrustSource::SelfDeclared;
+        assert!(!aura_contracts::verify_relay_request_auth(
+            &tampered,
+            "relay-req-key-1",
+            b"relay request auth test secret"
+        ));
+    }
+
+    #[test]
     fn relay_request_includes_matching_protected_account_attestation_before_signing() {
         let pattern_db = PatternDatabase::default_mvp();
         let config = AuraConfig::default();
@@ -1257,6 +1309,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
         let request_id = runtime
             .analyze_for_relay(&pending_input, now_ms)
@@ -1288,6 +1342,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             now_ms + 1,
         );

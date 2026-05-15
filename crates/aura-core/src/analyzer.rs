@@ -2848,6 +2848,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         }
     }
 
@@ -2862,6 +2864,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         }
     }
 
@@ -3706,6 +3710,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             last_result = Some(analyzer.analyze_with_context(&input, (idx as u64 + 1) * 1_000));
         }
@@ -3739,6 +3745,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1_000,
         );
@@ -3755,6 +3763,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             2_000,
         );
@@ -4797,6 +4807,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             let result = analyzer.analyze_with_context(&input, idx as u64 * 120_000);
             if idx == 2 {
@@ -4997,6 +5009,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
         let result = analyzer.analyze(&input);
         assert!(!result.is_threat());
@@ -5094,6 +5108,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
 
         let result = analyzer.analyze_with_context(&input, 1000);
@@ -5121,6 +5137,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             analyzer.analyze_with_context(&input, (i + 1) * 1000);
         }
@@ -5135,6 +5153,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
         let result = analyzer.analyze_with_context(&input, 5000);
         assert!(
@@ -5178,6 +5198,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             analyzer.analyze_with_context(&input, ts);
         }
@@ -5192,6 +5214,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
         let result = analyzer.analyze_with_context(&input, 4000);
         assert!(
@@ -5227,6 +5251,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             last_result = Some(analyzer.analyze_with_context(&input, (i as u64 + 1) * 1000));
         }
@@ -5267,6 +5293,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             last_result = Some(analyzer.analyze_with_context(&input, ts));
         }
@@ -5309,6 +5337,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             last_result =
                 Some(analyzer.analyze_with_context(&input, base_ts + (idx as u64 + 1) * 60_000));
@@ -5360,6 +5390,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             last_result =
                 Some(analyzer.analyze_with_context(&input, base_ts + (idx as u64 + 1) * 60_000));
@@ -5393,6 +5425,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1000,
         );
@@ -5423,6 +5457,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1000,
         );
@@ -5456,6 +5492,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1000,
         );
@@ -5471,6 +5509,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             2000,
         );
@@ -5521,6 +5561,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1000,
         );
@@ -5551,6 +5593,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1000,
         );
@@ -5583,6 +5627,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1000,
         );
@@ -5621,6 +5667,8 @@ mod tests {
                 conversation_type: ConversationType::Group,
                 member_count: Some(25),
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1_000,
         );
@@ -5657,6 +5705,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1_000,
         );
@@ -5673,6 +5723,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             2_000,
         );
@@ -5689,6 +5741,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             3_000,
         );
@@ -5718,6 +5772,8 @@ mod tests {
             conversation_type: ConversationType::Group,
             member_count: Some(12),
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
 
         analyzer.analyze_with_context(
@@ -5743,6 +5799,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             3_000,
         );
@@ -5779,6 +5837,8 @@ mod tests {
             conversation_type: ConversationType::Group,
             member_count: Some(16),
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
 
         analyzer.analyze_with_context(
@@ -5943,6 +6003,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             let result = analyzer.analyze_with_context(&input, (idx as u64 + 1) * 1_000);
             let score = crate::predicted_score_for_threat(&result, *threat);
@@ -5977,6 +6039,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1_000,
         );
@@ -5993,6 +6057,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             2_000,
         );
@@ -6023,6 +6089,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1_000,
         );
@@ -6039,6 +6107,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             2_000,
         );
@@ -6055,6 +6125,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             3_000,
         );
@@ -6094,6 +6166,8 @@ mod tests {
                     conversation_type: ConversationType::Direct,
                     member_count: None,
                     server_sender_risk_hint: None,
+                    sender_relationship: Default::default(),
+                    relationship_trust_source: Default::default(),
                 },
                 (idx as u64 + 1) * 1_000,
             ));
@@ -6144,6 +6218,8 @@ mod tests {
                     conversation_type: ConversationType::Group,
                     member_count: Some(6),
                     server_sender_risk_hint: None,
+                    sender_relationship: Default::default(),
+                    relationship_trust_source: Default::default(),
                 },
                 (idx as u64 + 1) * 1_000,
             ));
@@ -6193,6 +6269,8 @@ mod tests {
                     conversation_type: ConversationType::Group,
                     member_count: Some(10),
                     server_sender_risk_hint: None,
+                    sender_relationship: Default::default(),
+                    relationship_trust_source: Default::default(),
                 },
                 (idx as u64 + 1) * 1_000,
             ));
@@ -6243,6 +6321,8 @@ mod tests {
                     conversation_type: ConversationType::Group,
                     member_count: Some(6),
                     server_sender_risk_hint: None,
+                    sender_relationship: Default::default(),
+                    relationship_trust_source: Default::default(),
                 },
                 (idx as u64 + 1) * 1_000,
             ));
@@ -6276,6 +6356,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1_000,
         );
@@ -6292,6 +6374,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             2_000,
         );
@@ -6331,6 +6415,8 @@ mod tests {
                     conversation_type: ConversationType::Group,
                     member_count: Some(10),
                     server_sender_risk_hint: None,
+                    sender_relationship: Default::default(),
+                    relationship_trust_source: Default::default(),
                 },
                 (idx as u64 + 1) * 1_000,
             ));
@@ -6363,6 +6449,8 @@ mod tests {
                 conversation_type: ConversationType::Group,
                 member_count: Some(20),
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1_000,
         );
@@ -6399,6 +6487,8 @@ mod tests {
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             1_000,
         );
@@ -6917,6 +7007,8 @@ mod tests {
                     conversation_type: ConversationType::Direct,
                     member_count: None,
                     server_sender_risk_hint: None,
+                    sender_relationship: Default::default(),
+                    relationship_trust_source: Default::default(),
                 },
                 idx as u64 * 30 * 24 * 60 * 60 * 1000,
             );

@@ -223,6 +223,8 @@ fn run_scenario(analyzer: &mut Analyzer, num: usize, scenario: &Scenario, stats:
             conversation_type: msg.conv_type,
             member_count: msg.members,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
 
         let result = analyzer.analyze_with_context(&input, ts);

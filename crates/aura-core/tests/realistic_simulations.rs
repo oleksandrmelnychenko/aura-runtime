@@ -42,6 +42,8 @@ fn dm(text: &str, sender: &str, conv: &str, lang: &str) -> MessageInput {
         conversation_type: ConversationType::Direct,
         member_count: None,
         server_sender_risk_hint: None,
+        sender_relationship: Default::default(),
+        relationship_trust_source: Default::default(),
     }
 }
 

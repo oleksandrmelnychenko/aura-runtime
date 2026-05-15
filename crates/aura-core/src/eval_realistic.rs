@@ -625,6 +625,8 @@ fn build_realistic_chat_scenario(spec: &RealisticChatCaseSpec) -> RealisticChatS
                 }
                 .then_some(6),
                 server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             },
             observed_threats: message.observed_threats.clone(),
         })

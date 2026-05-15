@@ -651,6 +651,8 @@ fn run_world_simulation(
             conversation_type: event.conversation_type,
             member_count: event.member_count,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
 
         let result = analyzer.analyze_with_context(&input, event.timestamp_ms);

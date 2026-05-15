@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{ConversationId, SenderId};
 
 // ── Canonical shared enums (source: aura-contracts) ─────────────────
-pub use aura_contracts::{AccountType, Confidence, ProtectionLevel, ThreatType};
+pub use aura_contracts::{
+    AccountType, Confidence, ProtectionLevel, RelationshipTrustSource, SenderRelationship,
+    ThreatType,
+};
 
 /// Represents the enforcement action to apply to a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -694,4 +697,8 @@ pub struct MessageInput {
     pub member_count: Option<u32>,
     /// Server-injected sender reputation hint (0.0 = unknown, 1.0 = max risk).
     pub server_sender_risk_hint: Option<f32>,
+    /// Coarse sender relationship metadata supplied by the host application.
+    pub sender_relationship: SenderRelationship,
+    /// Source used to derive sender_relationship. Self-declared data is not trust.
+    pub relationship_trust_source: RelationshipTrustSource,
 }

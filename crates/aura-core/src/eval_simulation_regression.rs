@@ -538,6 +538,8 @@ fn build_pilot_simulation_regression_bundle(
                                 conversation_type: spec.conversation_type,
                                 member_count: spec.member_count,
                                 server_sender_risk_hint: None,
+                                sender_relationship: Default::default(),
+                                relationship_trust_source: Default::default(),
                             },
                             observed_threats: message.observed_threats.clone(),
                         })

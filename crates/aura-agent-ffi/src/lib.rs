@@ -536,28 +536,19 @@ pub unsafe extern "C" fn aura_analyze_for_relay(
         set_last_error("missing message in analyze_for_relay request");
         return false;
     };
-    let sender_relationship = sender_relationship_from_proto(message.sender_relationship);
-    let relationship_trust_source =
-        relationship_trust_source_from_proto(message.relationship_trust_source);
     let input = message_input_from_proto(message);
 
     match with_instance(handle, |instance| {
         let envelope = instance
             .analyzer
             .analyze_for_relay(&input, request.timestamp_ms);
-        let mut relay_request = envelope.relay_request;
-        if let Some(request) = relay_request.as_mut() {
-            request.sender_relationship = sender_relationship;
-            request.relationship_trust_source = relationship_trust_source;
-            instance.analyzer.sign_relay_request_if_configured(request);
-        }
         let response = proto::AnalyzeForRelayResponse {
             local_result: Some(analysis_result_to_proto(
                 &envelope.local_result,
                 Some(input.conversation_id.0.as_str()),
                 Some(input.sender_id.0.as_str()),
             )),
-            relay_request: relay_request.as_ref().map(relay_request_to_proto),
+            relay_request: envelope.relay_request.as_ref().map(relay_request_to_proto),
         };
         write_proto_message(out, &response)
     }) {
@@ -1283,6 +1274,8 @@ pub unsafe extern "C" fn aura_quick_check(
             conversation_type: aura_agent_core::ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
         let result = instance.analyzer.analyze_local(&input);
         let safe = match result.action {
@@ -1850,6 +1843,10 @@ fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
         conversation_type: conversation_type_from_proto(message.conversation_type),
         member_count: message.member_count,
         server_sender_risk_hint: message.server_sender_risk_hint,
+        sender_relationship: sender_relationship_from_proto(message.sender_relationship),
+        relationship_trust_source: relationship_trust_source_from_proto(
+            message.relationship_trust_source,
+        ),
     }
 }
 

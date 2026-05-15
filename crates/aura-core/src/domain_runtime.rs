@@ -1366,6 +1366,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
         let output = runtime.analyze_for_mode(DomainMode::None, &input);
         assert!(output.is_none());
@@ -1384,6 +1386,8 @@ mod tests {
             conversation_type: ConversationType::Direct,
             member_count: None,
             server_sender_risk_hint: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
         };
         let output = runtime
             .analyze_for_mode(DomainMode::Military, &input)

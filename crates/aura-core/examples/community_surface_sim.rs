@@ -1261,6 +1261,8 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
                 conversation_type: event.conversation_type,
                 member_count: event.member_count,
                 server_sender_risk_hint: event.server_sender_risk_hint,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
             };
             let result = analyzer.analyze_with_context(&input, event.timestamp_ms);
 

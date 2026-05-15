@@ -287,6 +287,8 @@ fn run_once(analyzer: &mut Analyzer, state: &mut SessionState, text: &str) {
         conversation_type: state.conversation_type,
         member_count: state.member_count,
         server_sender_risk_hint: None,
+        sender_relationship: Default::default(),
+        relationship_trust_source: Default::default(),
     };
 
     let result = analyzer.analyze_with_context(&input, state.next_timestamp_ms);
