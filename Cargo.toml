@@ -47,6 +47,17 @@ regex = "1"
 
 # ── Release profiles ─────────────────────────────────────────────────
 
+# Dev/test builds favour fast iteration and smaller link inputs. Full
+# backtraces still keep line-level debug info; release-with-debug remains the
+# profile for heavier profiling and crash analysis.
+[profile.dev]
+debug = 1
+incremental = true
+
+[profile.test]
+debug = 1
+incremental = true
+
 # Default release: maximum size reduction for mobile Agent builds.
 # Use: cargo build --release -p aura-agent-ffi
 [profile.release]

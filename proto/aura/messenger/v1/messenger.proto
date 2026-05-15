@@ -84,6 +84,8 @@ enum DetectionLayer {
   DETECTION_LAYER_PATTERN_MATCHING = 1;
   DETECTION_LAYER_ML_CLASSIFICATION = 2;
   DETECTION_LAYER_CONTEXT_ANALYSIS = 3;
+  DETECTION_LAYER_DOMAIN_HEURISTIC = 4;
+  DETECTION_LAYER_RELAY_INFERENCE = 5;
 }
 
 enum SignalFamily {
@@ -229,6 +231,45 @@ enum ContentType {
   CONTENT_TYPE_URL = 5;
 }
 
+enum RelayPrivacyMode {
+  RELAY_PRIVACY_MODE_UNSPECIFIED = 0;
+  // Send no plaintext message body to the relay.
+  RELAY_PRIVACY_MODE_METADATA_ONLY = 1;
+  // Send only the current message body when relay is queried.
+  RELAY_PRIVACY_MODE_MESSAGE_ONLY = 2;
+  // Send current message body plus bounded recent window when configured.
+  RELAY_PRIVACY_MODE_MESSAGE_AND_WINDOW = 3;
+}
+
+enum SafetyTelemetrySurface {
+  SAFETY_TELEMETRY_SURFACE_UNSPECIFIED = 0;
+  SAFETY_TELEMETRY_SURFACE_DIRECT_MESSAGE = 1;
+  SAFETY_TELEMETRY_SURFACE_GROUP_CHAT = 2;
+  SAFETY_TELEMETRY_SURFACE_PUBLIC_COMMENT = 3;
+  SAFETY_TELEMETRY_SURFACE_LIVESTREAM_COMMENT = 4;
+}
+
+enum SafetyTelemetrySeverity {
+  SAFETY_TELEMETRY_SEVERITY_UNSPECIFIED = 0;
+  SAFETY_TELEMETRY_SEVERITY_LOW = 1;
+  SAFETY_TELEMETRY_SEVERITY_MEDIUM = 2;
+  SAFETY_TELEMETRY_SEVERITY_HIGH = 3;
+  SAFETY_TELEMETRY_SEVERITY_CRITICAL = 4;
+}
+
+enum SafetyTelemetryAction {
+  SAFETY_TELEMETRY_ACTION_UNSPECIFIED = 0;
+  SAFETY_TELEMETRY_ACTION_NONE = 1;
+  SAFETY_TELEMETRY_ACTION_MARK = 2;
+  SAFETY_TELEMETRY_ACTION_BLUR = 3;
+  SAFETY_TELEMETRY_ACTION_WARN = 4;
+  SAFETY_TELEMETRY_ACTION_BLOCK = 5;
+  SAFETY_TELEMETRY_ACTION_GUARDIAN_ALERT = 6;
+  SAFETY_TELEMETRY_ACTION_REPORT_QUEUED = 7;
+  SAFETY_TELEMETRY_ACTION_RESTRICT_CONTACT = 8;
+  SAFETY_TELEMETRY_ACTION_CRISIS_SUPPORT = 9;
+}
+
 enum EventKind {
   EVENT_KIND_UNSPECIFIED = 0;
   EVENT_KIND_FLATTERY = 1;
@@ -302,6 +343,53 @@ message AuraConfig {
   int32 timezone_offset_minutes = 10;
   // Account-level domain mode and the only effective domain selector.
   DomainMode domain_mode = 11;
+  optional AgentRelayPolicy relay_policy = 12;
+}
+
+message AgentRelayPolicy {
+  optional bool enabled = 1;
+  optional float score_threshold = 2;
+  optional bool send_on_high_uncertainty = 3;
+  optional bool send_on_new_contact = 4;
+  optional bool send_on_repeated_sender = 5;
+  RelayPrivacyMode privacy_mode = 6;
+  optional uint32 max_recent_window_messages = 7;
+  // 0 means no deadline.
+  optional uint32 deadline_ms = 8;
+  optional bool emit_local_safety_telemetry = 9;
+  // Raw local account id. AURA tokenizes it before any relay request.
+  optional string protected_account_id = 10;
+  // Host-provisioned response MAC key. When present, Agent rejects unsigned
+  // or tampered RelayAnalyzeResponse envelopes for pending relay requests.
+  optional RelayResponseAuthKey response_auth_key = 11;
+  // Host-provisioned request MAC key. When present, Agent signs
+  // RelayAnalyzeRequest envelopes and Relay can reject unsigned or replayed
+  // requests.
+  optional RelayRequestAuthKey request_auth_key = 12;
+  // Additional response MAC keys accepted during key rotation. The primary
+  // response_auth_key is also accepted.
+  repeated RelayResponseAuthKey accepted_response_auth_keys = 13;
+  // Production guardrail: fail config/init unless both request signing and
+  // response verification keys are provisioned.
+  optional bool require_relay_auth = 14;
+  // Optional short-lived server-issued proof for the tokenized protected
+  // account. The Agent includes it in RelayAnalyzeRequest only when it matches
+  // the configured protected_account_id after tokenization and is not expired.
+  optional ProtectedAccountTokenAttestation protected_account_attestation = 15;
+  // Production guardrail: fail config/init unless protected_account_id has a
+  // matching protected_account_attestation. At runtime, suppress relay requests
+  // if the proof is expired or mismatched.
+  optional bool require_protected_account_attestation = 16;
+}
+
+message RelayResponseAuthKey {
+  string key_id = 1;
+  bytes secret = 2;
+}
+
+message RelayRequestAuthKey {
+  string key_id = 1;
+  bytes secret = 2;
 }
 
 message MessageInput {
@@ -321,6 +409,135 @@ message MessageInput {
 message AnalyzeContextRequest {
   MessageInput message = 1;
   uint64 timestamp_ms = 2;
+}
+
+message RelayObservation {
+  ThreatType threat_type = 1;
+  string threat_subtype = 2;
+  DetectionLayer layer = 3;
+  float score = 4;
+  Confidence confidence = 5;
+  string reason_code = 6;
+  string explanation = 7;
+}
+
+message RelayMessageWindowEntry {
+  string sender_id = 1;
+  string text = 2;
+  uint64 timestamp_ms = 3;
+}
+
+message RelayLocalContextSummary {
+  repeated string context_markers = 1;
+  repeated RelayObservation recent_observations = 2;
+}
+
+message RelayAgentCapabilities {
+  bool local_context_interpreter = 1;
+  bool local_tracker = 2;
+  bool supports_remote_correlation = 3;
+  optional uint32 relay_timeout_ms = 4;
+}
+
+message RelaySafetyTelemetryEvent {
+  string event_id = 1;
+  string sender_token = 2;
+  string protected_account_token = 3;
+  optional string conversation_token = 4;
+  SafetyTelemetrySurface surface = 5;
+  ThreatType threat_type = 6;
+  SafetyTelemetrySeverity severity = 7;
+  Confidence confidence = 8;
+  SafetyTelemetryAction action = 9;
+  uint64 timestamp_bucket_ms = 10;
+  optional string reason_family = 11;
+}
+
+message RelayRequestAuth {
+  string key_id = 1;
+  string alg = 2;
+  string tag = 3;
+}
+
+message ProtectedAccountTokenAttestation {
+  string key_id = 1;
+  string alg = 2;
+  string protected_account_token = 3;
+  uint64 expires_at_ms = 4;
+  string tag = 5;
+}
+
+message RelayAnalyzeRequest {
+  string schema_version = 1;
+  string request_id = 2;
+  string message_id = 3;
+  AccountType account_type = 4;
+  ProtectionLevel protection_level = 5;
+  ConversationType conversation_type = 6;
+  optional string language = 7;
+  string text = 8;
+  repeated RelayObservation local_observations = 9;
+  RelayLocalContextSummary local_context_summary = 10;
+  repeated RelaySafetyTelemetryEvent local_safety_telemetry = 11;
+  repeated RelayMessageWindowEntry recent_message_window = 12;
+  optional float server_sender_risk_hint = 13;
+  RelayPrivacyMode privacy_mode = 14;
+  RelayAgentCapabilities capabilities = 15;
+  optional uint32 deadline_ms = 16;
+  optional string sender_token = 17;
+  optional string protected_account_token = 18;
+  optional string conversation_token = 19;
+  RelayRequestAuth auth = 20;
+  ProtectedAccountTokenAttestation protected_account_attestation = 21;
+}
+
+message AnalyzeForRelayResponse {
+  AnalysisResult local_result = 1;
+  RelayAnalyzeRequest relay_request = 2;
+}
+
+message RelayRemoteFinding {
+  ThreatType threat_type = 1;
+  float score = 2;
+  Confidence confidence = 3;
+  string reason_code = 4;
+  string explanation = 5;
+}
+
+message RelayRemoteInferenceSummary {
+  ThreatType primary_threat = 1;
+  float score = 2;
+  Confidence confidence = 3;
+  RiskHorizon risk_horizon = 4;
+}
+
+message RelayResponseAuth {
+  string key_id = 1;
+  string alg = 2;
+  string tag = 3;
+}
+
+message RelayAnalyzeResponse {
+  string schema_version = 1;
+  string request_id = 2;
+  repeated RelayObservation remote_observations = 3;
+  // Field 4 is reserved for a future typed remote context frame.
+  repeated ContextEvent remote_events = 5;
+  repeated RelayRemoteFinding findings = 6;
+  RelayRemoteInferenceSummary inference = 7;
+  repeated string reason_codes = 8;
+  repeated string context_markers = 9;
+  Confidence confidence = 10;
+  optional uint64 expires_at_ms = 11;
+  optional float sender_reputation_hint = 12;
+  repeated string correlation_findings = 13;
+  RelayResponseAuth auth = 14;
+}
+
+message RecordRelayResponseRequest {
+  string sender_id = 1;
+  RelayAnalyzeResponse response = 2;
+  uint64 received_at_ms = 3;
 }
 
 message ThreatScore {
@@ -599,6 +816,15 @@ message WeeklyPropagandaCount {
   uint32 count = 2;
 }
 
+message ChildSafetyTrajectoryState {
+  uint64 first_grooming_ms = 1;
+  uint64 last_grooming_ms = 2;
+  uint32 grooming_stage_mask = 3;
+  uint32 grooming_event_count = 4;
+  uint32 high_risk_event_count = 5;
+  uint64 rapid_escalation_ms = 6;
+}
+
 message ContactProfileState {
   string sender_id = 1;
   uint64 first_seen_ms = 2;
@@ -633,6 +859,7 @@ message ContactProfileState {
   repeated NarrativeTimelineEntry narrative_timeline = 31;
   repeated WeeklyPropagandaCount weekly_propaganda_counts = 32;
   AgeSource age_source = 33;
+  ChildSafetyTrajectoryState child_safety = 34;
 }
 
 message ContactProfilerState {

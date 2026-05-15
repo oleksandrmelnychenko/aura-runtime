@@ -17,3 +17,6 @@ aura-proto = { path = "../aura-proto" }
 aura-patterns = { path = "../aura-patterns" }
 prost.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+aura-relay-api = { path = "../aura-relay-api" }

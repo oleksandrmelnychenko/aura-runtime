@@ -24,6 +24,13 @@ pub struct AuraConfig {
     #[serde(default)]
     pub account_holder_age: Option<u16>,
 
+    /// Stable sender/account ID for the protected account holder.
+    ///
+    /// When set, conversation tracking keeps this sender in timelines but
+    /// excludes them from external-contact risk profiling.
+    #[serde(default)]
+    pub protected_account_id: Option<String>,
+
     #[serde(default = "default_ttl_days")]
     pub ttl_days: u32,
 
@@ -174,6 +181,15 @@ impl AuraConfig {
                 )));
             }
         }
+        if self
+            .protected_account_id
+            .as_deref()
+            .is_some_and(|id| id.trim().is_empty())
+        {
+            return Err(crate::error::AuraError::InvalidConfig(
+                "protected_account_id must not be empty".to_string(),
+            ));
+        }
         if !(-14 * 60..=14 * 60).contains(&self.timezone_offset_minutes) {
             return Err(crate::error::AuraError::InvalidConfig(format!(
                 "timezone_offset_minutes must be within UTC-14..UTC+14, got {}",
@@ -195,6 +211,7 @@ impl Default for AuraConfig {
             patterns_path: None,
             models_path: None,
             account_holder_age: None,
+            protected_account_id: None,
             ttl_days: 30,
             timezone_offset_minutes: 0,
             domain_mode: DomainMode::default(),

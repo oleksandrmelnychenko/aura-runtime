@@ -1,2 +1,8 @@
 [env]
 ORT_DYLIB_PATH = "/opt/homebrew/lib/libonnxruntime.dylib"
+
+[build]
+# This on-prem Linux host exposes 48 logical CPUs. Make the intended
+# parallelism explicit so CI-style local gates do not inherit a lower shell
+# default via CARGO_BUILD_JOBS.
+jobs = 48

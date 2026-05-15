@@ -68,6 +68,237 @@ fn analysis_result_default_values() {
 }
 
 #[test]
+fn aura_config_relay_policy_round_trip() {
+    let original = proto::AuraConfig {
+        protection_level: proto::ProtectionLevel::High as i32,
+        account_type: proto::AccountType::Child as i32,
+        language: "en".to_string(),
+        cultural_context: None,
+        enabled: true,
+        patterns_path: None,
+        models_path: None,
+        account_holder_age: Some(12),
+        ttl_days: 30,
+        timezone_offset_minutes: 120,
+        domain_mode: proto::DomainMode::Kids as i32,
+        relay_policy: Some(proto::AgentRelayPolicy {
+            enabled: Some(true),
+            score_threshold: Some(0.45),
+            send_on_high_uncertainty: Some(false),
+            send_on_new_contact: Some(true),
+            send_on_repeated_sender: Some(false),
+            privacy_mode: proto::RelayPrivacyMode::MetadataOnly as i32,
+            max_recent_window_messages: Some(0),
+            deadline_ms: Some(0),
+            emit_local_safety_telemetry: Some(true),
+            protected_account_id: Some("child_local_1".to_string()),
+            response_auth_key: Some(proto::RelayResponseAuthKey {
+                key_id: "relay-key-1".to_string(),
+                secret: b"0123456789abcdef0123456789abcdef".to_vec(),
+            }),
+            request_auth_key: Some(proto::RelayRequestAuthKey {
+                key_id: "relay-req-key-1".to_string(),
+                secret: b"abcdef0123456789abcdef0123456789".to_vec(),
+            }),
+            accepted_response_auth_keys: vec![proto::RelayResponseAuthKey {
+                key_id: "relay-key-previous".to_string(),
+                secret: b"previous0123456789previous01234567".to_vec(),
+            }],
+            require_relay_auth: Some(true),
+            protected_account_attestation: Some(proto::ProtectedAccountTokenAttestation {
+                key_id: "acct-attest-key-1".to_string(),
+                alg: "hmac-sha256-v1".to_string(),
+                protected_account_token: "acct_token".to_string(),
+                expires_at_ms: 1_900_000_000_000,
+                tag: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string(),
+            }),
+            require_protected_account_attestation: Some(true),
+        }),
+    };
+
+    let bytes = original.encode_to_vec();
+    let decoded = proto::AuraConfig::decode(bytes.as_slice()).expect("decode aura config");
+
+    assert_eq!(decoded, original);
+    let relay_policy = decoded.relay_policy.expect("missing relay policy");
+    assert_eq!(
+        relay_policy.privacy_mode,
+        proto::RelayPrivacyMode::MetadataOnly as i32
+    );
+    assert_eq!(
+        relay_policy.protected_account_id.as_deref(),
+        Some("child_local_1")
+    );
+    let response_auth_key = relay_policy
+        .response_auth_key
+        .expect("missing response auth key");
+    assert_eq!(response_auth_key.key_id, "relay-key-1");
+    assert_eq!(
+        response_auth_key.secret,
+        b"0123456789abcdef0123456789abcdef".to_vec()
+    );
+    let request_auth_key = relay_policy
+        .request_auth_key
+        .expect("missing request auth key");
+    assert_eq!(request_auth_key.key_id, "relay-req-key-1");
+    assert_eq!(
+        request_auth_key.secret,
+        b"abcdef0123456789abcdef0123456789".to_vec()
+    );
+    assert_eq!(relay_policy.accepted_response_auth_keys.len(), 1);
+    assert_eq!(
+        relay_policy.accepted_response_auth_keys[0].key_id,
+        "relay-key-previous"
+    );
+    assert_eq!(relay_policy.require_relay_auth, Some(true));
+    assert_eq!(
+        relay_policy
+            .protected_account_attestation
+            .expect("missing protected account attestation")
+            .key_id,
+        "acct-attest-key-1"
+    );
+    assert_eq!(
+        relay_policy.require_protected_account_attestation,
+        Some(true)
+    );
+}
+
+#[test]
+fn analyze_for_relay_response_round_trip() {
+    let original = proto::AnalyzeForRelayResponse {
+        local_result: Some(analysis_result_fixture()),
+        relay_request: Some(proto::RelayAnalyzeRequest {
+            schema_version: "aura.relay.v1alpha1".to_string(),
+            request_id: "req_token".to_string(),
+            message_id: "msg_token".to_string(),
+            sender_token: Some("snd_token".to_string()),
+            protected_account_token: Some("acct_token".to_string()),
+            conversation_token: Some("conv_token".to_string()),
+            account_type: proto::AccountType::Child as i32,
+            protection_level: proto::ProtectionLevel::High as i32,
+            conversation_type: proto::ConversationType::Direct as i32,
+            language: Some("en".to_string()),
+            text: String::new(),
+            local_observations: vec![proto::RelayObservation {
+                threat_type: proto::ThreatType::Grooming as i32,
+                threat_subtype: String::new(),
+                layer: proto::DetectionLayer::PatternMatching as i32,
+                score: 0.91,
+                confidence: proto::Confidence::High as i32,
+                reason_code: "grooming.secrecy".to_string(),
+                explanation: String::new(),
+            }],
+            local_context_summary: Some(proto::RelayLocalContextSummary {
+                context_markers: vec!["relationship.new_contact".to_string()],
+                recent_observations: Vec::new(),
+            }),
+            local_safety_telemetry: vec![proto::RelaySafetyTelemetryEvent {
+                event_id: "evt_token".to_string(),
+                sender_token: "snd_token".to_string(),
+                protected_account_token: "acct_token".to_string(),
+                conversation_token: Some("conv_token".to_string()),
+                surface: proto::SafetyTelemetrySurface::DirectMessage as i32,
+                threat_type: proto::ThreatType::Grooming as i32,
+                severity: proto::SafetyTelemetrySeverity::High as i32,
+                confidence: proto::Confidence::High as i32,
+                action: proto::SafetyTelemetryAction::Warn as i32,
+                timestamp_bucket_ms: 1_700_000_000_000,
+                reason_family: Some("grooming".to_string()),
+            }],
+            recent_message_window: Vec::new(),
+            server_sender_risk_hint: Some(0.4),
+            privacy_mode: proto::RelayPrivacyMode::MetadataOnly as i32,
+            capabilities: Some(proto::RelayAgentCapabilities {
+                local_context_interpreter: true,
+                local_tracker: true,
+                supports_remote_correlation: true,
+                relay_timeout_ms: Some(300),
+            }),
+            deadline_ms: Some(300),
+            auth: Some(proto::RelayRequestAuth {
+                key_id: "relay-req-key-1".to_string(),
+                alg: "hmac-sha256-v1".to_string(),
+                tag: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string(),
+            }),
+            protected_account_attestation: Some(proto::ProtectedAccountTokenAttestation {
+                key_id: "acct-attest-key-1".to_string(),
+                alg: "hmac-sha256-v1".to_string(),
+                protected_account_token: "acct_token".to_string(),
+                expires_at_ms: 1_900_000_000_000,
+                tag: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string(),
+            }),
+        }),
+    };
+
+    let bytes = original.encode_to_vec();
+    let decoded =
+        proto::AnalyzeForRelayResponse::decode(bytes.as_slice()).expect("decode relay response");
+
+    assert_eq!(decoded, original);
+    let relay_request = decoded.relay_request.expect("missing relay request");
+    assert!(relay_request.text.is_empty());
+    assert_eq!(relay_request.sender_token.as_deref(), Some("snd_token"));
+    assert_eq!(relay_request.local_safety_telemetry.len(), 1);
+    assert_eq!(relay_request.auth.unwrap().alg, "hmac-sha256-v1");
+    assert_eq!(
+        relay_request.protected_account_attestation.unwrap().key_id,
+        "acct-attest-key-1"
+    );
+}
+
+#[test]
+fn relay_analyze_response_round_trip() {
+    let original = proto::RelayAnalyzeResponse {
+        schema_version: "aura.relay.v1alpha1".to_string(),
+        request_id: "req_token".to_string(),
+        remote_observations: vec![proto::RelayObservation {
+            threat_type: proto::ThreatType::Manipulation as i32,
+            threat_subtype: "cross_conversation".to_string(),
+            layer: proto::DetectionLayer::RelayInference as i32,
+            score: 0.84,
+            confidence: proto::Confidence::High as i32,
+            reason_code: "relay.context.cross_conversation_safety_telemetry".to_string(),
+            explanation: String::new(),
+        }],
+        remote_events: Vec::new(),
+        findings: vec![proto::RelayRemoteFinding {
+            threat_type: proto::ThreatType::Manipulation as i32,
+            score: 0.84,
+            confidence: proto::Confidence::High as i32,
+            reason_code: "relay.inference.primary".to_string(),
+            explanation: String::new(),
+        }],
+        inference: Some(proto::RelayRemoteInferenceSummary {
+            primary_threat: proto::ThreatType::Manipulation as i32,
+            score: 0.84,
+            confidence: proto::Confidence::High as i32,
+            risk_horizon: proto::RiskHorizon::ShortTerm as i32,
+        }),
+        reason_codes: vec!["relay.reputation.high".to_string()],
+        context_markers: vec!["relay.sender.repeated_across_children".to_string()],
+        confidence: proto::Confidence::High as i32,
+        expires_at_ms: Some(1_778_652_060_000),
+        sender_reputation_hint: Some(0.84),
+        correlation_findings: vec!["relay.context.cross_conversation_safety_telemetry".to_string()],
+        auth: Some(proto::RelayResponseAuth {
+            key_id: "relay-key-1".to_string(),
+            alg: "hmac-sha256-v1".to_string(),
+            tag: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+        }),
+    };
+
+    let bytes = original.encode_to_vec();
+    let decoded =
+        proto::RelayAnalyzeResponse::decode(bytes.as_slice()).expect("decode relay response");
+
+    assert_eq!(decoded, original);
+    assert_eq!(decoded.sender_reputation_hint, Some(0.84));
+    assert_eq!(decoded.correlation_findings.len(), 1);
+    assert_eq!(decoded.auth.unwrap().alg, "hmac-sha256-v1");
+}
+
+#[test]
 fn kids_memory_explainability_round_trip() {
     let original = proto::KidsMemoryExplainability {
         reason_codes: vec![
@@ -321,6 +552,14 @@ fn tracker_state_with_kids_memory_round_trip() {
                 narrative_timeline: Vec::new(),
                 weekly_propaganda_counts: Vec::new(),
                 age_source: proto::AgeSource::UserReported as i32,
+                child_safety: Some(proto::ChildSafetyTrajectoryState {
+                    first_grooming_ms: 1_710_000_100_000,
+                    last_grooming_ms: 1_710_000_200_000,
+                    grooming_stage_mask: 0b0000_1010,
+                    grooming_event_count: 2,
+                    high_risk_event_count: 2,
+                    rapid_escalation_ms: 100_000,
+                }),
             }],
         }),
         kids_memory: Some(kids_memory),

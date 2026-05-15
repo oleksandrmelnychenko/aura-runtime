@@ -10,32 +10,30 @@
 // ── Re-exports from aura-core (transitional) ────────────────────────
 
 pub use aura_core::action;
-pub use aura_core::product;
 pub use aura_core::pilot;
 pub use aura_core::pilot_gate;
+pub use aura_core::product;
 
 // Convenience re-exports of the most commonly used items.
 pub use aura_core::action::{
-    augment_recommendation_for_inference, augment_recommendation_for_reason_codes,
-    decide_action, decide_action_v2, propaganda_action_for_subtype,
+    augment_recommendation_for_inference, augment_recommendation_for_reason_codes, decide_action,
+    decide_action_v2, escalate_by_contact_history, propaganda_action_for_subtype,
     should_soften_policy_for_context, should_soften_policy_for_context_summary,
     soften_recommendation_for_context, soften_recommendation_for_context_summary,
-    escalate_by_contact_history,
 };
 
 pub use aura_core::product::{
     build_product_decision_surface, ProductChildIntervention, ProductChildSurface,
-    ProductDecisionSurface, ProductDeliveryMode, ProductGuardianSurface,
-    ProductReviewSurface, ProductReviewUrgency, ProductRolloutMode,
-    ProductUncertaintyDisposition, PRODUCT_DECISION_SURFACE_SCHEMA_VERSION,
+    ProductDecisionSurface, ProductDeliveryMode, ProductGuardianSurface, ProductReviewSurface,
+    ProductReviewUrgency, ProductRolloutMode, ProductUncertaintyDisposition,
+    PRODUCT_DECISION_SURFACE_SCHEMA_VERSION,
 };
 
 pub use aura_core::pilot::{
-    build_shadow_mode_event, ShadowModeBundle, ShadowModeContactSummary,
-    ShadowModeDecision, ShadowModeEvent, ShadowModeEventInput,
-    ShadowModeExpectation, ShadowModeFinding, ShadowModeMirror,
-    ShadowModePrivacy, ShadowModeSummary,
-    SHADOW_MODE_BUNDLE_SCHEMA_VERSION, SHADOW_MODE_WIRE_PACKAGE,
+    build_shadow_mode_event, ShadowModeBundle, ShadowModeContactSummary, ShadowModeDecision,
+    ShadowModeEvent, ShadowModeEventInput, ShadowModeExpectation, ShadowModeFinding,
+    ShadowModeMirror, ShadowModePrivacy, ShadowModeSummary, SHADOW_MODE_BUNDLE_SCHEMA_VERSION,
+    SHADOW_MODE_WIRE_PACKAGE,
 };
 
 pub use aura_core::pilot_gate::*;

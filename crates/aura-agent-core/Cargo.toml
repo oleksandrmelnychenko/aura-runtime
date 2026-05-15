@@ -14,5 +14,6 @@ aura-core = { path = "../aura-core" }
 aura-kids = { path = "../aura-kids" }
 aura-patterns = { path = "../aura-patterns" }
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
