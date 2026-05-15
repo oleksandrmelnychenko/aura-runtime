@@ -1,16 +1,13 @@
 use aura_core::{
     canonical_manipulation_scenarios, evaluate_scenario_quality_gates,
-    pre_release_manipulation_gates, run_scenario_case, summarize_scenario_runs, GateComparison,
+    pre_release_manipulation_gates, run_scenario_cases, summarize_scenario_runs, GateComparison,
 };
 use aura_patterns::PatternDatabase;
 
 fn main() {
     let db = PatternDatabase::default_mvp();
     let pack = canonical_manipulation_scenarios();
-    let runs: Vec<_> = pack
-        .iter()
-        .map(|case| run_scenario_case(&db, case))
-        .collect();
+    let runs = run_scenario_cases(&db, pack.iter()).runs;
     let summary = summarize_scenario_runs(&runs, 6);
     let gates = pre_release_manipulation_gates();
     let gate_report = evaluate_scenario_quality_gates(&summary, &gates);

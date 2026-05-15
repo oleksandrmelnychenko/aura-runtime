@@ -4,7 +4,7 @@
   "dataset_label": "AURA Realistic Chat Corpus",
   "maintainer": "aura_core_team",
   "created_at_ms": 1773100800000,
-  "updated_at_ms": 1773676800000,
+  "updated_at_ms": 1778630400000,
   "cases": [
     {
       "id": "realistic_en_stranger_secret_platform_switch",
@@ -2087,6 +2087,255 @@
       ]
     },
     {
+      "id": "realistic_en_slow_burn_gaming_grooming_12_steps",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "stranger",
+      "primary_threat": "grooming",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "onset_step": 6,
+      "step_interval_ms": 604800000,
+      "policy_expectation_case": "classic_grooming",
+      "messages": [
+        {
+          "text": "gg, you carried that round better than most people here",
+          "sender_id": "slow_game_groom_1"
+        },
+        {
+          "text": "what grade are you in? you sound older than the kids i usually meet",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "you can tell me stuff you dont tell classmates, i get you",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "ill send you a battle pass next season, dont make a big deal about it",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "your friends are immature anyway, they wouldnt understand us talking",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "keep our chats private so nobody ruins it",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming"]
+        },
+        {
+          "text": "move to telegram later, game chat logs everything",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "send a selfie there so i know its really you before i buy the pass",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "dont tell your parents about the gift, theyll just overreact",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "you trust me more than them right",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "send one from your room tonight, not in the group chat",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming", "manipulation"]
+        },
+        {
+          "text": "delete this thread after, its better if nobody sees how close we are",
+          "sender_id": "slow_game_groom_1",
+          "observed_threats": ["grooming", "manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_trusted_adult_long_parent_loop_safe",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "trusted_adult",
+      "tracked_threats": ["grooming", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 86400000,
+      "policy_expectation_case": "negative_control_trusted_adult",
+      "messages": [
+        {
+          "text": "привіт, завтра тренування переноситься на 17:30, я вже написав у батьківський чат",
+          "sender_id": "coach_long_safe_uk",
+          "language": "uk"
+        },
+        {
+          "text": "попроси маму підтвердити там же, щоб я бачив дозвіл",
+          "sender_id": "coach_long_safe_uk",
+          "language": "uk"
+        },
+        {
+          "text": "форму і воду не забудь, після заняття всіх забирають біля входу",
+          "sender_id": "coach_long_safe_uk",
+          "language": "uk"
+        },
+        {
+          "text": "якщо не встигаєш, нехай хтось із батьків напише адміністратору",
+          "sender_id": "coach_long_safe_uk",
+          "language": "uk"
+        },
+        {
+          "text": "фото довідки краще скиньте в загальну групу, щоб офіс теж бачив",
+          "sender_id": "coach_long_safe_uk",
+          "language": "uk"
+        },
+        {
+          "text": "я не приймаю документи в приват, тільки через батьківський чат або офіс",
+          "sender_id": "coach_long_safe_uk",
+          "language": "uk"
+        },
+        {
+          "text": "на змагання потрібна згода, попроси тата підписати форму сьогодні",
+          "sender_id": "coach_long_safe_uk",
+          "language": "uk"
+        },
+        {
+          "text": "дякую, побачимось завтра на тренуванні з усією групою",
+          "sender_id": "coach_long_safe_uk",
+          "language": "uk"
+        }
+      ]
+    },
+    {
+      "id": "realistic_mix_peer_gift_and_secret_boundary",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "primary_threat": "manipulation",
+      "tracked_threats": ["manipulation", "grooming"],
+      "detection_threshold": 0.55,
+      "onset_step": 4,
+      "step_interval_ms": 1800000,
+      "policy_expectation_case": "coercive_control_password_pressure",
+      "messages": [
+        {
+          "text": "я тобі купив скін, тепер ти мені винна одну маленьку послугу",
+          "sender_id": "peer_control_mix_1",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "dont be dramatic, just give me your account login for a minute",
+          "sender_id": "peer_control_mix_1",
+          "language": "en",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "нікому не кажи, бо всі подумають що ти мене використала",
+          "sender_id": "peer_control_mix_1",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "якщо не скинеш пароль, я напишу всім що ти мене кинула після подарунка",
+          "sender_id": "peer_control_mix_1",
+          "observed_threats": ["manipulation"]
+        },
+        {
+          "text": "delete our chat after, i dont want screenshots",
+          "sender_id": "peer_control_mix_1",
+          "language": "en",
+          "observed_threats": ["manipulation"]
+        }
+      ]
+    },
+    {
+      "id": "realistic_en_supportive_peer_long_crisis_boundary_safe",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "supportive_peer",
+      "tracked_threats": ["self_harm", "manipulation"],
+      "detection_threshold": 0.55,
+      "step_interval_ms": 36000000,
+      "policy_expectation_case": "negative_control_multilingual_support",
+      "messages": [
+        {
+          "text": "thank you for telling me things feel heavy, im staying with you in chat",
+          "sender_id": "support_peer_long_1"
+        },
+        {
+          "text": "lets call your mom or the counselor together now",
+          "sender_id": "support_peer_long_1"
+        },
+        {
+          "text": "i will not handle this alone because your safety matters and an adult should be with us",
+          "sender_id": "support_peer_long_1"
+        },
+        {
+          "text": "good, keep breathing with me until your aunt gets there",
+          "sender_id": "support_peer_long_1"
+        }
+      ]
+    },
+    {
+      "id": "realistic_uk_group_long_dogpile_to_selfharm",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "conversation_type": "group",
+      "primary_threat": "self_harm",
+      "tracked_threats": ["bullying", "self_harm"],
+      "detection_threshold": 0.70,
+      "onset_step": 6,
+      "step_interval_ms": 120000,
+      "policy_expectation_case": "bullying_selfharm_cascade",
+      "messages": [
+        {
+          "text": "знову він у чаті, зараз буде соромно",
+          "sender_id": "long_bully_uk_1",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "після того відео всі з тебе сміються",
+          "sender_id": "long_bully_uk_2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "ти нікому тут не потрібен, просто мовчи",
+          "sender_id": "long_bully_uk_3",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "завтра вся школа це побачить",
+          "sender_id": "long_bully_uk_1",
+          "observed_threats": ["bullying", "manipulation"]
+        },
+        {
+          "text": "краще взагалі не приходь, всім буде легше",
+          "sender_id": "long_bully_uk_2",
+          "observed_threats": ["bullying"]
+        },
+        {
+          "text": "я не можу це читати, мені дуже погано",
+          "sender_id": "long_victim_uk_1",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "я хочу зникнути назавжди, я більше не можу",
+          "sender_id": "long_victim_uk_1",
+          "observed_threats": ["self_harm"]
+        },
+        {
+          "text": "я хочу померти, я не бачу сенсу жити після цього",
+          "sender_id": "long_victim_uk_1",
+          "observed_threats": ["self_harm"]
+        }
+      ]
+    },
+    {
       "id": "realistic_en_bystander_rescue_friend_support",
       "default_language": "en",
       "age_band": "teen",
@@ -2112,4 +2361,3 @@
     }
   ]
 }
-

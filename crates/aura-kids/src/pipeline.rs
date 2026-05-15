@@ -12,6 +12,13 @@ use crate::lexicon;
 use crate::policy::{guardian, intervention};
 
 pub fn run_kids_pipeline(input: &DomainInput) -> DomainOutput {
+    run_kids_pipeline_with_memory(input, global_kids_memory())
+}
+
+pub fn run_kids_pipeline_with_memory(
+    input: &DomainInput,
+    memory: &KidsPipelineMemory,
+) -> DomainOutput {
     let mut signals: Vec<DomainSignal> = Vec::new();
 
     signals.extend(grooming::detect_all(input));
@@ -20,7 +27,7 @@ pub fn run_kids_pipeline(input: &DomainInput) -> DomainOutput {
     signals.extend(manipulation::detect_all(input));
 
     apply_kids_risk_amplifiers(&mut signals);
-    apply_kids_conversation_memory_amplifiers(input, &mut signals);
+    apply_kids_conversation_memory_amplifiers(input, &mut signals, memory);
     signals.sort_by(|left, right| {
         let left_priority = left.priority.unwrap_or(0);
         let right_priority = right.priority.unwrap_or(0);
@@ -99,12 +106,40 @@ fn next_global_activity() -> u64 {
     GLOBAL_ACTIVITY_COUNTER.fetch_add(1, Ordering::Relaxed) + 1
 }
 
-static KIDS_CONVERSATION_MEMORY: OnceLock<Mutex<HashMap<String, ConversationRiskMemory>>> =
-    OnceLock::new();
-static KIDS_SENDER_MEMORY: OnceLock<Mutex<HashMap<String, SenderRiskMemory>>> = OnceLock::new();
+static GLOBAL_KIDS_MEMORY: OnceLock<KidsPipelineMemory> = OnceLock::new();
 
-fn conversation_memory() -> &'static Mutex<HashMap<String, ConversationRiskMemory>> {
-    KIDS_CONVERSATION_MEMORY.get_or_init(|| Mutex::new(HashMap::new()))
+pub struct KidsPipelineMemory {
+    conversation_memory: Mutex<HashMap<String, ConversationRiskMemory>>,
+    sender_memory: Mutex<HashMap<String, SenderRiskMemory>>,
+}
+
+impl KidsPipelineMemory {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn clear(&self) {
+        clear_kids_memory_internal(self);
+    }
+}
+
+impl Default for KidsPipelineMemory {
+    fn default() -> Self {
+        Self {
+            conversation_memory: Mutex::new(HashMap::new()),
+            sender_memory: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+fn global_kids_memory() -> &'static KidsPipelineMemory {
+    GLOBAL_KIDS_MEMORY.get_or_init(KidsPipelineMemory::default)
+}
+
+fn conversation_memory(
+    memory: &KidsPipelineMemory,
+) -> &Mutex<HashMap<String, ConversationRiskMemory>> {
+    &memory.conversation_memory
 }
 
 #[derive(Default)]
@@ -116,8 +151,8 @@ struct SenderRiskMemory {
     last_emitted: HashMap<&'static str, u64>,
 }
 
-fn sender_memory() -> &'static Mutex<HashMap<String, SenderRiskMemory>> {
-    KIDS_SENDER_MEMORY.get_or_init(|| Mutex::new(HashMap::new()))
+fn sender_memory(memory: &KidsPipelineMemory) -> &Mutex<HashMap<String, SenderRiskMemory>> {
+    &memory.sender_memory
 }
 
 fn apply_kids_risk_amplifiers(signals: &mut Vec<DomainSignal>) {
@@ -178,7 +213,11 @@ fn apply_kids_risk_amplifiers(signals: &mut Vec<DomainSignal>) {
     }
 }
 
-fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut Vec<DomainSignal>) {
+fn apply_kids_conversation_memory_amplifiers(
+    input: &DomainInput,
+    signals: &mut Vec<DomainSignal>,
+    memory_store: &KidsPipelineMemory,
+) {
     let Some(conversation_id) = input.conversation_id.as_deref() else {
         return;
     };
@@ -217,7 +256,7 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
     let mut conversation_has_self_harm = false;
     let mut conversation_has_grooming = false;
 
-    let Ok(mut guard) = conversation_memory().lock() else {
+    let Ok(mut guard) = conversation_memory(memory_store).lock() else {
         return;
     };
     trim_conversation_memory_if_needed(&mut guard, conversation_id);
@@ -409,27 +448,31 @@ fn apply_kids_conversation_memory_amplifiers(input: &DomainInput, signals: &mut 
         });
     }
     drop(guard);
-    apply_cross_conversation_sender_amplifier(input, &settings, &current, signals);
+    apply_cross_conversation_sender_amplifier(input, &settings, &current, signals, memory_store);
 }
 
-fn clear_kids_memory_internal() {
-    let Ok(mut guard) = conversation_memory().lock() else {
+fn clear_kids_memory_internal(memory_store: &KidsPipelineMemory) {
+    let Ok(mut guard) = conversation_memory(memory_store).lock() else {
         return;
     };
     guard.clear();
-    let Ok(mut guard) = sender_memory().lock() else {
+    let Ok(mut guard) = sender_memory(memory_store).lock() else {
         return;
     };
     guard.clear();
+}
+
+pub fn clear_kids_memory_in(memory_store: &KidsPipelineMemory) {
+    clear_kids_memory_internal(memory_store);
 }
 
 pub fn clear_kids_memory() {
-    clear_kids_memory_internal();
+    clear_kids_memory_internal(global_kids_memory());
 }
 
 #[cfg(test)]
 fn clear_conversation_memory_for_tests() {
-    clear_kids_memory_internal();
+    clear_kids_memory_internal(global_kids_memory());
 }
 
 fn apply_cross_conversation_sender_amplifier(
@@ -437,6 +480,7 @@ fn apply_cross_conversation_sender_amplifier(
     settings: &KidsProfileSettings,
     current: &MessageRiskSnapshot,
     signals: &mut Vec<DomainSignal>,
+    memory_store: &KidsPipelineMemory,
 ) {
     let Some(sender_id) = input.sender_id.as_deref() else {
         return;
@@ -453,7 +497,7 @@ fn apply_cross_conversation_sender_amplifier(
         return;
     }
 
-    let Ok(mut guard) = sender_memory().lock() else {
+    let Ok(mut guard) = sender_memory(memory_store).lock() else {
         return;
     };
     trim_sender_memory_if_needed(&mut guard, sender_id);
@@ -726,11 +770,10 @@ pub struct ExportedKidsMemoryState {
     pub senders: Vec<ExportedSenderMemory>,
 }
 
-/// Export the current kids memory state for persistence/transfer.
-pub fn export_kids_memory() -> ExportedKidsMemoryState {
+pub fn export_kids_memory_from(memory_store: &KidsPipelineMemory) -> ExportedKidsMemoryState {
     let mut state = ExportedKidsMemoryState::default();
 
-    if let Ok(guard) = conversation_memory().lock() {
+    if let Ok(guard) = conversation_memory(memory_store).lock() {
         for (conv_id, memory) in guard.iter() {
             let mut entries = Vec::with_capacity(memory.entries.len());
             for (sender, snap) in &memory.entries {
@@ -756,7 +799,7 @@ pub fn export_kids_memory() -> ExportedKidsMemoryState {
         }
     }
 
-    if let Ok(guard) = sender_memory().lock() {
+    if let Ok(guard) = sender_memory(memory_store).lock() {
         for (sender_id, memory) in guard.iter() {
             state.senders.push(ExportedSenderMemory {
                 sender_id: sender_id.clone(),
@@ -774,9 +817,13 @@ pub fn export_kids_memory() -> ExportedKidsMemoryState {
     state
 }
 
-/// Import kids memory state (replaces current in-process state).
-pub fn import_kids_memory(state: &ExportedKidsMemoryState) {
-    if let Ok(mut guard) = conversation_memory().lock() {
+/// Export the current kids memory state for persistence/transfer.
+pub fn export_kids_memory() -> ExportedKidsMemoryState {
+    export_kids_memory_from(global_kids_memory())
+}
+
+pub fn import_kids_memory_into(memory_store: &KidsPipelineMemory, state: &ExportedKidsMemoryState) {
+    if let Ok(mut guard) = conversation_memory(memory_store).lock() {
         guard.clear();
         for conv in &state.conversations {
             let mut entries = VecDeque::with_capacity(conv.entries.len());
@@ -808,7 +855,7 @@ pub fn import_kids_memory(state: &ExportedKidsMemoryState) {
         }
     }
 
-    if let Ok(mut guard) = sender_memory().lock() {
+    if let Ok(mut guard) = sender_memory(memory_store).lock() {
         guard.clear();
         for sender in &state.senders {
             guard.insert(
@@ -828,9 +875,14 @@ pub fn import_kids_memory(state: &ExportedKidsMemoryState) {
     }
 }
 
+/// Import kids memory state (replaces current in-process state).
+pub fn import_kids_memory(state: &ExportedKidsMemoryState) {
+    import_kids_memory_into(global_kids_memory(), state);
+}
+
 /// Query the current conversation risk score for a given conversation.
 pub fn conversation_risk_score(conversation_id: &str) -> f32 {
-    let Ok(guard) = conversation_memory().lock() else {
+    let Ok(guard) = conversation_memory(global_kids_memory()).lock() else {
         return 0.0;
     };
     let Some(memory) = guard.get(conversation_id) else {
@@ -861,7 +913,7 @@ pub fn conversation_risk_score(conversation_id: &str) -> f32 {
 
 /// Query the number of tracked messages in a conversation.
 pub fn conversation_escalation_message_count(conversation_id: &str) -> u32 {
-    let Ok(guard) = conversation_memory().lock() else {
+    let Ok(guard) = conversation_memory(global_kids_memory()).lock() else {
         return 0;
     };
     let Some(memory) = guard.get(conversation_id) else {
@@ -872,7 +924,7 @@ pub fn conversation_escalation_message_count(conversation_id: &str) -> u32 {
 
 /// Query the sender risk score across conversations.
 pub fn sender_cross_risk_score(sender_id: &str) -> f32 {
-    let Ok(guard) = sender_memory().lock() else {
+    let Ok(guard) = sender_memory(global_kids_memory()).lock() else {
         return 0.0;
     };
     let Some(memory) = guard.get(sender_id) else {
@@ -902,10 +954,10 @@ pub enum GuardianVerdict {
 pub fn apply_guardian_feedback(sender_id: &str, conversation_id: &str, verdict: GuardianVerdict) {
     match verdict {
         GuardianVerdict::Trusted => {
-            if let Ok(mut guard) = sender_memory().lock() {
+            if let Ok(mut guard) = sender_memory(global_kids_memory()).lock() {
                 guard.remove(sender_id);
             }
-            if let Ok(mut guard) = conversation_memory().lock() {
+            if let Ok(mut guard) = conversation_memory(global_kids_memory()).lock() {
                 if let Some(memory) = guard.get_mut(conversation_id) {
                     memory
                         .entries
@@ -914,7 +966,7 @@ pub fn apply_guardian_feedback(sender_id: &str, conversation_id: &str, verdict: 
             }
         }
         GuardianVerdict::Block => {
-            if let Ok(mut guard) = sender_memory().lock() {
+            if let Ok(mut guard) = sender_memory(global_kids_memory()).lock() {
                 let memory = guard
                     .entry(sender_id.to_string())
                     .or_insert_with(SenderRiskMemory::default);
@@ -941,7 +993,7 @@ pub fn apply_guardian_feedback(sender_id: &str, conversation_id: &str, verdict: 
             // AURA continues normal detection with existing thresholds.
         }
         GuardianVerdict::FalsePositive => {
-            if let Ok(mut guard) = conversation_memory().lock() {
+            if let Ok(mut guard) = conversation_memory(global_kids_memory()).lock() {
                 guard.remove(conversation_id);
             }
         }

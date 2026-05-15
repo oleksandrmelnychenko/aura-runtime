@@ -8,7 +8,7 @@ use crate::ids::{ConversationId, SenderId};
 use crate::{
     canonical_policy_action_expectations, canonical_robustness_seed_scenarios,
     evaluate_policy_action_gates, evaluate_scenario_quality_gates, generate_robustness_variants,
-    pre_release_policy_action_gates, pre_release_robustness_profile_gates, run_scenario_case,
+    pre_release_policy_action_gates, pre_release_robustness_profile_gates, run_scenario_cases,
     summarize_policy_actions_with_expectation_names, summarize_scenario_runs, AccountType,
     AuraConfig, ContentType, ConversationType, MessageInput, PolicyActionQualityGates,
     PolicyActionSummary, ProtectionLevel, RobustnessProfile, ScenarioCase,
@@ -207,10 +207,7 @@ pub fn run_corpus_style_suite(
     bin_count: usize,
 ) -> CorpusStyleSuiteSummary {
     let variants = generate_corpus_style_variants(cases, profiles);
-    let runs: Vec<_> = variants
-        .iter()
-        .map(|variant| run_scenario_case(pattern_db, &variant.case))
-        .collect();
+    let runs = run_scenario_cases(pattern_db, variants.iter().map(|variant| &variant.case)).runs;
     let expectations = canonical_policy_action_expectations();
     let expected_policy_cases = expectations
         .iter()

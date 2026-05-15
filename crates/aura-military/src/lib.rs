@@ -2,6 +2,7 @@ pub mod detectors;
 mod lexicon;
 pub mod pipeline;
 pub mod policy;
+mod text;
 
 use aura_domain::{DomainInput, DomainModule, DomainModuleId, DomainOutput};
 

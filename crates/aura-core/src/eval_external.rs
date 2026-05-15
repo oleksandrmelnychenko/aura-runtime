@@ -7,7 +7,7 @@ use serde::Deserialize;
 use crate::ids::{ConversationId, SenderId};
 use crate::{
     canonical_policy_action_expectations, evaluate_policy_action_gates,
-    evaluate_scenario_quality_gates, pre_release_policy_action_gates, run_scenario_case,
+    evaluate_scenario_quality_gates, pre_release_policy_action_gates, run_scenario_cases,
     summarize_policy_actions_with_expectation_names, summarize_scenario_runs, AccountType,
     AuraConfig, ContentType, ConversationType, MessageInput, PolicyActionQualityGates,
     PolicyActionSummary, ProtectionLevel, ScenarioCase, ScenarioEvaluationSummary,
@@ -240,10 +240,7 @@ pub fn run_external_curated_suite_for_scenarios(
     pattern_db: &PatternDatabase,
     bin_count: usize,
 ) -> ExternalCuratedSuiteSummary {
-    let runs: Vec<_> = scenarios
-        .iter()
-        .map(|scenario| run_scenario_case(pattern_db, &scenario.case))
-        .collect();
+    let runs = run_scenario_cases(pattern_db, scenarios.iter().map(|scenario| &scenario.case)).runs;
     let expectations = canonical_policy_action_expectations();
     let expected_policy_cases = expectations
         .iter()

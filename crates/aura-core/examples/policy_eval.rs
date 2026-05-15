@@ -1,16 +1,14 @@
 use aura_core::{
     canonical_messenger_scenarios, canonical_policy_action_expectations,
-    evaluate_policy_action_gates, pre_release_policy_action_gates, run_scenario_case,
+    evaluate_policy_action_gates, pre_release_policy_action_gates, run_scenario_cases,
     summarize_policy_actions,
 };
 use aura_patterns::PatternDatabase;
 
 fn main() {
     let db = PatternDatabase::default_mvp();
-    let runs = canonical_messenger_scenarios()
-        .iter()
-        .map(|case| run_scenario_case(&db, case))
-        .collect::<Vec<_>>();
+    let pack = canonical_messenger_scenarios();
+    let runs = run_scenario_cases(&db, pack.iter()).runs;
     let summary = summarize_policy_actions(&runs, &canonical_policy_action_expectations());
     let report = evaluate_policy_action_gates(&summary, &pre_release_policy_action_gates());
 

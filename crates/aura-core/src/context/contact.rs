@@ -50,6 +50,117 @@ impl AgeSource {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GroomingTrajectoryStage {
+    TrustBuilding,
+    SecrecyOrMigration,
+    PersonalProbing,
+    MediaOrSexualPressure,
+    MeetingPressure,
+    ManipulationSetup,
+}
+
+impl GroomingTrajectoryStage {
+    fn bit(self) -> u8 {
+        match self {
+            Self::TrustBuilding => 1 << 0,
+            Self::SecrecyOrMigration => 1 << 1,
+            Self::PersonalProbing => 1 << 2,
+            Self::MediaOrSexualPressure => 1 << 3,
+            Self::MeetingPressure => 1 << 4,
+            Self::ManipulationSetup => 1 << 5,
+        }
+    }
+
+    fn is_high_risk(self) -> bool {
+        matches!(
+            self,
+            Self::SecrecyOrMigration
+                | Self::PersonalProbing
+                | Self::MediaOrSexualPressure
+                | Self::MeetingPressure
+        )
+    }
+}
+
+/// Compact contact-level memory for child-safety grooming trajectory.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct ChildSafetyTrajectory {
+    pub first_grooming_ms: u64,
+    pub last_grooming_ms: u64,
+    pub grooming_stage_mask: u8,
+    pub grooming_event_count: u16,
+    pub high_risk_event_count: u16,
+    pub rapid_escalation_ms: u64,
+}
+
+impl ChildSafetyTrajectory {
+    fn record_grooming_event(&mut self, kind: &EventKind, timestamp_ms: u64) {
+        let Some(stage) = grooming_trajectory_stage(kind) else {
+            return;
+        };
+
+        if self.first_grooming_ms == 0 {
+            self.first_grooming_ms = timestamp_ms;
+        }
+        self.last_grooming_ms = self.last_grooming_ms.max(timestamp_ms);
+        self.grooming_stage_mask |= stage.bit();
+        self.grooming_event_count = self.grooming_event_count.saturating_add(1);
+
+        if stage.is_high_risk() {
+            self.high_risk_event_count = self.high_risk_event_count.saturating_add(1);
+            let elapsed_ms = timestamp_ms.saturating_sub(self.first_grooming_ms);
+            if self.rapid_escalation_ms == 0 || elapsed_ms < self.rapid_escalation_ms {
+                self.rapid_escalation_ms = elapsed_ms;
+            }
+        }
+    }
+
+    pub fn stage_count(&self) -> u8 {
+        (self.grooming_stage_mask & 0b0011_1111).count_ones() as u8
+    }
+
+    pub fn high_risk_stage_count(&self) -> u8 {
+        let high_risk_mask = GroomingTrajectoryStage::SecrecyOrMigration.bit()
+            | GroomingTrajectoryStage::PersonalProbing.bit()
+            | GroomingTrajectoryStage::MediaOrSexualPressure.bit()
+            | GroomingTrajectoryStage::MeetingPressure.bit();
+        (self.grooming_stage_mask & high_risk_mask).count_ones() as u8
+    }
+
+    pub fn has_rapid_escalation(&self) -> bool {
+        self.rapid_escalation_ms > 0 && self.rapid_escalation_ms <= DAY_MS
+    }
+}
+
+fn grooming_trajectory_stage(kind: &EventKind) -> Option<GroomingTrajectoryStage> {
+    match kind {
+        EventKind::Flattery
+        | EventKind::LoveBombing
+        | EventKind::GiftOffer
+        | EventKind::MoneyOffer
+        | EventKind::FinancialGrooming
+        | EventKind::CasualMeetingRequest => Some(GroomingTrajectoryStage::TrustBuilding),
+        EventKind::SecrecyRequest | EventKind::PlatformSwitch => {
+            Some(GroomingTrajectoryStage::SecrecyOrMigration)
+        }
+        EventKind::PersonalInfoRequest | EventKind::LocationRequest => {
+            Some(GroomingTrajectoryStage::PersonalProbing)
+        }
+        EventKind::PhotoRequest
+        | EventKind::VideoCallRequest
+        | EventKind::SexualContent
+        | EventKind::AgeInappropriate => Some(GroomingTrajectoryStage::MediaOrSexualPressure),
+        EventKind::MeetingRequest => Some(GroomingTrajectoryStage::MeetingPressure),
+        EventKind::IdentityErosion
+        | EventKind::NetworkPoisoning
+        | EventKind::FakeVulnerability
+        | EventKind::FalseConsensus
+        | EventKind::DebtCreation => Some(GroomingTrajectoryStage::ManipulationSetup),
+        _ => None,
+    }
+}
+
 /// Captures aggregated behavioral statistics for a single weekly period.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehavioralSnapshot {
@@ -183,6 +294,8 @@ pub struct ContactProfile {
     pub trust_level: f32,
     pub inferred_age: Option<u16>,
     pub age_source: AgeSource,
+    #[serde(default)]
+    pub child_safety: ChildSafetyTrajectory,
     pub circle_tier: CircleTier,
     pub trend: BehavioralTrend,
     pub is_trusted: bool,
@@ -217,6 +330,7 @@ pub struct ContactProfileState {
     pub severity_count: u64,
     pub inferred_age: Option<u16>,
     pub age_source: AgeSource,
+    pub child_safety: ChildSafetyTrajectory,
     pub rating: f32,
     pub trust_level: f32,
     pub circle_tier: CircleTier,
@@ -261,6 +375,7 @@ impl From<&ContactProfile> for ContactProfileState {
             severity_count: profile.severity_count,
             inferred_age: profile.inferred_age,
             age_source: profile.age_source,
+            child_safety: profile.child_safety,
             rating: profile.rating,
             trust_level: profile.trust_level,
             circle_tier: profile.circle_tier,
@@ -311,6 +426,7 @@ impl From<ContactProfileState> for ContactProfile {
             severity_count: profile.severity_count,
             inferred_age: profile.inferred_age,
             age_source: profile.age_source,
+            child_safety: profile.child_safety,
             rating: profile.rating,
             trust_level: profile.trust_level,
             circle_tier: profile.circle_tier,
@@ -358,6 +474,7 @@ impl ContactProfile {
             severity_count: 0,
             inferred_age: None,
             age_source: AgeSource::default(),
+            child_safety: ChildSafetyTrajectory::default(),
             rating: 50.0,
             trust_level: 0.5,
             circle_tier: CircleTier::New,
@@ -529,6 +646,63 @@ impl ContactProfile {
         score.min(1.0)
     }
 
+    /// Computes a child-safety trajectory risk score for persistent grooming escalation.
+    pub fn child_safety_trajectory_risk(
+        &self,
+        is_minor_account: bool,
+        account_holder_age: Option<u16>,
+    ) -> f32 {
+        if !is_minor_account || self.is_trusted {
+            return 0.0;
+        }
+
+        let stage_count = self.child_safety.stage_count();
+        let high_risk_stage_count = self.child_safety.high_risk_stage_count();
+        if stage_count < 2
+            || high_risk_stage_count == 0
+            || self.child_safety.grooming_event_count < 2
+        {
+            return 0.0;
+        }
+
+        let mut score = 0.24
+            + stage_count as f32 * 0.075
+            + high_risk_stage_count as f32 * 0.07
+            + (self.child_safety.high_risk_event_count.min(4) as f32 * 0.025);
+
+        if high_risk_stage_count >= 2 {
+            score += 0.08;
+        }
+        if stage_count >= 4 {
+            score += 0.06;
+        }
+        if self.child_safety.has_rapid_escalation() {
+            score += 0.08;
+            if self.child_safety.rapid_escalation_ms <= 2 * 60 * 60 * 1000 {
+                score += 0.04;
+            }
+        }
+        if self.relationship_age_ms() <= 48 * 60 * 60 * 1000 {
+            score += 0.07;
+        }
+        if self.conversation_count >= 2 && high_risk_stage_count >= 2 {
+            score += 0.04;
+        }
+
+        if let (Some(holder_age), Some(sender_age)) = (account_holder_age, self.inferred_age) {
+            if holder_age < 18 && sender_age >= 18 {
+                let gap = sender_age.saturating_sub(holder_age);
+                if gap >= 5 {
+                    score +=
+                        (0.08 + gap as f32 * 0.01).min(0.20) * self.age_source.confidence_factor();
+                }
+            }
+        }
+
+        let trust_discount = 1.0 - (self.trust_level * 0.25);
+        (score * trust_discount).min(0.95)
+    }
+
     fn dominant_contact_risk_threat(&self) -> ThreatType {
         let mut dominant = ThreatType::Grooming;
         let mut best_score = (self.grooming_event_count as f32 * 0.1).min(0.4);
@@ -611,7 +785,7 @@ impl ContactProfile {
         } else {
             snapshot.neutral_count += 1;
         }
-        if event.kind.is_core_grooming_indicator() {
+        if event.kind.is_core_grooming_indicator() && event.supports_grooming_inference() {
             snapshot.grooming_count += 1;
         }
         if event.kind.is_manipulation_indicator() {
@@ -734,6 +908,37 @@ fn avg_supportive_ratio<'a>(snapshots: impl Iterator<Item = &'a BehavioralSnapsh
     }
 }
 
+fn merge_child_safety_trajectory(
+    local: ChildSafetyTrajectory,
+    incoming: ChildSafetyTrajectory,
+) -> ChildSafetyTrajectory {
+    let first_grooming_ms = match (local.first_grooming_ms, incoming.first_grooming_ms) {
+        (0, 0) => 0,
+        (0, incoming_first) => incoming_first,
+        (local_first, 0) => local_first,
+        (local_first, incoming_first) => local_first.min(incoming_first),
+    };
+    let rapid_escalation_ms = match (local.rapid_escalation_ms, incoming.rapid_escalation_ms) {
+        (0, 0) => 0,
+        (0, incoming_rapid) => incoming_rapid,
+        (local_rapid, 0) => local_rapid,
+        (local_rapid, incoming_rapid) => local_rapid.min(incoming_rapid),
+    };
+
+    ChildSafetyTrajectory {
+        first_grooming_ms,
+        last_grooming_ms: local.last_grooming_ms.max(incoming.last_grooming_ms),
+        grooming_stage_mask: local.grooming_stage_mask | incoming.grooming_stage_mask,
+        grooming_event_count: local
+            .grooming_event_count
+            .max(incoming.grooming_event_count),
+        high_risk_event_count: local
+            .high_risk_event_count
+            .max(incoming.high_risk_event_count),
+        rapid_escalation_ms,
+    }
+}
+
 fn trend_severity(trend: &BehavioralTrend) -> u8 {
     match trend {
         BehavioralTrend::Stable => 0,
@@ -792,8 +997,13 @@ impl ContactProfiler {
             profile.conversation_count = profile.conversations.len();
         }
 
-        if event.kind.is_core_grooming_indicator() {
+        if event.kind.is_core_grooming_indicator() && event.supports_grooming_inference() {
             profile.grooming_event_count += 1;
+        }
+        if event.supports_grooming_inference() {
+            profile
+                .child_safety
+                .record_grooming_event(&event.kind, event.timestamp_ms);
         }
         if event.kind.is_bullying_indicator() {
             profile.bullying_event_count += 1;
@@ -873,6 +1083,11 @@ impl ContactProfiler {
     /// Returns the profile for the given sender, if one exists.
     pub fn profile(&self, sender_id: &str) -> Option<&ContactProfile> {
         self.profiles.get(sender_id)
+    }
+
+    /// Removes a contact profile, if it exists.
+    pub fn remove_profile(&mut self, sender_id: &str) {
+        self.profiles.remove(sender_id);
     }
 
     /// Returns a lightweight snapshot for the given sender, if a profile exists.
@@ -1046,6 +1261,53 @@ impl ContactProfiler {
                 ),
             ));
         }
+
+        signals
+    }
+
+    /// Checks persistent child-safety trajectory memory for grooming escalation.
+    pub fn check_child_safety_trajectory(
+        &self,
+        sender_id: &str,
+        is_minor_account: bool,
+        account_holder_age: Option<u16>,
+    ) -> Vec<DetectionSignal> {
+        let mut signals = Vec::new();
+
+        let profile = match self.profiles.get(sender_id) {
+            Some(p) => p,
+            None => return signals,
+        };
+
+        let risk = profile.child_safety_trajectory_risk(is_minor_account, account_holder_age);
+        if risk < 0.55 {
+            return signals;
+        }
+
+        let stage_count = profile.child_safety.stage_count();
+        let high_risk_stage_count = profile.child_safety.high_risk_stage_count();
+        let confidence = if risk >= 0.75 || high_risk_stage_count >= 3 {
+            Confidence::High
+        } else {
+            Confidence::Medium
+        };
+
+        signals.push(DetectionSignal::context(
+            ThreatType::Grooming,
+            risk,
+            confidence,
+            SignalFamily::Conversation,
+            "conversation.contact.grooming_trajectory_risk",
+            format!(
+                "Contact-level grooming trajectory risk: {stage_count} stages, {high_risk_stage_count} high-risk stages, {} grooming events{}",
+                profile.child_safety.grooming_event_count,
+                if profile.child_safety.has_rapid_escalation() {
+                    " with rapid escalation"
+                } else {
+                    ""
+                }
+            ),
+        ));
 
         signals
     }
@@ -1342,6 +1604,8 @@ impl ContactProfiler {
                     if local.inferred_age.is_none() {
                         local.inferred_age = incoming.inferred_age;
                     }
+                    local.child_safety =
+                        merge_child_safety_trajectory(local.child_safety, incoming.child_safety);
 
                     let local_average = local.average_severity();
                     let merged_average = local_average.max(incoming_average);
@@ -1468,7 +1732,9 @@ pub struct ContactProfilerState {
 
 #[cfg(test)]
 mod tests {
-    use super::super::events::{ContextEvent, EventKind, EventStance};
+    use super::super::events::{
+        ContextEvent, EventDirectionality, EventKind, EventSpeechAct, EventStance,
+    };
     use super::*;
 
     fn make_event(sender: &str, conv: &str, kind: EventKind, ts: u64) -> ContextEvent {
@@ -1700,6 +1966,75 @@ mod tests {
         assert!(
             !signals.is_empty(),
             "Expected anomaly signal for risky new contact"
+        );
+    }
+
+    #[test]
+    fn child_safety_trajectory_detects_rapid_new_contact_escalation() {
+        let mut profiler = ContactProfiler::new();
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::Flattery,
+            1_000,
+        ));
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::PhotoRequest,
+            2_000,
+        ));
+        profiler.record_event(&make_event(
+            "stranger",
+            "conv_1",
+            EventKind::SecrecyRequest,
+            3_000,
+        ));
+        profiler.set_inferred_age("stranger", 29);
+
+        let profile = profiler.profile("stranger").unwrap();
+        assert_eq!(profile.child_safety.stage_count(), 3);
+        assert_eq!(profile.child_safety.high_risk_stage_count(), 2);
+        assert!(profile.child_safety.has_rapid_escalation());
+
+        let signals = profiler.check_child_safety_trajectory("stranger", true, Some(12));
+        assert!(
+            signals.iter().any(|signal| {
+                signal.reason_code == "conversation.contact.grooming_trajectory_risk"
+                    && signal.score >= 0.55
+            }),
+            "rapid grooming trajectory should emit contact risk: {signals:?}"
+        );
+    }
+
+    #[test]
+    fn reported_grooming_trajectory_does_not_poison_contact_memory() {
+        let mut profiler = ContactProfiler::new();
+
+        for (idx, kind) in [
+            EventKind::Flattery,
+            EventKind::PhotoRequest,
+            EventKind::SecrecyRequest,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut event = make_event("reporter", "conv_1", kind, 1_000 + idx as u64 * 1_000);
+            event.context.speech_act = EventSpeechAct::Report;
+            event.context.directionality = EventDirectionality::ThirdParty;
+            event.context.confidence = 0.8;
+            profiler.record_event(&event);
+        }
+
+        let profile = profiler.profile("reporter").unwrap();
+        assert_eq!(profile.grooming_event_count, 0);
+        assert_eq!(profile.child_safety.grooming_event_count, 0);
+        assert_eq!(profile.child_safety.stage_count(), 0);
+
+        let signals = profiler.check_child_safety_trajectory("reporter", true, Some(12));
+        assert!(
+            signals.is_empty(),
+            "reported third-party grooming should not emit contact trajectory risk: {signals:?}"
         );
     }
 

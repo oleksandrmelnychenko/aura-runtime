@@ -2752,3 +2752,93 @@ fn sim_100_full_lifecycle_6_months_all_threats() {
     assert!(s.any_threat_above(ThreatType::Grooming, 0.55));
     assert!(s.any_threat_above(ThreatType::Manipulation, 0.25));
 }
+
+#[test]
+fn sim_101_same_sender_grooming_across_conversations() {
+    let mut s = Sim::new(child_uk());
+    s.send(
+        0,
+        dm(
+            "ти класно граєш, не схожа на інших дітей",
+            "cross_conv_groomer",
+            "game_dm_1",
+            "uk",
+        ),
+    );
+    s.send(
+        DAY,
+        dm(
+            "я тобі подарунок в грі куплю, тільки не кажи батькам",
+            "cross_conv_groomer",
+            "game_dm_1",
+            "uk",
+        ),
+    );
+    s.send(
+        2 * DAY,
+        dm(
+            "тут чат палиться, давай перейдем в телегу",
+            "cross_conv_groomer",
+            "side_dm_2",
+            "uk",
+        ),
+    );
+    s.send(
+        3 * DAY,
+        dm(
+            "скинь там фотку, просто щоб я знав що це ти",
+            "cross_conv_groomer",
+            "side_dm_2",
+            "uk",
+        ),
+    );
+
+    assert!(
+        s.any_threat_above(ThreatType::Grooming, 0.55),
+        "same sender should accumulate grooming context across conversation ids"
+    );
+}
+
+#[test]
+fn sim_102_repeated_parent_visible_coach_logistics_stays_clean() {
+    let mut s = Sim::new(child_uk());
+    s.send(
+        8 * HOUR,
+        dm(
+            "тренування завтра о 17:30, я написав у батьківський чат",
+            "safe_coach_context",
+            "coach_parent_loop",
+            "uk",
+        ),
+    );
+    s.send(
+        10 * HOUR,
+        dm(
+            "попроси маму підтвердити там же, щоб офіс бачив дозвіл",
+            "safe_coach_context",
+            "coach_parent_loop",
+            "uk",
+        ),
+    );
+    s.send(
+        32 * HOUR,
+        dm(
+            "фото довідки скиньте в загальну групу, не в приват",
+            "safe_coach_context",
+            "coach_parent_loop",
+            "uk",
+        ),
+    );
+    s.send(
+        34 * HOUR,
+        dm(
+            "після заняття всіх дітей забирають батьки біля входу",
+            "safe_coach_context",
+            "coach_parent_loop",
+            "uk",
+        ),
+    );
+
+    assert!(s.no_threat_above(ThreatType::Grooming, 0.40));
+    assert!(s.no_threat_above(ThreatType::Manipulation, 0.40));
+}

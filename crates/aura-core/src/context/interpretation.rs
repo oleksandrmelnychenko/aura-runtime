@@ -155,7 +155,7 @@ impl ContextInterpreter {
             }
 
             if let Some(multiplier) = self.signal_multiplier(&frame, &signal, &lower) {
-                signal.score *= multiplier;
+                signal.score = (signal.score * multiplier).clamp(0.0, 1.0);
                 signal.confidence = confidence_from_score(signal.score);
             }
 
@@ -192,11 +192,13 @@ impl ContextInterpreter {
         snapshot: Option<&ContactSnapshot>,
     ) -> ThreatContextFrame {
         let lower = text.unwrap_or_default().to_lowercase();
-        let is_support = looks_like_support_context(&lower);
-        let is_counter = looks_like_counter_context(&lower);
-        let is_quote = looks_like_quote_context(&lower);
-        let is_report = looks_like_report_context(&lower) || looks_like_opsec_warning(&lower);
-        let is_solicit = looks_like_distribution_or_coordination(&lower);
+        let cue_lower = normalize_context_cues(&lower);
+        let is_support = looks_like_support_context(&cue_lower);
+        let is_counter = looks_like_counter_context(&cue_lower);
+        let is_quote = looks_like_quote_context(&cue_lower);
+        let is_report =
+            looks_like_report_context(&cue_lower) || looks_like_opsec_warning(&cue_lower);
+        let is_solicit = looks_like_distribution_or_coordination(&cue_lower);
         let speech_act = if is_support {
             SpeechAct::Support
         } else if is_counter {
@@ -223,11 +225,11 @@ impl ContextInterpreter {
             Stance::Ambiguous
         };
 
-        let directionality = if is_self_referential_distress(&lower) {
+        let directionality = if is_self_referential_distress(&cue_lower) {
             Directionality::SelfReferential
-        } else if looks_like_third_party_reference(&lower) || is_quote || is_report {
+        } else if looks_like_third_party_reference(&cue_lower) || is_quote || is_report {
             Directionality::ThirdParty
-        } else if looks_like_directed_at_user(&lower) {
+        } else if looks_like_directed_at_user(&cue_lower) {
             Directionality::DirectedAtUser
         } else if input.conversation_type != ConversationType::Direct {
             Directionality::Broadcast
@@ -294,13 +296,13 @@ impl ContextInterpreter {
             && (matches!(
                 frame.speech_act,
                 SpeechAct::Support | SpeechAct::Counter | SpeechAct::Quote | SpeechAct::Report
-            ) || looks_like_opsec_warning(lower)
+            ) || looks_like_opsec_warning_context(lower)
                 || looks_like_trusted_logistics_context(frame, lower))
         {
             return true;
         }
 
-        if looks_like_opsec_warning(lower)
+        if looks_like_opsec_warning_context(lower)
             && matches!(
                 signal.threat_type,
                 ThreatType::CoordinateLeak | ThreatType::OpsecViolation
@@ -332,7 +334,6 @@ impl ContextInterpreter {
         }
 
         if matches!(frame.speech_act, SpeechAct::Support)
-            && frame.directionality == Directionality::ThirdParty
             && signal.reason_code == "conversation.timing.late_night_minor_contact"
         {
             return true;
@@ -346,6 +347,7 @@ impl ContextInterpreter {
                     | ThreatType::Psyops
                     | ThreatType::MilitarySocialEng
             )
+            && !looks_like_direct_military_social_eng_pretext(signal, lower)
         {
             return true;
         }
@@ -362,6 +364,7 @@ impl ContextInterpreter {
                     | ThreatType::CoordinateLeak
                     | ThreatType::OpsecViolation
             )
+            && !looks_like_direct_military_social_eng_pretext(signal, lower)
         {
             return true;
         }
@@ -480,7 +483,7 @@ impl ContextInterpreter {
         kind: &EventKind,
         lower: &str,
     ) -> bool {
-        if looks_like_opsec_warning(lower)
+        if looks_like_opsec_warning_context(lower)
             && matches!(
                 kind,
                 EventKind::CoordinateMention
@@ -796,6 +799,144 @@ fn contains_any(text: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| text.contains(needle))
 }
 
+fn contains_any_token(text: &str, tokens: &[&str]) -> bool {
+    tokens.iter().any(|token| contains_token(text, token))
+}
+
+fn contains_token(text: &str, token: &str) -> bool {
+    let mut search_from = 0;
+    while let Some(pos) = text[search_from..].find(token) {
+        let start = search_from + pos;
+        let end = start + token.len();
+        let before = text[..start].chars().next_back();
+        let after = text[end..].chars().next();
+
+        if before.is_none_or(is_token_boundary) && after.is_none_or(is_token_boundary) {
+            return true;
+        }
+
+        search_from = end;
+    }
+    false
+}
+
+fn is_token_boundary(c: char) -> bool {
+    !c.is_alphanumeric() && c != '_'
+}
+
+fn normalize_context_cues(lower: &str) -> String {
+    let chars: Vec<char> = lower.chars().map(fold_fullwidth_context_char).collect();
+    let mut result = String::with_capacity(lower.len());
+    let mut last_was_space = false;
+
+    for (idx, c) in chars.iter().enumerate() {
+        if is_zero_width_context_noise(*c) || is_context_combining_mark(*c) {
+            continue;
+        }
+        if is_contextual_interstitial(&chars, idx) {
+            continue;
+        }
+        if is_emoji_context_noise(*c) {
+            if !last_was_space {
+                result.push(' ');
+                last_was_space = true;
+            }
+            continue;
+        }
+
+        let normalized = match *c {
+            '0' => 'o',
+            '1' => 'i',
+            '3' => 'e',
+            '4' => 'a',
+            '5' => 's',
+            '7' => 't',
+            other => other,
+        };
+        result.push(normalized);
+        last_was_space = normalized.is_whitespace();
+    }
+
+    result.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn fold_fullwidth_context_char(c: char) -> char {
+    match c {
+        '\u{3000}' => ' ',
+        '\u{FF01}'..='\u{FF5E}' => char::from_u32(c as u32 - 0xFEE0).unwrap_or(c),
+        other => other,
+    }
+}
+
+fn is_contextual_interstitial(chars: &[char], idx: usize) -> bool {
+    if !matches!(
+        chars[idx],
+        '*' | '.'
+            | '-'
+            | '_'
+            | '~'
+            | '`'
+            | '|'
+            | '/'
+            | '\\'
+            | '#'
+            | '^'
+            | '&'
+            | '='
+            | ':'
+            | ';'
+            | '·'
+            | '•'
+            | '‧'
+            | '∙'
+            | '⋅'
+            | '˙'
+            | '⁄'
+            | '∕'
+    ) {
+        return false;
+    }
+
+    let prev_letter = idx > 0 && chars[idx - 1].is_alphabetic();
+    let next_letter = idx + 1 < chars.len() && chars[idx + 1].is_alphabetic();
+    prev_letter && next_letter
+}
+
+fn is_zero_width_context_noise(c: char) -> bool {
+    matches!(
+        c,
+        '\u{200B}'
+            | '\u{200C}'
+            | '\u{200D}'
+            | '\u{FEFF}'
+            | '\u{00AD}'
+            | '\u{200E}'
+            | '\u{200F}'
+            | '\u{2060}'
+            | '\u{2061}'
+            | '\u{2062}'
+            | '\u{2063}'
+            | '\u{2064}'
+            | '\u{034F}'
+    )
+}
+
+fn is_emoji_context_noise(c: char) -> bool {
+    let cp = c as u32;
+    (0x1F000..=0x1FAFF).contains(&cp)
+        || (0x2600..=0x27BF).contains(&cp)
+        || (0xFE00..=0xFE0F).contains(&cp)
+        || cp == 0x20E3
+}
+
+fn is_context_combining_mark(c: char) -> bool {
+    let cp = c as u32;
+    (0x0300..=0x036F).contains(&cp)
+        || (0x1AB0..=0x1AFF).contains(&cp)
+        || (0x1DC0..=0x1DFF).contains(&cp)
+        || (0xFE20..=0xFE2F).contains(&cp)
+}
+
 fn looks_like_quote_context(lower: &str) -> bool {
     contains_any(
         lower,
@@ -807,6 +948,19 @@ fn looks_like_quote_context(lower: &str) -> bool {
             "he wrote",
             "she wrote",
             "they wrote",
+            "he texted",
+            "she texted",
+            "they texted",
+            "he messaged",
+            "she messaged",
+            "they messaged",
+            "court read",
+            "defendant's text",
+            "defendants text",
+            "the text said",
+            "message read",
+            "message said",
+            "evidence that",
             "quoted",
             "quote:",
             "quoted:",
@@ -842,6 +996,10 @@ fn looks_like_report_context(lower: &str) -> bool {
             "im reporting",
             "reported this",
             "sending this to",
+            "forwarding this",
+            "forwarding it",
+            "forwarding the screenshot",
+            "i m forwarding",
             "for context",
             "for the report",
             "поскаржуся",
@@ -858,6 +1016,55 @@ fn looks_like_report_context(lower: &str) -> bool {
             "это переслали",
         ],
     )
+}
+
+fn looks_like_direct_military_social_eng_pretext(signal: &DetectionSignal, lower: &str) -> bool {
+    if signal.threat_type != ThreatType::MilitarySocialEng {
+        return false;
+    }
+    if !(signal.reason_code.contains("military.social_eng.")
+        || signal.reason_code.starts_with("pattern.intel_honeytrap_")
+        || signal.reason_code.starts_with("pattern.intel_probing_"))
+    {
+        return false;
+    }
+
+    let has_pretext_role = contains_any(
+        lower,
+        &[
+            "я з відділу комплектування",
+            "я журналіст",
+            "я кореспондент",
+            "я фельдшер",
+            "я медик",
+            "капелан",
+            "фонду ветеранів",
+            "районного штабу",
+            "volunteer fund",
+            "hq here",
+        ],
+    );
+    let has_sensitive_request = contains_any(
+        lower,
+        &[
+            "підтвердіть",
+            "підтв",
+            "поділіться",
+            "дайте",
+            "скажіть",
+            "скинь",
+            "позицію",
+            "координати",
+            "номер частини",
+            "ваше звання",
+            "unit id",
+            "current position",
+            "відсканьте qr",
+            "з паспортом",
+        ],
+    );
+
+    has_pretext_role && has_sensitive_request
 }
 
 fn looks_like_counter_context(lower: &str) -> bool {
@@ -891,10 +1098,21 @@ fn looks_like_counter_context(lower: &str) -> bool {
             "dont post coordinates",
             "don't share coordinates",
             "dont share coordinates",
+            "do not post coordinates",
+            "do not share coordinates",
+            "do not publish coordinates",
+            "dont publish coordinates",
             "не публікуй координати",
+            "не публікувати координати",
+            "не публікувати в чатах",
+            "не публікувти в чатах",
+            "не публікуйте координати",
             "не кидай координати",
             "не скидай координати",
+            "не постити координати",
             "не публикуй координаты",
+            "не публиковать координаты",
+            "не публикуйте координаты",
             "не кидай координаты",
             "не скидывай координаты",
         ],
@@ -1003,32 +1221,32 @@ fn looks_like_directed_at_user(lower: &str) -> bool {
 }
 
 fn looks_like_third_party_reference(lower: &str) -> bool {
-    contains_any(
+    contains_any_token(
         lower,
         &[
-            "he ",
-            "she ",
-            "they ",
+            "he",
+            "she",
+            "they",
             "my friend",
-            "his ",
-            "her ",
-            "their ",
-            "він ",
-            "вона ",
-            "вони ",
+            "his",
+            "her",
+            "their",
+            "він",
+            "вона",
+            "вони",
             "мій друг",
             "моя подруга",
-            "його ",
-            "її ",
-            "їх ",
-            "он ",
-            "она ",
-            "они ",
+            "його",
+            "її",
+            "їх",
+            "он",
+            "она",
+            "они",
             "мой друг",
             "моя подруга",
-            "его ",
-            "ее ",
-            "их ",
+            "его",
+            "ее",
+            "их",
         ],
     )
 }
@@ -1072,18 +1290,34 @@ fn looks_like_opsec_warning(lower: &str) -> bool {
             "dont post coordinates",
             "don't share coordinates",
             "dont share coordinates",
+            "do not post coordinates",
+            "do not share coordinates",
+            "do not publish coordinates",
+            "dont publish coordinates",
             "delete the coordinates",
             "remove the coordinates",
             "не пиши координати",
+            "не публікуй координати",
+            "не публікувати координати",
+            "не публікувати в чатах",
+            "не публікувти в чатах",
+            "не публікуйте координати",
             "не кидай координати",
             "не скидай координати",
+            "не постити координати",
             "видали координати",
             "не публикуй координаты",
+            "не публиковать координаты",
+            "не публикуйте координаты",
             "не кидай координаты",
             "не скидывай координаты",
             "удали координаты",
         ],
     )
+}
+
+fn looks_like_opsec_warning_context(lower: &str) -> bool {
+    looks_like_opsec_warning(lower) || looks_like_opsec_warning(&normalize_context_cues(lower))
 }
 
 fn looks_like_trusted_logistics_context(frame: &ThreatContextFrame, lower: &str) -> bool {
@@ -1510,6 +1744,60 @@ mod tests {
     }
 
     #[test]
+    fn ukrainian_opsec_warning_suppresses_coordinate_leak() {
+        let interpreter = ContextInterpreter::new();
+        let text = "Нагадую: не публікувати в чатах координати типу 48.5928 38.0061.";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::signal_with_event(
+                signal(
+                    ThreatType::CoordinateLeak,
+                    "pattern.opsec_coordinates_001",
+                    0.92,
+                ),
+                EventKind::CoordinateMention,
+                0.8,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert!(result.adjusted_signals.is_empty());
+        assert!(result.confirmed_events.is_empty());
+    }
+
+    #[test]
+    fn interstitial_ukrainian_opsec_warning_suppresses_coordinate_leak() {
+        let interpreter = ContextInterpreter::new();
+        let text = "Нагадую: не п·у·б·л·і·к·у·в·а·т·и в чатах координати типу 48.5928 38.0061.";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::signal_with_event(
+                signal(
+                    ThreatType::CoordinateLeak,
+                    "pattern.opsec_coordinates_001",
+                    0.92,
+                ),
+                EventKind::CoordinateMention,
+                0.8,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert!(result.adjusted_signals.is_empty());
+        assert!(result.confirmed_events.is_empty());
+    }
+
+    #[test]
     fn quote_context_suppresses_direct_threat() {
         let interpreter = ContextInterpreter::new();
         let text = r#"He said "I will kill you", and I'm reporting it."#;
@@ -1530,6 +1818,106 @@ mod tests {
 
         assert!(result.adjusted_signals.is_empty());
         assert!(result.confirmed_events.is_empty());
+    }
+
+    #[test]
+    fn punctuation_stripped_report_context_suppresses_direct_threat() {
+        let interpreter = ContextInterpreter::new();
+        let text = "He texted I will hurt you tomorrow I m forwarding the screenshot";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::signal_with_event(
+                signal(ThreatType::Threat, "pattern.threat_test", 0.90),
+                EventKind::PhysicalThreat,
+                0.8,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert!(result.adjusted_signals.is_empty());
+        assert!(result.confirmed_events.is_empty());
+        assert!(result
+            .diagnostic_reason_codes()
+            .iter()
+            .any(|code| code == "context.speech_act.quote"));
+    }
+
+    #[test]
+    fn fullwidth_quote_context_suppresses_direct_threat() {
+        let interpreter = ContextInterpreter::new();
+        let text = "Ｈｅ ｔｅｘｔｅｄ ＂Ｉ ｗｉｌｌ ｈｕｒｔ ｙｏｕ ｔｏｍｏｒｒｏｗ＂ － Ｉ＇ｍ ｆｏｒｗａｒｄｉｎｇ ｔｈｅ ｓｃｒｅｅｎｓｈｏｔ．";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::signal_with_event(
+                signal(ThreatType::Threat, "pattern.threat_test", 0.90),
+                EventKind::PhysicalThreat,
+                0.8,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert!(result.adjusted_signals.is_empty());
+        assert!(result.confirmed_events.is_empty());
+    }
+
+    #[test]
+    fn combining_mark_quote_context_suppresses_direct_threat() {
+        let interpreter = ContextInterpreter::new();
+        let text = "Cọúrt read tḥe defendánt's text 'Í wi̇ḷl k̇ill yoụ ṭomoṙroẇ' aloud.";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::signal_with_event(
+                signal(ThreatType::Threat, "pattern.threat_test", 0.90),
+                EventKind::PhysicalThreat,
+                0.8,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert!(result.adjusted_signals.is_empty());
+        assert!(result.confirmed_events.is_empty());
+    }
+
+    #[test]
+    fn leetspeak_quote_context_suppresses_direct_threat() {
+        let interpreter = ContextInterpreter::new();
+        let text = "C0ur7 r34d 7h3 d3f3nd4n7's 73x7 '1 w1ll k1ll y0u 70m0rr0w' aloud";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::signal_with_event(
+                signal(ThreatType::Threat, "pattern.threat_test", 0.90),
+                EventKind::PhysicalThreat,
+                0.8,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert!(result.adjusted_signals.is_empty());
+        assert!(result.confirmed_events.is_empty());
+        assert!(result
+            .diagnostic_reason_codes()
+            .iter()
+            .any(|code| code == "context.speech_act.quote"));
     }
 
     #[test]
@@ -1581,6 +1969,16 @@ mod tests {
 
         assert!(result.adjusted_signals.is_empty(), "{result:?}");
         assert!(result.confirmed_events.is_empty(), "{result:?}");
+    }
+
+    #[test]
+    fn third_party_reference_uses_token_boundaries() {
+        assert!(!looks_like_third_party_reference(
+            "you're the most incredible person"
+        ));
+        assert!(looks_like_third_party_reference(
+            "he asked me to send a photo"
+        ));
     }
 
     #[test]

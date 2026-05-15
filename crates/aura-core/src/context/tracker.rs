@@ -9,6 +9,8 @@ use crate::types::{Confidence, ConversationType, DetectionSignal, SignalFamily, 
 /// Current schema version for serialized tracker state.
 pub const TRACKER_STATE_VERSION: u32 = 3;
 
+const GROUP_PILE_ON_WINDOW_MS: u64 = 6 * 60 * 60 * 1000;
+
 use super::coercion::CoercionDetector;
 use super::contact::{ContactProfiler, ContactProfilerWireState, DEFAULT_MAX_CONTACT_PROFILES};
 use super::events::{ContextEvent, EventKind};
@@ -36,6 +38,13 @@ pub struct TrackerConfig {
     #[serde(default)]
     pub account_holder_age: Option<u16>,
 
+    /// Sender/account ID of the protected account holder.
+    ///
+    /// Events from this sender remain in conversation timelines but are not
+    /// treated as an external contact profile.
+    #[serde(default)]
+    pub protected_account_id: Option<String>,
+
     #[serde(default)]
     pub auto_cleanup_interval: u32,
 
@@ -56,6 +65,7 @@ impl Default for TrackerConfig {
             is_child_account: false,
             is_teen_account: false,
             account_holder_age: None,
+            protected_account_id: None,
             auto_cleanup_interval: 0,
             timezone_offset_minutes: 0,
         }
@@ -331,6 +341,7 @@ impl ConversationTracker {
     /// Replaces the tracker configuration and adjusts timelines and limits accordingly.
     pub fn update_config(&mut self, config: TrackerConfig) {
         self.config = config;
+        self.prune_protected_account_profile();
         let mode = if self.config.is_child_account || self.config.is_teen_account {
             AnalysisMode::Strict
         } else {
@@ -393,6 +404,10 @@ impl ConversationTracker {
             None => return signals,
         };
 
+        if self.is_protected_account_sender(sender_id) {
+            return signals;
+        }
+
         let coercion_signals = self
             .coercion_detector
             .analyze(timeline, sender_id, window_start);
@@ -414,16 +429,25 @@ impl ConversationTracker {
             .check_age_gap(sender_id, self.config.account_holder_age);
         signals.extend(age_gap_signals);
 
+        let child_safety_trajectory_signals = self.contact_profiler.check_child_safety_trajectory(
+            sender_id,
+            self.config.is_child_account || self.config.is_teen_account,
+            self.config.account_holder_age,
+        );
+        signals.extend(child_safety_trajectory_signals);
+
         let contact_signals = self.contact_profiler.check_anomalies(
             sender_id,
             self.config.is_child_account || self.config.is_teen_account,
         );
         signals.extend(contact_signals);
 
-        let shift_signals = self.contact_profiler.check_behavioral_shift(sender_id);
-        signals.extend(shift_signals);
+        if self.current_sender_event_supports_contact_shift(timeline, sender_id, now_ms) {
+            let shift_signals = self.contact_profiler.check_behavioral_shift(sender_id);
+            signals.extend(shift_signals);
+        }
         let inferred_event_signals =
-            self.infer_event_pattern_signals(timeline, sender_id, window_start);
+            self.infer_event_pattern_signals(timeline, sender_id, window_start, now_ms);
         signals.extend(inferred_event_signals);
         signals
     }
@@ -433,6 +457,7 @@ impl ConversationTracker {
         timeline: &ConversationTimeline,
         sender_id: &SenderId,
         window_start: u64,
+        now_ms: u64,
     ) -> Vec<DetectionSignal> {
         let mut signals = Vec::with_capacity(2);
 
@@ -453,10 +478,13 @@ impl ConversationTracker {
             ));
         }
 
-        let pile_on_hostile_count =
-            timeline.count_matching(window_start, |event| event.supports_bullying_inference());
-        let hostile_senders = timeline
-            .unique_senders_matching(window_start, |event| event.supports_bullying_inference());
+        let pile_on_window_start = window_start.max(now_ms.saturating_sub(GROUP_PILE_ON_WINDOW_MS));
+        let pile_on_hostile_count = timeline.count_matching(pile_on_window_start, |event| {
+            event.supports_bullying_inference()
+        });
+        let hostile_senders = timeline.unique_senders_matching(pile_on_window_start, |event| {
+            event.supports_bullying_inference()
+        });
         if hostile_senders.len() >= 2 && pile_on_hostile_count >= 3 {
             let score = (0.45 + hostile_senders.len() as f32 * 0.08).min(0.75);
             signals.push(DetectionSignal::context(
@@ -469,6 +497,22 @@ impl ConversationTracker {
             ));
         }
 
+        if let Some(signal) =
+            infer_coordinate_narrowing_progression(timeline, sender_id, window_start)
+        {
+            signals.push(signal);
+        }
+
+        if let Some(signal) =
+            infer_doxxing_aggregation_progression(timeline, sender_id, window_start)
+        {
+            signals.push(signal);
+        }
+
+        if let Some(signal) = infer_grooming_setup_progression(timeline, sender_id, window_start) {
+            signals.push(signal);
+        }
+
         signals
     }
 
@@ -479,7 +523,9 @@ impl ConversationTracker {
         let mut event = event;
         event.event_id = self.next_event_id;
         self.next_event_id += 1;
-        self.contact_profiler.record_event(&event);
+        if !self.is_protected_account_sender(&sender_id) {
+            self.contact_profiler.record_event(&event);
+        }
         let timeline = self
             .timelines
             .entry(conversation_id.clone())
@@ -594,6 +640,7 @@ impl ConversationTracker {
 
         self.contact_profiler
             .merge_import_wire_state(state.contact_profiler);
+        self.prune_protected_account_profile();
         Ok(())
     }
 
@@ -621,6 +668,341 @@ impl ConversationTracker {
             self.timelines.remove(&id);
         }
     }
+
+    fn is_protected_account_sender(&self, sender_id: &str) -> bool {
+        self.config
+            .protected_account_id
+            .as_deref()
+            .is_some_and(|protected_id| protected_id == sender_id)
+    }
+
+    fn prune_protected_account_profile(&mut self) {
+        if let Some(protected_id) = self.config.protected_account_id.as_deref() {
+            self.contact_profiler.remove_profile(protected_id);
+        }
+    }
+
+    fn current_sender_event_supports_contact_shift(
+        &self,
+        timeline: &ConversationTimeline,
+        sender_id: &str,
+        now_ms: u64,
+    ) -> bool {
+        timeline.all_events().iter().any(|event| {
+            event.sender_id == sender_id
+                && event.timestamp_ms == now_ms
+                && !matches!(
+                    event.kind,
+                    EventKind::NormalConversation
+                        | EventKind::TrustedContact
+                        | EventKind::DefenseOfVictim
+                )
+        })
+    }
+}
+
+fn infer_coordinate_narrowing_progression(
+    timeline: &ConversationTimeline,
+    sender_id: &SenderId,
+    window_start: u64,
+) -> Option<DetectionSignal> {
+    let mut crumb_count = 0usize;
+    let mut area = false;
+    let mut relative = false;
+    let mut site = false;
+    let mut current_position = false;
+
+    for event in timeline.events_since(window_start) {
+        if event.sender_id != *sender_id || event.kind != EventKind::CoordinateMention {
+            continue;
+        }
+        let Some(subtype) = event.subtype.as_deref() else {
+            continue;
+        };
+        if !subtype.starts_with("coordinate_crumb.") {
+            continue;
+        }
+
+        crumb_count += 1;
+        match subtype {
+            "coordinate_crumb.area" => area = true,
+            "coordinate_crumb.relative" => relative = true,
+            "coordinate_crumb.site" => site = true,
+            "coordinate_crumb.current_position" => {
+                site = true;
+                current_position = true;
+            }
+            _ => {}
+        }
+    }
+
+    let stage_count = [area, relative, site]
+        .into_iter()
+        .filter(|present| *present)
+        .count();
+    let has_progression =
+        (crumb_count >= 3 && stage_count >= 2) || (crumb_count >= 2 && current_position);
+    if !has_progression {
+        return None;
+    }
+
+    let mut score = 0.50 + crumb_count as f32 * 0.04 + stage_count as f32 * 0.05;
+    if current_position {
+        score += 0.06;
+    }
+    score = score.min(0.76);
+
+    Some(DetectionSignal::context(
+        ThreatType::CoordinateLeak,
+        score,
+        Confidence::Medium,
+        SignalFamily::Conversation,
+        "context.coordinate.narrowing_progression",
+        "Progressive location narrowing detected across recent military-context messages",
+    ))
+}
+
+#[derive(Default)]
+struct DoxxingCrumbStats {
+    count: usize,
+    senders: HashSet<SenderId>,
+    intent: bool,
+    name: bool,
+    address: bool,
+    city: bool,
+    school: bool,
+    phone: bool,
+    family: bool,
+    work: bool,
+}
+
+impl DoxxingCrumbStats {
+    fn record(&mut self, event: &ContextEvent, subtype: &str) {
+        self.count += 1;
+        self.senders.insert(event.sender_id.clone());
+        match subtype {
+            "doxxing_crumb.intent" => self.intent = true,
+            "doxxing_crumb.name" => self.name = true,
+            "doxxing_crumb.address" => self.address = true,
+            "doxxing_crumb.city" => self.city = true,
+            "doxxing_crumb.school" => self.school = true,
+            "doxxing_crumb.phone" => self.phone = true,
+            "doxxing_crumb.family" => self.family = true,
+            "doxxing_crumb.work" => self.work = true,
+            _ => {}
+        }
+    }
+
+    fn pii_type_count(&self) -> usize {
+        [
+            self.name,
+            self.address,
+            self.city,
+            self.school,
+            self.phone,
+            self.family,
+            self.work,
+        ]
+        .into_iter()
+        .filter(|present| *present)
+        .count()
+    }
+
+    fn has_location_or_contact_anchor(&self) -> bool {
+        self.address || self.phone
+    }
+}
+
+fn infer_doxxing_aggregation_progression(
+    timeline: &ConversationTimeline,
+    sender_id: &SenderId,
+    window_start: u64,
+) -> Option<DetectionSignal> {
+    let mut same_sender = DoxxingCrumbStats::default();
+    let mut conversation = DoxxingCrumbStats::default();
+
+    for event in timeline.events_since(window_start) {
+        if event.kind != EventKind::DoxxingAttempt {
+            continue;
+        }
+        let Some(subtype) = event.subtype.as_deref() else {
+            continue;
+        };
+        if !subtype.starts_with("doxxing_crumb.") {
+            continue;
+        }
+
+        conversation.record(event, subtype);
+        if event.sender_id == *sender_id {
+            same_sender.record(event, subtype);
+        }
+    }
+
+    let same_sender_types = same_sender.pii_type_count();
+    let conversation_types = conversation.pii_type_count();
+    let same_sender_progression = same_sender.count >= 3
+        && same_sender_types >= 3
+        && same_sender.has_location_or_contact_anchor();
+    let group_progression = conversation.count >= 5
+        && conversation_types >= 4
+        && conversation.has_location_or_contact_anchor()
+        && (conversation.intent || conversation.senders.len() >= 2);
+
+    let (stats, reason) = if same_sender_progression {
+        (&same_sender, "sender")
+    } else if group_progression {
+        (&conversation, "group")
+    } else {
+        return None;
+    };
+
+    let pii_type_count = stats.pii_type_count();
+    let mut score = 0.50 + stats.count as f32 * 0.03 + pii_type_count as f32 * 0.05;
+    if stats.intent {
+        score += 0.06;
+    }
+    if stats.address && stats.phone {
+        score += 0.05;
+    }
+    if stats.school || stats.family {
+        score += 0.04;
+    }
+    score = score.min(0.84);
+
+    Some(DetectionSignal::context(
+        ThreatType::Doxxing,
+        score,
+        if stats.intent && stats.address && stats.phone {
+            Confidence::High
+        } else {
+            Confidence::Medium
+        },
+        SignalFamily::Conversation,
+        "context.doxxing.aggregation_progression",
+        format!(
+            "Progressive doxxing aggregation detected across recent {reason} messages: {pii_type_count} PII categories"
+        ),
+    ))
+}
+
+fn infer_grooming_setup_progression(
+    timeline: &ConversationTimeline,
+    sender_id: &SenderId,
+    window_start: u64,
+) -> Option<DetectionSignal> {
+    let mut trust_building = false;
+    let mut secrecy_or_migration = false;
+    let mut personal_probing = false;
+    let mut media_or_sexual_pressure = false;
+    let mut meeting_pressure = false;
+    let mut manipulation_setup = false;
+    let mut grooming_event_count = 0usize;
+
+    for event in timeline.events_since(window_start) {
+        if event.sender_id != *sender_id {
+            continue;
+        }
+        if !event.supports_grooming_inference() {
+            continue;
+        }
+
+        match event.kind {
+            EventKind::Flattery
+            | EventKind::LoveBombing
+            | EventKind::GiftOffer
+            | EventKind::MoneyOffer
+            | EventKind::FinancialGrooming => {
+                trust_building = true;
+                grooming_event_count += 1;
+            }
+            EventKind::SecrecyRequest | EventKind::PlatformSwitch => {
+                secrecy_or_migration = true;
+                grooming_event_count += 1;
+            }
+            EventKind::PersonalInfoRequest | EventKind::LocationRequest => {
+                personal_probing = true;
+                grooming_event_count += 1;
+            }
+            EventKind::PhotoRequest
+            | EventKind::VideoCallRequest
+            | EventKind::SexualContent
+            | EventKind::AgeInappropriate => {
+                media_or_sexual_pressure = true;
+                grooming_event_count += 1;
+            }
+            EventKind::MeetingRequest => {
+                meeting_pressure = true;
+                grooming_event_count += 1;
+            }
+            EventKind::CasualMeetingRequest => {
+                trust_building = true;
+                grooming_event_count += 1;
+            }
+            EventKind::IdentityErosion
+            | EventKind::NetworkPoisoning
+            | EventKind::FakeVulnerability
+            | EventKind::FalseConsensus
+            | EventKind::DebtCreation => {
+                manipulation_setup = true;
+                grooming_event_count += 1;
+            }
+            _ => {}
+        }
+    }
+
+    let stage_count = [
+        trust_building,
+        secrecy_or_migration,
+        personal_probing,
+        media_or_sexual_pressure,
+        meeting_pressure,
+        manipulation_setup,
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+    let high_risk_stage_count = [
+        secrecy_or_migration,
+        personal_probing,
+        media_or_sexual_pressure,
+        meeting_pressure,
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+
+    let has_progression = high_risk_stage_count >= 2
+        || (stage_count >= 3 && high_risk_stage_count >= 1 && grooming_event_count >= 3);
+    if !has_progression {
+        return None;
+    }
+
+    let mut score = 0.42 + stage_count as f32 * 0.07 + high_risk_stage_count as f32 * 0.06;
+    if media_or_sexual_pressure {
+        score += 0.06;
+    }
+    if meeting_pressure {
+        score += 0.08;
+    }
+    if grooming_event_count >= 4 {
+        score += 0.04;
+    }
+    score = score.min(0.82);
+
+    Some(DetectionSignal::context(
+        ThreatType::Grooming,
+        score,
+        if high_risk_stage_count >= 3 {
+            Confidence::High
+        } else {
+            Confidence::Medium
+        },
+        SignalFamily::Conversation,
+        "context.grooming.setup_progression",
+        format!(
+            "Distinct grooming setup stages detected from sender: {stage_count} stages, {high_risk_stage_count} high-risk stages"
+        ),
+    ))
 }
 
 #[cfg(test)]
@@ -678,6 +1060,238 @@ mod tests {
 
         let timeline = tracker.timeline("conv_1").unwrap();
         assert_eq!(timeline.len(), 3);
+    }
+
+    #[test]
+    fn protected_account_sender_is_not_profiled_or_flagged_as_contact() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            account_holder_age: Some(13),
+            protected_account_id: Some("child_13".to_string()),
+            ..Default::default()
+        });
+
+        let mut last_signals = Vec::new();
+        for (idx, kind) in [
+            EventKind::Flattery,
+            EventKind::GiftOffer,
+            EventKind::SecrecyRequest,
+            EventKind::PlatformSwitch,
+            EventKind::PhotoRequest,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            last_signals = tracker.record_event(make_event(
+                &format!("conv_{idx}"),
+                "child_13",
+                kind,
+                idx as u64 * 1_000,
+            ));
+        }
+
+        assert!(tracker.timeline("conv_0").is_some());
+        assert!(tracker.contact_profiler().profile("child_13").is_none());
+        assert!(
+            last_signals
+                .iter()
+                .all(|signal| !signal.reason_code.starts_with("conversation.contact.")),
+            "protected account must not emit contact-risk signals, got {last_signals:?}"
+        );
+    }
+
+    #[test]
+    fn external_sender_still_gets_multi_conversation_contact_risk() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            account_holder_age: Some(13),
+            protected_account_id: Some("child_13".to_string()),
+            ..Default::default()
+        });
+
+        let mut last_signals = Vec::new();
+        for (idx, kind) in [
+            EventKind::Flattery,
+            EventKind::GiftOffer,
+            EventKind::SecrecyRequest,
+            EventKind::PlatformSwitch,
+            EventKind::PhotoRequest,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            last_signals = tracker.record_event(make_event(
+                &format!("conv_{idx}"),
+                "older_contact",
+                kind,
+                idx as u64 * 1_000,
+            ));
+        }
+
+        assert!(tracker
+            .contact_profiler()
+            .profile("older_contact")
+            .is_some());
+        assert!(
+            last_signals.iter().any(|signal| {
+                signal.reason_code == "conversation.contact.multi_conversation_predator_pattern"
+            }),
+            "external sender should still emit multi-conversation contact risk, got {last_signals:?}"
+        );
+    }
+
+    #[test]
+    fn stale_group_pile_on_does_not_mark_later_clean_messages() {
+        let day_ms = 24 * 60 * 60 * 1000u64;
+        let minute_ms = 60 * 1000u64;
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            analysis_window_ms: 220 * day_ms,
+            ..Default::default()
+        });
+
+        tracker.record_event(make_event("class", "bully_1", EventKind::Insult, 0));
+        tracker.record_event(make_event(
+            "class",
+            "bully_2",
+            EventKind::Denigration,
+            minute_ms,
+        ));
+        let active_pile_on = tracker.record_event(make_event(
+            "class",
+            "bully_3",
+            EventKind::Mockery,
+            2 * minute_ms,
+        ));
+        assert!(
+            active_pile_on
+                .iter()
+                .any(|signal| signal.reason_code == "context.group_bullying.pile_on"),
+            "fresh hostile burst should emit pile-on signal, got {active_pile_on:?}"
+        );
+
+        let later_clean = tracker.record_event(make_event(
+            "class",
+            "neutral_peer",
+            EventKind::NormalConversation,
+            2 * day_ms,
+        ));
+        assert!(
+            !later_clean
+                .iter()
+                .any(|signal| signal.reason_code == "context.group_bullying.pile_on"),
+            "stale hostile burst should not mark later clean messages, got {later_clean:?}"
+        );
+    }
+
+    #[test]
+    fn import_prunes_protected_account_contact_profile() {
+        let mut old_tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            account_holder_age: Some(13),
+            ..Default::default()
+        });
+        old_tracker.record_event(make_event("conv_1", "child_13", EventKind::Flattery, 1_000));
+        assert!(old_tracker.contact_profiler().profile("child_13").is_some());
+
+        let state = old_tracker.export_wire_state();
+        let mut restored = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            account_holder_age: Some(13),
+            protected_account_id: Some("child_13".to_string()),
+            ..Default::default()
+        });
+        restored.import_wire_state(state).unwrap();
+
+        assert!(restored.timeline("conv_1").is_some());
+        assert!(restored.contact_profiler().profile("child_13").is_none());
+    }
+
+    #[test]
+    fn coordinate_crumb_progression_emits_context_signal() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+
+        let mut area = make_event("conv_1", "soldier", EventKind::CoordinateMention, 0);
+        area.subtype = Some("coordinate_crumb.area".to_string());
+        tracker.record_event(area);
+
+        let mut relative = make_event("conv_1", "soldier", EventKind::CoordinateMention, 30_000);
+        relative.subtype = Some("coordinate_crumb.relative".to_string());
+        tracker.record_event(relative);
+
+        let mut current = make_event("conv_1", "soldier", EventKind::CoordinateMention, 60_000);
+        current.subtype = Some("coordinate_crumb.current_position".to_string());
+        let signals = tracker.record_event(current);
+
+        assert!(
+            signals.iter().any(|signal| {
+                signal.threat_type == ThreatType::CoordinateLeak
+                    && signal.reason_code == "context.coordinate.narrowing_progression"
+                    && signal.score >= 0.55
+            }),
+            "expected coordinate narrowing context signal, got {signals:?}"
+        );
+    }
+
+    #[test]
+    fn doxxing_crumb_progression_emits_context_signal_for_split_pii() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+
+        let mut name = make_event("conv_1", "attacker", EventKind::DoxxingAttempt, 0);
+        name.subtype = Some("doxxing_crumb.name".to_string());
+        tracker.record_event(name);
+
+        let mut address = make_event("conv_1", "attacker", EventKind::DoxxingAttempt, 5_000);
+        address.subtype = Some("doxxing_crumb.address".to_string());
+        tracker.record_event(address);
+
+        let mut city = make_event("conv_1", "attacker", EventKind::DoxxingAttempt, 10_000);
+        city.subtype = Some("doxxing_crumb.city".to_string());
+        let signals = tracker.record_event(city);
+
+        assert!(
+            signals.iter().any(|signal| {
+                signal.threat_type == ThreatType::Doxxing
+                    && signal.reason_code == "context.doxxing.aggregation_progression"
+                    && signal.score >= 0.55
+            }),
+            "expected doxxing aggregation context signal, got {signals:?}"
+        );
+    }
+
+    #[test]
+    fn doxxing_crumb_progression_emits_context_signal_for_group_pileup() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+
+        for (idx, (sender, subtype)) in [
+            ("a", "doxxing_crumb.intent"),
+            ("b", "doxxing_crumb.school"),
+            ("c", "doxxing_crumb.name"),
+            ("d", "doxxing_crumb.family"),
+            ("a", "doxxing_crumb.address"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut event = make_event(
+                "conv_1",
+                sender,
+                EventKind::DoxxingAttempt,
+                idx as u64 * 5_000,
+            );
+            event.subtype = Some(subtype.to_string());
+            let signals = tracker.record_event(event);
+            if idx == 4 {
+                assert!(
+                    signals.iter().any(|signal| {
+                        signal.threat_type == ThreatType::Doxxing
+                            && signal.reason_code == "context.doxxing.aggregation_progression"
+                            && signal.score >= 0.55
+                    }),
+                    "expected group doxxing aggregation context signal, got {signals:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -963,6 +1577,61 @@ mod tests {
     }
 
     #[test]
+    fn behavioral_shift_does_not_classify_clean_current_message() {
+        let week_ms = 7 * 24 * 60 * 60 * 1000u64;
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            ..Default::default()
+        });
+
+        for week in 0..3 {
+            for msg in 0..10 {
+                let kind = if msg < 6 {
+                    EventKind::NormalConversation
+                } else {
+                    EventKind::DefenseOfVictim
+                };
+                tracker.record_event(make_event(
+                    "conv_shift",
+                    "peer",
+                    kind,
+                    week * week_ms + msg * 1000,
+                ));
+            }
+        }
+
+        for week in 3..5 {
+            for msg in 0..10 {
+                let kind = if msg < 6 {
+                    EventKind::NormalConversation
+                } else {
+                    EventKind::Insult
+                };
+                tracker.record_event(make_event(
+                    "conv_shift",
+                    "peer",
+                    kind,
+                    week * week_ms + msg * 1000,
+                ));
+            }
+        }
+
+        let clean_signals = tracker.record_event(make_event(
+            "conv_shift",
+            "peer",
+            EventKind::NormalConversation,
+            5 * week_ms + 1_000,
+        ));
+
+        assert!(
+            clean_signals.iter().all(|signal| !signal
+                .reason_code
+                .starts_with("conversation.contact.behavior_")),
+            "clean current message should not emit behavioral shift signal, got {clean_signals:?}"
+        );
+    }
+
+    #[test]
     fn eviction_removes_oldest_conversation() {
         let mut tracker = ConversationTracker::new(TrackerConfig {
             max_conversations: 3,
@@ -1191,6 +1860,73 @@ mod tests {
                 .iter()
                 .any(|signal| signal.reason_code.starts_with("abuse.raid.")),
             "Third-party reported hostility should not trigger raid patterns"
+        );
+    }
+
+    #[test]
+    fn distinct_grooming_setup_stages_emit_progression_signal() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            ..Default::default()
+        });
+
+        tracker.record_event(make_event("conv_1", "stranger", EventKind::Flattery, 1_000));
+        tracker.record_event(make_event(
+            "conv_1",
+            "stranger",
+            EventKind::SecrecyRequest,
+            2_000,
+        ));
+        let signals = tracker.record_event(make_event(
+            "conv_1",
+            "stranger",
+            EventKind::PhotoRequest,
+            3_000,
+        ));
+
+        assert!(
+            signals
+                .iter()
+                .any(|signal| signal.reason_code == "context.grooming.setup_progression"),
+            "Distinct grooming setup stages should emit progression signal: {signals:?}"
+        );
+    }
+
+    #[test]
+    fn reported_grooming_setup_does_not_emit_progression_or_sender_risk() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            is_child_account: true,
+            ..Default::default()
+        });
+
+        let mut events = Vec::new();
+        for (idx, kind) in [
+            EventKind::SecrecyRequest,
+            EventKind::PhotoRequest,
+            EventKind::MeetingRequest,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut event = make_event("conv_1", "reporter", kind, 1_000 + idx as u64 * 1_000);
+            event.context.speech_act = crate::context::events::EventSpeechAct::Report;
+            event.context.directionality = crate::context::events::EventDirectionality::ThirdParty;
+            event.context.confidence = 0.8;
+            events.push(event);
+        }
+
+        let signals = tracker.record_events(events);
+
+        assert!(
+            !signals
+                .iter()
+                .any(|signal| signal.reason_code == "context.grooming.setup_progression"),
+            "Reported third-party grooming should not emit sender progression: {signals:?}"
+        );
+        let profile = tracker.contact_profiler().profile("reporter").unwrap();
+        assert_eq!(
+            profile.grooming_event_count, 0,
+            "Reported third-party grooming should not count against the reporter"
         );
     }
 

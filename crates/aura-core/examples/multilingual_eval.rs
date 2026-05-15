@@ -1,13 +1,10 @@
-use aura_core::{canonical_multilingual_scenarios, run_scenario_case, summarize_scenario_runs};
+use aura_core::{canonical_multilingual_scenarios, run_scenario_cases, summarize_scenario_runs};
 use aura_patterns::PatternDatabase;
 
 fn main() {
     let db = PatternDatabase::default_mvp();
     let pack = canonical_multilingual_scenarios();
-    let runs: Vec<_> = pack
-        .iter()
-        .map(|case| run_scenario_case(&db, case))
-        .collect();
+    let runs = run_scenario_cases(&db, pack.iter()).runs;
     let summary = summarize_scenario_runs(&runs, 6);
 
     println!("AURA multilingual scenario evaluation");

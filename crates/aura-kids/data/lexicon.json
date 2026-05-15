@@ -26,7 +26,14 @@
           "keep this btwn us",
           "нікому не кажи",
           "це наш секрет",
-          "не кажи батькам"
+          "наш маленький секрет",
+          "не кажи батькам",
+          "батькам не кажи",
+          "не розказуй батькам",
+          "не розповідай батькам",
+          "не кажи мамі",
+          "мамі не кажи",
+          "не розказуй мамі"
         ],
         [
           "send me a photo",
@@ -56,7 +63,112 @@
         "keep this between us",
         "нікому не кажи",
         "це наш секрет",
-        "не кажи батькам"
+        "наш маленький секрет",
+        "не кажи батькам",
+        "батькам не кажи",
+        "не розказуй батькам",
+        "не розповідай батькам",
+        "не кажи мамі",
+        "мамі не кажи",
+        "не розказуй мамі"
+      ]
+    },
+    {
+      "threat_key": "grooming_parent_deception",
+      "reason_code": "kids.grooming.parent_deception",
+      "score": 0.82,
+      "threat_type": "grooming",
+      "severity": "high",
+      "priority": 88,
+      "all_of": [],
+      "any_of": [
+        "якщо батьки питають кажи що я однокласник",
+        "якщо батьки питають, кажи що я однокласник",
+        "скажи батькам що я однокласник",
+        "скажи мамі що я однокласник",
+        "кажи що я твій однокласник",
+        "кажи що я твоя однокласниця",
+        "tell your parents i am your classmate",
+        "tell your mom i am from school"
+      ]
+    },
+    {
+      "threat_key": "grooming_age_flattery_minor",
+      "reason_code": "kids.grooming.age_flattery_minor",
+      "score": 0.78,
+      "threat_type": "grooming",
+      "severity": "medium",
+      "priority": 84,
+      "all_of": [],
+      "any_of": [
+        "ти дуже доросла для 13",
+        "ти дуже дорослий для 13",
+        "ти доросла для 13",
+        "ти дорослий для 13",
+        "ти виглядаєш старшою",
+        "ти виглядаєш старшим",
+        "з тобою можна говорити як з рівною",
+        "з тобою можна говорити як з рівним",
+        "you are mature for 13",
+        "you seem older than 13"
+      ]
+    },
+    {
+      "threat_key": "grooming_gaming_gift_secrecy",
+      "reason_code": "kids.grooming.gaming_gift_secrecy",
+      "score": 0.8,
+      "threat_type": "grooming",
+      "severity": "medium",
+      "priority": 86,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "подарувати тобі скін",
+          "подарую тобі скін",
+          "куплю тобі скін",
+          "рідкісний скін",
+          "free skin",
+          "rare skin",
+          "gift you a skin"
+        ],
+        [
+          "не роби з цього шум",
+          "не роби шум",
+          "нікому не кажи",
+          "це наш секрет",
+          "keep it quiet",
+          "dont tell anyone"
+        ]
+      ]
+    },
+    {
+      "threat_key": "grooming_platform_privacy_switch",
+      "reason_code": "kids.grooming.platform_privacy_switch",
+      "score": 0.82,
+      "threat_type": "grooming",
+      "severity": "high",
+      "priority": 90,
+      "all_of": [],
+      "any_of": [],
+      "any_groups": [
+        [
+          "перейдемо в інший додаток",
+          "перейдем в інший додаток",
+          "переходимо в інший додаток",
+          "перейдемо в приватний чат",
+          "інший додаток",
+          "another app",
+          "private app"
+        ],
+        [
+          "батьки можуть побачити",
+          "мама може побачити",
+          "тут можуть побачити повідомлення",
+          "тут не приватно",
+          "parents can see",
+          "not private here"
+        ]
       ]
     },
     {
@@ -74,7 +186,10 @@
           "you can trust only me",
           "your friends are fake",
           "only i understand you",
+          "ти можеш довіряти тільки мені",
+          "можеш довіряти тільки мені",
           "довіряй тільки мені",
+          "інші тебе не розуміють",
           "твої друзі фейкові",
           "лише я тебе розумію"
         ],
@@ -85,6 +200,24 @@
           "не спілкуйся з ними",
           "перестань писати друзям"
         ]
+      ]
+    },
+    {
+      "threat_key": "grooming_dependency_claim",
+      "reason_code": "kids.grooming.dependency_claim",
+      "score": 0.82,
+      "threat_type": "manipulation",
+      "severity": "high",
+      "priority": 88,
+      "all_of": [],
+      "any_of": [
+        "ти можеш довіряти тільки мені",
+        "можеш довіряти тільки мені",
+        "довіряти тільки мені",
+        "інші тебе не розуміють",
+        "лише я тебе розумію",
+        "you can only trust me",
+        "only i understand you"
       ]
     },
     {

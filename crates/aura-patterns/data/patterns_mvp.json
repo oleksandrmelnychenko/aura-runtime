@@ -390,6 +390,9 @@
         "type": "keyword",
         "words": [
           "you're so mature for your age",
+          "you seem way more mature than other kids your age",
+          "you seem so mature for your age",
+          "you seem mature for your age",
           "ur so mature for ur age",
           "you're not like other kids",
           "you're special to me",
@@ -416,6 +419,8 @@
         "words": [
           "ти така доросла для свого віку",
           "ти такий дорослий для свого віку",
+          "ти дуже доросла для свого віку",
+          "ти дуже дорослий для свого віку",
           "ти для свого віку дуже розумна",
           "ти для свого віку дуже розумний",
           "ти для свого віку дуже красива",
@@ -444,6 +449,9 @@
           "send me a photo of you",
           "show me what you look like",
           "take a selfie for me",
+          "send a selfie there so i know its really you",
+          "send a selfie there so i know it's really you",
+          "send a selfie there",
           "i want to see you",
           "send a pic",
           "can i see a photo of you",
@@ -468,6 +476,8 @@
           "надішли мені своє фото",
           "покажи як ти виглядаєш",
           "зроби селфі для мене",
+          "скинь селфі там щоб я знав що це точно ти",
+          "скинь селфі там",
           "я хочу тебе побачити",
           "скинь фотку",
           "можна побачити твоє фото",
@@ -494,9 +504,11 @@
           "let's move to telegram",
           "let's switch to telegram",
           "switch to telegram",
+          "move this to telegram",
           "keep talking there privately",
           "message me on whatsapp",
           "this app isn't private enough",
+          "this chat logs everything",
           "let's talk somewhere more private",
           "do you have discord",
           "text me instead",
@@ -519,6 +531,9 @@
           "давай спілкуватись в телеграмі",
           "додай мене в інстаграм",
           "давай перейдемо в вайбер",
+          "давай перейдем в телегу",
+          "давай перейдемо в телегу",
+          "тут усі все бачать",
           "тут не приватно",
           "давай в іншому месенджері",
           "в тебе є дискорд",
@@ -639,6 +654,10 @@
           "nobody would notice if i wasn't here",
           "no one would notice if i wasnt here",
           "i want to die",
+          "i dont want to live anymore",
+          "i don't want to live anymore",
+          "i dont see a reason to wake up tomorrow",
+          "i don't see a reason to wake up tomorrow",
           "can't go on anymore",
           "i want to disappear",
           "i wish i was never born",
@@ -689,6 +708,9 @@
           "нікому до мене немає діла",
           "нікому до мене нема діла",
           "не хочу більше жити",
+          "я більше не хочу жити",
+          "не бачу сенсу прокидатися завтра",
+          "не бачу сенсу прокидатись завтра",
           "всім буде краще без мене",
           "хочу зникнути",
           "краще б я не народився",
@@ -738,6 +760,8 @@
           "нет смысла жить",
           "лучше бы меня не было",
           "не хочу больше жить",
+          "я больше не хочу жить",
+          "не вижу смысла просыпаться завтра",
           "всем будет лучше без меня",
           "хочу исчезнуть",
           "я режу себя",
@@ -765,8 +789,11 @@
           "you're so ugly",
           "you should die",
           "no one wants you",
+          "nobody wants you",
+          "nobody wants you here",
           "you're a loser",
-          "you're pathetic"
+          "you're pathetic",
+          "you are pathetic"
         ]
       },
       "score": 0.8,
@@ -790,6 +817,9 @@
           "you're embarrassing",
           "you should be ashamed",
           "everyone laughs at you",
+          "everyone is laughing at your video",
+          "everyone is laughing at you",
+          "the whole school will laugh at you",
           "you're a waste of space"
         ]
       },
@@ -823,6 +853,22 @@
       "explanation": "Social exclusion / isolation tactics detected"
     },
     {
+      "id": "bullying_en_media_humiliation_001",
+      "threat_type": "bullying",
+      "kind": {
+        "type": "keyword",
+        "words": [
+          "everyone is laughing at your video",
+          "the whole school will laugh at you"
+        ]
+      },
+      "score": 0.7,
+      "languages": [
+        "en"
+      ],
+      "explanation": "Public media humiliation detected"
+    },
+    {
       "id": "bullying_uk_001",
       "threat_type": "bullying",
       "kind": {
@@ -842,7 +888,10 @@
           "ей лох",
           "ти ще живий",
           "вали з нашого класу",
-          "ніхто тебе тут не хоче"
+          "ніхто тебе тут не хоче",
+          "всі сміються з твого відео",
+          "завтра вся школа буде з тебе ржати",
+          "завтра вся школа буде з тебе сміятися"
         ]
       },
       "score": 0.8,
@@ -913,7 +962,10 @@
           "ты такой уродливый",
           "тебя никто не хочет",
           "ты лузер",
-          "ты ничтожество"
+          "ты ничтожество",
+          "никто не хочет тебя тут видеть",
+          "все смеются с твоего видео",
+          "завтра вся школа будет над тобой смеяться"
         ]
       },
       "score": 0.8,
@@ -1049,6 +1101,9 @@
           "prove it and tell me where you are",
           "tell me where you are right now",
           "send your password now",
+          "send your password for a minute",
+          "send your password for a minute dont be dramatic",
+          "send your password for a minute don't be dramatic",
           "share your password if you trust me",
           "send me a private photo, i promise it stays between us",
           "send me a private photo i promise it stays between us",
@@ -1078,6 +1133,8 @@
           "ти такий боягуз",
           "доведи що не боїшся",
           "я тебе на слабо",
+          "скинь пароль на хвилину",
+          "скинь пароль на хвилину не драматизуй",
           "чого ти боїшся",
           "не будь такою боягузкою",
           "всі нормальні діти це роблять",
@@ -1150,8 +1207,12 @@
           "i'll show everyone your photos",
           "i'll tell everyone your secret",
           "if you don't do this i'll",
+          "if you dont do what i say",
+          "if you don't do what i say",
           "i have your photos",
           "i'll share this with everyone",
+          "if you dont do what i say ill show everyone screenshots",
+          "if you don't do what i say i'll show everyone screenshots",
           "i'll ruin your reputation",
           "i recorded our conversation",
           "i have screenshots",
@@ -1180,6 +1241,8 @@
           "якщо ти не зробиш це я",
           "в мене є твої фото",
           "я покажу це всім",
+          "якщо не зробиш як я кажу я покажу всім скріни",
+          "якщо не зробиш як я кажу я покажу всім скрини",
           "я зруйную твою репутацію",
           "я записав нашу розмову",
           "в мене є скріншоти",
@@ -1249,7 +1312,7 @@
       "threat_type": "phishing",
       "kind": {
         "type": "regex",
-        "pattern": "https?://[\\w.-]*(?:free-?gift|claim-?prize|verify-?account|secure-?login|update-?password|confirm-?identity|account-?suspended|urgent-?action)[\\w./-]*"
+        "pattern": "https?://[\\w.-]*(?:free-?gift|claim-?prize|verify-?account|verify-?login|secure-?login|update-?password|confirm-?identity|account-?suspended|urgent-?action)[\\w./-]*"
       },
       "score": 0.8,
       "languages": [],
@@ -4142,6 +4205,7 @@
           "you're the one who started this",
           "this is your fault not mine",
           "you made me do this",
+          "this will be your fault because you made me do it",
           "you're the abusive one",
           "i'm the victim here",
           "you're the bully not me",
@@ -4166,6 +4230,8 @@
           "це твоя вина а не моя",
           "ти мене змусила так зробити",
           "ти мене змусив так зробити",
+          "це буде твоя провина ти сама мене змусила",
+          "це буде твоя провина ти сам мене змусив",
           "це ти агресорка а не я",
           "це ти агресор а не я",
           "я тут жертва а не ти",
@@ -4285,6 +4351,25 @@
         "uk"
       ],
       "explanation": "Дитина ділиться своєю адресою (PII self-disclosure)"
+    },
+    {
+      "id": "pii_home_alone_self_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "keyword",
+        "words": [
+          "im home alone until",
+          "i'm home alone until",
+          "home alone until",
+          "я сама вдома до",
+          "я сам вдома до",
+          "я одна дома до",
+          "я один дома до"
+        ]
+      },
+      "score": 0.6,
+      "languages": [],
+      "explanation": "Child disclosing they are home alone until a specific time"
     },
     {
       "id": "pii_school_self_en",
@@ -4825,6 +4910,7 @@
         "words": [
           "ти не як інші діти",
           "ти така доросла для свого віку",
+          "ти дуже доросла для свого віку",
           "тобі не потрібні ці друзі",
           "твої батьки тебе не розуміють",
           "ти занадто розумна для своїх ровесників",
@@ -4846,6 +4932,8 @@
         "words": [
           "ты не как другие дети",
           "ты такая взрослая для своего возраста",
+          "ты очень взрослая для своего возраста",
+          "ты очень взрослая для свого возраста",
           "тебе не нужны эти друзья",
           "твои родители тебя не понимают",
           "только я тебя реально понимаю"
@@ -4994,6 +5082,8 @@
           "got discord",
           "lets talk on telegram",
           "delete this chat",
+          "delete this thread after",
+          "delete this thread after nobody needs to see us talking",
           "this app is trash lets go"
         ]
       },
@@ -5018,6 +5108,7 @@
           "давай в телегу",
           "тут палево",
           "видали чат",
+          "видали цей чат після",
           "го в дс"
         ]
       },
@@ -5040,7 +5131,8 @@
           "го в инст",
           "давай в телегу",
           "тут палево",
-          "удали чат"
+          "удали чат",
+          "удали этот чат после"
         ]
       },
       "score": 0.6,
@@ -5058,6 +5150,9 @@
           "ill get u vbucks",
           "free robux",
           "want free skins",
+          "i can buy you a game skin",
+          "i can buy you skins",
+          "i can get you a game skin",
           "ill boost ur account",
           "i can get u followers"
         ]
@@ -5076,6 +5171,9 @@
         "words": [
           "я тобі робакси куплю",
           "хочеш безкоштовні скіни",
+          "я можу купити тобі скін",
+          "я можу купити тобі скіни",
+          "куплю тобі скін",
           "я можу накрутити підписників",
           "хочеш вібакси"
         ]
@@ -5094,6 +5192,9 @@
         "words": [
           "я тебе робуксы куплю",
           "хочешь бесплатные скины",
+          "я могу купить тебе скин",
+          "я могу купить тебе скины",
+          "куплю тебе скин",
           "могу накрутить подписчиков"
         ]
       },
@@ -5423,11 +5524,11 @@
       "threat_type": "opsec_violation",
       "kind": {
         "type": "regex",
-        "pattern": "\\b\\d{2}[.,]\\d{4,6}[,;\\s]+\\d{2}[.,]\\d{4,6}\\b"
+        "pattern": "(?i)(?:наш(?:а|е|і)\\s+позиці|позиці(?:я|ю|ї)|координат|coord(?:inate)?s?|grid\\s+ref|ціль[:\\s]|lat\\s*[:=]|lon\\s*[:=]|карт(?:а|и|ах)|maps?\\?q=|google\\s+maps|geolocat|geo[:=]|ми\\s+(?:тут|на)\\s+|зустрічаємось\\s+тут|knock\\s+(?:on|at)|holding\\s+(?:point|position)|hold\\s+this\\s+point|operating\\s+at)[\\s\\S]{0,80}?\\b\\d{2}[.,]\\d{4,6}[,;\\s]+\\d{2}[.,]\\d{4,6}\\b"
       },
       "score": 0.9,
       "languages": [],
-      "explanation": "Виявлено географічні координати (DD.DDDDDD формат)"
+      "explanation": "Виявлено географічні координати (DD.DDDDDD формат) у контексті позиції"
     },
     {
       "id": "opsec_coordinates_002",
@@ -6393,7 +6494,7 @@
       "threat_type": "coordinate_leak",
       "kind": {
         "type": "regex",
-        "pattern": "(?:what3words\\.com/|w3w\\.co/|///)[a-zA-Zа-яіїєґА-ЯІЇЄҐ]+\\.[a-zA-Zа-яіїєґА-ЯІЇЄҐ]+\\.[a-zA-Zа-яіїєґА-ЯІЇЄҐ]+"
+        "pattern": "(?:what3words\\.com/|w3w\\.co/|///)[a-zA-Zа-яіїєґА-ЯІЇЄҐ·•‧∙⋅˙]+\\.[a-zA-Zа-яіїєґА-ЯІЇЄҐ·•‧∙⋅˙]+\\.[a-zA-Zа-яіїєґА-ЯІЇЄҐ·•‧∙⋅˙]+"
       },
       "score": 0.9,
       "languages": [],
@@ -6499,7 +6600,11 @@
         "words": [
           "двохсотий",
           "трьохсотий",
-          "втрати",
+          "наші втрати",
+          "наших втрати",
+          "у нас втрати",
+          "наші 200-х",
+          "наші 300-х",
           "скільки наших загинуло",
           "некомплект",
           "людей не вистачає",
@@ -6523,7 +6628,10 @@
         "words": [
           "двухсотый",
           "трёхсотый",
-          "потери",
+          "наши потери",
+          "у нас потери",
+          "наши 200-х",
+          "наши 300-х",
           "сколько наших погибло",
           "некомплект",
           "людей не хватает",
@@ -6600,6 +6708,83 @@
         "ru"
       ],
       "explanation": "Обнаружена утечка позывных (OPSEC)"
+    },
+    {
+      "id": "opsec_callsign_height_resilient_001",
+      "threat_type": "opsec_violation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)\\bбойов(?:ий|ого|у)\\b[\\s\\S]{0,40}\\b[\\p{L}]{3,20}\\s+\\d{1,3}\\b[\\s\\S]{0,80}\\bтримає\\s+висоту\\s+\\d{2,4}\\b[\\s\\S]{0,90}\\b(?:північніше|південніше|східніше|західніше|лісосмуг|бахмут)"
+      },
+      "score": 0.86,
+      "languages": ["uk"],
+      "explanation": "OPSEC: callsign / combat group tied to current height or nearby landmark"
+    },
+    {
+      "id": "opsec_casualty_count_resilient_001",
+      "threat_type": "opsec_violation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)(?:на\\s+сьогодні|сьогодні|зараз)?[\\s\\S]{0,30}\\b200\\s*(?:-|\\s)?(?:их|х)?\\s+(?:\\d+|двоє|троє|четверо|п['’]?ятеро|шестеро|семеро)\\b[\\s\\S]{0,60}\\b300\\s*(?:-|\\s)?(?:их|х)?\\s+(?:\\d+|двоє|троє|четверо|п['’]?ятеро|шестеро|семеро)\\b"
+      },
+      "score": 0.86,
+      "languages": ["uk"],
+      "explanation": "OPSEC: casualty counts before public release, resilient to punctuation stripping"
+    },
+    {
+      "id": "opsec_commander_visit_resilient_001",
+      "threat_type": "opsec_violation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)\\bкомбриг\\b[\\s\\S]{0,120}\\b(?:наш(?:ій)?\\s+позиці|позиції)\\b[\\s\\S]{0,100}\\b(?:о|в)?\\s*\\d{1,2}[\\s:.]\\d{2}\\b[\\s\\S]{0,80}\\b(?:охорона\\s+мінімальна|нагородження|буде|прибуде)"
+      },
+      "score": 0.88,
+      "languages": ["uk"],
+      "explanation": "OPSEC: commander movement / visit time to a position"
+    },
+    {
+      "id": "opsec_foreign_instructor_unit_resilient_001",
+      "threat_type": "opsec_violation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)\\bбританськ\\w*\\s+інструктор\\w*\\b[\\s\\S]{0,80}\\b1\\s+(?:para|p4r4)\\b[\\s\\S]{0,120}\\b(?:яворів|дроняр|prr|бренд)"
+      },
+      "score": 0.84,
+      "languages": ["uk"],
+      "explanation": "OPSEC: partner unit identity linked to training location / role"
+    },
+    {
+      "id": "opsec_landmark_hq_location_resilient_001",
+      "threat_type": "opsec_violation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)\\b(?:ми\\s+)?зараз\\b[\\s\\S]{0,60}\\bпоряд\\s+із\\b[\\s\\S]{0,90}\\bзелен\\w*\\s+церкв\\w*\\b[\\s\\S]{0,140}\\bпівнічніш\\w*\\b[\\s\\S]{0,100}\\b(?:з[ао]правк\\w*|зарпавк\\w*)\\b[\\s\\S]{0,80}\\b(?:ось\\s+де\\s+)?(?:шта[бп]|шаб)\\b"
+      },
+      "score": 0.86,
+      "languages": ["uk"],
+      "explanation": "OPSEC: landmark chain narrowing the current HQ / position"
+    },
+    {
+      "id": "opsec_exif_trench_location_resilient_001",
+      "threat_type": "opsec_violation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)\\b(?:exif|3x1f)\\b[\\s\\S]{0,30}\\b48(?:[.,]|\\s)\\d{4,7}[\\s,;]+38(?:[.,]|\\s)\\d{4,7}\\b[\\s\\S]{0,120}\\b(?:наш(?:ого|ому)?\\s+)?(?:окоп\\w*|око[уо]п\\w*)\\b"
+      },
+      "score": 0.90,
+      "languages": ["uk"],
+      "explanation": "OPSEC: photo EXIF coordinates tied to own trench / fighting position"
+    },
+    {
+      "id": "opsec_hq_meeting_landmark_resilient_001",
+      "threat_type": "opsec_violation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)\\b(?:зустр\\w*|зустірч)\\b[\\s\\S]{0,60}\\b(?:о|в)?\\s*21[\\s:.]\\s*00\\b[\\s\\S]{0,80}\\bштаб\\w*\\b[\\s\\S]{0,140}\\bдим\\s+(?:від|ві)\\s+багаття\\b[\\s\\S]{0,120}\\b(?:п[оь]?льов\\w*|дорог\\w*)"
+      },
+      "score": 0.84,
+      "languages": ["uk"],
+      "explanation": "OPSEC: timed HQ meeting narrowed by visible landmark / smoke cue"
     },
     {
       "id": "psyops_surrender_uk_001",
@@ -8301,6 +8486,9 @@
           "ты не такой как все",
           "ты особенная",
           "ты особенный",
+          "ты очень взрослая для своего возраста",
+          "ты очень взрослый для своего возраста",
+          "ты очень взрослая не как другие дети",
           "ты очень взрослая для своих лет",
           "ты очень умная для своего возраста",
           "ты самая красивая",
@@ -8324,6 +8512,8 @@
           "скинь фотку",
           "хочу увидеть тебя",
           "пришли свою фотку",
+          "скинь селфи там чтобы я знал что это точно ты",
+          "скинь селфи там",
           "сфоткайся для меня",
           "покажи тело",
           "сними на камеру"
@@ -8342,6 +8532,8 @@
         "type": "keyword",
         "words": [
           "давай перейдём в телеграм",
+          "давай перейдем в телегу",
+          "давай перейдём в телегу",
           "пиши мне в вотсап",
           "давай перейдём в ватсап",
           "добавь меня в снапчат",
@@ -8536,6 +8728,8 @@
         "words": [
           "все так делают",
           "ты что трусишь",
+          "скинь пароль на минуту",
+          "скинь пароль на минуту не драматизируй",
           "ты слабак",
           "не будь тряпкой",
           "тебе слабо",
@@ -8579,6 +8773,8 @@
           "я расскажу всем про тебя",
           "я покажу твои скрины",
           "если не сделаешь то я",
+          "если не сделаешь как я сказал я покажу всем скрины",
+          "если не сделаешь как я сказала я покажу всем скрины",
           "у меня есть на тебя компромат",
           "я выложу всё в сеть",
           "я расскажу всем твой секрет",
@@ -8590,6 +8786,19 @@
         "ru"
       ],
       "explanation": "Шантаж"
+    },
+    {
+      "id": "manipulation_blackmail_ru_punct_001",
+      "threat_type": "manipulation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)если\\s+не\\s+сделаешь\\s+как\\s+я\\s+сказал[а]?\\W{0,12}я\\s+покажу\\s+всем\\s+скрины"
+      },
+      "score": 0.85,
+      "languages": [
+        "ru"
+      ],
+      "explanation": "Шантаж с пунктуацией/шумом: угроза показать скрины"
     },
     {
       "id": "sextortion_ru",
@@ -8680,6 +8889,8 @@
         "words": [
           "ты сама виновата",
           "ты сам виноват",
+          "это будет твоя вина ты сама меня заставила",
+          "это будет твоя вина ты сам меня заставил",
           "ты первый начал",
           "ты первая начала",
           "ты сама напросилась",
@@ -8692,6 +8903,19 @@
         "ru"
       ],
       "explanation": "DARVO — перевод вины на жертву"
+    },
+    {
+      "id": "manipulation_darvo_ru_punct_001",
+      "threat_type": "manipulation",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)это\\s+будет\\s+твоя\\s+вина\\W{0,12}ты\\s+сам[а]?\\s+меня\\s+заставил[а]?"
+      },
+      "score": 0.72,
+      "languages": [
+        "ru"
+      ],
+      "explanation": "DARVO с пунктуацией/шумом: перевод вины на жертву"
     },
     {
       "id": "manipulation_intermittent_ru",
@@ -8973,7 +9197,7 @@
       "threat_type": "pii_leakage",
       "kind": {
         "type": "regex",
-        "pattern": "(?iu)(?:мой номер|вот мой номер|напиши мне на|позвони мне|мой телефон)\\s*\\+?7?\\s?9\\d{2}[\\s-]?\\d{3}[\\s-]?\\d{2}[\\s-]?\\d{2}"
+        "pattern": "(?iu)(?:мой номер|вот мой номер|напиши мне на|позвони мне|мой телефон)\\s*\\+?(?:7|8)?\\s?9\\d{2}[\\s-]?\\d{3}[\\s-]?\\d{2}[\\s-]?\\d{2}"
       },
       "score": 0.6,
       "languages": [
@@ -9339,6 +9563,1357 @@
         "ru"
       ],
       "explanation": "Пропаганда вокруг мобилизации и капитуляции"
+    },
+    {
+      "id": "phishing_credential_pretext_en_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:verify|confirm|update|reset|reactivate)\\s+(?:your\\s+)?(?:identity|account|password|details|payment|billing|profile)\\s+(?:now|immediately|today|within\\s+\\d|or\\s+(?:it|your|we|the))"
+      },
+      "score": 0.85,
+      "languages": ["en"],
+      "explanation": "Phishing pretext: imperative credential-verification demand directed at the reader"
+    },
+    {
+      "id": "phishing_account_threat_en_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)your\\s+(?:account|page|profile|subscription|access|password)\\s+(?:will\\s+be|has\\s+been|is\\s+about\\s+to\\s+be|expires?)\\s*(?:frozen|suspended|locked|deleted|deactivated|terminated|disabled|today|tomorrow|in\\s+\\d)"
+      },
+      "score": 0.80,
+      "languages": ["en"],
+      "explanation": "Phishing pretext: scare-tactic threat about user's account state"
+    },
+    {
+      "id": "phishing_otp_relay_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:^|[.!?,;:]\\s+|\\bplease\\s+|\\bjust\\s+|to\\s+(?:stop|verify|confirm|secure)\\s+(?:it|this|your\\s+account)[,.\\s]+|then\\s+|now\\s+)(?:send|share|tell|paste|forward|relay|read(?:\\s+back)?|repeat|reply\\s+with)\\s+(?:me\\s+)?(?:back\\s+)?(?:the\\s+)?(?:sms\\s+|verification\\s+|2fa\\s+|otp\\s+|security\\s+|6[\\s\\-]?digit\\s+|one[\\s\\-]?time\\s+)?(?:code|otp)\\b"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "Phishing: imperative request to relay an OTP / verification code"
+    },
+    {
+      "id": "phishing_crypto_recovery_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "keyword",
+        "words": [
+          "seed phrase",
+          "recovery phrase",
+          "12-word seed",
+          "12 word seed",
+          "12-word recovery",
+          "24-word seed",
+          "24 word seed",
+          "private key",
+          "wallet recovery",
+          "secret recovery phrase",
+          "paste your seed",
+          "сід фраза",
+          "сид фраза",
+          "сид-фраза",
+          "відновлення гаманця",
+          "восстановление кошелька",
+          "ключ від гаманця",
+          "приватний ключ",
+          "паролі для гаманця"
+        ]
+      },
+      "score": 0.92,
+      "languages": [],
+      "explanation": "Phishing: request for crypto wallet seed/recovery phrase or private key"
+    },
+    {
+      "id": "phishing_delivery_scam_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:redelivery\\s+fee|delivery\\s+payment|package\\s+(?:held|on\\s+hold)|small\\s+fee\\s+to\\s+release|pay\\s+(?:\\$|usd)?\\s*\\d+(?:[.,]\\d+)?\\s+(?:to\\s+release|redelivery|tracking)|usps\\s+(?:redelivery|tracking)\\s+fee|dhl\\s+fee|fedex\\s+fee|customs\\s+clearance\\s+fee)"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "Phishing: delivery / courier redelivery-fee scam"
+    },
+    {
+      "id": "phishing_gov_refund_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:tax\\s+refund\\s+(?:pending|of\\s+\\$)|irs\\s+notice|stimulus\\s+(?:claim|pending|payment\\s+pending)|benefit\\s+pending|refund\\s+of\\s+\\$\\d|grant\\s+pending|грошова\\s+виплата\\s+чекає|виплата\\s+(?:чекає|очікує)\\s+підтвердження|підтвердіть\\s+особу\\s+за\\s+посиланням|підтвердіть\\s+номер\\s+картки|введіть\\s+номер\\s+картки)"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "Phishing: government refund / benefit pretext"
+    },
+    {
+      "id": "phishing_oauth_grant_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:click\\s+(?:on\\s+)?(?:['\"]?allow['\"]?|the\\s+allow\\s+button)|grant\\s+(?:full\\s+)?access|approve\\s+(?:the\\s+)?permission|allow\\s+this\\s+app\\s+to\\s+(?:access|read|use)|press\\s+allow\\s+on\\s+the\\s+(?:google|microsoft|apple)\\s+prompt)"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "Phishing: OAuth consent-grant abuse pretext"
+    },
+    {
+      "id": "phishing_ceo_fraud_en_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:in\\s+a\\s+(?:board\\s+)?(?:meeting|call)\\s+[—\\-,]\\s*quick|i\\s+need\\s+(?:a|you\\s+to\\s+do)\\s+(?:a\\s+)?(?:wire|transfer|payment)\\s+(?:to\\s+|asap|now)|can(?:'|)?t\\s+talk\\s+(?:right\\s+)?(?:now\\s+)?(?:on\\s+phone)|signal[\\s\\-]?back\\s+when\\s+(?:sent|done)|just\\s+do\\s+it[,.\\s]+settle\\s+(?:the|this))"
+      },
+      "score": 0.82,
+      "languages": ["en"],
+      "explanation": "Phishing: CEO-fraud urgency + wire-transfer demand"
+    },
+    {
+      "id": "phishing_url_pretext_v2",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "https?://[\\w.\\-]*(?:secure[\\-]?(?:bank|account|chase|paypal|signin|login)|verify[\\-]?(?:account|card|identity|user|customer|payment|login)|update[\\-]?(?:password|billing|payment|profile)|reset[\\-]?(?:password|account)|reactivate[\\-]?(?:account|access)|claim[\\-]?(?:prize|gift|skins|refund)|free[\\-]?(?:skins|prize|gift|gifts|crypto)|gift[\\-]?(?:claim|prize)|prize[\\-]?claim|m365[\\-]?(?:renew|keep|password)|office365[\\-]?(?:auth|renew|signin)|chase[\\-]?secure|paypal[\\-]?verify|amazon[\\-]?secure|apple[\\-]?(?:id[\\-]?verify|account)|usps[\\-]?(?:redelivery|tracking)|dhl[\\-]?(?:redelivery|payment)|fedex[\\-]?(?:tracking|redelivery)|irs[\\-]?(?:refund|claim|verify)|diia[\\-]?vyplata|diia[\\-]?login|stimulus[\\-]?claim|tax[\\-]?refund|docpreview|doc[\\-]?preview|invoice[\\-]?view|invoice[\\-]?login|document[\\-]?signin|preview[\\-]?invoice|workspace[\\-]?login|teams[\\-]?signin)"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "Phishing: brand-impersonating URL with credential-harvest path"
+    },
+    {
+      "id": "phishing_punycode_url_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "https?://xn--[\\w.\\-]+\\.(?:com|org|net|co|io|ua|ru|me|info)"
+      },
+      "score": 0.78,
+      "languages": [],
+      "explanation": "Phishing: punycode-encoded domain (xn--) used to disguise origin"
+    },
+    {
+      "id": "phishing_brand_domain_verify_card_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:sign|51gn)[\\s\\S]{0,12}\\b(?:in|1n)\\b[\\s\\S]{0,12}\\b(?:to|70)\\s+(?:(?:c|с)h[a4]s[e3][\\.\\s\\x{200B}]+e\\x{200B}?x\\x{200B}?a\\x{200B}?m\\x{200B}?p\\x{200B}?l\\x{200B}?e[\\.\\s\\x{200B}]+com|chaseexamplecom)[\\s\\S]{0,100}\\b(?:v(?:e|3)r(?:ify|1fy)|vreify)[\\s\\S]{0,20}\\b(?:your|y0ur|oyur)\\b[\\s\\S]{0,20}\\bc(?:ard|4rd)\\b"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Phishing: brand-like domain without scheme plus card-verification pretext"
+    },
+    {
+      "id": "phishing_m365_password_url_resilient_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:your\\s+)?(?:microsoft\\s+365|m365|office\\s*365|m1cr050f7\\s+365|0ff1c3\\s*365)\\b[\\s\\S]{0,80}\\b(?:password|p455w0rd|apssword)\\b[\\s\\S]{0,80}\\b(?:expires?|reset|rese|r3537|renew|keep\\s+current\\s+password|k33p\\s+curr3n7\\s+p455w0rd)\\b[\\s\\S]{0,160}(?:https?\\s*[:/]\\s*/|h77p5\\s*[:/]\\s*/|/auth\\b|/signin\\b|sign\\s*in|51gn\\s*1n)"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Phishing: Microsoft 365 password reset/expiry pretext with URL or sign-in action"
+    },
+    {
+      "id": "phishing_invoice_login_resilient_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:attached\\s+invoice|invoice\\s+#?\\w{2,}|invoice[\\s\\S]{0,40}approval|docpreview|doc\\s*preview)\\b[\\s\\S]{0,140}\\b(?:open|login|sign\\s+in|signin|ret\\s*=\\s*invoice|work\\s+email)\\b"
+      },
+      "score": 0.84,
+      "languages": [],
+      "explanation": "Phishing: invoice/document pretext leading to login or work-email credential capture"
+    },
+    {
+      "id": "phishing_steam_giveaway_leet_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:free|fr33)\\s+(?:steam|5734m|573m)\\s+(?:skins?|5k1n5)\\b[\\s\\S]{0,120}\\b(?:claim|cl41m)\\s+(?:now|n0w)\\b[\\s\\S]{0,160}\\b(?:login|l0g1n)\\s+w(?:i|1)(?:t|7)h\\s+(?:steam|5734m|573m)\\b"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Phishing: gaming-skin giveaway with Steam-login capture, including leet obfuscation"
+    },
+    {
+      "id": "phishing_punctuation_stripped_url_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\bhttps\\s+(?:verify\\s+login|free\\s+skins)\\s+example\\b(?:\\s+(?:claim|login))?"
+      },
+      "score": 0.82,
+      "languages": [],
+      "explanation": "Phishing: URL with punctuation stripped into space-separated credential/giveaway domain tokens"
+    },
+    {
+      "id": "phishing_punycode_broken_scheme_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\bpassword\\s+reset\\b[\\s\\S]{0,80}\\bhttps\\s+//\\s*xn\\s+[a-z0-9]+\\s+[a-z0-9]+\\s+(?:example|exampel)\\s+com\\s*/?\\s*reset\\b|\\bxn\\s+[a-z0-9]+\\s+[a-z0-9]+\\s+(?:example|exampel)\\s+com\\s*/?\\s*reset\\b[\\s\\S]{0,60}\\bpassword\\s+reset\\b"
+      },
+      "score": 0.80,
+      "languages": [],
+      "explanation": "Phishing: punycode reset URL after punctuation stripping"
+    },
+    {
+      "id": "phishing_support_impersonation_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:hi\\s+)?(?:this|his|7h15)\\s+(?:is|15)\\s+(?:microsoft|m1cr050f7)\\s+supp(?:ort|rot|0r7)\\b|\\b(?:microsoft|m1cr050f7)\\s+supp(?:ort|rot|0r7)\\b[\\s\\S]{0,100}\\b(?:suspicious\\s+sign[\\-\\s]?ins|verify\\s+(?:a\\s+few\\s+)?details|secure\\s+the\\s+account)\\b"
+      },
+      "score": 0.76,
+      "languages": [],
+      "explanation": "Phishing: direct support impersonation pretext for account takeover"
+    },
+    {
+      "id": "coord_lat_lon_cardinal_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:наш(?:а|е|і)\\s+позиці|на\\s+позиці(?:я|ю|ї)|grid\\s+ref|ціль[:\\s]|maps?\\?q=|google\\s+maps|geolocat|geo[:=]|ретранслятор\\s+сидит(?:ь)?|тримаємо\\s+(?:до|висот|позиці)|ми\\s+(?:тут|на)\\s+|зустрічаємось\\s+тут|hold(?:ing)?\\s+(?:point|position)|hold\\s+this\\s+point|operating\\s+at|якщо\\s+точніше|сидит(?:ь)?\\s+на\\s+координат|штаб\\s+перейш|штаб\\s+розгорнул)[\\s\\S]{0,80}?\\b(?:4[4-9]|5[0-2])\\.\\d{2,7}\\s*[ns][\\s,;]+(?:2[2-9]|3[0-9]|40)\\.\\d{2,7}\\s*[ew]\\b"
+      },
+      "score": 0.92,
+      "languages": [],
+      "explanation": "Coordinate leak: decimal lat/lon with optional cardinal direction (UA zone)"
+    },
+    {
+      "id": "coord_contextual_split_decimal_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)(?:наш(?:а|е|і)\\s+позиці|позиці(?:я|ю|ї)|якщо\\s+точніше|lat\\s*[:=]?|lon\\s*[:=]?|exif|maps?\\s+example|maps?\\?q|google\\s+maps|гугл\\s+карт|ретранслятор\\s+сидит(?:ь)?|decoded|ми\\s+саме|позначеному\\s+місці|тримаємо\\s+до|сидит(?:ь)?\\s+на\\s+координат)[\\s\\S]{0,120}?\\b(4[4-9]|5[0-2])(?:[\\s.,]+)\\d{2,7}\\s*(?:n|пн)?[\\s\\S]{0,32}?\\b(2[2-9]|3\\d|40)(?:[\\s.,]+)\\d{1,7}\\s*(?:e|3|сх)?\\b"
+      },
+      "score": 0.91,
+      "languages": [],
+      "explanation": "Coordinate leak: contextual split decimal lat/lon after punctuation or chat-noise mutation"
+    },
+    {
+      "id": "coord_keycap_decimal_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:🧭|📌)[\\s\\S]{0,80}?4️⃣\\s*8️⃣[\\s\\S]{0,24}?5️⃣\\s*9️⃣\\s*2️⃣\\s*8️⃣[\\s\\S]{0,80}?3️⃣\\s*8️⃣[\\s\\S]{0,24}?0️⃣\\s*0️⃣\\s*6️⃣\\s*1️⃣"
+      },
+      "score": 0.90,
+      "languages": [],
+      "explanation": "Coordinate leak: emoji/keycap-obfuscated decimal coordinate pair"
+    },
+    {
+      "id": "coord_w3w_lenient_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:what3words|wh[a4]t[3e]w[o0]rd[s5]|w3w|///)[\\s\\S]{0,80}?[a-z0-9·•‧∙⋅˙\\x{200B}\\x{200C}\\x{200D}\\x{FEFF}]{3,}[.\\s\\x{200B}\\x{200C}\\x{200D}\\x{FEFF}]+[a-z0-9·•‧∙⋅˙\\x{200B}\\x{200C}\\x{200D}\\x{FEFF}]{3,}[.\\s\\x{200B}\\x{200C}\\x{200D}\\x{FEFF}]+[a-z0-9·•‧∙⋅˙\\x{200B}\\x{200C}\\x{200D}\\x{FEFF}]{3,}[\\s\\S]{0,80}?(?:наша\\s+точка|саме\\s+там|точка|position)"
+      },
+      "score": 0.88,
+      "languages": [],
+      "explanation": "Coordinate leak: What3Words-style location under punctuation / leet mutation"
+    },
+    {
+      "id": "coord_exif_lat_lon_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:exif\\s*[:=\\-]?\\s*)?lat(?:itude)?\\s*[:=\\-]?\\s*\\d+\\.\\d{2,7}[\\s,;]+lon(?:gitude)?\\s*[:=\\-]?\\s*\\d+\\.\\d{2,7}"
+      },
+      "score": 0.92,
+      "languages": [],
+      "explanation": "Coordinate leak: EXIF-style lat/lon labels"
+    },
+    {
+      "id": "coord_mgrs_with_prefix_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:грід|grid|gr\\.)[\\s\\S]{0,20}?(?:3[4-7])(?:[T-U]|7)[\\s\\S]{0,14}?[A-Z5]{2}[\\s\\S]{0,14}?\\d{4,5}[\\s\\S]{0,14}?\\d{4,5}"
+      },
+      "score": 0.93,
+      "languages": [],
+      "explanation": "Coordinate leak: MGRS with explicit 'грід/grid' prefix"
+    },
+    {
+      "id": "coord_spelled_out_uk_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)сор(?:ок|ко)\\s+вісім[\\s\\S]{0,60}?крапка[\\s\\S]{0,100}?(?:п['’]?ять|п\\s+ять|дев['’]?ять|дев\\s+ять|девять)[\\s\\S]{0,120}?тридцять\\s+вісім[\\s\\S]{0,60}?крапка[\\s\\S]{0,120}?нуль[\\s\\S]{0,60}?нуль[\\s\\S]{0,80}?шість[\\s\\S]{0,80}?(?:один|одн)"
+      },
+      "score": 0.88,
+      "languages": ["uk"],
+      "explanation": "Coordinate leak: Ukrainian spelled-out decimal coordinate pair"
+    },
+    {
+      "id": "coord_landmark_triangulation_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)(?:церкв\\w{0,8}[\\s\\S]{0,100}антенн\\w*\\s+веж|північ\\s*[-–]?\\s*захід[\\s\\S]{0,80}веж[\\s\\S]{0,60}\\d(?:[.,]\\d)?\\s*км[\\s\\S]{0,40}ліс|за\\s+струмком\\s+\\d+\\s*км\\s+лісосмуга|видно\\s+силос|північніше\\s+шосе\\s+на\\s+\\d+\\s*км|антенн\\w*\\s+веж\\w*\\s+на\\s+горбі)"
+      },
+      "score": 0.82,
+      "languages": ["uk"],
+      "explanation": "Coordinate leak: landmark triangulation or progressive narrowing of a military position"
+    },
+    {
+      "id": "coord_landmark_chain_001",
+      "threat_type": "coordinate_leak",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?iu)(?:біля\\s+['\"]?зелен\\w+\\s+мост\\w+['\"]?[\\s\\S]{0,80}червон\\w+\\s+хатинк\\w+[\\s\\S]{0,100}(?:кладовищ|там\\s+ми)|червон\\w+\\s+хатинк\\w+[\\s\\S]{0,100}стар\\w+\\s+кладовищ[\\s\\S]{0,60}там\\s+ми)"
+      },
+      "score": 0.83,
+      "languages": ["uk"],
+      "explanation": "Coordinate leak: landmark chain narrowing a current military location"
+    },
+    {
+      "id": "scam_crypto_pump_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:\\$[A-Z]{2,8}\\s+(?:token|coin)\\s+\\d+x|buying\\s+window\\s+closes|presale\\s+tier\\s+\\d|ape\\s+in\\s+(?:now|before)|moon\\s+launch|pump\\s+(?:starts|in\\s+\\d)|to\\s+the\\s+moon|airdrop\\s+claim|next\\s+1000x|don'?t\\s+miss\\s+(?:this\\s+)?(?:moon|pump|launch))"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "Scam: crypto pump-and-dump / shill language"
+    },
+    {
+      "id": "scam_advance_fee_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:i\\s+am\\s+(?:barrister|attorney|widow(?:er)?|prince|dr|engineer)\\s+[A-Z]\\w+[\\s\\S]{0,160}?usd\\s+\\d+[.,]?\\d*\\s*[mk]?|left\\s+(?:usd|\\$)?\\s*\\d+[\\.,]?\\d*\\s*[mk]?[\\s\\S]{0,80}?(?:process|release|transfer)\\s+(?:fee|the\\s+transfer)|\\d+\\s+usd\\s+(?:processing|transfer|release)\\s+fee)"
+      },
+      "score": 0.88,
+      "languages": [],
+      "explanation": "Scam: classic 419 / advance-fee inheritance pretext"
+    },
+    {
+      "id": "scam_advance_fee_structural_002",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:barrister|attorney|solicitor|late\\s+client|inheritance|beneficiary|surname\\s+left)[\\s\\S]{0,180}?(?:usd|\\$)\\s*\\d+[\\.,]?\\d*\\s*[mk]?[\\s\\S]{0,180}?(?:process(?:ing)?|release|transfer|clearance)\\s*(?:fee|payment|cost)?"
+      },
+      "score": 0.84,
+      "languages": [],
+      "explanation": "Scam: advance-fee inheritance structure with money amount and processing/release fee"
+    },
+    {
+      "id": "scam_wire_transfer_romance_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:wire\\s+(?:(?:it|17)\\s+)?(?:via|through)\\s+(?:western\\s+union|moneygram|wu\\b)|send\\s+(?:via|through)\\s+western\\s+union|(?:i|1)'?ll\\s+repay\\s+(?:you\\s+)?(?:double|2x|3x|10x|next\\s+week)|repay\\s+everything\\s+(?:2x|double|next\\s+week)|oil\\s+rig\\s+(?:pay|salary|wage)\\s+(?:just\\s+)?(?:got\\s+frozen|frozen)|customs\\s+(?:clearance\\s+)?fee\\s+\\d+|lawyer'?s?\\s+retainer\\s+\\d+)"
+      },
+      "score": 0.87,
+      "languages": [],
+      "explanation": "Scam: romance-scam / fake-emergency wire-transfer pretext"
+    },
+    {
+      "id": "scam_grandparent_emergency_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:i'?m\\s+in\\s+(?:jail|trouble|the\\s+hospital)|grandma[,\\s]+i'?m|babushk|бабус[юі])[\\s\\S]{0,120}?(?:gift\\s+cards?|itunes\\s+cards?|amazon\\s+cards?|google\\s+play\\s+cards?|steam\\s+cards?)[\\s\\S]{0,100}?(?:don'?t\\s+tell\\s+(?:mom|dad|anyone|family)|send\\s+(?:me\\s+)?(?:codes?|the\\s+codes?|the\\s+numbers?)|please\\s+hurry|need\\s+(?:it|them|the\\s+money)\\s+now|hurry\\s+(?:before|please))"
+      },
+      "score": 0.90,
+      "languages": [],
+      "explanation": "Scam: grandparent / emergency gift-card scam"
+    },
+    {
+      "id": "scam_grandparent_emergency_structural_002",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:grandma|grandpa|i\\s*'?\\s*m\\s+in\\s+(?:jail|trou?ble|hospital)|need\\s+\\d+\\s+in)[\\s\\S]{0,140}?(?:gift\\s+cards?|itunes|amazon\\s+cards?|google\\s+play|steam\\s+cards?)[\\s\\S]{0,120}?(?:don\\s*'?\\s*t\\s+tell|send\\s+(?:codes?|numbers?)|hurry|need\\s+(?:it|them|money)\\s+now)"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Scam: emergency gift-card request with secrecy or code-transfer action"
+    },
+    {
+      "id": "scam_loan_no_credit_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:approved\\s+for\\s+\\$?\\d+[,\\.]?\\d+\\s+(?:loan|line\\s+of\\s+credit)|regardless\\s+of\\s+credit\\s+(?:score|history|status)?|guaranteed\\s+(?:loan|approval|funding)|same[\\-\\s]?day\\s+funding|send\\s+(?:dob|ssn|bank\\s+(?:account|details))\\s+to\\s+start)"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "Scam: predatory loan offer with PII collection"
+    },
+    {
+      "id": "scam_pet_adoption_fee_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:free\\s+(?:golden\\s+(?:retriever|retreiver)|labrador|husky|persian|kitten|cat|puppy|dog)\\s+(?:puppy\\s+)?(?:to|70)\\s+(?:good|loving|forever)\\s+home)[\\s\\S]{0,120}?(?:only\\s+(?:ask|45k)\\s+\\$?\\d|just\\s+\\$?\\d+\\s+for|vaccin|crate|ship\\s+anywhere|can\\s+ship)"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Scam: free-pet-with-shipping-fee adoption scam"
+    },
+    {
+      "id": "scam_fake_job_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:hr\\s+manager\\s+here|we'?ve\\s+selected\\s+you\\s+for(?:\\s+a)?\\s+(?:remote|paid)|remote\\s+(?:qa|admin|data\\s+entry|tester|assistant|virtual\\s+assistant)\\s+(?:role|position))[\\s\\S]{0,160}?\\$\\d+[\\.,]?\\d+(?:/(?:mo|month|week))?[\\s\\S]{0,120}?(?:pay\\s+\\$?\\d+\\s+for\\s+(?:training|certification|equipment|onboarding|materials)|training\\s+(?:fee|certificat|materials\\s+fee))"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Scam: fake-job paid-training fee scam"
+    },
+    {
+      "id": "scam_fake_job_fee_structural_002",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:hr\\s+manager\\s+here|remote\\s+(?:qa|admin|data\\s+entry|tester|assistant|virtual\\s+assistant)\\s+(?:role|position)|selected\\s+you\\s+for\\s+(?:a\\s+)?remote|\\$\\d+[\\.,]?\\d+/(?:mo|month|week))[\\s\\S]{0,180}?(?:just\\s+pay|pay\\s+\\$?\\d+|upfront\\s+(?:fee|payment)|(?:training|certif\\w*|equipment|onboarding|materials)[\\s\\S]{0,80}?(?:fee|pay|\\$\\d+))"
+      },
+      "score": 0.84,
+      "languages": [],
+      "explanation": "Scam: remote-job offer combined with upfront training/certification/equipment fee"
+    },
+    {
+      "id": "spam_emoji_flood_giveaway_001",
+      "threat_type": "spam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:🔥|🎁|💰|🚀|💯|💎|🤑|🎉){3,}[\\s\\S]{0,80}?(?:free|win|winner|claim|prize|first\\s+\\d+\\s+only)[\\s\\S]{0,80}?(?:🔥|🎁|💰|🚀|💯|💎|🤑|🎉|click|👉|👇|⬇️)"
+      },
+      "score": 0.82,
+      "languages": [],
+      "explanation": "Spam: emoji-flooded giveaway / claim-bait"
+    },
+    {
+      "id": "spam_giveaway_claim_structural_002",
+      "threat_type": "spam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:free|fr[3e][3e])[\\s\\S]{0,80}?(?:iphone|airpods?|steam\\s+skins?|robux|v[\\-\\s]?bucks|prize|reward|gift)[\\s\\S]{0,120}?(?:first\\s+\\d+|claim|click|winner|prize[\\s\\-]?claim|login|receive)"
+      },
+      "score": 0.76,
+      "languages": [],
+      "explanation": "Spam: giveaway claim-bait with free item, scarcity/action marker"
+    },
+    {
+      "id": "spam_winner_click_claim_structural_002",
+      "threat_type": "spam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:winner|claim|cl41m)[\\s\\S]{0,90}?(?:click|prize[\\s\\-]?claim|prizeclaim|reward|gift)[\\s\\S]{0,100}?(?:https?|www|example[\\.\\s]*com|examplecom|bit\\s*ly|tinyurl|goo\\s*gl)"
+      },
+      "score": 0.74,
+      "languages": [],
+      "explanation": "Spam: winner/claim-bait paired with click or claim URL"
+    },
+    {
+      "id": "spam_passive_income_001",
+      "threat_type": "spam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:passive\\s+income\\s+\\$?\\d+|earn\\s+\\$?\\d+\\s+(?:a\\s+day|per\\s+day|/day|/week|a\\s+week)|\\$?\\d+/(?:day|week|month)\\s+with\\s+this|one\\s+trick\\s+(?:they|the\\s+banks|everyone)\\s+hates?|make\\s+money\\s+(?:online|fast|from\\s+home)\\s+with|work\\s+from\\s+home\\s+\\$\\d+)"
+      },
+      "score": 0.78,
+      "languages": [],
+      "explanation": "Spam: make-money-fast / passive-income bait"
+    },
+    {
+      "id": "scam_typo_laced_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:free|f[r0][e3][3e])[\\.\\s]?l[o0]an[\\s\\S]{0,40}?(?:apprvd|aprvd|approv|appro)|fnd\\s+today|snd\\s+(?:dob|ssn|bank|acct)|snd\\s+(?:me|info|details)[\\s\\S]{0,40}?(?:bank|card|acct|ssn|dob)"
+      },
+      "score": 0.83,
+      "languages": [],
+      "explanation": "Scam: typo-obfuscated loan/credential phishing"
+    },
+    {
+      "id": "scam_url_shortener_chain_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?:bit\\.ly|tinyurl\\.com|goo\\.gl|t\\.co|ow\\.ly|is\\.gd|cutt\\.ly|rb\\.gy)[\\s\\S]{0,60}?(?:bit\\.ly|tinyurl\\.com|goo\\.gl|t\\.co|ow\\.ly|is\\.gd|cutt\\.ly|rb\\.gy|→|->)[\\s\\S]{0,60}?(?:bit\\.ly|tinyurl\\.com|goo\\.gl|t\\.co|ow\\.ly|is\\.gd|cutt\\.ly|rb\\.gy|final)"
+      },
+      "score": 0.82,
+      "languages": [],
+      "explanation": "Scam: chain of multiple URL shorteners (redirect laundering)"
+    },
+    {
+      "id": "scam_url_shortener_chain_stripped_002",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:bit(?:\\.|\\s+)ly|tinyurl(?:\\.|\\s+)com|goo(?:\\.|\\s+)gl|t(?:\\.|\\s+)co|ow(?:\\.|\\s+)ly|is(?:\\.|\\s+)gd|cutt(?:\\.|\\s+)ly|rb(?:\\.|\\s+)gy)[\\s\\S]{0,90}?(?:bit(?:\\.|\\s+)ly|tinyurl(?:\\.|\\s+)com|goo(?:\\.|\\s+)gl|t(?:\\.|\\s+)co|ow(?:\\.|\\s+)ly|is(?:\\.|\\s+)gd|cutt(?:\\.|\\s+)ly|rb(?:\\.|\\s+)gy|final)"
+      },
+      "score": 0.80,
+      "languages": [],
+      "explanation": "Scam: chained URL shorteners resilient to punctuation stripping"
+    },
+    {
+      "id": "scam_voice_bank_pretext_uk_001",
+      "threat_type": "scam",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:\\[голосов(?:е|ое)|\\[voice|voicemail|транскрипц)[\\s\\S]{0,160}?(?:з\\s+банку|из\\s+банка|from\\s+(?:the\\s+)?bank|у\\s+вас\\s+(?:підозрілий|подозрительный)\\s+платіж|suspicious\\s+(?:transaction|payment))[\\s\\S]{0,160}?(?:зайдіть\\s+за\\s+посиланням|зайдите\\s+по\\s+ссылке|click\\s+the\\s+link|підтвердіть\\s+особу|підтвердіть\\s+картку|підтвердіть\\s+особу|картка\\s+буде\\s+заблокована|account\\s+will\\s+be\\s+(?:blocked|frozen))"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Scam: voice-to-text bank pretext (transcribed voicemail with phishing link)"
+    },
+    {
+      "id": "nsfw_nude_request_001",
+      "threat_type": "nsfw",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:send|53nd)\\s+(?:(?:me|m3)\\s+)?(?:(?:a|4)\\s+)?(?:nude|nudes?|topless|naked|n\\*?d\\*?s?|t\\*?pl\\*?ss|t\\*?lp\\*?ss|7\\*?pl\\*?55|fully\\s+naked|naked\\s+pic|topless\\s+mirror\\s+shot)|i'?ll\\s+send\\s+you\\s+(?:a\\s+few\\s+)?(?:full[\\-\\s]?frontal\\s+)?nudes|sending\\s+(?:the\\s+)?explicit\\s+(?:videos?|photos?|content)|want\\s+me\\s+to\\s+send\\s+you\\s+(?:a\\s+few\\s+)?(?:full[\\-\\s]?frontal\\s+)?nudes|already\\s+topless|drop\\s+the\\s+spicy\\s+content|thirst\\s+trap\\s+to\\s+the\\s+max|надішли\\s+(?:фото|фотку)\\s+без\\s+одягу|зніми\\s+трусики|повністю\\s+оголеною|fotku\\s+bez\\s+odyahu)"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "NSFW: explicit nude / topless request or offer"
+    },
+    {
+      "id": "nsfw_strip_camera_001",
+      "threat_type": "nsfw",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:take\\s+(?:everything|it\\s+all)\\s+off|strip\\s+(?:and|for|for\\s+the)\\s+(?:show|the\\s+camera|me)|spread\\s+your\\s+legs\\s+for\\s+(?:the\\s+)?camera|now\\s+(?:everything|all)\\s+off,?\\s+slow|open\\s+the\\s+video\\s+(?:right\\s+now|now),?\\s+take\\s+(?:everything|it\\s+all)\\s+off|now\\s+stand\\s+up,?\\s+no\\s+clothes)"
+      },
+      "score": 0.90,
+      "languages": ["en"],
+      "explanation": "NSFW: live strip-on-camera coercion"
+    },
+    {
+      "id": "nsfw_coercive_consent_001",
+      "threat_type": "nsfw",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:if\\s+you\\s+really\\s+love\\s+me\\s+you'?ll\\s+send\\s+(?:a\\s+)?(?:fully\\s+)?(?:naked|nude)\\s+pic|nobody\\s+else\\s+will\\s+see\\s+it|just\\s+turn\\s+off\\s+the\\s+lights\\s+and\\s+pose\\s+for\\s+me|send\\s+the\\s+explicit\\s+one\\s+already|i'?ll\\s+send\\s+our\\s+chats\\s+to\\s+your\\s+parents|you\\s+owe\\s+me\\s*,?\\s*i\\s+sent\\s+u\\s+that\\s+gift\\s+card|i'?m\\s+telling\\s+everyone\\s+u\\s+sent\\s+the\\s+topless\\s+one|якщо\\s+любиш\\s+(?:мене\\s+)?надішли)"
+      },
+      "score": 0.92,
+      "languages": [],
+      "explanation": "NSFW: coercive consent-violation / blackmail-tied nude request"
+    },
+    {
+      "id": "nsfw_explicit_describe_001",
+      "threat_type": "nsfw",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:tell|tll)\\s+me\\s+(?:what(?:'?s|\\s+are)\\s+(?:you'?re\\s+)?wearing\\s+und(?:er|re)(?:neath)?(?:\\s+that)?|whats?\\s+und(?:er|re)(?:\\s+that)?\\s+(?:shirt|hoodie|dress|bra)|what\\s+you'?re\\s+hiding\\s+under)|lift\\s+(?:it|that\\s+shirt|that\\s+dress)\\s+up\\s+(?:just\\s+a\\s+little|now)|send\\s+the\\s+pic\\s+without\\s+(?:the\\s+)?(?:bra|shirt|underwear|bottom|top)|опиши\\s+(?:мені\\s+)?все\\s+що\\s+зробила\\s+б\\s+зі\\s+мною\\s+оголеною)"
+      },
+      "score": 0.83,
+      "languages": [],
+      "explanation": "NSFW: explicit clothing-reveal / detail-request"
+    },
+    {
+      "id": "nsfw_link_drop_001",
+      "threat_type": "nsfw",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:fresh\\s+nudes\\s+from\\s+(?:local\\s+girls|teens|college)|no\\s+age\\s+check|free\\s+preview\\s*(?:🔥|💦)|(?:🔥|💦){2,}[\\s\\S]{0,30}?(?:nudes?|teens?|girls|cam|spicy)|spicycam|cam[\\-\\s]?girls?[\\-\\s]?live)"
+      },
+      "score": 0.88,
+      "languages": [],
+      "explanation": "NSFW: link-drop to explicit-content site (often spam)"
+    },
+    {
+      "id": "nsfw_emoji_request_001",
+      "threat_type": "nsfw",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:show|5h0w)\\s+(?:me|m3)\\s+🍑+\\s+(?:(?:and|4nd)\\s+)?🍒+\\s+(?:(?:no|n0)\\s+(?:clothes|cl07h35)|naked|nude|без\\s+одягу)|(?:show|5h0w)\\s+(?:(?:me|m3)\\s+)?🍑+[\\s\\S]{0,20}?🍒+|(?:send|53nd)\\s+(?:(?:me|m3)\\s+)?(?:📸|📷)[\\s\\S]{0,10}?(?:now|n0w|or)\\s*(?:☠️|🔪|💀)"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "NSFW: emoji-coded explicit request"
+    },
+    {
+      "id": "nsfw_third_party_share_001",
+      "threat_type": "nsfw",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:sharing\\s+the\\s+(?:explicit|naked|nude|topless)\\s+(?:videos?|photos?|pics?)\\s+my\\s+(?:ex|3x)|5h4r1ng\\s+7h3\\s+3xpl1c17[\\s\\S]{0,24}?(?:v1d305|1d305)\\s+my\\s+3x|sharing\\s+(?:them|the\\s+set)\\s+with\\s+the\\s+(?:whole|entire)\\s+(?:group|chat)|drop(?:ping)?\\s+(?:the\\s+)?link\\s+in\\s+\\d+\\s+min(?:ute)?s?[\\s\\S]{0,40}?(?:explicit|nude|topless))"
+      },
+      "score": 0.89,
+      "languages": [],
+      "explanation": "NSFW: third-party sharing of explicit media (image-based abuse)"
+    },
+    {
+      "id": "hate_dehumanizing_metaphor_en_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:those|thos|htose)\\s+peop(?:le|ie)|they|them|их|вони|ці\\s+(?:люди|приїжджі)|біженці|трансгенди?ери?|trans\\s+people|women|жінк(?:и|ам)|жени|females?|men|чоловіки)\\s+(?:are|r|—|-|–|—)?\\s*(?:cockroaches?|vermin|parasites?|animals?|not\\s+(?:human|real)|subhuman|disease|sickness|cancer|filth|trash|scum|тваринами?|паразити|парази?ти|худоба|сарана|свині|сволочі|нелюди|нацисти)\\b"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Hate: dehumanizing metaphor (group + animal/disease/non-human)"
+    },
+    {
+      "id": "hate_extermination_call_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:round|wipe|clean|stomp|exterminate|erase)\\s+(?:them|those\\s+people|their\\s+(?:kind|whole\\s+race)|all\\s+of\\s+them)\\s+(?:out|up|away)?|every\\s+single\\s+one\\s+(?:of\\s+them\\s+)?(?:should\\s+be|deserves)\\s+(?:wiped|erased|gone|removed|exterminated)|treat\\s+them\\s+like\\s+the\\s+pests|knock\\s+them\\s+out\\s+of|i\\s+hope\\s+every\\s+(?:single\\s+)?one\\s+of\\s+you\\s+(?:is\\s+wiped\\s+out|dies)|(?:those|thos|tose|7053)\\s+(?:are|r)?\\s*(?:infesting|1nf3571ng)\\s+(?:everything|3v3ry7h1ng)[\\s\\S]{0,40}?(?:exterminate|3x3rm1n473)|зачищати\\s+всіх|знищувати\\s+їх|чистимо\\s+територію\\s+від)"
+      },
+      "score": 0.92,
+      "languages": [],
+      "explanation": "Hate: extermination / 'cleanse' call against a group"
+    },
+    {
+      "id": "hate_dog_whistle_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:it'?s\\s+always\\s+them\\s+behind\\s+everything|the\\s+same\\s+group\\s*,?\\s*over\\s+and\\s+over|they\\s+control\\s+(?:the\\s+media|all\\s+the\\s+banks|everything|hollywood)|those\\s+people\\s+control|(?:you\\s+know\\s+)?які\\s+люди\\s+control\\s+everything|clean\\s+them\\s+out\\s+of\\s+every\\s+position\\s+of\\s+power|just\\s+asking\\s+questions[\\s\\S]{0,80}?(?:them|those\\s+people|they|their\\s+kind))"
+      },
+      "score": 0.82,
+      "languages": ["en", "uk"],
+      "explanation": "Hate: dog-whistle conspiracy framing ('they control', 'just asking')"
+    },
+    {
+      "id": "hate_subhuman_target_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:subhuman|sub[\\s\\-]human|inferior\\s+race|inferior\\s+species|literally\\s+subhuman|she'?s\\s+literally\\s+subhuman)\\s+(?:trash|garbage|scum|kid|girl|boy|@\\w+|literally)?|@\\w+\\s+(?:you\\s+)?subhuman\\s+(?:trash|garbage)|go\\s+back\\s+to\\s+your\\s+country|stop\\s+pretending\\s+you\\s+belong\\s+here|your\\s+kind\\s+never\\s+will)"
+      },
+      "score": 0.87,
+      "languages": ["en"],
+      "explanation": "Hate: subhuman slur or 'go back' directed at user"
+    },
+    {
+      "id": "hate_anti_orientation_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:trans\\s+people\\s+are\\s+not\\s+human|trans(?:gender)?\\s+(?:are|r)\\s+(?:freaks|mentally\\s+ill|abomination)|their\\s+lifestyle\\s+is\\s+a\\s+sickness|they\\s+are\\s+not\\s+real\\s+(?:men|women|anything)|abomination[s]?\\s+(?:that|who)\\s+(?:should|deserve)|lock\\s+them\\s+(?:up|away)\\s*,?\\s*problem\\s+solved|round\\s+them\\s+up\\s*,?\\s*lock\\s+them\\s+away)"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Hate: orientation/identity dehumanization"
+    },
+    {
+      "id": "hate_anti_gender_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:women\\s+are\\s+objects\\s*,?\\s*they\\s+exist\\s+to\\s+serve|females?\\s+are\\s+subhuman|females?\\s+(?:are\\s+)?(?:property|cattle|breeding\\s+stock)|they\\s+deserve\\s+everything\\s+that\\s+happens\\s+to\\s+them|no\\s+rights\\s*,?\\s*no\\s+opinions\\s*,?\\s*no\\s+value)"
+      },
+      "score": 0.90,
+      "languages": ["en"],
+      "explanation": "Hate: misogynistic dehumanization"
+    },
+    {
+      "id": "hate_anti_immigrant_uk_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:біженц(?:і|ів|ям)|пр[иі]?[їі]?жджі|чужинці|мігранти)\\s+(?:це\\s+)?(?:паразити|сарана|худоба|тварини|нелюди|свині|сміття|зайві|жеруть)|(?:ці\\s+(?:люди|пр[иі]?[їі]?жджі)|пр[иі]?[їі]?жджі|біженці)[\\s\\S]{0,40}?(?:сміття|паразити|худоба|тварини|нелюди)|(?:виганяти|гнати|очищати|чистити|знищувати)\\s+(?:їх|всіх)\\s+(?:геть|від\\s+нас|з\\s+(?:країни|міста|нашої))|(?:недонація|недолюди|недонарод|неповноцінн[аі]\\s+раса)"
+      },
+      "score": 0.86,
+      "languages": ["uk", "ru"],
+      "explanation": "Hate: anti-immigrant/refugee dehumanization (UA/RU)"
+    },
+    {
+      "id": "hate_coordinated_raid_ru_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:эти\\s+(?:хохлы|укропы|бандеровцы|жиды)\\s+(?:-|—)?\\s*не\\s+люди|скоты\\s*,?\\s*всех\\s+под\\s+нож|выродки|зачищать\\s+всех|твари\\s+не\\s+заслуживают\\s+жить|під\\s+ніж\\s+(?:всіх|треба))"
+      },
+      "score": 0.91,
+      "languages": ["ru", "uk"],
+      "explanation": "Hate: coordinated raid / ethnic dehumanization (RU/UA)"
+    },
+    {
+      "id": "hate_religious_ban_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:their\\s+(?:entire\\s+)?(?:faith|religion)\\s+is\\s+a\\s+(?:cult|disease|sickness)|cult\\s+of\\s+violence|ban\\s+(?:the\\s+)?(?:entire\\s+)?(?:community|religion|race)\\s+from\\s+(?:this\\s+)?country|cannot\\s+integrate|every\\s+time\\s+something\\s+bad\\s+happens\\s+you\\s+can\\s+guess\\s+which\\s+religion)"
+      },
+      "score": 0.85,
+      "languages": ["en"],
+      "explanation": "Hate: religion-based dehumanization / collective ban call"
+    },
+    {
+      "id": "hate_racist_joke_normalization_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:why\\s+(?:do|d0)\\s+they\\s+always\\s+smell\\s+like\\s+that[\\s\\S]{0,90}(?:their|7h31r)\\s+kind|(?:their|7h31r)\\s+(?:whole\\s+)?race\\s+(?:is\\s+)?built\\s+for\\s+crime[\\s\\S]{0,80}(?:genetic|look\\s+it\\s+up)|(?:their|7h31r)\\s+kind\\s+(?:does|d035)|(?:her|their)\\s+people\\s+always\\s+do)"
+      },
+      "score": 0.86,
+      "languages": ["en"],
+      "explanation": "Hate: normalized racist-joke framing against a protected group"
+    },
+    {
+      "id": "hate_trans_dehumanization_resilient_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)trans\\s+people\\s+(?:are|aer|r)?\\s*n[\\w]{0,2}\\s+human[\\s\\S]{0,100}(?:mentally\\s+ill\\s+freaks?|should\\s+be\\s+erased|abomination)"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Hate: resilient trans dehumanization under minor typo perturbation"
+    },
+    {
+      "id": "hate_abbrev_pile_on_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:tose|those|7053)\\s+ppl\\s+r\\s+(?:subh?u?mn|suhbumn|5ubhumn)\\s+(?:trsh?e?|trseh|7r5h3)\\s+(?:go|g0)\\s+bk\\s+(?:home|h0m3)|(?:vermn|v3rm1n)\\s+yall\\s*,?\\s+no\\s+(?:humn|human)\\s+(?:rgts|rights)\\s+4\\s+(?:ur|your)\\s+(?:kynd|kind)"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Hate: abbreviated dehumanizing pile-on / exclusion language"
+    },
+    {
+      "id": "hate_homoglyph_dehumanization_001",
+      "threat_type": "hate_speech",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:[tт]?h?[oо]s[eе]?|[tт][oо]h?s[eе]?)\\s+[pр][eе][oо][pр](?:l|[iі])[eе]\\s+[aа]r[eе]\\s+v[eе]rmin[\\s\\S]{0,80}(?:[eе]xt[eе]rmin[aа]t[eе]d|all\\s+[oо]f\\s+th[eе]m)"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Hate: mixed-script homoglyph dehumanization / extermination wording"
+    },
+    {
+      "id": "psyops_surrender_call_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:українські\\s+солдати[,!\\s].{0,80}?здавайтеся|здавайтеся[,!\\s].{0,80}?(?:вас\\s+зрадили|командир|вас\\s+покин|втекли)|складайте\\s+зброю|сдавайтесь[,!\\s].{0,80}?(?:вас\\s+предали|командир|вас\\s+броси|сбежали)|surrender\\s+now\\s+(?:before|or|while)|lay\\s+down\\s+your\\s+(?:arms|weapons)|ukrainian\\s+soldiers[,!\\s].{0,80}?surrender)"
+      },
+      "score": 0.91,
+      "languages": [],
+      "explanation": "PSYOPS: surrender appeal directed at service members"
+    },
+    {
+      "id": "psyops_false_prisoner_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:він\\s+у\\s+нас\\s+у\\s+полоні\\s+(?:і\\s+просить|і\\s+благає)|у\\s+полоні\\s+(?:і\\s+просить|і\\s+благає|під\\s+примусом)|відео\\s+(?:твого\\s+побратима|вашого\\s+побратима)\\s+в\\s+полоні|під\\s+примусом\\s+просить\\s+(?:здатися|капітул)|фото(?:к|и)?\\s+(?:наших\\s+)?полонен(?:их|ого)\\s+у\\s+(?:Луганську|Донецьку|росії|москві))"
+      },
+      "score": 0.88,
+      "languages": [],
+      "explanation": "PSYOPS: false-prisoner / coerced-prisoner video framing"
+    },
+    {
+      "id": "psyops_command_collapse_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:командування\\s+(?:.{0,40}?\\s+)?(?:відбуло|втекло|втекли|відступило)\\s+(?:до|в|у)\\s+(?:Польщ|Європ|Київ|тил)|ваші\\s+(?:офіцери|командири)\\s+вас\\s+(?:покинули|кинули|зрадили)|ваше\\s+командування\\s+вас\\s+(?:бросило|кинуло|покинуло|зрадило)|рятуйтеся\\s+самі|спасайтесь\\s+сами|нікого\\s+(?:не|немає|нема)\\s+(?:вас\\s+рятувати|за\\s+вами))"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "PSYOPS: command-collapse narrative ('your officers abandoned you')"
+    },
+    {
+      "id": "psyops_morale_collapse_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:гривня\\s+впала\\s+(?:вдвічі|на\\s+\\d+%)|ваші\\s+родини\\s+(?:голодують|без\\s+їжі|на\\s+межі)|захід(?:у)?\\s+(?:на\\s+нас\\s+(?:плювати|байдуже)|нас\\s+зрадив|нас\\s+продав)|нато\\s+(?:нас\\s+(?:зрадило|кинуло|продало)|вас\\s+обманю|нас\\s+обманю)|америка\\s+(?:використовує|зрадила)\\s+(?:україну|нас)|війна\\s+(?:марна|програна|вже\\s+програна)|(?:новинах\\s+пишуть|пишуть)[\\s\\S]{0,80}?економіка[\\s\\S]{0,80}?не\\s+витр(?:и|)має)"
+      },
+      "score": 0.83,
+      "languages": [],
+      "explanation": "PSYOPS: morale-erosion narrative (economic collapse, NATO abandonment, war lost)"
+    },
+    {
+      "id": "psyops_amplified_loss_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:за\\s+(?:оцінками\\s+експертів|даними\\s+експертів)[\\s\\S]{0,80}?ЗСУ\\s+втратили\\s+\\d+|\\d{3,}\\s+бійців[\\s\\S]{0,40}?(?:командування\\s+мовчить|втратили\\s+за\\s+(?:тиждень|день))|втрати\\s+ЗСУ\\s+(?:сягнули|перевищили|становлять)\\s+\\d{4,}|втрати\\s+вже\\s+перевищили)"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "PSYOPS: amplified loss / inflated casualty narrative"
+    },
+    {
+      "id": "psyops_deserter_norm_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:твої\\s+побратими\\s+вже\\s+(?:двоє|троє|кілька)\\s+пішли\\s+через\\s+кордон|нікого\\s+(?:не|немає)\\s+судитим(?:уть|е)|життя\\s+дорожче(?:\\s+за\\s+(?:присягу|обов(?:'|)?язок|країну))?|шлях\\s+через\\s+(?:румунію|молдову|польщу|угорщину)\\s+(?:без\\s+проблем|з\\s+гарант)|є\\s+люди[,\\s]+вони\\s+(?:допоможуть|переведуть))"
+      },
+      "score": 0.84,
+      "languages": [],
+      "explanation": "PSYOPS: deserter normalization ('your buddies left, no judgment')"
+    },
+    {
+      "id": "psyops_family_extortion_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:знаю\\s+де\\s+живе\\s+твоя\\s+(?:дружина|жінка|мати|дочка|сім(?:'|)я|родина)|якщо\\s+хочеш\\s+щоб\\s+з\\s+(?:ними|нею|ним)\\s+нічого\\s+(?:не\\s+)?сталося|передай\\s+координати\\s+свого\\s+підрозділу|ми\\s+тебе\\s+захистимо.{0,40}?(?:координат|підрозділ|позиці))"
+      },
+      "score": 0.92,
+      "languages": [],
+      "explanation": "PSYOPS: family-extortion pretext (coerced info-handover)"
+    },
+    {
+      "id": "psyops_false_news_framing_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:(?:bbc|reuters|r3u73r5|cnn|associated\\s+press|ap\\s+news)[^\\n]{0,80}?(?:Україна\\s+на\\s+межі|ЗСУ\\s+втратили\\s+половину|ЗСУ\\s+відступають\\s+по\\s+всьому\\s+фронту|капітул|колапс|на\\s+межі\\s+розпаду|втратили\\s+половину\\s+особового\\s+складу)|(?:джерела\\s+(?:в\\s+)?кремл|джерела\\s+у\\s+москв|нібито\\s+зеленський\\s+(?:закликає|просить|підпис))|скріншот\\s+з\\s+(?:reuters|r3u73r5|bbc)[\\s\\S]{0,220}?(?:ймовірно\\s+фейк|можливо\\s+правда|але\\s+хто\\s+(?:розбереться|робзереться)))"
+      },
+      "score": 0.87,
+      "languages": [],
+      "explanation": "PSYOPS: false news-source framing (fake BBC/Reuters, Kremlin sources)"
+    },
+    {
+      "id": "psyops_sleeper_amplifier_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:чую\\s+ходять\\s+чутки\\s+що\\s+200-их\\s+(?:там\\s+по|вже\\s+по)\\s+\\d+\\s+на\\s+(?:день|тиждень)|\\d{2,}-их?\\s+на\\s+день|бачив\\s+фотки\\s+наших\\s+полонених\\s+у\\s+(?:луганську|лугансьу|луагнську|донецьку|москві)|ваш\\s+командир\\s+мовчить.{0,40}?(?:чому|правда)|чутки\\s+(?:серед|у)\\s+нас[,]?\\s+що\\s+\\d{2,}\\s+(?:загиблих|поранених))"
+      },
+      "score": 0.82,
+      "languages": [],
+      "explanation": "PSYOPS: sleeper / rumor amplifier (high casualty rumors)"
+    },
+    {
+      "id": "psyops_whataboutism_guantanamo_001",
+      "threat_type": "psyops",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)\\b(?:гуантанамо|гуантанмо|гуантнаамо)\\b[\\s\\S]{0,120}\\bсша\\b[\\s\\S]{0,80}\\b(?:теж\\s+)?убивали\\s+(?:мирних|мриних)\\b[\\s\\S]{0,140}\\bчому\\s+ми\\s+(?:тут|тт)\\s+воюємо\\s+за\\s+їхні\\s+гроші\\b"
+      },
+      "score": 0.84,
+      "languages": ["uk"],
+      "explanation": "PSYOPS: whataboutism pivot used to undermine current mission legitimacy"
+    },
+    {
+      "id": "threat_direct_kill_en_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:^|\\s|lmao\\s+|lol\\s+|ngl\\s+|fr\\s+)(?:i\\s+|im\\s+)?(?:will|'?ll|am\\s+going\\s+to|m\\s+gonna|'?m\\s+gonna|gonna|gonan|gona)\\s+(?:kill|hurt|murder|shoot|stab|beat|destroy|end|finish|cut|burn|break|fuck\\s+up)\\s+(?:you|u|ya|y'?all)|i\\s+will\\s+use\\s+it\\s+on\\s+you|imagine\\s+which\\s+one\\s+is\\s+yours|i\\s+know\\s+what\\s+time\\s+you\\s+(?:leave|elave)\\s+school)"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Threat: imminent violence directed at user (first/short-form)"
+    },
+    {
+      "id": "threat_death_countdown_en_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:u|you|ur|y'?all)\\s+(?:r|are|'?re)\\s+dead(?:\\s+(?:(?:next|net|nxet|n37)\\s+(?:week|w33k|month|day)|tomorrow|tonight|in\\s+\\d+))?|count\\s+(?:the\\s+|your\\s+)?days|u\\s+(?:wont|won'?t)\\s+(?:make\\s+it|see)\\s+(?:to\\s+)?(?:graduation|tomorrow|monday|home)|u\\s+won'?t\\s+make\\s+it\\s+(?:home|that\\s+far|to\\s+graduation|in\\s+one\\s+piece)|y(?:ou|u)\\s+won'?t\\s+make\\s+it\\s+that\\s+far\\s+tonight|catch\\s+y(?:ou|u)\\s+slipping)"
+      },
+      "score": 0.85,
+      "languages": ["en"],
+      "explanation": "Threat: death-countdown / can't-make-it framing"
+    },
+    {
+      "id": "threat_emoji_future_target_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:🔫|🔪|💣|🩸)[\\s\\S]{0,80}?(?:(?:💀|☠|🩸)[\\s\\S]{0,60}?\\b(?:u|you)\\b|\\b(?:u|you)\\b[\\s\\S]{0,60}?(?:💀|☠|🩸))[\\s\\S]{0,60}?\\b(?:(?:next|n3x7|net|nxet|n37)[\\s\\S]{0,24}?(?:week|w33k|wek|ewek|day|month)|tomorrow|tonight)\\b"
+      },
+      "score": 0.82,
+      "languages": [],
+      "explanation": "Threat: weapon/death emoji sequence with future target timing"
+    },
+    {
+      "id": "threat_uk_kill_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:я\\s+тебе\\s+(?:вб(?:'|)ю|задушу|приріжу|знищу|закопаю)|я\\s+вб(?:'|)ю\\s+тебе|задушу\\s+тебе|приб(?:'|)ю\\s+тебе|тебе\\s+зачищу|я\\s+знаю\\s+де\\s+ти\\s+будеш)"
+      },
+      "score": 0.88,
+      "languages": ["uk", "ru"],
+      "explanation": "Threat: first-person violence threat in UA/RU"
+    },
+    {
+      "id": "threat_conditional_softened_en_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:if\\s+you\\s+(?:tell|talk|leave|run|report|say|breathe|move)\\s+(?:anyone|anything|to\\s+anyone|a\\s+word|the\\s+police|the\\s+cops)[\\s\\S]{0,80}?(?:regret|kill|hurt|destroy|make\\s+sure|won'?t\\s+(?:recognise|recognize|see)|never\\s+see|burn|happens?\\s+to))|(?:by\\s+'?regret'?\\s+i\\s+don'?t\\s+mean)"
+      },
+      "score": 0.85,
+      "languages": ["en"],
+      "explanation": "Threat: conditional softened threat (if you X, regret/kill/hurt)"
+    },
+    {
+      "id": "threat_blackmail_screenshots_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:i\\s+still\\s+have\\s+the\\s+screenshots?|you\\s+have\\s+\\d+\\s+hours?\\s+to\\s+pay|or\\s+your\\s+(?:parents|family|boss|friends)\\s+see\\s+(?:them|it|these)|i\\s+just\\s+sent\\s+a\\s+preview\\s+to\\s+your|the\\s+full\\s+set\\s+is\\s+next|якщо\\s+не\\s+(?:заплатиш|переведеш)|маєш\\s+\\d+\\s+годин)"
+      },
+      "score": 0.87,
+      "languages": [],
+      "explanation": "Threat: blackmail with screenshots / image-leak ultimatum"
+    },
+    {
+      "id": "threat_weapon_specific_en_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:i\\s+bought\\s+(?:the|a)\\s+(?:gun|pistol|rifle|knife|gasoline|gas|rope)|there\\s+are\\s+\\d+\\s+rounds?\\s+in\\s+it|i'?ll\\s+use\\s+it\\s+on\\s+you|i\\s+have\\s+(?:the|a)\\s+(?:gun|knife|weapon)\\s+ready|loaded\\s+and\\s+waiting|i'?m\\s+breaking\\s+(?:the\\s+door|in))"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Threat: explicit weapon mention with intent toward target"
+    },
+    {
+      "id": "threat_school_shooter_en_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:don'?t\\s+(?:(?:show|sow)\\s+up\\s+|come\\s+)to\\s+(?:school|5ch00l)\\s+(?:tomorrow|70m0rr0w)[\\s\\S]{0,80}?(?:regret|r3gr37|won'?t|sorry|empty|quiet)|especially\\s+(?:the|7h3)\\s+\\d+(?:th|st|nd|rd)?\\s+(?:graders|gr4d3r5|years?|class)|cafeteria\\s+will\\s+be\\s+(?:quiet|empty|silent)\\s+by|trust\\s+me\\s*[,.]?\\s*the\\s+(?:cafeteria|hallway|gym)\\s+will)"
+      },
+      "score": 0.93,
+      "languages": ["en"],
+      "explanation": "Threat: school-attack warning / countdown"
+    },
+    {
+      "id": "threat_family_target_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:i\\s*(?:'|’)?\\s*ll\\s+(?:start|5747|stat)\\s+with\\s+your\\s+(?:kid|kids|daughter|son|wife|husband|mother|mom|dad|family)|she\\s+doesn'?t\\s+have\\s+to\\s+know\\s+what'?s\\s+coming|your\\s+(?:little\\s+)?(?:sister|brother|daughter|son)\\s+[A-Z][a-z]+[\\s\\S]{0,80}?(?:attends|goes\\s+to|knows)[\\s\\S]{0,40}?(?:want\\s+a\\s+(?:picture|photo)|bus\\s+stop\\s+tomorrow|what'?s\\s+coming))"
+      },
+      "score": 0.90,
+      "languages": ["en"],
+      "explanation": "Threat: family-member targeting (coercive)"
+    },
+    {
+      "id": "threat_anon_swarm_short_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:^|\\s)(?:u\\s+r\\s+(?:dead|daed|deda)\\s+(?:next\\s+(?:week|month|day)|tomorrow|tonight|in\\s+\\d)|ur\\s+(?:dead|daed|deda)\\.?\\s+for\\s+real|count\\s+the\\s+days\\s+kid|u\\s+won'?t\\s+make\\s+it\\s+to\\s+graduation|ur\\s+dead\\s+kid)"
+      },
+      "score": 0.84,
+      "languages": ["en"],
+      "explanation": "Threat: short-form anonymous death message ('u r dead', 'count the days')"
+    },
+    {
+      "id": "threat_imminent_proximity_001",
+      "threat_type": "threat",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:i\\s+am\\s+waiting\\s+outside\\s+(?:the\\s+)?(?:back\\s+gate|your\\s+(?:house|home|door)|gym|gmy|school)|i'?m\\s+outside\\s+your\\s+(?:gym|gmy|house|home|school|door)\\s+now|come\\s+out\\s+(?:right\\s+)?now|i'?ll\\s+(?:be|come)\\s+(?:there|up|over)|open\\s+(?:it|the\\s+door)\\s+or\\s+i\\s+break\\s+it|i\\s+can\\s+hear\\s+you\\s+breathing|i'?m\\s+on\\s+your\\s+floor)"
+      },
+      "score": 0.92,
+      "languages": ["en"],
+      "explanation": "Threat: imminent proximity (waiting outside, on your floor, breaking in)"
+    },
+    {
+      "id": "threat_consent_coercion_001",
+      "threat_type": "explicit",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:you\\s+will\\s+sleep\\s+with\\s+me\\s+(?:tonight|tomorrow)\\s+whether\\s+you\\s+want\\s+(?:to|70)\\s+or\\s+not|no\\s+is\\s+not\\s+an\\s+answer\\s+tonight|if\\s+the\\s+door\\s+is\\s+locked\\s+i'?m\\s+breaking\\s+it|i'?m\\s+coming\\s+over\\s+whether)"
+      },
+      "score": 0.90,
+      "languages": ["en"],
+      "explanation": "Explicit: sexual coercion / consent violation language"
+    },
+    {
+      "id": "doxxing_target_lives_at_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:here'?s\\s+)?where\\s+(?:@?\\w{2,40}|she|he|they|that\\s+(?:guy|girl|kid)|the\\s+target)\\s+(?:actually\\s+)?(?:liv(?:e|es|s)?|works?|goes\\s+to\\s+school)|@?\\w{2,40}\\s+(?:liv(?:e|es|s)?|stays?)\\s+(?:at|on)\\s+|find\\s+(?:@?\\w{2,40}|her|him|them|that\\s+(?:guy|girl))\\s+at\\s+|(?:she|he|they|@?\\w{2,40})\\s+liv(?:e|es|s)?\\s+at\\s+\\d+\\s+[A-Z][a-z]+\\s+(?:st|street|ave|avenue|rd|road|drive|dr|ln|lane|court|ct|blvd|way))"
+      },
+      "score": 0.85,
+      "languages": ["en"],
+      "explanation": "Doxxing: explicit pointer to a target's address / location"
+    },
+    {
+      "id": "doxxing_target_lives_at_uk_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:ось\\s+(?:де|адреса)\\s+(?:цієї|цього|@\\w+|нашого|неї|його)|@\\w+\\s+(?:живе|працює)\\s+(?:за\\s+адресою|на\\s+вулиці|у\\s+місті)|працює\\s+(?:ця\\s+)?(?:активістк|журналістк|вчительк|особа|@\\w+)|@\\w+\\s+(?:навчається|вчиться|ходить\\s+до\\s+школи)\\s+(?:у|в)\\s+|телефон\\s+(?:офісу|її|його|@\\w+))"
+      },
+      "score": 0.85,
+      "languages": ["uk", "ru"],
+      "explanation": "Doxxing: outing a target's address / workplace / school in UA/RU"
+    },
+    {
+      "id": "doxxing_adversarial_framing_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:knock\\s+yourself\\s+out|go\\s+for\\s+it|have\\s+at\\s+(?:it|her|him|them)|do\\s+what\\s+(?:you|y'?all|yall)\\s+want|make\\s+(?:her|his|their)\\s+life\\s+hell|pass\\s+it\\s+(?:around|along)|repost\\s+(?:the\\s+address|in\\s+every\\s+channel)|drop\\s+(?:the\\s+)?(?:address|info|dox|bundle)|burner\\s+accounts?\\s+only|fake\\s+(?:pizza\\s+orders?|deliveries))[^.\\n]{0,200}?(?:\\d{3}[\\s\\-]\\d{3}[\\s\\-]\\d{4}|\\d+\\s+[A-Z][a-z]+\\s+(?:st|street|ave|avenue|rd|road|drive|dr|ln|lane|court|ct|blvd|way))"
+      },
+      "score": 0.92,
+      "languages": ["en"],
+      "explanation": "Doxxing: hostile / coordination framing co-occurring with address or phone"
+    },
+    {
+      "id": "doxxing_third_party_proxy_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:i'?m\\s+just\\s+passing\\s+it\\s+on|f(?:or|o)warded\\s*:?\\s+my\\s+friend\\s+g(?:ot|o|0)|don'?t\\s+blame\\s+me|since\\s+(?:she|he|they)\\s+ghosted\\s+me\\s*,?\\s+here\\s+is|since\\s+(?:she|he|they)\\s+(?:left|dumped|broke\\s+up\\s+with)\\s+me|got\\s+(?:her|his|their)\\s+info\\s+from)\\s*[^.\\n]{0,150}?(?:\\d{3}[\\s\\-]\\d{3}[\\s\\-]\\d{4}|\\d+\\s+[A-Z][a-z]+\\s+(?:st|street|ave|avenue|rd|road|drive|dr|ln|lane|court|ct|blvd|way))"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Doxxing: third-party laundering ('just passing it on') of target's PII"
+    },
+    {
+      "id": "doxxing_stalker_proximity_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:i'?m\\s+outside\\s+(?:your|ur)\\s+(?:house|home|apartment|window)\\s+(?:right\\s+now|rn)|i\\s+(?:can\\s+see|just\\s+saw)\\s+(?:your|ur)\\s+(?:bedroom|kitchen|living\\s+room|window|lights)|(?:white|black|red|blue|silver)\\s+(?:sedan|van|suv)\\s+(?:across\\s+the\\s+street|parked|outside)|(?:ur|your)\\s+(?:bedroom|second[\\s\\-]?floor)\\s+light\\s+just\\s+turned|knock\\s+at\\s+your\\s+door\\s+in)"
+      },
+      "score": 0.93,
+      "languages": ["en"],
+      "explanation": "Doxxing + stalker proximity threat: attacker signalling presence at target location"
+    },
+    {
+      "id": "doxxing_family_enumeration_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:(?:your|her|his|their)\\s+(?:mom|mother|dad|father|sister|brother|aunt|uncle|grandma|grandpa)\\s+[A-Z][a-z]+\\s+(?:works?\\s+(?:at|as)|does)\\s+|(?:mom|mother|dad|father)'?s\\s+name:?\\s*[A-Z][a-z]+\\b[^.\\n]{0,80}?(?:works?|at|hospital|pharmacy|bank|school)|your\\s+(?:little\\s+)?(?:sister|brother|son|daughter)\\s+[A-Z][a-z]+\\s+(?:attends?|goes\\s+to|class))"
+      },
+      "score": 0.86,
+      "languages": ["en"],
+      "explanation": "Doxxing: enumeration of target's family members + their workplaces / schools"
+    },
+    {
+      "id": "doxxing_school_phone_combo_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:she|he|they)\\s+(?:goes\\s+to|attends|is\\s+at)\\s+(?:[A-Z][\\w]+\\s+)*(?:high|elementary|middle|junior|HS|MS|school)[^\\n]{0,120}?(?:cell|phone|number|num)\\s*[:\\-]?\\s*\\d{3}[\\s\\-]\\d{3}[\\s\\-]\\d{4}|(?:she|he|they)\\s+(?:goes\\s+to|attends)\\s+(?:[A-Z][\\w]+\\s+)*(?:high|elementary|HS)[^\\n]{0,100}?\\b(?:freshman|sophomore|junior|senior|grade\\s*\\d|\\d+(?:st|nd|rd|th)\\s+grade)[^\\n]{0,100}?\\d{3}[\\s\\-]\\d{3}[\\s\\-]\\d{4}|locker\\s+\\d+[^\\n]{0,100}?\\d{3}[\\s\\-]\\d{3}[\\s\\-]\\d{4}"
+      },
+      "score": 0.84,
+      "languages": ["en"],
+      "explanation": "Doxxing: third-person + school identifier + phone number composite"
+    },
+    {
+      "id": "doxxing_school_phone_resilient_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?is)(?:she|5h3|he|they|@?\\w{2,40})\\s+(?:(?:g(?:oe|o)?s|g035)\\s+(?:to|70)|attends|is\\s+at)\\s+[^\\n]{0,90}?\\b(?:high|h1gh|elementary|middle|junior|hs|ms|school)\\b[^\\n]{0,170}?\\b(?:ce?ll|c3ll|phone|ph0n3|number|numb3r|num)\\b\\s*[:\\-]?\\s*\\d{3}[\\s\\-]?\\d{3}[\\s\\-]?\\d{4}"
+      },
+      "score": 0.86,
+      "languages": ["en"],
+      "explanation": "Doxxing: resilient school + phone disclosure under spacing/emoji perturbation"
+    },
+    {
+      "id": "doxxing_phone_words_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:\\b\\w+'?s\\s+)?(?:number|cell|phone)\\s*[:\\-]?[^A-Za-z0-9]{0,24}(?:zero|ezro|one|two|three|four|five|six|seven|eight|nine)(?:[^A-Za-z0-9]{1,24}(?:zero|ezro|one|two|three|four|five|six|seven|eight|nine)){6,12}\\b"
+      },
+      "score": 0.90,
+      "languages": ["en"],
+      "explanation": "Doxxing: phone number spelled out as words"
+    },
+    {
+      "id": "doxxing_phone_trailing_hostile_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:\\+?1\\s*)?\\d{3}[\\s\\-]?\\d{3}[\\s\\-]?\\d{4}\\b[^\\n]{0,90}\\b(?:that\\s*(?:'|\\s)?s\\s+)?(?:her|hre|his|their)\\s+(?:cel|cell|phone|number)\\b[^\\n]{0,90}\\b(?:g?o\\s+for\\s+(?:it|17)|knock\\s+(?:yourself|yourselves|ourselves?)\\s+out|have\\s+at\\s+(?:it|her|him|them)|pass\\s+it\\s+(?:around|along))\\b"
+      },
+      "score": 0.90,
+      "languages": ["en"],
+      "explanation": "Doxxing: disclosed phone followed by hostile sharing / action cue"
+    },
+    {
+      "id": "doxxing_spelled_out_address_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:target|taget|@?\\w{2,40}|she|he|they)\\s+liv(?:e|es|s|se)?\\s+at\\s+(?:(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fortyfive|fifty|sixty|seventy|eighty|ninety|hundred)[\\s\\-]+){2,14}(?:[a-z]+\\s+){0,4}(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|blvd|way)\\b"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Doxxing: target address spelled out to evade numeric address matching"
+    },
+    {
+      "id": "doxxing_leet_address_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:target|taget|74rg37|@?\\w{2,40})\\s+(?:liv(?:e|es|s|se)?|l1v35)\\s+(?:at|47)\\s+[^\\n]{0,140}\\b(?:street|st|57|avenue|ave|4v3|road|rd|drive|dr|dr1v3|lane|ln|court|ct|blvd|way)\\b"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Doxxing: leetspeak address disclosure using target + lives-at structure"
+    },
+    {
+      "id": "doxxing_revenge_info_leet_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:since|51nc3)\\s+(?:she|5h3|he|they)\\s+(?:ghosted|gh0573d)\\s+(?:me|m3)[^\\n]{0,180}(?:liv(?:e|es|s)?|l1v35)\\s+(?:at|47)\\s+\\d+\\s+[A-Z0-9][A-Za-z0-9]+\\s+(?:st|57|street|ave|4v3|road|rd|drive|dr|ln|lane|court|ct)\\b[^\\n]{0,140}(?:works?|w0rk5)\\s+(?:as|45|at|47)"
+      },
+      "score": 0.90,
+      "languages": ["en"],
+      "explanation": "Doxxing: leetspeak revenge disclosure containing address and workplace"
+    },
+    {
+      "id": "doxxing_pii_bundle_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b\\d{1,5}\\s+[A-Z][a-z]+\\s+(?:st|street|ave|avenue|rd|road|drive|dr|ln|lane|court|ct|blvd|way)\\b[^\\n]{0,130}\\b\\d{3}[\\s\\-]?\\d{3}[\\s\\-]?\\d{4}\\b[^\\n]{0,90}\\b(?:locker|parents|brother|sister|school|grade|class)\\b"
+      },
+      "score": 0.88,
+      "languages": ["en"],
+      "explanation": "Doxxing: bundled address + phone + school/family details"
+    },
+    {
+      "id": "doxxing_bundle_distribution_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:drop|post|share|repost)\\s+(?:the\\s+)?(?:full\\s+)?(?:dox|doxx|bundle|address|info)\\s+(?:in|to|around|every|the\\s+group|the\\s+discord)\\b"
+      },
+      "score": 0.84,
+      "languages": ["en"],
+      "explanation": "Doxxing: active instruction to distribute a dox / PII bundle"
+    },
+    {
+      "id": "doxxing_identity_unmasking_001",
+      "threat_type": "doxxing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:that\\s+anon\\s+account\\s+@\\w+\\s+is\\s+actually|@\\w+\\s+is\\s+(?:actually|really)\\s+[A-Z][a-z]+\\s+[A-Z][a-z]+|his\\s+linkedin\\s+confirms|her\\s+linkedin\\s+confirms|photo\\s+matches|реальне\\s+ім(?:'|)я\\s+цього\\s+анона|справжнє\\s+ім(?:'|)я\\s+@\\w+)"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "Doxxing: identity unmasking of anonymous account holder"
+    },
+    {
+      "id": "pii_ssn_format_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:^|\\s|[:;,])(?:ssn|social\\s+security|номер\\s+(?:соц|пенсійний))\\s*(?:is|:|=)?\\s*\\d{3}[\\-\\s]\\d{2}[\\-\\s]\\d{4}\\b|\\b\\d{3}\\-\\d{2}\\-\\d{4}\\b\\s*(?:,|\\.|$|;|that|that's|that\\s+is)"
+      },
+      "score": 0.88,
+      "languages": [],
+      "explanation": "PII: explicit SSN value shared in plaintext"
+    },
+    {
+      "id": "pii_credit_card_format_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:card|карт[аиу]|card\\s+(?:number|no)|num|number)\\s*(?:is|:|=)?\\s*(?:\\d{4}[\\s\\-]){3}\\d{4}\\b|\\b(?:\\d{4}[\\s\\-]){3}\\d{4}\\b\\s*(?:,?\\s*(?:exp|expir|valid|cvv|cvc|вал|до))"
+      },
+      "score": 0.92,
+      "languages": [],
+      "explanation": "PII: explicit credit / payment card number in plaintext"
+    },
+    {
+      "id": "pii_cvv_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:cvv2?|cvc2?|security\\s+code|код\\s+безпеки|cvv\\s+код)\\s*(?:is|=|:|\\-)?\\s*\\d{3,4}\\b"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "PII: CVV / CVC code shared in plaintext"
+    },
+    {
+      "id": "pii_iban_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "\\b(?:[A-Z]{2}\\d{2}\\s?(?:[A-Z0-9]{4}\\s?){2,7}[A-Z0-9]{1,4})\\b"
+      },
+      "score": 0.80,
+      "languages": [],
+      "explanation": "PII: IBAN format account number"
+    },
+    {
+      "id": "pii_routing_account_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\brouting\\s*(?:number|#|no)?\\s*[:\\-]?\\s*\\d{9}\\b[^.]{0,40}?\\baccount\\s*(?:number|#|no)?\\s*[:\\-]?\\s*\\d{6,17}\\b|\\bтрафовый\\s+\\d{9}.*?счёт\\s+\\d{6,17}"
+      },
+      "score": 0.90,
+      "languages": [],
+      "explanation": "PII: bank routing + account number combo"
+    },
+    {
+      "id": "pii_medicare_id_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\bmedicare\\s+(?:id|number|no|#)?\\s*[:\\-]?\\s*[A-Z0-9]{4}[\\s\\-][A-Z0-9]{3}[\\s\\-][A-Z0-9]{4}\\b"
+      },
+      "score": 0.88,
+      "languages": [],
+      "explanation": "PII: US Medicare Beneficiary Identifier (MBI)"
+    },
+    {
+      "id": "pii_passport_value_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:passport|паспорт(?:а)?|passport\\s+(?:number|no|#))\\s*(?:is|:|=|\\-)?\\s*(?:[A-Z]{1,2}\\s?\\d{6,9}|\\d{7,9})\\b|\\bua\\s*\\d{7,9}\\b"
+      },
+      "score": 0.85,
+      "languages": [],
+      "explanation": "PII: passport number value shared in plaintext"
+    },
+    {
+      "id": "pii_diagnosis_icd_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:diagnosis|діагноз|диагноз|dx)\\b[\\s\\S]{0,16}[A-Z]\\d{2}(?:[\\.\\s]\\d{1,2})?\\b"
+      },
+      "score": 0.78,
+      "languages": [],
+      "explanation": "PII: medical diagnosis (ICD-10) code attached to a named patient context"
+    },
+    {
+      "id": "pii_code_relay_response_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:the\\s+)?(?:sms\\s+|verification\\s+|2fa\\s+|otp\\s+|security\\s+|one[\\s\\-]?time\\s+|6[\\s\\-]?digit\\s+)?code\\s+(?:is|=|:|—|--)\\s*\\d{3,4}[\\s\\-]?\\d{3,4}\\b|\\b(?:got|received|sent\\s+me)\\s+\\d{3}[\\s\\-]?\\d{3}\\b\\s*(?:as\\s+the\\s+code|code|otp)?|\\bcode\\s+is\\s+\\d{6}\\b"
+      },
+      "score": 0.78,
+      "languages": [],
+      "explanation": "PII: victim relays an OTP / verification code back to a counterparty"
+    },
+    {
+      "id": "pii_mothers_maiden_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\bmother(?:'|)?s\\s+maiden(?:\\s+name)?\\s*(?:is|=|:|\\-)?\\s*[A-Z]?[A-Za-z]+\\b|\\bдівоче\\s+прізвище\\s+(?:матері|мати)\\s*[:\\-]?\\s*[А-ЯЇЄІЁ][а-яїєіё]+\\b"
+      },
+      "score": 0.82,
+      "languages": [],
+      "explanation": "PII: mother's maiden name shared (classic identity-recovery question answer)"
+    },
+    {
+      "id": "pii_last4_ssn_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\blast\\s+(?:4|four)\\s+(?:digits?\\s+of\\s+)?ssn\\s*(?:is|=|:|\\-)?\\s*\\d{4}\\b|\\bостанн[іьо]і?\\s+(?:чотири|4)\\s+(?:цифри\\s+)?(?:ссн|номера)\\s*[:\\-]?\\s*\\d{4}\\b"
+      },
+      "score": 0.80,
+      "languages": [],
+      "explanation": "PII: last-4 SSN digits shared in chat"
+    },
+    {
+      "id": "pii_minor_school_pii_combo_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:\\b[A-Z][a-z]+\\s+(?:ele|elem|elementary|primary|school|HS|high\\s+school|школа|середня\\s+школа)[^.\\n]{0,80}?\\b[A-Z][a-z]+\\s+[A-Z][a-z]+[^.\\n]{0,40}?(?:gr|grade|class|клас)\\.?\\s*\\w+|\\b[A-Z][a-z]+\\s+[A-Z][a-z]+,\\s+\\d{1,2},\\s+[^.\\n]{0,80}?(?:ele|elem|elementary|primary|school|HS|high\\s+school|школа|середня\\s+школа)[^.\\n]{0,40}?(?:class|клас|grade|gr\\.?)\\s*\\w+|\\b(?:badge|id|#)\\s*#?\\s*\\d{4,6}\\b[^.\\n]{0,60}?\\bdob\\b\\s*\\d{4}\\-\\d{2}\\-\\d{2})"
+      },
+      "score": 0.78,
+      "languages": [],
+      "explanation": "PII: minor name + age + school + class composite — high identity-theft / safety risk"
+    },
+    {
+      "id": "pii_otp_code_typos_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:the\\s+)?(?:code|cdoe|coe|c0d3)\\s*(?:is|15|=|:|\\-)?\\s*\\d{6,8}\\b"
+      },
+      "score": 0.78,
+      "languages": [],
+      "explanation": "PII: verification code shared despite typo / leet obfuscation"
+    },
+    {
+      "id": "pii_ssn_spaced_context_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:ssn|social\\s+security)\\b(?:\\s+(?:is|15|full|together|number))*\\s*[:=\\-]?\\s*\\d{3}\\s+\\d{2}\\s+\\d{4}\\b|\\b\\d{3}\\s+\\d{2}\\s+\\d{4}\\b\\s*(?:$|;|,|\\.|that|thats|that's)"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "PII: SSN shared with punctuation stripped or spaced groups"
+    },
+    {
+      "id": "pii_credit_card_spelled_digits_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:card|c4rd)\\b(?:[\\s\\S]{0,16}\\b(?:zero|one|two|three|four|our|five|six|seven|eight|nine|oh|o)\\b){12,22}[\\s\\S]{0,100}\\b(?:cvv|cvc)\\b(?:[\\s\\S]{0,16}\\b(?:zero|one|two|three|four|five|six|seven|eight|nine|oh|o)\\b){3,4}"
+      },
+      "score": 0.88,
+      "languages": [],
+      "explanation": "PII: payment card and CVV digits spelled out in words"
+    },
+    {
+      "id": "pii_passport_obfuscated_value_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:p\\W*a\\W*s\\W*s\\W*p\\W*o\\W*r\\W*t|p455p0r7|p45p0r7|assport|passpotr|passport)\\b[\\s\\S]{0,24}(?:u[\\s\\x{200B}]*a|u4|ua)[\\s\\x{200B}\\-]*(?:\\d[\\s\\x{200B}\\-]*){7,9}\\b"
+      },
+      "score": 0.86,
+      "languages": [],
+      "explanation": "PII: passport identifier with zero-width, emoji, typo, or leet obfuscation"
+    },
+    {
+      "id": "pii_dob_address_mothers_maiden_loose_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\bdob\\b\\s+\\d{4}[\\-\\s]\\d{2}[\\-\\s]\\d{2}[\\s\\S]{0,90}\\baddress\\b[\\s\\S]{0,140}\\bmother(?:'s|\\s+s)?\\s+maiden\\s+[A-Za-z]+\\b"
+      },
+      "score": 0.84,
+      "languages": [],
+      "explanation": "PII: DOB + current address + mother's maiden name with punctuation stripped"
+    },
+    {
+      "id": "pii_medicare_last4_obfuscated_001",
+      "threat_type": "pii_leakage",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)\\b(?:last|l457)\\s+(?:4|four)\\s+(?:digits?\\s+of\\s+)?(?:ssn|55n)\\s*[:=\\-]?\\s*\\d{4}\\b|\\b(?:medicare|m3d1c4r3)\\s+(?:id|1d|number|no|#)?\\s*[:\\-]?\\s*[A-Z0-9]{4}[\\s\\-]?[A-Z0-9]{3}[\\s\\-]?[A-Z0-9]{4}\\b"
+      },
+      "score": 0.84,
+      "languages": [],
+      "explanation": "PII: Medicare / last-4 SSN value with leet or separator obfuscation"
+    },
+    {
+      "id": "phishing_email_giveaway_en_001",
+      "threat_type": "phishing",
+      "kind": {
+        "type": "regex",
+        "pattern": "(?i)(?:free\\s+(?:steam\\s+skins?|cs2\\s+skins?|robux|v[\\-]?bucks|in[\\-]?game\\s+items?|airpods?|iphone(?:\\s+\\d+)?)|claim\\s+(?:your\\s+)?(?:free\\s+)?(?:steam\\s+skins?|prize|reward|gift|airdrop)|first\\s+\\d+\\s+only\\b|login\\s+with\\s+steam\\s+to\\s+receive)"
+      },
+      "score": 0.85,
+      "languages": ["en"],
+      "explanation": "Phishing: gaming / electronics giveaway bait"
     }
   ]
 }

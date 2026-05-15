@@ -39,6 +39,25 @@ mod tests {
     }
 
     #[test]
+    fn detect_matches_ukrainian_real_world_grooming_variants() {
+        let cases = [
+            "Це наш маленький секрет, не розказуй батькам про наші чати.",
+            "Ти дуже доросла для 13, з тобою можна говорити як з рівною.",
+            "Я можу подарувати тобі рідкісний скін, тільки не роби з цього шум.",
+            "Давай перейдемо в інший додаток, тут батьки можуть побачити повідомлення.",
+            "Якщо батьки питають, кажи що я однокласник.",
+            "Ти можеш довіряти тільки мені, інші тебе не розуміють.",
+        ];
+
+        for case in cases {
+            assert!(
+                detect(&input(case)).is_some(),
+                "expected grooming signal for: {case}"
+            );
+        }
+    }
+
+    #[test]
     fn detect_all_returns_multiple_grooming_hits() {
         let signals = detect_all(&input(
             "our little secret. move to private chat. meet me tonight.",

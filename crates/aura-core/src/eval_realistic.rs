@@ -7,7 +7,7 @@ use serde::Deserialize;
 use crate::ids::{ConversationId, SenderId};
 use crate::{
     canonical_policy_action_expectations, evaluate_policy_action_gates,
-    evaluate_scenario_quality_gates, pre_release_policy_action_gates, run_scenario_case,
+    evaluate_scenario_quality_gates, pre_release_policy_action_gates, run_scenario_cases,
     summarize_policy_actions_with_expectation_names, summarize_scenario_runs, AccountType,
     AuraConfig, ContentType, ConversationType, MessageInput, PolicyActionQualityGates,
     PolicyActionSummary, ProtectionLevel, ScenarioCase, ScenarioEvaluationSummary,
@@ -185,10 +185,7 @@ pub fn run_realistic_chat_suite(
 ) -> RealisticChatSuiteSummary {
     let bundle = realistic_chat_bundle();
     let scenarios = bundle.scenarios;
-    let runs: Vec<_> = scenarios
-        .iter()
-        .map(|scenario| run_scenario_case(pattern_db, &scenario.case))
-        .collect();
+    let runs = run_scenario_cases(pattern_db, scenarios.iter().map(|scenario| &scenario.case)).runs;
     let expectations = canonical_policy_action_expectations();
     let expected_policy_cases = expectations
         .iter()
@@ -813,6 +810,105 @@ mod tests {
                 .is_none_or(|recommendation| recommendation.ui_actions.is_empty()),
             "{final_result:?}"
         );
+    }
+
+    #[test]
+    fn realistic_long_parent_loop_logistics_case_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let case = realistic_case("realistic_uk_trusted_adult_long_parent_loop_safe");
+        let run = crate::run_scenario_case(&db, &case);
+
+        for result in &run.step_results {
+            assert_eq!(result.threat_type, ThreatType::None, "{result:?}");
+            assert_eq!(result.action, crate::Action::Allow, "{result:?}");
+            assert!(
+                result
+                    .recommended_action
+                    .as_ref()
+                    .is_none_or(|recommendation| recommendation.ui_actions.is_empty()),
+                "{result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn realistic_slow_burn_gaming_grooming_crosses_threshold() {
+        let db = PatternDatabase::default_mvp();
+        let case = realistic_case("realistic_en_slow_burn_gaming_grooming_12_steps");
+        let run = crate::run_scenario_case(&db, &case);
+        let peak_grooming = run
+            .step_results
+            .iter()
+            .map(|result| crate::predicted_score_for_threat(result, ThreatType::Grooming))
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            peak_grooming >= case.detection_threshold,
+            "slow-burn gaming grooming should cross threshold, peak={peak_grooming}: {run:?}"
+        );
+        assert!(
+            run.lead_time
+                .as_ref()
+                .is_some_and(|lead| lead.detected_before_onset || lead.detected_after_onset),
+            "slow-burn gaming grooming should produce lead-time detection: {run:?}"
+        );
+    }
+
+    #[test]
+    fn realistic_long_supportive_peer_boundary_stays_clean() {
+        let db = PatternDatabase::default_mvp();
+        let case = realistic_case("realistic_en_supportive_peer_long_crisis_boundary_safe");
+        let run = crate::run_scenario_case(&db, &case);
+
+        for result in &run.step_results {
+            assert_eq!(result.threat_type, ThreatType::None, "{result:?}");
+            assert_eq!(result.action, crate::Action::Allow, "{result:?}");
+            assert!(
+                result
+                    .recommended_action
+                    .as_ref()
+                    .is_none_or(|recommendation| recommendation.ui_actions.is_empty()),
+                "{result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn realistic_long_bullying_selfharm_cascade_escalates_to_crisis_support() {
+        let db = PatternDatabase::default_mvp();
+        let case = realistic_case("realistic_uk_group_long_dogpile_to_selfharm");
+        let run = crate::run_scenario_case(&db, &case);
+        let peak_selfharm = run
+            .step_results
+            .iter()
+            .map(|result| crate::predicted_score_for_threat(result, ThreatType::SelfHarm))
+            .fold(0.0f32, f32::max);
+        let crisis_result = run
+            .step_results
+            .iter()
+            .find(|result| {
+                result
+                    .recommended_action
+                    .as_ref()
+                    .is_some_and(|recommendation| {
+                        recommendation
+                            .ui_actions
+                            .contains(&crate::UiAction::ShowCrisisSupport)
+                    })
+            })
+            .expect("crisis support recommendation");
+
+        assert!(
+            peak_selfharm >= case.detection_threshold,
+            "bullying-to-selfharm cascade should cross threshold, peak={peak_selfharm}: {run:?}"
+        );
+        assert_eq!(crisis_result.threat_type, ThreatType::SelfHarm);
+        assert!(crisis_result
+            .recommended_action
+            .as_ref()
+            .is_some_and(|recommendation| recommendation
+                .ui_actions
+                .contains(&crate::UiAction::EscalateToGuardian)));
     }
 
     #[test]

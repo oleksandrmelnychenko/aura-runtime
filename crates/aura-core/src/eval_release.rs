@@ -21,7 +21,7 @@ use crate::{
     pre_release_robustness_gates, pre_release_social_context_gates,
     pre_release_social_context_policy_gates, run_corpus_style_suite,
     run_external_curated_gold_suite, run_external_curated_suite, run_realistic_chat_suite,
-    run_robustness_suite, run_scenario_case, run_social_context_suite, summarize_scenario_runs,
+    run_robustness_suite, run_scenario_cases, run_social_context_suite, summarize_scenario_runs,
     CorpusStyleSuiteSummary, GateComparison, LanguageSliceSummary, PolicyActionSummary,
     RealisticChatSuiteSummary, RobustnessSuiteSummary, ScenarioEvaluationSummary,
     ScenarioGateCheck, ScenarioGateReport, ScenarioQualityGates, SocialContextSuiteSummary,
@@ -577,10 +577,8 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
     let drift_thresholds = default_release_drift_thresholds();
     assert_release_threshold_sanity(support_thresholds, drift_thresholds);
 
-    let canonical_runs: Vec<_> = canonical_messenger_scenarios()
-        .iter()
-        .map(|case| run_scenario_case(pattern_db, case))
-        .collect();
+    let canonical_cases = canonical_messenger_scenarios();
+    let canonical_runs = run_scenario_cases(pattern_db, canonical_cases.iter()).runs;
     let canonical_summary = summarize_scenario_runs(&canonical_runs, bin_count);
     let canonical_suite = build_scenario_suite_report(
         "canonical_messenger",
@@ -589,10 +587,8 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
         support_thresholds,
     );
 
-    let manipulation_runs: Vec<_> = canonical_manipulation_scenarios()
-        .iter()
-        .map(|case| run_scenario_case(pattern_db, case))
-        .collect();
+    let manipulation_cases = canonical_manipulation_scenarios();
+    let manipulation_runs = run_scenario_cases(pattern_db, manipulation_cases.iter()).runs;
     let manipulation_summary = summarize_scenario_runs(&manipulation_runs, bin_count);
     let manipulation_suite = build_scenario_suite_report(
         "canonical_manipulation",
@@ -601,10 +597,8 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
         support_thresholds,
     );
 
-    let multilingual_runs: Vec<_> = canonical_multilingual_scenarios()
-        .iter()
-        .map(|case| run_scenario_case(pattern_db, case))
-        .collect();
+    let multilingual_cases = canonical_multilingual_scenarios();
+    let multilingual_runs = run_scenario_cases(pattern_db, multilingual_cases.iter()).runs;
     let multilingual_summary = summarize_scenario_runs(&multilingual_runs, bin_count);
     let multilingual_suite = build_scenario_suite_report(
         "canonical_multilingual",
@@ -613,10 +607,8 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
         support_thresholds,
     );
 
-    let noisy_runs: Vec<_> = canonical_noisy_slang_scenarios()
-        .iter()
-        .map(|case| run_scenario_case(pattern_db, case))
-        .collect();
+    let noisy_cases = canonical_noisy_slang_scenarios();
+    let noisy_runs = run_scenario_cases(pattern_db, noisy_cases.iter()).runs;
     let noisy_summary = summarize_scenario_runs(&noisy_runs, bin_count);
     let noisy_suite = build_scenario_suite_report(
         "canonical_noisy_slang",

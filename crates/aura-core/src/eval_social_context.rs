@@ -11,7 +11,7 @@ use crate::{
     military_coordinate_leak_case, negative_control_counter_speech_propaganda_case,
     negative_control_opsec_warning_case, negative_control_quoted_threat_report_case,
     negative_control_supportive_selfharm_response_case, pre_release_corpus_style_gates,
-    pre_release_policy_action_gates, run_scenario_case,
+    pre_release_policy_action_gates, run_scenario_cases,
     summarize_policy_actions_with_expectation_names, summarize_scenario_runs, AccountType,
     ConversationType, CorpusStyleProfile, LatentStateKind, PolicyActionQualityGates,
     PolicyActionSummary, RiskHorizon, ScenarioCase, ScenarioEvaluationSummary, ScenarioGateReport,
@@ -168,10 +168,7 @@ pub fn run_social_context_suite(
     bin_count: usize,
 ) -> SocialContextSuiteSummary {
     let prepared = prepare_social_context_cases(cases, profiles);
-    let runs: Vec<_> = prepared
-        .iter()
-        .map(|prepared| run_scenario_case(pattern_db, &prepared.case))
-        .collect();
+    let runs = run_scenario_cases(pattern_db, prepared.iter().map(|prepared| &prepared.case)).runs;
     let expectations = canonical_policy_action_expectations();
     let expected_policy_cases = expectations
         .iter()
@@ -867,8 +864,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        acute_selfharm_case, negative_control_trusted_adult_case, trusted_adult_grooming_case,
-        AnalysisResult, LatentStateKind, RiskHorizon, ScenarioRunResult,
+        acute_selfharm_case, negative_control_trusted_adult_case, run_scenario_case,
+        trusted_adult_grooming_case, AnalysisResult, LatentStateKind, RiskHorizon,
+        ScenarioRunResult,
     };
 
     fn final_result(case: &ScenarioCase) -> AnalysisResult {

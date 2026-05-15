@@ -3,32 +3,48 @@ use std::sync::OnceLock;
 use aura_domain::{match_all_lexical_rules, match_lexical_rules, DomainInput, DomainSignal};
 use regex::Regex;
 
-use crate::lexicon;
+use crate::{lexicon, text::scan_variants_with_leet};
 
 pub fn detect(input: &DomainInput) -> Option<DomainSignal> {
     let text = input.text.as_deref()?;
-    if let Some(signal) = match_lexical_rules(text, lexicon::psyops_rules()) {
-        return Some(signal);
+    for variant in scan_variants_with_leet(text) {
+        if let Some(signal) = match_lexical_rules(&variant, lexicon::psyops_rules()) {
+            return Some(signal);
+        }
+        if let Some(signal) = detect_regex(&variant) {
+            return Some(signal);
+        }
     }
-    detect_regex(text)
+    None
 }
 
 pub fn detect_all(input: &DomainInput) -> Vec<DomainSignal> {
     let Some(text) = input.text.as_deref() else {
         return Vec::new();
     };
-    let mut signals = match_all_lexical_rules(text, lexicon::psyops_rules());
+    let mut signals = Vec::new();
     let mut seen_keys: Vec<String> = Vec::new();
-    for signal in &signals {
-        seen_keys.push(signal.threat_key.clone());
-    }
-    for signal in detect_all_regex(text) {
-        if !seen_keys.contains(&signal.threat_key) {
-            seen_keys.push(signal.threat_key.clone());
-            signals.push(signal);
+
+    for variant in scan_variants_with_leet(text) {
+        for signal in match_all_lexical_rules(&variant, lexicon::psyops_rules()) {
+            push_unique_signal(signal, &mut signals, &mut seen_keys);
+        }
+        for signal in detect_all_regex(&variant) {
+            push_unique_signal(signal, &mut signals, &mut seen_keys);
         }
     }
     signals
+}
+
+fn push_unique_signal(
+    signal: DomainSignal,
+    signals: &mut Vec<DomainSignal>,
+    seen_keys: &mut Vec<String>,
+) {
+    if !seen_keys.contains(&signal.threat_key) {
+        seen_keys.push(signal.threat_key.clone());
+        signals.push(signal);
+    }
 }
 
 fn detect_regex(text: &str) -> Option<DomainSignal> {

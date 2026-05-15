@@ -1,4 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
 
 use aura_patterns::PatternDatabase;
 use serde::Serialize;
@@ -122,6 +124,144 @@ pub struct ScenarioRunResult {
     pub step_results: Vec<AnalysisResult>,
     pub calibration_examples: Vec<RiskExample>,
     pub lead_time: Option<LeadTimeResult>,
+}
+
+struct EvalKidsMemoryGuard;
+
+impl EvalKidsMemoryGuard {
+    fn new() -> Self {
+        aura_kids::pipeline::clear_kids_memory();
+        Self
+    }
+}
+
+impl Drop for EvalKidsMemoryGuard {
+    fn drop(&mut self) {
+        aura_kids::pipeline::clear_kids_memory();
+    }
+}
+
+pub struct ScenarioCaseRunner<'a> {
+    pattern_db: &'a PatternDatabase,
+    analyzers: HashMap<String, Analyzer>,
+}
+
+impl<'a> ScenarioCaseRunner<'a> {
+    pub fn new(pattern_db: &'a PatternDatabase) -> Self {
+        Self {
+            pattern_db,
+            analyzers: HashMap::new(),
+        }
+    }
+
+    pub fn run(&mut self, case: &ScenarioCase) -> ScenarioRunResult {
+        let _kids_memory_guard = EvalKidsMemoryGuard::new();
+        let key = scenario_config_key(&case.config);
+        let analyzer = self
+            .analyzers
+            .entry(key)
+            .or_insert_with(|| Analyzer::new(case.config.clone(), self.pattern_db));
+
+        analyzer.reset_runtime_state();
+        let result = run_scenario_case_on_analyzer(analyzer, case);
+        analyzer.reset_runtime_state();
+        result
+    }
+
+    pub fn analyzer_count(&self) -> usize {
+        self.analyzers.len()
+    }
+}
+
+pub fn run_scenario_cases<'a>(
+    pattern_db: &PatternDatabase,
+    cases: impl IntoIterator<Item = &'a ScenarioCase>,
+) -> ScenarioBatchRunResult {
+    let mut runner = ScenarioCaseRunner::new(pattern_db);
+    let runs = cases.into_iter().map(|case| runner.run(case)).collect();
+    let worker_count = if runner.analyzer_count() == 0 { 0 } else { 1 };
+
+    ScenarioBatchRunResult {
+        runs,
+        analyzer_instances: runner.analyzer_count(),
+        worker_count,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ScenarioBatchRunResult {
+    pub runs: Vec<ScenarioRunResult>,
+    pub analyzer_instances: usize,
+    pub worker_count: usize,
+}
+
+pub fn run_scenario_cases_parallel(
+    pattern_db: &PatternDatabase,
+    cases: &[ScenarioCase],
+    worker_count: usize,
+) -> ScenarioBatchRunResult {
+    if cases.is_empty() {
+        return ScenarioBatchRunResult {
+            runs: Vec::new(),
+            analyzer_instances: 0,
+            worker_count: 0,
+        };
+    }
+
+    let worker_count = worker_count.max(1).min(cases.len());
+    if worker_count == 1 {
+        let mut runner = ScenarioCaseRunner::new(pattern_db);
+        let runs = cases.iter().map(|case| runner.run(case)).collect();
+        return ScenarioBatchRunResult {
+            runs,
+            analyzer_instances: runner.analyzer_count(),
+            worker_count,
+        };
+    }
+
+    let next_case = AtomicUsize::new(0);
+    let mut indexed_runs = Vec::with_capacity(cases.len());
+    let mut analyzer_instances = 0usize;
+
+    thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            handles.push(scope.spawn(|| {
+                let mut runner = ScenarioCaseRunner::new(pattern_db);
+                let mut worker_runs = Vec::new();
+
+                loop {
+                    let idx = next_case.fetch_add(1, Ordering::Relaxed);
+                    if idx >= cases.len() {
+                        break;
+                    }
+                    worker_runs.push((idx, runner.run(&cases[idx])));
+                }
+
+                (worker_runs, runner.analyzer_count())
+            }));
+        }
+
+        for handle in handles {
+            let (mut worker_runs, worker_analyzers) =
+                handle.join().expect("scenario worker panicked");
+            analyzer_instances += worker_analyzers;
+            indexed_runs.append(&mut worker_runs);
+        }
+    });
+
+    indexed_runs.sort_by_key(|(idx, _)| *idx);
+    let runs = indexed_runs.into_iter().map(|(_, run)| run).collect();
+
+    ScenarioBatchRunResult {
+        runs,
+        analyzer_instances,
+        worker_count,
+    }
+}
+
+fn scenario_config_key(config: &AuraConfig) -> String {
+    serde_json::to_string(config).unwrap_or_else(|_| format!("{config:?}"))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -516,23 +656,15 @@ pub fn summarize_runs_by_language(
 }
 
 pub fn run_scenario_case(pattern_db: &PatternDatabase, case: &ScenarioCase) -> ScenarioRunResult {
-    struct EvalKidsMemoryGuard;
-
-    impl EvalKidsMemoryGuard {
-        fn new() -> Self {
-            aura_kids::pipeline::clear_kids_memory();
-            Self
-        }
-    }
-
-    impl Drop for EvalKidsMemoryGuard {
-        fn drop(&mut self) {
-            aura_kids::pipeline::clear_kids_memory();
-        }
-    }
-
     let _kids_memory_guard = EvalKidsMemoryGuard::new();
     let mut analyzer = Analyzer::new(case.config.clone(), pattern_db);
+    run_scenario_case_on_analyzer(&mut analyzer, case)
+}
+
+fn run_scenario_case_on_analyzer(
+    analyzer: &mut Analyzer,
+    case: &ScenarioCase,
+) -> ScenarioRunResult {
     let mut step_results = Vec::with_capacity(case.steps.len());
     let mut languages = BTreeSet::new();
 
@@ -1456,6 +1588,191 @@ mod tests {
         assert!(
             (summary.negative_false_positive_rate - 0.5).abs() < f32::EPSILON,
             "expected 1/2 false-positive negative scenarios"
+        );
+    }
+
+    #[test]
+    fn scenario_case_runner_reuses_analyzer_for_same_config() {
+        let db = PatternDatabase::empty();
+        let config = AuraConfig::default();
+        let case = ScenarioCase {
+            name: "clean_case".to_string(),
+            config: config.clone(),
+            primary_threat: None,
+            onset_step: None,
+            detection_threshold: 0.6,
+            tracked_threats: Vec::new(),
+            steps: vec![ScenarioStep {
+                timestamp_ms: 1,
+                input: MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some("hello there".to_string()),
+                    image_data: None,
+                    sender_id: "sender".into(),
+                    conversation_id: "dm".into(),
+                    language: Some(config.language.clone()),
+                    conversation_type: ConversationType::Direct,
+                    member_count: None,
+                    server_sender_risk_hint: None,
+                },
+                observed_threats: Vec::new(),
+            }],
+        };
+        let mut runner = ScenarioCaseRunner::new(&db);
+
+        let first = runner.run(&case);
+        let second = runner.run(&case);
+
+        assert_eq!(runner.analyzer_count(), 1);
+        assert_eq!(first.step_results.len(), 1);
+        assert_eq!(second.step_results.len(), 1);
+    }
+
+    #[test]
+    fn scenario_batch_runner_reuses_analyzer_for_same_config() {
+        let db = PatternDatabase::empty();
+        let config = AuraConfig::default();
+        let case = |name: &str| ScenarioCase {
+            name: name.to_string(),
+            config: config.clone(),
+            primary_threat: None,
+            onset_step: None,
+            detection_threshold: 0.6,
+            tracked_threats: Vec::new(),
+            steps: vec![ScenarioStep {
+                timestamp_ms: 1,
+                input: MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some("hello there".to_string()),
+                    image_data: None,
+                    sender_id: "sender".into(),
+                    conversation_id: name.into(),
+                    language: Some(config.language.clone()),
+                    conversation_type: ConversationType::Direct,
+                    member_count: None,
+                    server_sender_risk_hint: None,
+                },
+                observed_threats: Vec::new(),
+            }],
+        };
+        let cases = vec![case("clean_a"), case("clean_b")];
+
+        let batch = run_scenario_cases(&db, &cases);
+
+        assert_eq!(batch.worker_count, 1);
+        assert_eq!(batch.analyzer_instances, 1);
+        assert_eq!(
+            batch
+                .runs
+                .iter()
+                .map(|run| run.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["clean_a", "clean_b"]
+        );
+    }
+
+    #[test]
+    fn scenario_case_runner_clears_kids_memory_between_reused_analyzer_cases() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            protection_level: ProtectionLevel::High,
+            language: "en".to_string(),
+            ..AuraConfig::default()
+        };
+        let case = |name: &str, text: &str, timestamp_ms: u64| ScenarioCase {
+            name: name.to_string(),
+            config: config.clone(),
+            primary_threat: Some(ThreatType::Grooming),
+            onset_step: Some(0),
+            detection_threshold: 0.5,
+            tracked_threats: vec![ThreatType::Grooming],
+            steps: vec![ScenarioStep {
+                timestamp_ms,
+                input: MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some(text.to_string()),
+                    image_data: None,
+                    sender_id: "stranger".into(),
+                    conversation_id: "shared_dm".into(),
+                    language: Some("en".to_string()),
+                    conversation_type: ConversationType::Direct,
+                    member_count: None,
+                    server_sender_risk_hint: None,
+                },
+                observed_threats: vec![ThreatType::Grooming],
+            }],
+        };
+        let seed = case(
+            "seed_secrecy",
+            "our little secret. don't tell your parents.",
+            1_000,
+        );
+        let followup = case(
+            "followup_without_prior_case_memory",
+            "you can only trust me. do it now or i post everything.",
+            2_000,
+        );
+        let mut runner = ScenarioCaseRunner::new(&db);
+
+        let _ = runner.run(&seed);
+        let run = runner.run(&followup);
+
+        assert!(
+            run.step_results.iter().all(|result| !result
+                .reason_codes
+                .iter()
+                .any(|code| code == "domain.kids.memory.grooming_progression")),
+            "reused analyzer leaked kids memory into the next scenario: {:?}",
+            run.step_results
+        );
+    }
+
+    #[test]
+    fn parallel_scenario_runner_preserves_case_order() {
+        let db = PatternDatabase::empty();
+        let config = AuraConfig::default();
+        let case = |name: &str, text: &str| ScenarioCase {
+            name: name.to_string(),
+            config: config.clone(),
+            primary_threat: None,
+            onset_step: None,
+            detection_threshold: 0.6,
+            tracked_threats: Vec::new(),
+            steps: vec![ScenarioStep {
+                timestamp_ms: 1,
+                input: MessageInput {
+                    content_type: ContentType::Text,
+                    text: Some(text.to_string()),
+                    image_data: None,
+                    sender_id: "sender".into(),
+                    conversation_id: name.into(),
+                    language: Some(config.language.clone()),
+                    conversation_type: ConversationType::Direct,
+                    member_count: None,
+                    server_sender_risk_hint: None,
+                },
+                observed_threats: Vec::new(),
+            }],
+        };
+        let cases = vec![
+            case("case_a", "hello a"),
+            case("case_b", "hello b"),
+            case("case_c", "hello c"),
+            case("case_d", "hello d"),
+        ];
+
+        let batch = run_scenario_cases_parallel(&db, &cases, 3);
+
+        assert_eq!(batch.worker_count, 3);
+        assert!(batch.analyzer_instances >= 1);
+        assert_eq!(
+            batch
+                .runs
+                .iter()
+                .map(|run| run.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["case_a", "case_b", "case_c", "case_d"]
         );
     }
 

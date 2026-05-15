@@ -155,5 +155,32 @@ fn main() {
                 if check.passed { "pass" } else { "fail" }
             );
         }
+        for scenario in cohort
+            .evaluation
+            .classification
+            .scenarios
+            .iter()
+            .filter(|scenario| scenario.false_positive)
+        {
+            println!(
+                "    false positive: run={} peak_score={:.2} threshold={:.2} first_step={:?}",
+                scenario.name,
+                scenario.peak_score,
+                scenario.threshold,
+                scenario.first_detection_step
+            );
+        }
+        for scenario in cohort
+            .evaluation
+            .classification
+            .scenarios
+            .iter()
+            .filter(|scenario| scenario.primary_threat.is_some() && !scenario.detected)
+        {
+            println!(
+                "    miss: run={} threat={:?} peak_score={:.2} threshold={:.2}",
+                scenario.name, scenario.primary_threat, scenario.peak_score, scenario.threshold
+            );
+        }
     }
 }

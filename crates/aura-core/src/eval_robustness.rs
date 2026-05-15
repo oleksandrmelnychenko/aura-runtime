@@ -4,7 +4,7 @@ use aura_patterns::PatternDatabase;
 
 use crate::{
     canonical_messenger_scenarios, canonical_multilingual_scenarios,
-    evaluate_scenario_quality_gates, run_scenario_case, summarize_scenario_runs, ScenarioCase,
+    evaluate_scenario_quality_gates, run_scenario_cases, summarize_scenario_runs, ScenarioCase,
     ScenarioEvaluationSummary, ScenarioQualityGates, ThreatCalibrationGate, ThreatType,
 };
 
@@ -202,10 +202,7 @@ pub fn run_robustness_suite(
     bin_count: usize,
 ) -> RobustnessSuiteSummary {
     let variants = generate_robustness_variants(cases, profiles);
-    let runs: Vec<_> = variants
-        .iter()
-        .map(|variant| run_scenario_case(pattern_db, &variant.case))
-        .collect();
+    let runs = run_scenario_cases(pattern_db, variants.iter().map(|variant| &variant.case)).runs;
 
     let mut profile_summaries = Vec::new();
     for profile in profiles {

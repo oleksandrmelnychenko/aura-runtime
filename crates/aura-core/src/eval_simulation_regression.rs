@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::ids::ConversationId;
 use crate::{
     evaluate_policy_action_gates, evaluate_scenario_quality_gates, pre_release_policy_action_gates,
-    run_scenario_case, summarize_policy_actions_with_expectation_names, summarize_scenario_runs,
+    run_scenario_cases, summarize_policy_actions_with_expectation_names, summarize_scenario_runs,
     AccountType, AuraConfig, ContentType, ConversationType, MessageInput, PolicyActionQualityGates,
     PolicyActionSummary, ProtectionLevel, ScenarioCase, ScenarioEvaluationSummary,
     ScenarioGateReport, ScenarioPolicyExpectation, ScenarioQualityGates, ScenarioRunResult,
@@ -233,10 +233,7 @@ pub fn run_pilot_simulation_regression_suite(
 ) -> PilotSimulationRegressionSuiteSummary {
     let bundle = pilot_simulation_regression_bundle();
     let scenarios = bundle.scenarios;
-    let runs: Vec<_> = scenarios
-        .iter()
-        .map(|scenario| run_scenario_case(pattern_db, &scenario.case))
-        .collect();
+    let runs = run_scenario_cases(pattern_db, scenarios.iter().map(|scenario| &scenario.case)).runs;
     let expectations = scenarios
         .iter()
         .map(|scenario| scenario.policy_expectation.clone())

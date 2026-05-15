@@ -43,6 +43,7 @@ pub mod ids;
 pub mod pilot;
 pub mod pilot_gate;
 pub mod product;
+pub mod scenario_packs;
 pub mod types;
 
 pub use analyzer::Analyzer;

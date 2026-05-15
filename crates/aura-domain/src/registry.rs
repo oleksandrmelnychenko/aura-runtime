@@ -16,6 +16,13 @@ impl DomainRegistry {
         self.modules.insert(module.id(), Arc::new(module));
     }
 
+    pub fn register_arc<M>(&mut self, module: Arc<M>)
+    where
+        M: DomainModule + 'static,
+    {
+        self.modules.insert(module.id(), module);
+    }
+
     pub fn contains(&self, module_id: DomainModuleId) -> bool {
         self.modules.contains_key(&module_id)
     }

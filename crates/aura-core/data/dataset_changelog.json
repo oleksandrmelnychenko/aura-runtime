@@ -5,6 +5,25 @@
       "dataset_id": "aura_realistic_chat_v1",
       "entries": [
         {
+          "change_id": "2026-05-13-realistic-context-stress",
+          "changed_at_ms": 1778630400000,
+          "author": "aura_core_team",
+          "change_kind": "coverage_expansion",
+          "summary": "Added long-form context stress cases for slow-burn gaming grooming, parent-visible trusted adult logistics, supportive crisis boundaries, peer coercion, and bullying-to-self-harm cascade.",
+          "affected_slices": [
+            "relationship:stranger",
+            "relationship:trusted_adult",
+            "relationship:supportive_peer",
+            "relationship:peer",
+            "relationship:group_peer",
+            "threat_focus:grooming",
+            "threat_focus:manipulation",
+            "threat_focus:self_harm"
+          ],
+          "support_impact": "increase",
+          "review_ticket": "realistic-context-stress"
+        },
+        {
           "change_id": "2026-03-14-realistic-phase2-slice-hardening",
           "changed_at_ms": 1773676800000,
           "author": "aura_core_team",

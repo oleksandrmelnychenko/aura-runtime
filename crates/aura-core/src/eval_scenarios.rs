@@ -1847,8 +1847,8 @@ pub fn bystander_rescue_case() -> ScenarioCase {
     ScenarioCase {
         name: "bystander_rescue".to_string(),
         config: child_config(),
-        primary_threat: None,
-        onset_step: None,
+        primary_threat: Some(ThreatType::Bullying),
+        onset_step: Some(0),
         detection_threshold: 0.55,
         tracked_threats: vec![ThreatType::Bullying],
         steps: vec![
@@ -2470,7 +2470,7 @@ pub fn negative_control_noisy_teen_chat_case() -> ScenarioCase {
     }
 }
 
-fn child_config() -> AuraConfig {
+pub(crate) fn child_config() -> AuraConfig {
     AuraConfig {
         account_type: AccountType::Child,
         protection_level: ProtectionLevel::High,
@@ -2479,7 +2479,7 @@ fn child_config() -> AuraConfig {
     }
 }
 
-fn teen_config() -> AuraConfig {
+pub(crate) fn teen_config() -> AuraConfig {
     AuraConfig {
         account_type: AccountType::Teen,
         protection_level: ProtectionLevel::High,
@@ -2488,7 +2488,16 @@ fn teen_config() -> AuraConfig {
     }
 }
 
-fn military_config() -> AuraConfig {
+pub(crate) fn adult_config() -> AuraConfig {
+    AuraConfig {
+        account_type: AccountType::Adult,
+        protection_level: ProtectionLevel::Medium,
+        language: "en".to_string(),
+        ..AuraConfig::default()
+    }
+}
+
+pub(crate) fn military_config() -> AuraConfig {
     AuraConfig {
         account_type: AccountType::Adult,
         protection_level: ProtectionLevel::High,
@@ -2498,7 +2507,7 @@ fn military_config() -> AuraConfig {
     }
 }
 
-fn direct_msg(text: &str, sender: &str, conversation_id: &str) -> MessageInput {
+pub(crate) fn direct_msg(text: &str, sender: &str, conversation_id: &str) -> MessageInput {
     MessageInput {
         content_type: ContentType::Text,
         text: Some(text.to_string()),
@@ -2512,7 +2521,7 @@ fn direct_msg(text: &str, sender: &str, conversation_id: &str) -> MessageInput {
     }
 }
 
-fn direct_msg_lang(
+pub(crate) fn direct_msg_lang(
     text: &str,
     sender: &str,
     conversation_id: &str,
@@ -2524,7 +2533,7 @@ fn direct_msg_lang(
     }
 }
 
-fn group_msg(text: &str, sender: &str, conversation_id: &str) -> MessageInput {
+pub(crate) fn group_msg(text: &str, sender: &str, conversation_id: &str) -> MessageInput {
     MessageInput {
         conversation_type: ConversationType::Group,
         member_count: Some(6),
@@ -2532,10 +2541,28 @@ fn group_msg(text: &str, sender: &str, conversation_id: &str) -> MessageInput {
     }
 }
 
-fn group_msg_lang(text: &str, sender: &str, conversation_id: &str, language: &str) -> MessageInput {
+pub(crate) fn group_msg_lang(
+    text: &str,
+    sender: &str,
+    conversation_id: &str,
+    language: &str,
+) -> MessageInput {
     MessageInput {
         language: Some(language.to_string()),
         ..group_msg(text, sender, conversation_id)
+    }
+}
+
+pub(crate) fn group_msg_lang_size(
+    text: &str,
+    sender: &str,
+    conversation_id: &str,
+    language: &str,
+    member_count: u32,
+) -> MessageInput {
+    MessageInput {
+        member_count: Some(member_count),
+        ..group_msg_lang(text, sender, conversation_id, language)
     }
 }
 

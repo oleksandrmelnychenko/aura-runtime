@@ -108,7 +108,10 @@ impl Analyzer {
         }
 
         let mut raw_observations = Vec::with_capacity(12);
-        let content_hash = input.text.as_ref().map(|text| content_fingerprint_u64(text));
+        let content_hash = input
+            .text
+            .as_ref()
+            .map(|text| content_fingerprint_u64(text));
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
@@ -122,6 +125,13 @@ impl Analyzer {
                 .signal_enricher
                 .enrich_observations_with_hash(text, content_hash);
             raw_observations.extend(enrichment.observations);
+            if self.config.effective_domain_mode() == DomainMode::Military {
+                if let Some(observation) = military_coordinate_crumb_observation(text, content_hash)
+                {
+                    raw_observations.push(observation);
+                }
+            }
+            raw_observations.extend(doxxing_crumb_observations(text, content_hash));
 
             if let Some(age) = enrichment.extracted_age {
                 self.context_tracker
@@ -348,16 +358,510 @@ impl Analyzer {
     }
 }
 
-fn append_reason_codes(reason_codes: &mut Vec<String>, extras: &[String]) {
-    for extra in extras {
-        if reason_codes.iter().any(|existing| existing == extra) {
+fn military_coordinate_crumb_observation(
+    text: &str,
+    content_hash: Option<u64>,
+) -> Option<RawObservation> {
+    let normalized = normalize_location_crumb_text(text);
+    if normalized.is_empty() || looks_like_coordinate_warning_fragment(&normalized) {
+        return None;
+    }
+
+    let has_area = contains_any(
+        &normalized,
+        &[
+            "місто ",
+            "місот ",
+            "село ",
+            "селище ",
+            "район ",
+            "західній частині",
+            "східній частині",
+        ],
+    ) || contains_token(
+        &normalized,
+        &["місто", "міст", "місо", "місот", "село", "селище"],
+    );
+    let has_relative = contains_any(
+        &normalized,
+        &[
+            "околиц",
+            "південн",
+            "північн",
+            "західн",
+            "східн",
+            "за струм",
+            "поряд струм",
+            "на іншому березі",
+            "далі за",
+        ],
+    );
+    let has_site = contains_any(
+        &normalized,
+        &[
+            "завод",
+            "заво ",
+            "цемент",
+            "цех",
+            "лісосмуг",
+            "силос",
+            "шосе",
+            "антенн",
+            "веж",
+            "горбі",
+        ],
+    );
+    let has_current_position = has_site
+        && contains_any(
+            &normalized,
+            &[
+                "наш цех",
+                "наш це",
+                "аш цех",
+                "наша позиц",
+                "наш пункт",
+                "там ми",
+                "ми тут",
+                "видно нас",
+            ],
+        );
+
+    let (subtype, confidence) = if has_current_position {
+        ("coordinate_crumb.current_position", 0.55)
+    } else if has_site {
+        ("coordinate_crumb.site", 0.45)
+    } else if has_relative {
+        ("coordinate_crumb.relative", 0.40)
+    } else if has_area {
+        ("coordinate_crumb.area", 0.35)
+    } else {
+        return None;
+    };
+
+    Some(RawObservation::event(
+        EventKind::CoordinateMention,
+        confidence,
+        Some(subtype.to_string()),
+        content_hash,
+    ))
+}
+
+fn doxxing_crumb_observations(text: &str, content_hash: Option<u64>) -> Vec<RawObservation> {
+    let normalized = normalize_doxxing_crumb_text(text);
+    if normalized.is_empty() || looks_like_benign_doxxing_fragment(&normalized) {
+        return Vec::new();
+    }
+
+    let mut crumbs = Vec::with_capacity(4);
+    push_doxxing_crumb_if(
+        &mut crumbs,
+        doxxing_has_distribution_intent(&normalized),
+        "doxxing_crumb.intent",
+        0.48,
+        content_hash,
+    );
+    push_doxxing_crumb_if(
+        &mut crumbs,
+        doxxing_has_name_fragment(&normalized),
+        "doxxing_crumb.name",
+        0.34,
+        content_hash,
+    );
+    push_doxxing_crumb_if(
+        &mut crumbs,
+        doxxing_has_address_fragment(&normalized),
+        "doxxing_crumb.address",
+        0.42,
+        content_hash,
+    );
+    push_doxxing_crumb_if(
+        &mut crumbs,
+        doxxing_has_city_fragment(&normalized),
+        "doxxing_crumb.city",
+        0.34,
+        content_hash,
+    );
+    push_doxxing_crumb_if(
+        &mut crumbs,
+        doxxing_has_school_fragment(&normalized),
+        "doxxing_crumb.school",
+        0.40,
+        content_hash,
+    );
+    push_doxxing_crumb_if(
+        &mut crumbs,
+        doxxing_has_phone_fragment(&normalized),
+        "doxxing_crumb.phone",
+        0.42,
+        content_hash,
+    );
+    push_doxxing_crumb_if(
+        &mut crumbs,
+        doxxing_has_family_fragment(&normalized),
+        "doxxing_crumb.family",
+        0.38,
+        content_hash,
+    );
+    push_doxxing_crumb_if(
+        &mut crumbs,
+        doxxing_has_work_fragment(&normalized),
+        "doxxing_crumb.work",
+        0.36,
+        content_hash,
+    );
+
+    crumbs
+}
+
+fn push_doxxing_crumb_if(
+    crumbs: &mut Vec<RawObservation>,
+    condition: bool,
+    subtype: &str,
+    confidence: f32,
+    content_hash: Option<u64>,
+) {
+    if condition {
+        crumbs.push(RawObservation::event(
+            EventKind::DoxxingAttempt,
+            confidence,
+            Some(subtype.to_string()),
+            content_hash,
+        ));
+    }
+}
+
+fn normalize_doxxing_crumb_text(text: &str) -> String {
+    let normalized = TextNormalizer::new().normalize(text);
+    normalize_location_crumb_text(&normalized)
+}
+
+fn looks_like_benign_doxxing_fragment(normalized: &str) -> bool {
+    contains_any(
+        normalized,
+        &[
+            "my address",
+            "my place",
+            "my bakery",
+            "business contact",
+            "for the conference",
+            "open house",
+            "listing agent",
+            "all welcome",
+            "courier",
+            "pickup address",
+            "for the package",
+            "thanks for sending",
+            "patient",
+            "consent",
+            "on file",
+            "public library",
+            "safest place",
+            "reporting it",
+            "won t repeat",
+            "news article",
+            "this piece",
+            "interviews with victims",
+            "doxxing campaigns",
+            "address leaks",
+            "не повторюйте",
+            "закидайте скаргами",
+        ],
+    )
+}
+
+fn doxxing_has_distribution_intent(normalized: &str) -> bool {
+    contains_any(
+        normalized,
+        &[
+            "find everything",
+            "knock yourself out",
+            "knock yourselves out",
+            "go for it",
+            "go forth",
+            "pass it around",
+            "pass it along",
+            "repost the address",
+            "drop the bundle",
+            "drop the dox",
+            "post the full dox",
+            "full dox",
+            "dox in the group",
+            "bundle in the discord",
+            "burner accounts",
+            "send pizzas",
+            "fake deliveries",
+            "call the school",
+            "scaring her",
+            "info is out forever",
+        ],
+    )
+}
+
+fn doxxing_has_name_fragment(normalized: &str) -> bool {
+    normalized.starts_with("name ")
+        || contains_any(
+            normalized,
+            &[
+                " first name ",
+                " last name ",
+                " real name ",
+                "full name",
+                "is her handle",
+            ],
+        )
+}
+
+fn doxxing_has_address_fragment(normalized: &str) -> bool {
+    let has_street_type = contains_token(
+        normalized,
+        &[
+            "st", "street", "ave", "avenue", "rd", "road", "drive", "dr", "ln", "lane", "court",
+            "ct", "blvd", "way",
+        ],
+    );
+    let has_digit = normalized.chars().any(|ch| ch.is_ascii_digit());
+
+    (has_digit && has_street_type)
+        || (has_street_type
+            && contains_any(
+                normalized,
+                &[
+                    "lives at",
+                    "live at",
+                    "lives on",
+                    "live on",
+                    "they live",
+                    "address",
+                    "county records",
+                ],
+            ))
+}
+
+fn doxxing_has_city_fragment(normalized: &str) -> bool {
+    (normalized.starts_with("city ") || contains_any(normalized, &[" city ", " zip "]))
+        && (has_zip_token(normalized)
+            || contains_token(
+                normalized,
+                &[
+                    "il", "ca", "pa", "or", "az", "ny", "wa", "tx", "fl", "oh", "mi", "ma",
+                ],
+            ))
+}
+
+fn doxxing_has_school_fragment(normalized: &str) -> bool {
+    let has_school_identifier = contains_any(
+        normalized,
+        &[
+            " school",
+            " high",
+            " hs",
+            " elementary",
+            " locker",
+            " junior",
+            " sophomore",
+            " freshman",
+            " senior",
+            " grade",
+            " class",
+            " period",
+            " bus ",
+        ],
+    );
+    let has_sensitive_context = normalized.starts_with("school ")
+        || contains_any(
+            normalized,
+            &[
+                " goes to ",
+                " attends ",
+                " junior at ",
+                " locker",
+                " class ",
+                " period",
+                " call the school",
+                " her ",
+                " his ",
+                " she ",
+                " he ",
+                " they ",
+                " target",
+                "@",
+            ],
+        );
+
+    has_school_identifier && has_sensitive_context
+}
+
+fn doxxing_has_phone_fragment(normalized: &str) -> bool {
+    let digit_count = normalized.chars().filter(|ch| ch.is_ascii_digit()).count();
+    if !(10..=12).contains(&digit_count) {
+        return false;
+    }
+
+    contains_any(
+        normalized,
+        &[
+            " phone",
+            " cell",
+            " number",
+            " called",
+            " call em",
+            " call them",
+            "verified i called",
+        ],
+    ) || normalized
+        .split_whitespace()
+        .all(|token| token.chars().all(|ch| ch.is_ascii_digit()))
+}
+
+fn doxxing_has_family_fragment(normalized: &str) -> bool {
+    contains_token(
+        normalized,
+        &[
+            "mom", "mother", "dad", "father", "parents", "brother", "sister", "son", "daughter",
+            "aunt", "uncle", "grandma", "grandpa",
+        ],
+    )
+}
+
+fn doxxing_has_work_fragment(normalized: &str) -> bool {
+    contains_any(
+        normalized,
+        &[
+            " works at",
+            " work at",
+            " works as",
+            " work as",
+            " works night",
+            " it guy",
+            " credit union",
+            " pharmacy",
+            " nurse",
+            " consultant",
+        ],
+    )
+}
+
+fn has_zip_token(normalized: &str) -> bool {
+    normalized
+        .split_whitespace()
+        .any(|token| token.len() == 5 && token.chars().all(|ch| ch.is_ascii_digit()))
+}
+
+fn normalize_location_crumb_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        if matches!(
+            ch,
+            '\u{200B}'
+                | '\u{200C}'
+                | '\u{200D}'
+                | '\u{FEFF}'
+                | '\u{00AD}'
+                | '\u{200E}'
+                | '\u{200F}'
+                | '\u{2060}'
+                | '\u{2061}'
+                | '\u{2062}'
+                | '\u{2063}'
+                | '\u{2064}'
+                | '\u{034F}'
+        ) {
             continue;
         }
-        reason_codes.push(extra.clone());
-        if reason_codes.len() >= 12 {
-            break;
+        for lower in ch.to_lowercase() {
+            if lower.is_alphanumeric() {
+                out.push(lower);
+            } else {
+                out.push(' ');
+            }
         }
     }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn contains_any(text: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| text.contains(needle))
+}
+
+fn contains_token(text: &str, tokens: &[&str]) -> bool {
+    text.split_whitespace()
+        .any(|word| tokens.iter().any(|token| word == *token))
+}
+
+fn looks_like_coordinate_warning_fragment(normalized: &str) -> bool {
+    contains_any(
+        normalized,
+        &[
+            "не публіку",
+            "не публику",
+            "не пиш",
+            "не скидай",
+            "нагадую",
+            "інструкція",
+            "стирались",
+            "видаліть",
+            "видаляй",
+        ],
+    )
+}
+
+fn append_reason_codes(reason_codes: &mut Vec<String>, extras: &[String]) {
+    for priority in 0..=2 {
+        for extra in extras {
+            if context_reason_priority(extra) != Some(priority) {
+                continue;
+            }
+            if !push_reason_code(reason_codes, extra) {
+                return;
+            }
+        }
+    }
+
+    for extra in extras {
+        if context_reason_priority(extra).is_some() {
+            continue;
+        }
+        if !push_reason_code(reason_codes, extra) {
+            return;
+        }
+    }
+}
+
+fn push_reason_code(reason_codes: &mut Vec<String>, extra: &str) -> bool {
+    if reason_codes.iter().any(|existing| existing == extra) {
+        return true;
+    }
+    reason_codes.push(extra.to_string());
+    reason_codes.len() < 12
+}
+
+fn context_reason_priority(code: &str) -> Option<u8> {
+    if code.starts_with("context.trajectory.") {
+        return Some(0);
+    }
+    if code == "context.filter.applied"
+        || matches!(
+            code,
+            "context.speech_act.quote"
+                | "context.speech_act.report"
+                | "context.speech_act.counter"
+                | "context.speech_act.support"
+                | "context.direction.directed_at_user"
+                | "context.direction.self_referential"
+                | "context.direction.third_party"
+        )
+    {
+        return Some(1);
+    }
+    if matches!(
+        code,
+        "context.relationship.new_contact"
+            | "context.relationship.trusted"
+            | "context.reciprocity.one_sided"
+    ) {
+        return Some(2);
+    }
+    None
 }
 
 fn apply_context_signal_filters(
@@ -365,13 +869,12 @@ fn apply_context_signal_filters(
     signals: &mut Vec<DetectionSignal>,
 ) {
     let has_support = context_summary.speech_act == ContextSpeechAct::Support;
-    let has_third_party = context_summary.directionality == ContextDirectionality::ThirdParty;
     let has_neutral_or_oppose = matches!(
         context_summary.stance,
         ContextStance::Neutral | ContextStance::Oppose
     );
 
-    if has_support && has_third_party && has_neutral_or_oppose {
+    if has_support && has_neutral_or_oppose {
         signals.retain(|signal| {
             !(signal.threat_type == ThreatType::Grooming
                 && signal.reason_code == "conversation.timing.late_night_minor_contact")

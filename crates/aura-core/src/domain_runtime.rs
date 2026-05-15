@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use aura_domain::{
     DomainAction, DomainConversationType, DomainInput, DomainModuleId, DomainOutput,
@@ -20,17 +21,27 @@ use crate::types::{
 use crate::DomainMode;
 use crate::{AuraConfig, AuraDomainModule, MessageInput};
 
-#[derive(Default)]
 pub struct AuraDomainRuntime {
     registry: DomainRegistry,
+    kids_module: Arc<KidsModule>,
+}
+
+impl Default for AuraDomainRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AuraDomainRuntime {
     pub fn new() -> Self {
         let mut registry = DomainRegistry::default();
-        registry.register(KidsModule);
+        let kids_module = Arc::new(KidsModule::new());
+        registry.register_arc(kids_module.clone());
         registry.register(MilitaryModule);
-        Self { registry }
+        Self {
+            registry,
+            kids_module,
+        }
     }
 
     pub fn supports(&self, config: &AuraConfig) -> bool {
@@ -50,6 +61,18 @@ impl AuraDomainRuntime {
             config.effective_protection_level(),
             input,
         )
+    }
+
+    pub fn export_kids_memory(&self) -> aura_kids::pipeline::ExportedKidsMemoryState {
+        self.kids_module.export_memory()
+    }
+
+    pub fn import_kids_memory(&self, state: &aura_kids::pipeline::ExportedKidsMemoryState) {
+        self.kids_module.import_memory(state);
+    }
+
+    pub fn clear_kids_memory(&self) {
+        self.kids_module.clear_memory();
     }
 
     pub fn analyze_for_mode(

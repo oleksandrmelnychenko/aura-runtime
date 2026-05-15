@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use aura_domain::MlSafetyHint;
 use aura_ml::{IntentLabel, MlConfig, MlPipeline, MlUncertaintyLevel, SafetyLabel, ToxicityLabel};
-use aura_patterns::{PatternDatabase, PatternMatcher, UrlChecker};
+use aura_patterns::{PatternDatabase, PatternMatcher, TextNormalizer, UrlChecker};
 use sha2::{Digest, Sha256};
 use tracing::debug;
 
@@ -255,6 +255,7 @@ impl Analyzer {
             is_child_account: config.account_type == AccountType::Child,
             is_teen_account: config.account_type == AccountType::Teen,
             account_holder_age: config.account_holder_age,
+            protected_account_id: config.protected_account_id.clone(),
             auto_cleanup_interval: 100,
             timezone_offset_minutes: config.timezone_offset_minutes,
             ..Default::default()
@@ -452,6 +453,16 @@ impl Analyzer {
         timestamp_ms: u64,
     ) -> AnalysisResult {
         self.analyze_with_context_staged(input, timestamp_ms)
+    }
+
+    /// Clears per-run state while preserving compiled patterns, URL rules, and ML caches.
+    pub fn reset_runtime_state(&mut self) {
+        self.context_tracker = ConversationTracker::new(Self::tracker_config(&self.config));
+        self.context_interpreter = ContextInterpreter::new();
+        self.timing_analyzer = TimingAnalyzer::new();
+        self.escalation_tracker = EscalationTracker::new();
+        self.rate_limiter = SenderRateLimiter::new(60, 60_000);
+        self.domain_runtime = AuraDomainRuntime::new();
     }
 
     fn combine_signals(
@@ -666,12 +677,30 @@ impl Analyzer {
         self.context_tracker.export_wire_state()
     }
 
+    /// Exports kids-domain runtime memory owned by this analyzer instance.
+    pub fn export_kids_memory_state(&self) -> aura_kids::pipeline::ExportedKidsMemoryState {
+        self.domain_runtime.export_kids_memory()
+    }
+
     /// Imports a previously exported tracker state, merging it with existing data.
     pub fn import_context_state(
         &mut self,
         state: TrackerWireState,
     ) -> Result<(), crate::error::AuraError> {
         self.context_tracker.import_wire_state(state)
+    }
+
+    /// Imports kids-domain runtime memory owned by this analyzer instance.
+    pub fn import_kids_memory_state(
+        &mut self,
+        state: &aura_kids::pipeline::ExportedKidsMemoryState,
+    ) {
+        self.domain_runtime.import_kids_memory(state);
+    }
+
+    /// Clears kids-domain runtime memory owned by this analyzer instance.
+    pub fn clear_kids_memory_state(&mut self) {
+        self.domain_runtime.clear_kids_memory();
     }
 
     /// Removes expired events and escalation entries older than the analysis window.
@@ -701,6 +730,7 @@ impl Analyzer {
         self.context_tracker.update_config(tracker_config);
         self.signal_enricher = signal_enricher;
         self.ml_pipeline = ml_pipeline;
+        self.domain_runtime = AuraDomainRuntime::new();
         self.config = config;
     }
 
@@ -1024,6 +1054,29 @@ impl Analyzer {
             });
         }
 
+        let deescalating_peer_conflict = is_deescalating_peer_conflict_message(text);
+        if deescalating_peer_conflict {
+            raw_observations.retain(|observation| {
+                !observation.signal_matches(|signal| {
+                    matches!(
+                        signal.threat_type,
+                        ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
+                    ) && signal.score <= 0.75
+                })
+            });
+            raw_observations.retain(|observation| {
+                !observation.event_kind_matches(|kind| {
+                    matches!(
+                        kind,
+                        EventKind::Insult
+                            | EventKind::Denigration
+                            | EventKind::Mockery
+                            | EventKind::PhysicalThreat
+                    )
+                })
+            });
+        }
+
         let has_friendly_context = self.has_recent_playful_reciprocity(
             &input.conversation_id,
             &input.sender_id,
@@ -1128,7 +1181,7 @@ impl Analyzer {
                             | EventKind::Flattery
                             | EventKind::LoveBombing
                     )
-                })
+                }) || observation.signal_matches(is_high_risk_grooming_signal)
             });
         }
 
@@ -1210,6 +1263,16 @@ impl Analyzer {
                     _ => false,
                 };
                 !dominated
+            });
+        }
+
+        let deescalating_peer_conflict = is_deescalating_peer_conflict_message(text);
+        if deescalating_peer_conflict {
+            signals.retain(|signal| {
+                !(matches!(
+                    signal.threat_type,
+                    ThreatType::Bullying | ThreatType::Explicit | ThreatType::Threat
+                ) && signal.score <= 0.85)
             });
         }
 
@@ -1348,6 +1411,10 @@ impl Analyzer {
             timestamp_ms,
         );
 
+        if looks_like_unresolved_future_violence(&lower) {
+            return false;
+        }
+
         let self_nullified_teasing = joke_disclaimer && (playful_marker || reciprocal_play);
         let playful_hyperbole = lower.contains("я тебе вб'ю за")
             || lower.contains("kill you for")
@@ -1453,6 +1520,50 @@ impl Analyzer {
     }
 }
 
+fn looks_like_unresolved_future_violence(lower: &str) -> bool {
+    if unresolved_future_violence_in(lower) {
+        return true;
+    }
+
+    let normalized = TextNormalizer::new().normalize(lower);
+    normalized != lower && unresolved_future_violence_in(&normalized)
+}
+
+fn unresolved_future_violence_in(lower: &str) -> bool {
+    let violent_action = contains_any(
+        lower,
+        &[
+            "kill u",
+            "kill you",
+            "hurt you",
+            "shoot you",
+            "stab you",
+            "beat you",
+            "break your",
+            "gonna kill",
+            "going to kill",
+            "wont make it",
+            "won't make it",
+        ],
+    );
+    let future_or_ambiguous = contains_any(
+        lower,
+        &[
+            "tmrw",
+            "tomorrow",
+            "tonight",
+            "next week",
+            "after school",
+            "unless",
+            "outside",
+            "come out",
+            "waiting",
+        ],
+    );
+
+    violent_action && future_or_ambiguous
+}
+
 fn contains_any(text: &str, needles: &[&str]) -> bool {
     let mut found = false;
     for needle in needles {
@@ -1472,6 +1583,100 @@ fn count_contains(text: &str, needles: &[&str]) -> usize {
         }
     }
     count
+}
+
+fn is_deescalating_peer_conflict_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    if is_deescalating_peer_conflict_text(&lower) {
+        return true;
+    }
+
+    let normalizer = TextNormalizer::new();
+    normalizer
+        .normalize_cyrillic_leet_variants(text, "uk")
+        .iter()
+        .any(|normalized| normalized != &lower && is_deescalating_peer_conflict_text(normalized))
+}
+
+fn is_deescalating_peer_conflict_text(lower: &str) -> bool {
+    if contains_any(
+        lower,
+        &[
+            "здох",
+            "вбий",
+            "убей",
+            "kill yourself",
+            "nobody wants",
+            "nobody likes",
+            "everyone hates",
+            "worthless",
+            "pathetic",
+            "нікому не",
+            "никому не",
+            "ніхто тебе",
+            "никто тебя",
+            "потвор",
+            "урод",
+            "ненавид",
+        ],
+    ) {
+        return false;
+    }
+
+    let deescalation = contains_any(
+        lower,
+        &[
+            "без сварок",
+            "без ссор",
+            "не свар",
+            "не ссор",
+            "не треба кричати",
+            "не надо кричать",
+            "не треба свар",
+            "не надо ссор",
+            "lets not fight",
+            "let's not fight",
+            "dont fight",
+            "don't fight",
+            "stop fighting",
+            "calm down",
+            "i disagree but",
+            "я не згоден, але",
+            "я не согласен, но",
+        ],
+    );
+    let repair_context = contains_any(
+        lower,
+        &[
+            "переробимо",
+            "переделаем",
+            "fix the project",
+            "fix the slides",
+            "слайд",
+            "slides",
+            "презентац",
+            "presentation",
+            "проєкт",
+            "проект",
+            "project",
+            "тактик",
+            "tactic",
+            "розберемо",
+            "розберем",
+            "review the play",
+            "review the game",
+            "момент",
+            "match",
+            "матч",
+            "тренув",
+            "training",
+            "after class",
+            "після урок",
+            "после урок",
+        ],
+    );
+
+    deescalation && repair_context
 }
 
 fn is_plain_peer_compliment_message(text: &str) -> bool {
@@ -5479,6 +5684,263 @@ mod tests {
         );
         assert_eq!(third.threat_type, ThreatType::None, "{third:?}");
         assert_eq!(third.action, Action::Allow);
+    }
+
+    #[test]
+    fn group_project_deescalation_stays_clean_after_mild_conflict() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(12),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "uk_group_project_conflict";
+        let group_input = |text: &str, sender: &str| MessageInput {
+            content_type: ContentType::Text,
+            text: Some(text.to_string()),
+            image_data: None,
+            sender_id: sender.into(),
+            conversation_id: conv.into(),
+            language: Some("uk".to_string()),
+            conversation_type: ConversationType::Group,
+            member_count: Some(12),
+            server_sender_risk_hint: None,
+        };
+
+        analyzer.analyze_with_context(
+            &group_input("ти знову забув частину презентації, це дратує", "peer_1"),
+            1_000,
+        );
+        let result = analyzer.analyze_with_context(
+            &group_input("давайте без сварок, просто переробимо слайди", "peer_2"),
+            2_000,
+        );
+
+        assert_eq!(result.threat_type, ThreatType::None, "{result:?}");
+        assert_eq!(result.action, Action::Allow, "{result:?}");
+
+        let dm_result = analyzer.analyze_with_context(
+            &MessageInput {
+                content_type: ContentType::Text,
+                text: Some("давайте без сварок, просто переробимо слайди".to_string()),
+                image_data: None,
+                sender_id: "peer_3".into(),
+                conversation_id: "uk_project_dm".into(),
+                language: Some("uk".to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+                server_sender_risk_hint: None,
+            },
+            3_000,
+        );
+        assert_eq!(dm_result.threat_type, ThreatType::None, "{dm_result:?}");
+        assert_eq!(dm_result.action, Action::Allow, "{dm_result:?}");
+
+        let leet_result = analyzer.analyze_with_context(
+            &group_input("д4в4й73 б3з 5в4р0к, пр0570 п3р3р0б1м0 5л4йд1", "peer_4"),
+            4_000,
+        );
+        assert_eq!(leet_result.threat_type, ThreatType::None, "{leet_result:?}");
+        assert_eq!(leet_result.action, Action::Allow, "{leet_result:?}");
+    }
+
+    #[test]
+    fn sports_team_deescalation_stays_clean_after_tactical_disagreement() {
+        let db = PatternDatabase::default_mvp();
+        let config = AuraConfig {
+            account_type: AccountType::Child,
+            account_holder_age: Some(13),
+            language: "uk".to_string(),
+            protection_level: ProtectionLevel::High,
+            ..AuraConfig::default()
+        };
+        let mut analyzer = Analyzer::new(config, &db);
+        let conv = "uk_sports_team_conflict";
+        let input = |text: &str, sender: &str| MessageInput {
+            content_type: ContentType::Text,
+            text: Some(text.to_string()),
+            image_data: None,
+            sender_id: sender.into(),
+            conversation_id: conv.into(),
+            language: Some("uk".to_string()),
+            conversation_type: ConversationType::Group,
+            member_count: Some(16),
+            server_sender_risk_hint: None,
+        };
+
+        analyzer.analyze_with_context(
+            &input("я не згоден з тактикою на матч, але без образ", "peer_1"),
+            1_000,
+        );
+        let result = analyzer.analyze_with_context(
+            &input(
+                "я не згоден з тактикою, але давайте без сварок і спокійно розберемо моменти",
+                "peer_2",
+            ),
+            2_000,
+        );
+
+        assert_eq!(result.threat_type, ThreatType::None, "{result:?}");
+        assert_eq!(result.action, Action::Allow, "{result:?}");
+    }
+
+    #[test]
+    fn community_surface_recall_anchors_route_to_expected_threats() {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(child_config(), &db);
+        let cases = [
+            (
+                "you seem way more mature than other kids your age",
+                "en",
+                ThreatType::Grooming,
+                0.55,
+            ),
+            (
+                "i can buy you a game skin, just dont make it a big deal",
+                "en",
+                ThreatType::Grooming,
+                0.50,
+            ),
+            (
+                "nobody wants you here anymore",
+                "en",
+                ThreatType::Bullying,
+                0.55,
+            ),
+            (
+                "everyone is laughing at your video",
+                "en",
+                ThreatType::Bullying,
+                0.55,
+            ),
+            (
+                "3v3ry0n3 15 l4ugh1ng 47 y0ur v1d30",
+                "en",
+                ThreatType::Bullying,
+                0.55,
+            ),
+            (
+                "71 дуж3 д0р05л4 для 5в0г0 в1ку, н3 як 1нш1 д171",
+                "uk",
+                ThreatType::Grooming,
+                0.50,
+            ),
+            (
+                "4к4ун7 з4бл0кую7ь з4 10 хв, п1д7в3рд1 h77p5://v3r1fy-l0g1n.3x4mpl3",
+                "uk",
+                ThreatType::Phishing,
+                0.60,
+            ),
+            (
+                "акаунт заблокують за 10 хв підтверди https verify login example",
+                "uk",
+                ThreatType::Phishing,
+                0.60,
+            ),
+            (
+                "eveyrone is lauhging at your video",
+                "en",
+                ThreatType::Bullying,
+                0.55,
+            ),
+            (
+                "ти дуже дорсла для свого віку, не як інші діти",
+                "uk",
+                ThreatType::Grooming,
+                0.50,
+            ),
+            (
+                "send a selfie there so i know its really you",
+                "en",
+                ThreatType::Grooming,
+                0.55,
+            ),
+            (
+                "delete this thread after, nobody needs to see us talking",
+                "en",
+                ThreatType::Grooming,
+                0.55,
+            ),
+            (
+                "i dont want to live anymore",
+                "en",
+                ThreatType::SelfHarm,
+                0.70,
+            ),
+            (
+                "im home alone until nine while mom is at work",
+                "en",
+                ThreatType::PiiLeakage,
+                0.55,
+            ),
+            (
+                "send your password for a minute, dont be dramatic",
+                "en",
+                ThreatType::Manipulation,
+                0.55,
+            ),
+            (
+                "не бачу сенсу прокидатися завтра",
+                "uk",
+                ThreatType::SelfHarm,
+                0.70,
+            ),
+            (
+                "мой номер 89161234567, позвони после уроков",
+                "ru",
+                ThreatType::PiiLeakage,
+                0.55,
+            ),
+            (
+                "м1й н0м3р 0671234567, п0дзв0н1 п15ля ур0к1в",
+                "uk",
+                ThreatType::PiiLeakage,
+                0.50,
+            ),
+            ("я б1льш3 н3 х0чу ж171", "uk", ThreatType::SelfHarm, 0.70),
+            (
+                "я м0жу куп171 70б1 5к1н, 71льк1 н3 р0б1 з ць0г0 шум",
+                "uk",
+                ThreatType::Grooming,
+                0.50,
+            ),
+            (
+                "если не сделаешь как я сказал, я покажу всем скрины",
+                "ru",
+                ThreatType::Manipulation,
+                0.55,
+            ),
+            (
+                "это будет твоя вина, ты сама меня заставила",
+                "ru",
+                ThreatType::Manipulation,
+                0.55,
+            ),
+        ];
+
+        for (idx, (text, lang, threat, min_score)) in cases.iter().enumerate() {
+            analyzer.reset_runtime_state();
+            let input = MessageInput {
+                content_type: ContentType::Text,
+                text: Some((*text).to_string()),
+                image_data: None,
+                sender_id: format!("sender_{idx}").into(),
+                conversation_id: format!("conv_{idx}").into(),
+                language: Some((*lang).to_string()),
+                conversation_type: ConversationType::Direct,
+                member_count: None,
+                server_sender_risk_hint: None,
+            };
+            let result = analyzer.analyze_with_context(&input, (idx as u64 + 1) * 1_000);
+            let score = crate::predicted_score_for_threat(&result, *threat);
+            assert!(
+                score >= *min_score || (result.threat_type == *threat && result.action != Action::Allow),
+                "Expected {threat:?} score >= {min_score} for '{text}', got score={score:.2}, result={result:?}"
+            );
+        }
     }
 
     #[test]

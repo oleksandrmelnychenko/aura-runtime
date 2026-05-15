@@ -186,6 +186,28 @@ impl ContextEvent {
         self.kind.is_bullying_indicator() && self.supports_targeted_harm_inference()
     }
 
+    pub fn supports_grooming_inference(&self) -> bool {
+        if !self.kind.is_grooming_indicator() {
+            return false;
+        }
+
+        if !self.context.is_meaningful() {
+            return true;
+        }
+
+        if matches!(
+            self.context.speech_act,
+            EventSpeechAct::Quote
+                | EventSpeechAct::Report
+                | EventSpeechAct::Counter
+                | EventSpeechAct::Support
+        ) {
+            return false;
+        }
+
+        true
+    }
+
     pub fn supports_manipulation_inference(&self) -> bool {
         self.kind.is_manipulation_indicator() && self.supports_targeted_harm_inference()
     }
@@ -218,6 +240,9 @@ impl ContextEvent {
         if self.kind.is_propaganda_indicator() && !self.supports_propaganda_inference() {
             return 0.0;
         }
+        if self.kind.is_grooming_indicator() && !self.supports_grooming_inference() {
+            return 0.0;
+        }
         if self.kind.is_hostile() && !self.supports_targeted_harm_inference() {
             return 0.0;
         }
@@ -226,6 +251,9 @@ impl ContextEvent {
 
     pub fn effective_rating_delta(&self) -> f32 {
         if self.kind.is_propaganda_indicator() && !self.supports_propaganda_inference() {
+            return 0.0;
+        }
+        if self.kind.is_grooming_indicator() && !self.supports_grooming_inference() {
             return 0.0;
         }
 
