@@ -3900,7 +3900,10 @@ fn proto_event_kind(value: CoreEventKind) -> proto::EventKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{DateTime, Duration, Utc};
     use prost::Message as ProstMessage;
+    use serde::Deserialize;
+    use std::collections::HashMap;
     use std::ffi::CStr;
     use std::fs;
     use std::path::PathBuf;
@@ -5133,6 +5136,198 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Deserialize)]
+    struct FfiWorldFixture {
+        label: String,
+        owner: FfiWorldOwner,
+        #[serde(default)]
+        config: FfiWorldConfig,
+        #[serde(default)]
+        actors: Vec<FfiWorldActor>,
+        #[serde(default)]
+        conversations: Vec<FfiWorldConversation>,
+        #[serde(default)]
+        events: Vec<FfiWorldEvent>,
+        #[serde(default)]
+        generated_batches: Vec<FfiGeneratedBatch>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FfiWorldOwner {
+        id: String,
+        #[serde(default)]
+        age: Option<u32>,
+    }
+
+    #[derive(Debug, Default, Deserialize)]
+    struct FfiWorldConfig {
+        #[serde(default)]
+        account_type: Option<String>,
+        #[serde(default)]
+        protection_level: Option<String>,
+        #[serde(default)]
+        language: Option<String>,
+        #[serde(default)]
+        enabled: Option<bool>,
+        #[serde(default)]
+        account_holder_age: Option<u32>,
+        #[serde(default)]
+        ttl_days: Option<u32>,
+        #[serde(default)]
+        timezone_offset_minutes: Option<i32>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FfiWorldActor {
+        id: String,
+        #[serde(default)]
+        trusted: bool,
+        #[serde(default)]
+        sender_relationship: Option<String>,
+        #[serde(default)]
+        relationship_trust_source: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FfiWorldConversation {
+        id: String,
+        #[serde(default)]
+        conversation_type: Option<String>,
+        #[serde(default)]
+        member_count: Option<u32>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FfiWorldEvent {
+        at: String,
+        sender_id: String,
+        conversation_id: String,
+        text: String,
+        #[serde(default)]
+        language: Option<String>,
+        #[serde(default)]
+        conversation_type: Option<String>,
+        #[serde(default)]
+        member_count: Option<u32>,
+        #[serde(default)]
+        sender_relationship: Option<String>,
+        #[serde(default)]
+        relationship_trust_source: Option<String>,
+        #[serde(default)]
+        expect_clean: bool,
+        #[serde(default)]
+        expect_threat: Option<String>,
+        #[serde(default)]
+        expect_min_action: Option<String>,
+        #[serde(default)]
+        expect_min_alert: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FfiGeneratedBatch {
+        label: String,
+        start_at: String,
+        count: usize,
+        interval_minutes: i64,
+        #[serde(default = "default_day_repeats_for_ffi_world")]
+        day_repeats: usize,
+        #[serde(default = "default_day_stride_days_for_ffi_world")]
+        day_stride_days: i64,
+        sender_ids: Vec<String>,
+        conversation_ids: Vec<String>,
+        texts: Vec<String>,
+        #[serde(default)]
+        language: Option<String>,
+        #[serde(default)]
+        conversation_type: Option<String>,
+        #[serde(default)]
+        member_count: Option<u32>,
+        #[serde(default)]
+        sender_relationship: Option<String>,
+        #[serde(default)]
+        relationship_trust_source: Option<String>,
+        #[serde(default)]
+        expect_clean: bool,
+        #[serde(default)]
+        expect_threat: Option<String>,
+        #[serde(default)]
+        expect_min_action: Option<String>,
+        #[serde(default)]
+        expect_min_alert: Option<String>,
+    }
+
+    fn default_day_repeats_for_ffi_world() -> usize {
+        1
+    }
+
+    fn default_day_stride_days_for_ffi_world() -> i64 {
+        1
+    }
+
+    #[derive(Debug, Clone)]
+    struct FfiResolvedWorldEvent {
+        source_index: usize,
+        timestamp_ms: u64,
+        sender_id: String,
+        conversation_id: String,
+        language: String,
+        conversation_type: proto::ConversationType,
+        member_count: Option<u32>,
+        sender_relationship: proto::SenderRelationship,
+        relationship_trust_source: proto::RelationshipTrustSource,
+        expectation: Option<FfiWorldExpectation>,
+        text: String,
+        sender_trusted: bool,
+    }
+
+    #[derive(Debug, Clone)]
+    struct FfiWorldEventSeed {
+        timestamp_ms: u64,
+        sender_id: String,
+        conversation_id: String,
+        language: Option<String>,
+        conversation_type: Option<String>,
+        member_count: Option<u32>,
+        sender_relationship: Option<String>,
+        relationship_trust_source: Option<String>,
+        expectation: Option<FfiWorldExpectation>,
+        text: String,
+    }
+
+    #[derive(Debug, Clone)]
+    struct FfiWorldExpectation {
+        expect_clean: bool,
+        expect_threat: Option<proto::ThreatType>,
+        expect_min_action: Option<proto::Action>,
+        expect_min_alert: Option<proto::AlertPriority>,
+    }
+
+    #[derive(Debug)]
+    struct FfiWorldReplayReport {
+        total_events: usize,
+        labeled_positive_events: usize,
+        labeled_clean_events: usize,
+        true_positive_events: usize,
+        false_positive_events: usize,
+        findings: Vec<String>,
+    }
+
+    impl FfiWorldReplayReport {
+        fn positive_recall(&self) -> f64 {
+            if self.labeled_positive_events == 0 {
+                return 1.0;
+            }
+            self.true_positive_events as f64 / self.labeled_positive_events as f64
+        }
+
+        fn clean_false_positive_rate(&self) -> f64 {
+            if self.labeled_clean_events == 0 {
+                return 0.0;
+            }
+            self.false_positive_events as f64 / self.labeled_clean_events as f64
+        }
+    }
+
     fn encode_proto<M: ProstMessage>(message: &M) -> Vec<u8> {
         message.encode_to_vec()
     }
@@ -5245,6 +5440,17 @@ mod tests {
         assert!(aura_import_context(handle, bytes.as_ptr(), bytes.len()));
     }
 
+    unsafe fn mark_contact_trusted_for_test(handle: *mut c_void, sender_id: &str) {
+        let request = encode_proto(&proto::MarkContactTrustedRequest {
+            sender_id: sender_id.to_string(),
+        });
+        assert!(aura_mark_contact_trusted(
+            handle,
+            request.as_ptr(),
+            request.len()
+        ));
+    }
+
     unsafe fn get_contacts_by_risk(handle: *mut c_void) -> proto::ContactsByRiskResponse {
         let mut out = AuraBuffer::empty();
         assert!(aura_get_contacts_by_risk(handle, &mut out));
@@ -5292,6 +5498,468 @@ mod tests {
         fs::write(&path, json)
             .unwrap_or_else(|error| panic!("write temp patterns file {}: {error}", path.display()));
         path
+    }
+
+    fn fixture_data_path(relative: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../aura-core/data")
+            .join(relative)
+    }
+
+    fn load_ffi_world_fixture(relative: &str) -> FfiWorldFixture {
+        let path = fixture_data_path(relative);
+        let raw = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read world fixture {}: {error}", path.display()));
+        serde_json::from_str(&raw)
+            .unwrap_or_else(|error| panic!("parse world fixture {}: {error}", path.display()))
+    }
+
+    fn ffi_config_for_world(world: &FfiWorldFixture) -> proto::AuraConfig {
+        let account_type = match world.config.account_type.as_deref() {
+            Some("adult") => proto::AccountType::Adult,
+            Some("teen") => proto::AccountType::Teen,
+            Some("child") | None => proto::AccountType::Child,
+            Some(other) => panic!("unsupported fixture account_type: {other}"),
+        };
+        let mut config = proto_config(account_type, world.config.enabled.unwrap_or(true));
+        config.protection_level = match world.config.protection_level.as_deref() {
+            Some("off") => proto::ProtectionLevel::Off as i32,
+            Some("low") => proto::ProtectionLevel::Low as i32,
+            Some("medium") => proto::ProtectionLevel::Medium as i32,
+            Some("high") | None => proto::ProtectionLevel::High as i32,
+            Some(other) => panic!("unsupported fixture protection_level: {other}"),
+        };
+        config.language = world
+            .config
+            .language
+            .clone()
+            .unwrap_or_else(|| "uk".to_string());
+        config.cultural_context = Some(proto::CulturalContext {
+            kind: match config.language.as_str() {
+                "uk" => proto::CulturalContextKind::Ukrainian as i32,
+                "ru" => proto::CulturalContextKind::Russian as i32,
+                "en" => proto::CulturalContextKind::English as i32,
+                _ => proto::CulturalContextKind::Custom as i32,
+            },
+            custom_value: (!matches!(config.language.as_str(), "uk" | "ru" | "en"))
+                .then(|| config.language.clone()),
+        });
+        config.account_holder_age = world.config.account_holder_age.or(world.owner.age);
+        config.ttl_days = world.config.ttl_days.unwrap_or(30);
+        config.timezone_offset_minutes = world.config.timezone_offset_minutes.unwrap_or(120);
+        let mut relay_policy = metadata_only_relay_policy();
+        relay_policy.enabled = Some(false);
+        relay_policy.protected_account_id = Some(world.owner.id.clone());
+        config.relay_policy = Some(relay_policy);
+        config
+    }
+
+    fn resolve_ffi_world_events(world: &FfiWorldFixture) -> Vec<FfiResolvedWorldEvent> {
+        let actor_lookup: HashMap<_, _> = world
+            .actors
+            .iter()
+            .map(|actor| (actor.id.as_str(), actor))
+            .collect();
+        let conversation_lookup: HashMap<_, _> = world
+            .conversations
+            .iter()
+            .map(|conversation| (conversation.id.as_str(), conversation))
+            .collect();
+
+        let mut seeds = Vec::new();
+        for event in &world.events {
+            seeds.push(FfiWorldEventSeed {
+                timestamp_ms: timestamp_ms_from_rfc3339(&event.at),
+                sender_id: event.sender_id.clone(),
+                conversation_id: event.conversation_id.clone(),
+                language: event.language.clone(),
+                conversation_type: event.conversation_type.clone(),
+                member_count: event.member_count,
+                sender_relationship: event.sender_relationship.clone(),
+                relationship_trust_source: event.relationship_trust_source.clone(),
+                expectation: ffi_expectation_from_parts(
+                    event.expect_clean,
+                    event.expect_threat.as_deref(),
+                    event.expect_min_action.as_deref(),
+                    event.expect_min_alert.as_deref(),
+                ),
+                text: event.text.clone(),
+            });
+        }
+        for batch in &world.generated_batches {
+            seeds.extend(expand_ffi_generated_batch(batch));
+        }
+
+        let mut resolved = seeds
+            .into_iter()
+            .enumerate()
+            .map(|(index, seed)| {
+                resolve_ffi_world_event(index, seed, world, &actor_lookup, &conversation_lookup)
+            })
+            .collect::<Vec<_>>();
+        resolved.sort_by_key(|event| (event.timestamp_ms, event.source_index));
+        resolved
+    }
+
+    fn expand_ffi_generated_batch(batch: &FfiGeneratedBatch) -> Vec<FfiWorldEventSeed> {
+        assert!(batch.count > 0, "batch {} has zero count", batch.label);
+        assert!(
+            batch.interval_minutes > 0,
+            "batch {} has non-positive interval",
+            batch.label
+        );
+        assert!(
+            batch.day_repeats > 0,
+            "batch {} has zero day_repeats",
+            batch.label
+        );
+        assert!(
+            batch.day_stride_days > 0,
+            "batch {} has non-positive day stride",
+            batch.label
+        );
+        assert!(
+            !batch.sender_ids.is_empty()
+                && !batch.conversation_ids.is_empty()
+                && !batch.texts.is_empty(),
+            "batch {} is missing generated dimensions",
+            batch.label
+        );
+
+        let start = DateTime::parse_from_rfc3339(&batch.start_at)
+            .unwrap_or_else(|error| panic!("batch {} timestamp: {error}", batch.label));
+        let interval = Duration::minutes(batch.interval_minutes);
+        let day_stride = Duration::days(batch.day_stride_days);
+        let mut seeds = Vec::with_capacity(batch.count * batch.day_repeats);
+
+        for day_index in 0..batch.day_repeats {
+            let day_base = start + day_stride * day_index as i32;
+            for event_index in 0..batch.count {
+                let absolute_index = day_index * batch.count + event_index;
+                let at = day_base + interval * event_index as i32;
+                seeds.push(FfiWorldEventSeed {
+                    timestamp_ms: at.with_timezone(&Utc).timestamp_millis() as u64,
+                    sender_id: batch.sender_ids[absolute_index % batch.sender_ids.len()].clone(),
+                    conversation_id: batch.conversation_ids
+                        [absolute_index % batch.conversation_ids.len()]
+                    .clone(),
+                    language: batch.language.clone(),
+                    conversation_type: batch.conversation_type.clone(),
+                    member_count: batch.member_count,
+                    sender_relationship: batch.sender_relationship.clone(),
+                    relationship_trust_source: batch.relationship_trust_source.clone(),
+                    expectation: ffi_expectation_from_parts(
+                        batch.expect_clean,
+                        batch.expect_threat.as_deref(),
+                        batch.expect_min_action.as_deref(),
+                        batch.expect_min_alert.as_deref(),
+                    ),
+                    text: batch.texts[absolute_index % batch.texts.len()].clone(),
+                });
+            }
+        }
+        seeds
+    }
+
+    fn resolve_ffi_world_event(
+        index: usize,
+        seed: FfiWorldEventSeed,
+        world: &FfiWorldFixture,
+        actor_lookup: &HashMap<&str, &FfiWorldActor>,
+        conversation_lookup: &HashMap<&str, &FfiWorldConversation>,
+    ) -> FfiResolvedWorldEvent {
+        let actor = actor_lookup.get(seed.sender_id.as_str()).copied();
+        let conversation = conversation_lookup
+            .get(seed.conversation_id.as_str())
+            .copied();
+        FfiResolvedWorldEvent {
+            source_index: index,
+            timestamp_ms: seed.timestamp_ms,
+            sender_relationship: ffi_sender_relationship(
+                seed.sender_relationship
+                    .as_deref()
+                    .or_else(|| actor.and_then(|actor| actor.sender_relationship.as_deref())),
+            ),
+            relationship_trust_source: ffi_relationship_trust_source(
+                seed.relationship_trust_source
+                    .as_deref()
+                    .or_else(|| actor.and_then(|actor| actor.relationship_trust_source.as_deref())),
+            ),
+            conversation_type: ffi_conversation_type(seed.conversation_type.as_deref().or_else(
+                || conversation.and_then(|conversation| conversation.conversation_type.as_deref()),
+            )),
+            member_count: seed
+                .member_count
+                .or_else(|| conversation.and_then(|conversation| conversation.member_count)),
+            language: seed.language.unwrap_or_else(|| {
+                world
+                    .config
+                    .language
+                    .clone()
+                    .unwrap_or_else(|| "uk".to_string())
+            }),
+            sender_trusted: actor.is_some_and(|actor| actor.trusted),
+            sender_id: seed.sender_id,
+            conversation_id: seed.conversation_id,
+            expectation: seed.expectation,
+            text: seed.text,
+        }
+    }
+
+    fn timestamp_ms_from_rfc3339(value: &str) -> u64 {
+        DateTime::parse_from_rfc3339(value)
+            .unwrap_or_else(|error| panic!("invalid fixture timestamp {value}: {error}"))
+            .with_timezone(&Utc)
+            .timestamp_millis() as u64
+    }
+
+    fn ffi_expectation_from_parts(
+        expect_clean: bool,
+        expect_threat: Option<&str>,
+        expect_min_action: Option<&str>,
+        expect_min_alert: Option<&str>,
+    ) -> Option<FfiWorldExpectation> {
+        let expect_threat = expect_threat.map(ffi_threat_type);
+        let expect_min_action = expect_min_action.map(ffi_action);
+        let expect_min_alert = expect_min_alert.map(ffi_alert_priority);
+        (expect_clean
+            || expect_threat.is_some()
+            || expect_min_action.is_some()
+            || expect_min_alert.is_some())
+        .then_some(FfiWorldExpectation {
+            expect_clean,
+            expect_threat,
+            expect_min_action,
+            expect_min_alert,
+        })
+    }
+
+    fn ffi_conversation_type(value: Option<&str>) -> proto::ConversationType {
+        match value {
+            Some("group") => proto::ConversationType::Group,
+            Some("direct") | None => proto::ConversationType::Direct,
+            Some(other) => panic!("unsupported fixture conversation_type: {other}"),
+        }
+    }
+
+    fn ffi_sender_relationship(value: Option<&str>) -> proto::SenderRelationship {
+        match value {
+            Some("parent") => proto::SenderRelationship::Parent,
+            Some("guardian") => proto::SenderRelationship::Guardian,
+            Some("family") => proto::SenderRelationship::Family,
+            Some("sibling") => proto::SenderRelationship::Sibling,
+            Some("peer") => proto::SenderRelationship::Peer,
+            Some("teacher") => proto::SenderRelationship::Teacher,
+            Some("coach") => proto::SenderRelationship::Coach,
+            Some("authority") => proto::SenderRelationship::Authority,
+            Some("service") => proto::SenderRelationship::Service,
+            Some("unknown_adult") => proto::SenderRelationship::UnknownAdult,
+            Some("unknown_peer") => proto::SenderRelationship::UnknownPeer,
+            Some("unknown") | None => proto::SenderRelationship::Unknown,
+            Some(other) => panic!("unsupported fixture sender_relationship: {other}"),
+        }
+    }
+
+    fn ffi_relationship_trust_source(value: Option<&str>) -> proto::RelationshipTrustSource {
+        match value {
+            Some("user_verified") => proto::RelationshipTrustSource::UserVerified,
+            Some("guardian_verified") => proto::RelationshipTrustSource::GuardianVerified,
+            Some("platform_verified") => proto::RelationshipTrustSource::PlatformVerified,
+            Some("address_book") => proto::RelationshipTrustSource::AddressBook,
+            Some("school_directory") => proto::RelationshipTrustSource::SchoolDirectory,
+            Some("server_reputation") => proto::RelationshipTrustSource::ServerReputation,
+            Some("local_heuristic") => proto::RelationshipTrustSource::LocalHeuristic,
+            Some("self_declared") => proto::RelationshipTrustSource::SelfDeclared,
+            Some("unknown") | None => proto::RelationshipTrustSource::Unknown,
+            Some(other) => panic!("unsupported fixture relationship_trust_source: {other}"),
+        }
+    }
+
+    fn ffi_threat_type(value: &str) -> proto::ThreatType {
+        match value {
+            "bullying" => proto::ThreatType::Bullying,
+            "grooming" => proto::ThreatType::Grooming,
+            "explicit" => proto::ThreatType::Explicit,
+            "threat" => proto::ThreatType::Threat,
+            "self_harm" => proto::ThreatType::SelfHarm,
+            "spam" => proto::ThreatType::Spam,
+            "scam" => proto::ThreatType::Scam,
+            "phishing" => proto::ThreatType::Phishing,
+            "manipulation" => proto::ThreatType::Manipulation,
+            "nsfw" => proto::ThreatType::Nsfw,
+            "hate_speech" => proto::ThreatType::HateSpeech,
+            "doxxing" => proto::ThreatType::Doxxing,
+            "pii_leakage" => proto::ThreatType::PiiLeakage,
+            "propaganda" => proto::ThreatType::Propaganda,
+            "opsec_violation" => proto::ThreatType::OpsecViolation,
+            "psyops" => proto::ThreatType::Psyops,
+            "military_social_eng" => proto::ThreatType::MilitarySocialEng,
+            "coordinate_leak" => proto::ThreatType::CoordinateLeak,
+            other => panic!("unsupported fixture threat_type: {other}"),
+        }
+    }
+
+    fn ffi_action(value: &str) -> proto::Action {
+        match value {
+            "allow" => proto::Action::Allow,
+            "mark" => proto::Action::Mark,
+            "blur" => proto::Action::Blur,
+            "warn" => proto::Action::Warn,
+            "block" => proto::Action::Block,
+            other => panic!("unsupported fixture action: {other}"),
+        }
+    }
+
+    fn ffi_alert_priority(value: &str) -> proto::AlertPriority {
+        match value {
+            "none" => proto::AlertPriority::None,
+            "low" => proto::AlertPriority::Low,
+            "medium" => proto::AlertPriority::Medium,
+            "high" => proto::AlertPriority::High,
+            "urgent" => proto::AlertPriority::Urgent,
+            other => panic!("unsupported fixture alert: {other}"),
+        }
+    }
+
+    unsafe fn run_ffi_world_replay(relative_fixture_path: &str) -> FfiWorldReplayReport {
+        let world = load_ffi_world_fixture(relative_fixture_path);
+        let events = resolve_ffi_world_events(&world);
+        let handle = init_handle(ffi_config_for_world(&world));
+        assert!(!handle.is_null(), "failed to initialize FFI world replay");
+
+        let mut report = FfiWorldReplayReport {
+            total_events: events.len(),
+            labeled_positive_events: 0,
+            labeled_clean_events: 0,
+            true_positive_events: 0,
+            false_positive_events: 0,
+            findings: Vec::new(),
+        };
+
+        for (sequence, event) in events.iter().enumerate() {
+            let mut message = proto_message(&event.text, &event.sender_id, &event.conversation_id);
+            message.language = Some(event.language.clone());
+            message.conversation_type = event.conversation_type as i32;
+            message.member_count = event.member_count;
+            message.sender_relationship = event.sender_relationship as i32;
+            message.relationship_trust_source = event.relationship_trust_source as i32;
+
+            let result = analyze_context_result(handle, message, event.timestamp_ms);
+            if event.sender_trusted {
+                mark_contact_trusted_for_test(handle, &event.sender_id);
+            }
+            evaluate_ffi_world_expectation(&world, event, &result, sequence + 1, &mut report);
+        }
+
+        aura_free(handle);
+        report
+    }
+
+    fn evaluate_ffi_world_expectation(
+        world: &FfiWorldFixture,
+        event: &FfiResolvedWorldEvent,
+        result: &proto::AnalysisResult,
+        sequence: usize,
+        report: &mut FfiWorldReplayReport,
+    ) {
+        if let Some(expectation) = &event.expectation {
+            if expectation.expect_clean {
+                report.labeled_clean_events += 1;
+                if ffi_clean_expectation_violated(result) {
+                    report.false_positive_events += 1;
+                    report.findings.push(format!(
+                        "{}#{sequence}: expected clean allow, got threat={} action={}",
+                        world.label, result.threat_type, result.action
+                    ));
+                }
+            }
+
+            if let Some(expected_threat) = expectation.expect_threat {
+                report.labeled_positive_events += 1;
+                if ffi_result_contains_threat(result, expected_threat) {
+                    report.true_positive_events += 1;
+                } else {
+                    report.findings.push(format!(
+                        "{}#{sequence}: expected threat {:?}, got threat={} detected={:?}",
+                        world.label,
+                        expected_threat,
+                        result.threat_type,
+                        result
+                            .detected_threats
+                            .iter()
+                            .map(|threat| threat.threat_type)
+                            .collect::<Vec<_>>()
+                    ));
+                }
+            }
+
+            if let Some(expected_action) = expectation.expect_min_action {
+                if result.action < expected_action as i32 {
+                    report.findings.push(format!(
+                        "{}#{sequence}: expected action >= {:?}, got {}",
+                        world.label, expected_action, result.action
+                    ));
+                }
+            }
+
+            if let Some(expected_alert) = expectation.expect_min_alert {
+                let actual_alert = result
+                    .recommended_action
+                    .as_ref()
+                    .map(|recommendation| recommendation.parent_alert)
+                    .unwrap_or(proto::AlertPriority::None as i32);
+                if actual_alert < expected_alert as i32 {
+                    report.findings.push(format!(
+                        "{}#{sequence}: expected alert >= {:?}, got {}",
+                        world.label, expected_alert, actual_alert
+                    ));
+                }
+            }
+        }
+
+        if event.sender_id == world.owner.id
+            && result
+                .reason_codes
+                .iter()
+                .any(|code| code.starts_with("conversation.contact."))
+        {
+            report.findings.push(format!(
+                "{}#{sequence}: owner-authored message triggered contact-risk reason code",
+                world.label
+            ));
+        }
+        if event.sender_id == world.owner.id
+            && result
+                .reason_codes
+                .iter()
+                .any(|code| code == "conversation.timing.late_night_minor_contact")
+        {
+            report.findings.push(format!(
+                "{}#{sequence}: owner-authored message triggered late-night contact reason code",
+                world.label
+            ));
+        }
+    }
+
+    fn ffi_clean_expectation_violated(result: &proto::AnalysisResult) -> bool {
+        let threat_type =
+            proto::ThreatType::try_from(result.threat_type).unwrap_or(proto::ThreatType::None);
+        let action = proto::Action::try_from(result.action).unwrap_or(proto::Action::Allow);
+        !matches!(
+            threat_type,
+            proto::ThreatType::None | proto::ThreatType::Unspecified
+        ) || action != proto::Action::Allow
+    }
+
+    fn ffi_result_contains_threat(
+        result: &proto::AnalysisResult,
+        expected: proto::ThreatType,
+    ) -> bool {
+        result.threat_type == expected as i32
+            || result
+                .detected_threats
+                .iter()
+                .any(|threat| threat.threat_type == expected as i32)
     }
 
     fn empty_ruleset_patterns_json() -> &'static str {
@@ -5813,6 +6481,62 @@ mod tests {
 
             aura_free(handle_a);
             aura_free(handle_b);
+        }
+    }
+
+    #[test]
+    #[ignore = "long fixture replay; run via ci/ffi_world_replay_gate.sh"]
+    fn ffi_replays_six_month_world_fixture() {
+        unsafe {
+            let report = run_ffi_world_replay("world_sim_13yo_6mo.json");
+            assert!(
+                report.total_events >= 400,
+                "six-month FFI replay unexpectedly small: {:?}",
+                report
+            );
+            assert!(
+                report.positive_recall() >= 0.95,
+                "six-month FFI replay recall below gate: {:?}",
+                report
+            );
+            assert!(
+                report.clean_false_positive_rate() <= 0.01,
+                "six-month FFI replay clean FP above gate: {:?}",
+                report
+            );
+            assert!(
+                report.findings.is_empty(),
+                "six-month FFI replay findings: {:#?}",
+                report.findings
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "long fixture replay; run via ci/ffi_world_replay_gate.sh"]
+    fn ffi_replays_dense_two_year_world_fixture() {
+        unsafe {
+            let report = run_ffi_world_replay("world_lifecycle_suite/sofia_13_to_15_dense_2y.json");
+            assert!(
+                report.total_events >= 6000,
+                "dense two-year FFI replay unexpectedly small: {:?}",
+                report
+            );
+            assert!(
+                report.positive_recall() >= 0.95,
+                "dense two-year FFI replay recall below gate: {:?}",
+                report
+            );
+            assert!(
+                report.clean_false_positive_rate() <= 0.01,
+                "dense two-year FFI replay clean FP above gate: {:?}",
+                report
+            );
+            assert!(
+                report.findings.is_empty(),
+                "dense two-year FFI replay findings: {:#?}",
+                report.findings
+            );
         }
     }
 

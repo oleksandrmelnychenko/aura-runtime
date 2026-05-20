@@ -22,6 +22,9 @@ safety-world-v2-smoke:
 world-lifecycle-gate:
     bash ci/world_lifecycle_gate.sh
 
+ffi-world-replay-gate:
+    bash ci/ffi_world_replay_gate.sh
+
 kids-memory-health-strict:
     cargo run --quiet --example world_sim -p aura-core -- --input crates/aura-core/data/world_sim_kids_memory_stress.json --summary-only --shadow-output artifacts/pilot-shadow-run-a.json --require-clean
     cargo run --quiet --example world_sim -p aura-core -- --input crates/aura-core/data/world_sim_kids_memory_stress.json --summary-only --shadow-output artifacts/pilot-shadow-run-b.json --require-clean

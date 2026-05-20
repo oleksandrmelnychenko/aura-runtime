@@ -65,6 +65,15 @@ This writes redacted reports to `artifacts/world-lifecycle-dense-2y-report.json`
 and `artifacts/world-lifecycle-suite-report.json`. For nightly scale, raise
 `AURA_LIFECYCLE_REPEAT_MULTIPLIER` without changing the fixture files.
 
+## FFI World Replay Gate
+
+```bash
+bash ci/ffi_world_replay_gate.sh
+```
+
+This runs the long ignored `aura-agent-ffi` world replay tests for the
+six-month fixture and dense two-year fixture through the protobuf FFI boundary.
+
 ## Full Workspace Validation
 
 ```bash

@@ -68,8 +68,9 @@ Latest known expanded lifecycle-suite gate:
 - [x] Add a CI command for the dense two-year world gate and expanded
   lifecycle suite:
   `bash ci/world_lifecycle_gate.sh`.
-- [ ] Add FFI replay coverage for the six-month and two-year world fixtures,
-  not only direct `aura-core` execution.
+- [x] Add FFI replay coverage for the six-month and two-year world fixtures,
+  not only direct `aura-core` execution:
+  `bash ci/ffi_world_replay_gate.sh`.
 - [ ] Add client-boundary replay that imports/exports conversation state during
   long world simulations to verify persistence across app restarts.
 - [ ] Add performance gates for 10k, 50k, and 100k message runs:
