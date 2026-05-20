@@ -78,7 +78,12 @@ jobs:
       run: python3 ci/run_ffi_soak.py --output "$AURA_FFI_SOAK_EVIDENCE_PATH" --iterations 5 --label promotion-${AURA_PROMOTION_TARGET}
     - name: Generate Release Report
       if: ${{ always() }}
-      run: cargo run --quiet --example release_report -p aura-core -- --output "$AURA_RELEASE_REPORT_PATH" --require-pass
+      run: |
+        WORLD_LIFECYCLE_ARGS=""
+        if [ -f "$AURA_WORLD_LIFECYCLE_REPORT_PATH" ]; then
+          WORLD_LIFECYCLE_ARGS="--world-lifecycle-report $AURA_WORLD_LIFECYCLE_REPORT_PATH"
+        fi
+        cargo run --quiet --example release_report -p aura-core -- $WORLD_LIFECYCLE_ARGS --output "$AURA_RELEASE_REPORT_PATH" --require-pass
     - name: Generate Contract Evidence
       if: ${{ always() }}
       run: cargo run --quiet --example contract_evidence -p aura-core -- --output "$AURA_CONTRACT_EVIDENCE_PATH"

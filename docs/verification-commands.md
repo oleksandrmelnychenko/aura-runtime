@@ -65,6 +65,19 @@ This writes redacted reports to `artifacts/world-lifecycle-dense-2y-report.json`
 and `artifacts/world-lifecycle-suite-report.json`. For nightly scale, raise
 `AURA_LIFECYCLE_REPEAT_MULTIPLIER` without changing the fixture files.
 
+## Release Report With World Metrics
+
+```bash
+cargo run --quiet --example release_report -p aura-core -- \
+  --world-lifecycle-report artifacts/world-lifecycle-suite-report.json \
+  --output artifacts/release-report.json \
+  --require-pass
+```
+
+The release report embeds the compact world-simulation metric section by
+relationship, surface, language, and expected threat. CI also picks up
+`AURA_WORLD_LIFECYCLE_REPORT_PATH` when the lifecycle report is present.
+
 ## FFI World Replay Gate
 
 ```bash

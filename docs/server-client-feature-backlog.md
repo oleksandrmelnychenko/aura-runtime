@@ -77,7 +77,7 @@ Latest known expanded lifecycle-suite gate:
 - [x] Add performance gates for 10k, 50k, and 100k message runs:
   runtime, memory growth, and context-store bounds:
   `bash ci/world_performance_gate.sh`.
-- [ ] Add a release report section that records world-simulation metrics by
+- [x] Add a release report section that records world-simulation metrics by
   relationship, surface, language, and expected threat.
 
 ## Server Backlog

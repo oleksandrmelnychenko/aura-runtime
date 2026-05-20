@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use aura_patterns::PatternDatabase;
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     calibration_for_threat, canonical_manipulation_scenarios, canonical_messenger_scenarios,
@@ -213,9 +213,97 @@ pub struct PreReleaseReport {
     pub operator_summary: Vec<String>,
     pub suites: Vec<SuiteReleaseReport>,
     pub drift_checks: Vec<SuiteDriftReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub world_simulation: Option<WorldSimulationReleaseSnapshot>,
     pub wave1_on_device_checks: Vec<GateCheckSnapshot>,
     pub wave1_model_profile_drift: Vec<String>,
     pub wave1_rollback_decision: Wave1RollbackDecision,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorldSimulationReleaseSnapshot {
+    pub schema_version: String,
+    pub label: String,
+    pub input_path: String,
+    pub total_worlds: usize,
+    pub total_events: usize,
+    pub total_findings: usize,
+    pub block_events: usize,
+    pub warn_events: usize,
+    pub threat_events: usize,
+    #[serde(default)]
+    pub action_counts: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub alert_counts: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub threat_counts: BTreeMap<String, usize>,
+    pub metrics: WorldSimulationMetricsSnapshot,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorldSimulationMetricsSnapshot {
+    pub overall: WorldSimulationMetricCountsSnapshot,
+    pub by_relationship: Vec<WorldSimulationMetricSliceSnapshot>,
+    pub by_surface: Vec<WorldSimulationMetricSliceSnapshot>,
+    pub by_language: Vec<WorldSimulationMetricSliceSnapshot>,
+    pub by_expected_threat: Vec<WorldSimulationMetricSliceSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorldSimulationMetricSliceSnapshot {
+    pub slice_id: String,
+    pub counts: WorldSimulationMetricCountsSnapshot,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorldSimulationMetricCountsSnapshot {
+    pub labeled_events: usize,
+    pub labeled_positive_events: usize,
+    pub labeled_clean_events: usize,
+    pub true_positive_events: usize,
+    pub false_negative_events: usize,
+    pub wrong_threat_events: usize,
+    pub true_negative_events: usize,
+    pub false_positive_events: usize,
+    pub positive_precision: Option<f64>,
+    pub positive_recall: Option<f64>,
+    pub clean_false_positive_rate: Option<f64>,
+}
+
+pub fn world_simulation_release_snapshot_from_value(
+    value: &serde_json::Value,
+) -> Result<WorldSimulationReleaseSnapshot, String> {
+    let snapshot: WorldSimulationReleaseSnapshot = serde_json::from_value(value.clone())
+        .map_err(|err| format!("invalid world lifecycle report shape: {err}"))?;
+
+    if snapshot.schema_version != "world_suite.v1" {
+        return Err(format!(
+            "unsupported world lifecycle report schema_version `{}`",
+            snapshot.schema_version
+        ));
+    }
+
+    let mut missing_groups = Vec::new();
+    if snapshot.metrics.by_relationship.is_empty() {
+        missing_groups.push("by_relationship");
+    }
+    if snapshot.metrics.by_surface.is_empty() {
+        missing_groups.push("by_surface");
+    }
+    if snapshot.metrics.by_language.is_empty() {
+        missing_groups.push("by_language");
+    }
+    if snapshot.metrics.by_expected_threat.is_empty() {
+        missing_groups.push("by_expected_threat");
+    }
+    if !missing_groups.is_empty() {
+        return Err(format!(
+            "world lifecycle report is missing release metric groups: {}",
+            missing_groups.join(",")
+        ));
+    }
+
+    Ok(snapshot)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -720,6 +808,7 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
         operator_summary: Vec::new(),
         suites,
         drift_checks,
+        world_simulation: None,
         wave1_on_device_checks: Vec::new(),
         wave1_model_profile_drift: Vec::new(),
         wave1_rollback_decision: Wave1RollbackDecision {
@@ -1816,6 +1905,53 @@ mod tests {
         }
     }
 
+    fn test_world_counts() -> WorldSimulationMetricCountsSnapshot {
+        WorldSimulationMetricCountsSnapshot {
+            labeled_events: 10,
+            labeled_positive_events: 2,
+            labeled_clean_events: 8,
+            true_positive_events: 2,
+            false_negative_events: 0,
+            wrong_threat_events: 0,
+            true_negative_events: 8,
+            false_positive_events: 0,
+            positive_precision: Some(1.0),
+            positive_recall: Some(1.0),
+            clean_false_positive_rate: Some(0.0),
+        }
+    }
+
+    fn test_world_slice(slice_id: &str) -> WorldSimulationMetricSliceSnapshot {
+        WorldSimulationMetricSliceSnapshot {
+            slice_id: slice_id.to_string(),
+            counts: test_world_counts(),
+        }
+    }
+
+    fn test_world_simulation_snapshot() -> WorldSimulationReleaseSnapshot {
+        WorldSimulationReleaseSnapshot {
+            schema_version: "world_suite.v1".to_string(),
+            label: "world_lifecycle_suite".to_string(),
+            input_path: "crates/aura-core/data/world_lifecycle_suite".to_string(),
+            total_worlds: 2,
+            total_events: 10,
+            total_findings: 0,
+            block_events: 1,
+            warn_events: 2,
+            threat_events: 2,
+            action_counts: BTreeMap::from([("block".to_string(), 1), ("warn".to_string(), 2)]),
+            alert_counts: BTreeMap::from([("high".to_string(), 1)]),
+            threat_counts: BTreeMap::from([("grooming".to_string(), 2)]),
+            metrics: WorldSimulationMetricsSnapshot {
+                overall: test_world_counts(),
+                by_relationship: vec![test_world_slice("unknown_adult")],
+                by_surface: vec![test_world_slice("direct")],
+                by_language: vec![test_world_slice("uk")],
+                by_expected_threat: vec![test_world_slice("grooming")],
+            },
+        }
+    }
+
     #[test]
     fn support_assessment_tracks_reportable_and_blocking_thresholds() {
         let summary = ScenarioEvaluationSummary {
@@ -2151,6 +2287,37 @@ mod tests {
     }
 
     #[test]
+    fn world_simulation_release_snapshot_extracts_metric_groups() {
+        let value =
+            serde_json::to_value(test_world_simulation_snapshot()).expect("world snapshot value");
+        let snapshot =
+            world_simulation_release_snapshot_from_value(&value).expect("world snapshot parses");
+
+        assert_eq!(snapshot.schema_version, "world_suite.v1");
+        assert_eq!(snapshot.total_worlds, 2);
+        assert_eq!(
+            snapshot.metrics.by_relationship[0].slice_id,
+            "unknown_adult"
+        );
+        assert_eq!(snapshot.metrics.by_surface[0].slice_id, "direct");
+        assert_eq!(snapshot.metrics.by_language[0].slice_id, "uk");
+        assert_eq!(snapshot.metrics.by_expected_threat[0].slice_id, "grooming");
+        assert_eq!(snapshot.metrics.overall.positive_recall, Some(1.0));
+    }
+
+    #[test]
+    fn world_simulation_release_snapshot_requires_release_metric_groups() {
+        let mut value =
+            serde_json::to_value(test_world_simulation_snapshot()).expect("world snapshot value");
+        value["metrics"]["by_relationship"] = serde_json::json!([]);
+
+        let err = world_simulation_release_snapshot_from_value(&value)
+            .expect_err("empty relationship metrics should fail");
+
+        assert!(err.contains("by_relationship"));
+    }
+
+    #[test]
     fn operator_summary_highlights_social_context_failures() {
         let report = PreReleaseReport {
             schema_version: RELEASE_REPORT_SCHEMA_VERSION,
@@ -2189,6 +2356,7 @@ mod tests {
                 slices: Vec::new(),
             }],
             drift_checks: Vec::new(),
+            world_simulation: None,
             wave1_on_device_checks: vec![GateCheckSnapshot {
                 name: "wave1.on_device.safe_cohort_fp_budget".to_string(),
                 comparison: "at_most".to_string(),
@@ -2320,6 +2488,7 @@ mod tests {
                 },
                 gates: empty_gates.clone(),
             }],
+            world_simulation: Some(test_world_simulation_snapshot()),
             wave1_on_device_checks: vec![GateCheckSnapshot {
                 name: "wave1.on_device.high_risk_recall".to_string(),
                 comparison: "at_least".to_string(),
@@ -2344,6 +2513,11 @@ mod tests {
         assert!(json.contains("release_blocking_ready"));
         assert!(json.contains("social_context_inference"));
         assert!(json.contains("operator_summary"));
+        assert!(json.contains("world_simulation"));
+        assert!(json.contains("by_relationship"));
+        assert!(json.contains("by_surface"));
+        assert!(json.contains("by_language"));
+        assert!(json.contains("by_expected_threat"));
         assert!(json.contains("wave1.on_device.high_risk_recall"));
         assert_eq!(report.schema_version, RELEASE_REPORT_SCHEMA_VERSION);
     }
@@ -2387,6 +2561,7 @@ mod tests {
                 slices: Vec::new(),
             }],
             drift_checks: Vec::new(),
+            world_simulation: None,
             wave1_on_device_checks: Vec::new(),
             wave1_model_profile_drift: Vec::new(),
             wave1_rollback_decision: Wave1RollbackDecision {
@@ -2428,6 +2603,7 @@ mod tests {
             operator_summary: Vec::new(),
             suites: Vec::new(),
             drift_checks: Vec::new(),
+            world_simulation: None,
             wave1_on_device_checks: Vec::new(),
             wave1_model_profile_drift: Vec::new(),
             wave1_rollback_decision: Wave1RollbackDecision {
