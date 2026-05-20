@@ -1,0 +1,413 @@
+{
+  "label": "liza_14_multilingual_creator_18mo",
+  "description": "Eighteen-month multilingual creator lifecycle for a 14-year-old: Ukrainian, Russian, and English chats, public comments, creator community noise, safe mentors, phishing, propaganda, doxxing, and older-contact grooming.",
+  "owner": {
+    "id": "liza_14",
+    "display_name": "Ліза",
+    "age": 14
+  },
+  "config": {
+    "account_type": "teen",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 14,
+    "ttl_days": 365
+  },
+  "actors": [
+    {
+      "id": "liza_14",
+      "display_name": "Ліза"
+    },
+    {
+      "id": "mama_liza",
+      "display_name": "Мама Лізи",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "tato_liza",
+      "display_name": "Тато Лізи",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "natalia_14",
+      "display_name": "Наталя",
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "anya_14",
+      "display_name": "Аня",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "timur_15",
+      "display_name": "Тимур",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "marta_15",
+      "display_name": "Марта",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "english_peer_mia",
+      "display_name": "Mia",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "ru_peer_dima",
+      "display_name": "Дима",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "art_teacher_olha",
+      "display_name": "Пані Ольга",
+      "trusted": true,
+      "sender_relationship": "teacher",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "creator_mod",
+      "display_name": "Creator Mod",
+      "trusted": true,
+      "sender_relationship": "authority",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "mentor_art_29",
+      "display_name": "Арт-ментор",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "older_fan_34",
+      "display_name": "Fan34",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "unknown_commenter_ru",
+      "display_name": "Комментатор",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "prop_account_ru",
+      "display_name": "Новости",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "grant_bot",
+      "display_name": "Creator Grant",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "portfolio_bot",
+      "display_name": "Portfolio Bot",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "public_peer_1",
+      "display_name": "Підписниця",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "public_peer_2",
+      "display_name": "Follower",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "family_group",
+      "display_name": "Сім'я Лізи",
+      "conversation_type": "group",
+      "member_count": 3
+    },
+    {
+      "id": "creator_group",
+      "display_name": "Creator Group",
+      "conversation_type": "group",
+      "member_count": 18
+    },
+    {
+      "id": "public_comments",
+      "display_name": "Public Comments",
+      "conversation_type": "group",
+      "member_count": 150
+    },
+    {
+      "id": "photo_comments",
+      "display_name": "Photo Comments",
+      "conversation_type": "group",
+      "member_count": 200
+    },
+    {
+      "id": "english_club",
+      "display_name": "English Club",
+      "conversation_type": "group",
+      "member_count": 20
+    },
+    {
+      "id": "ru_art_chat",
+      "display_name": "RU Art Chat",
+      "conversation_type": "group",
+      "member_count": 24
+    },
+    {
+      "id": "mentor_dm",
+      "display_name": "Mentor DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "older_fan_dm",
+      "display_name": "Fan34 DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "grant_dm",
+      "display_name": "Creator Grants",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "news_thread",
+      "display_name": "News Thread",
+      "conversation_type": "group",
+      "member_count": 42
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-04-05T18:20:00+03:00",
+      "sender_id": "older_fan_34",
+      "conversation_id": "photo_comments",
+      "text": "Ти виглядаєш дуже дорослою для 14, напиши мені в приват, тут не місце для таких розмов.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-04-07T21:10:00+03:00",
+      "sender_id": "older_fan_34",
+      "conversation_id": "older_fan_dm",
+      "text": "Тільки не кажи мамі, вона не зрозуміє, що ми просто спілкуємось.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-05-15T20:30:00+03:00",
+      "sender_id": "mentor_art_29",
+      "conversation_id": "mentor_dm",
+      "text": "Давай в телегу, тут нас можуть читати батьки.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-06-01T12:30:00+03:00",
+      "sender_id": "grant_bot",
+      "conversation_id": "grant_dm",
+      "text": "You won a creator grant today. Confirm login and card at http://creator-grant-claim.xyz now",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-07-18T19:00:00+03:00",
+      "sender_id": "prop_account_ru",
+      "conversation_id": "news_thread",
+      "language": "ru",
+      "text": "нацисты у власти, надо капитулировать",
+      "expect_threat": "propaganda",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-07-18T19:10:00+03:00",
+      "sender_id": "prop_account_ru",
+      "conversation_id": "news_thread",
+      "language": "ru",
+      "text": "братские народы, зачем война",
+      "expect_threat": "propaganda",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-08-12T17:45:00+03:00",
+      "sender_id": "liza_14",
+      "conversation_id": "creator_group",
+      "text": "Мій номер 0671234567, дзвони після заняття якщо що.",
+      "expect_threat": "pii_leakage",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-09-03T18:10:00+03:00",
+      "sender_id": "unknown_commenter_ru",
+      "conversation_id": "public_comments",
+      "language": "en",
+      "text": "Liza lives at 245 Maple Drive Apt 4B. Her phone is 312-555-0140. Share it everywhere.",
+      "expect_threat": "doxxing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2027-02-20T21:20:00+02:00",
+      "sender_id": "mentor_art_29",
+      "conversation_id": "mentor_dm",
+      "text": "Скинь фото без одягу, я нікому не покажу.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "family_clean",
+      "start_at": "2026-01-10T08:00:00+02:00",
+      "count": 3,
+      "interval_minutes": 300,
+      "day_repeats": 540,
+      "day_stride_days": 1,
+      "sender_ids": [
+        "mama_liza",
+        "liza_14",
+        "tato_liza"
+      ],
+      "conversation_ids": [
+        "family_group"
+      ],
+      "texts": [
+        "Доброго ранку, гарного дня.",
+        "Я після уроків напишу.",
+        "Ввечері обговоримо плани."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 3,
+      "expect_clean": true
+    },
+    {
+      "label": "creator_group_clean",
+      "start_at": "2026-01-12T17:30:00+02:00",
+      "count": 6,
+      "interval_minutes": 18,
+      "day_repeats": 78,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "liza_14",
+        "natalia_14",
+        "anya_14",
+        "timur_15",
+        "marta_15",
+        "art_teacher_olha",
+        "creator_mod"
+      ],
+      "conversation_ids": [
+        "creator_group",
+        "public_comments"
+      ],
+      "texts": [
+        "Класна робота з кольором.",
+        "Мені подобається композиція.",
+        "Додайте назву роботи до опису.",
+        "Наступного разу беремо акварель.",
+        "Модерація затвердила тему тижня.",
+        "Я викладу фінальну версію ввечері."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 150,
+      "expect_clean": true
+    },
+    {
+      "label": "english_club_clean",
+      "start_at": "2026-02-01T16:30:00+02:00",
+      "count": 5,
+      "interval_minutes": 15,
+      "day_repeats": 72,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "english_peer_mia",
+        "liza_14",
+        "natalia_14",
+        "creator_mod"
+      ],
+      "conversation_ids": [
+        "english_club"
+      ],
+      "texts": [
+        "Can we practice the presentation tomorrow?",
+        "I added notes to the shared document.",
+        "The pronunciation exercise was helpful.",
+        "The worksheet is ready for tomorrow.",
+        "Thanks, I understand the grammar now."
+      ],
+      "language": "en",
+      "conversation_type": "group",
+      "member_count": 20,
+      "expect_clean": true
+    },
+    {
+      "label": "ru_art_clean",
+      "start_at": "2026-02-08T18:00:00+02:00",
+      "count": 5,
+      "interval_minutes": 18,
+      "day_repeats": 52,
+      "day_stride_days": 10,
+      "sender_ids": [
+        "ru_peer_dima",
+        "liza_14",
+        "public_peer_1",
+        "public_peer_2"
+      ],
+      "conversation_ids": [
+        "ru_art_chat"
+      ],
+      "texts": [
+        "Классная работа с тенью.",
+        "Мне нравится цветовая палитра.",
+        "Добавь, пожалуйста, название рисунка.",
+        "Следующая тема будет про портрет.",
+        "Спасибо за совет по кистям."
+      ],
+      "language": "ru",
+      "conversation_type": "group",
+      "member_count": 24,
+      "expect_clean": true
+    },
+    {
+      "label": "portfolio_service_clean",
+      "start_at": "2026-01-20T12:00:00+02:00",
+      "count": 2,
+      "interval_minutes": 240,
+      "day_repeats": 90,
+      "day_stride_days": 5,
+      "sender_ids": [
+        "portfolio_bot",
+        "creator_mod"
+      ],
+      "conversation_ids": [
+        "creator_group"
+      ],
+      "texts": [
+        "Portfolio review reminder: submit final image by Friday.",
+        "Community showcase opens next Monday."
+      ],
+      "language": "en",
+      "conversation_type": "group",
+      "member_count": 18,
+      "expect_clean": true
+    }
+  ]
+}

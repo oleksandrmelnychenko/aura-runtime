@@ -1,0 +1,406 @@
+{
+  "label": "lev_10_gaming_scam_grooming_1y",
+  "description": "One-year gaming-heavy lifecycle for a 10-year-old: high-volume safe game chat, parent-visible logistics, scam bots, unknown adult grooming, fake teen contact, PII leakage, and peer bullying.",
+  "owner": {
+    "id": "lev_10",
+    "display_name": "Лев",
+    "age": 10
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 10,
+    "ttl_days": 365
+  },
+  "actors": [
+    {
+      "id": "lev_10",
+      "display_name": "Лев"
+    },
+    {
+      "id": "mama_lev",
+      "display_name": "Мама Лева",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "tato_lev",
+      "display_name": "Тато Лева",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "danylo_10",
+      "display_name": "Данило",
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "misha_10",
+      "display_name": "Міша",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "artem_11",
+      "display_name": "Артем",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "sonia_10",
+      "display_name": "Соня",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "ira_11",
+      "display_name": "Іра",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "bully_11",
+      "display_name": "Кирило",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "coach_esports",
+      "display_name": "Тренер гуртка",
+      "trusted": true,
+      "sender_relationship": "coach",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "teacher_nina",
+      "display_name": "Пані Ніна",
+      "trusted": true,
+      "sender_relationship": "teacher",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "max_28_game",
+      "display_name": "MaxPro",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "max_backup_game",
+      "display_name": "MaxPro2",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "fake_kid_13",
+      "display_name": "Нікіта",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "self_declared"
+    },
+    {
+      "id": "skin_drop_bot",
+      "display_name": "Skin Drop",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "robux_bot",
+      "display_name": "Robux Bot",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "unknown_player_1",
+      "display_name": "PlayerOne",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "unknown_player_2",
+      "display_name": "PixelFox",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "family_group",
+      "display_name": "Сім'я Лева",
+      "conversation_type": "group",
+      "member_count": 3
+    },
+    {
+      "id": "class_4b",
+      "display_name": "4-Б клас",
+      "conversation_type": "group",
+      "member_count": 24
+    },
+    {
+      "id": "gaming_squad",
+      "display_name": "Gaming Squad",
+      "conversation_type": "group",
+      "member_count": 14
+    },
+    {
+      "id": "guild_chat",
+      "display_name": "Guild Chat",
+      "conversation_type": "group",
+      "member_count": 32
+    },
+    {
+      "id": "max_game_dm",
+      "display_name": "MaxPro ↔ Лев",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "max_backup_dm",
+      "display_name": "MaxPro2 ↔ Лев",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "fake_kid_dm",
+      "display_name": "Нікіта ↔ Лев",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "promo_dm",
+      "display_name": "Promo DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "esports_parent_loop",
+      "display_name": "Гурток + батьки",
+      "conversation_type": "group",
+      "member_count": 5
+    },
+    {
+      "id": "private_notes",
+      "display_name": "Особисті нотатки",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-02-03T18:40:00+02:00",
+      "sender_id": "max_28_game",
+      "conversation_id": "gaming_squad",
+      "text": "Лев, ти дуже круто граєш як для 10, додай мене в друзі."
+    },
+    {
+      "at": "2026-02-05T21:10:00+02:00",
+      "sender_id": "max_28_game",
+      "conversation_id": "max_game_dm",
+      "text": "Я можу подарувати тобі рідкісний скін, тільки не роби з цього шум.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-09T21:45:00+02:00",
+      "sender_id": "max_28_game",
+      "conversation_id": "max_game_dm",
+      "text": "Це наш маленький секрет, не розказуй батькам про наші чати.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-02-12T22:05:00+02:00",
+      "sender_id": "max_28_game",
+      "conversation_id": "max_game_dm",
+      "text": "Давай перейдемо в інший додаток, тут батьки можуть побачити повідомлення.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-01T17:15:00+02:00",
+      "sender_id": "skin_drop_bot",
+      "conversation_id": "promo_dm",
+      "text": "Claim free skins now: http://fr33-skins-drop.xyz/claim login and get prize today",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-18T14:20:00+02:00",
+      "sender_id": "bully_11",
+      "conversation_id": "class_4b",
+      "text": "Ніхто тебе тут не хоче в команді, ти все псуєш.",
+      "expect_threat": "bullying",
+      "expect_min_action": "blur"
+    },
+    {
+      "at": "2026-03-18T14:25:00+02:00",
+      "sender_id": "bully_11",
+      "conversation_id": "class_4b",
+      "text": "Завтра в школі тобі кінець, зрозуміла?",
+      "expect_threat": "threat",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-04-02T18:00:00+03:00",
+      "sender_id": "lev_10",
+      "conversation_id": "gaming_squad",
+      "text": "Мій номер 0671234567, дзвони після катки якщо що.",
+      "expect_threat": "pii_leakage",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-05-11T20:30:00+03:00",
+      "sender_id": "fake_kid_13",
+      "conversation_id": "fake_kid_dm",
+      "text": "Тільки не кажи мамі, вона не зрозуміє, що ми просто спілкуємось.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-07-22T21:40:00+03:00",
+      "sender_id": "max_backup_game",
+      "conversation_id": "max_backup_dm",
+      "text": "Лев, це я. Якщо батьки питають, кажи що я однокласник.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-07-25T22:10:00+03:00",
+      "sender_id": "max_backup_game",
+      "conversation_id": "max_backup_dm",
+      "text": "Ти можеш довіряти тільки мені, інші тебе не розуміють.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-10-12T19:20:00+03:00",
+      "sender_id": "robux_bot",
+      "conversation_id": "promo_dm",
+      "text": "FREE ROBUX today: http://robux-prize-login.xyz claim code now and confirm password",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "family_daily_clean",
+      "start_at": "2026-01-10T07:30:00+02:00",
+      "count": 3,
+      "interval_minutes": 300,
+      "day_repeats": 365,
+      "day_stride_days": 1,
+      "sender_ids": [
+        "mama_lev",
+        "lev_10",
+        "tato_lev"
+      ],
+      "conversation_ids": [
+        "family_group"
+      ],
+      "texts": [
+        "Доброго ранку, гарного дня.",
+        "Я після школи напишу.",
+        "Ввечері перевіримо домашку."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 3,
+      "expect_clean": true
+    },
+    {
+      "label": "gaming_squad_clean",
+      "start_at": "2026-01-12T18:00:00+02:00",
+      "count": 8,
+      "interval_minutes": 12,
+      "day_repeats": 104,
+      "day_stride_days": 3,
+      "sender_ids": [
+        "lev_10",
+        "danylo_10",
+        "misha_10",
+        "artem_11",
+        "sonia_10",
+        "ira_11",
+        "unknown_player_1",
+        "unknown_player_2"
+      ],
+      "conversation_ids": [
+        "gaming_squad",
+        "guild_chat"
+      ],
+      "texts": [
+        "Хто сьогодні грає після домашки?",
+        "Я буду десь о сьомій.",
+        "Давайте спокійно, просто тренуємось.",
+        "Можемо пройти квест командою.",
+        "Не забудьте оновити клієнт.",
+        "Ставлю паузу на десять хвилин.",
+        "Гарна гра, ще один раунд?",
+        "Я створю кімнату і кину код у чат."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 32,
+      "expect_clean": true
+    },
+    {
+      "label": "class_clean",
+      "start_at": "2026-01-20T10:00:00+02:00",
+      "count": 5,
+      "interval_minutes": 18,
+      "day_repeats": 52,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "teacher_nina",
+        "danylo_10",
+        "misha_10",
+        "sonia_10",
+        "lev_10"
+      ],
+      "conversation_ids": [
+        "class_4b"
+      ],
+      "texts": [
+        "Не забудьте зошити з математики.",
+        "Я можу скинути фото дошки.",
+        "Контрольна буде наступного тижня.",
+        "Хто бере папір для аплікації?",
+        "Дякую, я записав домашнє."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 24,
+      "expect_clean": true
+    },
+    {
+      "label": "parent_visible_esports_clean",
+      "start_at": "2026-02-01T15:30:00+02:00",
+      "count": 4,
+      "interval_minutes": 30,
+      "day_repeats": 36,
+      "day_stride_days": 10,
+      "sender_ids": [
+        "coach_esports",
+        "mama_lev",
+        "lev_10",
+        "tato_lev"
+      ],
+      "conversation_ids": [
+        "esports_parent_loop"
+      ],
+      "texts": [
+        "Гурток завтра о 16:00, батьки можуть бути присутні.",
+        "Дякую, підтверджую.",
+        "Лев буде після школи.",
+        "Офіційний розклад тут у чаті."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 5,
+      "expect_clean": true
+    }
+  ]
+}

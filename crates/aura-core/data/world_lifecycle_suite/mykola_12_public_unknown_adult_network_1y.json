@@ -1,0 +1,430 @@
+{
+  "label": "mykola_12_public_unknown_adult_network_1y",
+  "description": "One-year lifecycle for a 12-year-old with public sports/video comments, multiple unknown adult contacts, backup accounts, scam links, doxxing, school noise, and safe parent-visible adult support.",
+  "owner": {
+    "id": "mykola_12",
+    "display_name": "Микола",
+    "age": 12
+  },
+  "config": {
+    "account_type": "child",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 12,
+    "ttl_days": 365
+  },
+  "actors": [
+    {
+      "id": "mykola_12",
+      "display_name": "Микола"
+    },
+    {
+      "id": "mama_mykola",
+      "display_name": "Мама Миколи",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "tato_mykola",
+      "display_name": "Тато Миколи",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "coach_serhii",
+      "display_name": "Тренер Сергій",
+      "trusted": true,
+      "sender_relationship": "coach",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "teacher_ira",
+      "display_name": "Пані Ірина",
+      "trusted": true,
+      "sender_relationship": "teacher",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "taras_12",
+      "display_name": "Тарас",
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "oleh_12",
+      "display_name": "Олег",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "dima_13",
+      "display_name": "Діма",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "sasha_12",
+      "display_name": "Саша",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "vlad_13",
+      "display_name": "Влад",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "older_scout_30",
+      "display_name": "Scout30",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "older_scout_backup",
+      "display_name": "Scout Backup",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "fake_teammate_16",
+      "display_name": "Ігор",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "self_declared"
+    },
+    {
+      "id": "public_commenter_1",
+      "display_name": "Коментатор",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "public_commenter_2",
+      "display_name": "Fan",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "kit_bot",
+      "display_name": "Sports Kit Bot",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "ticket_bot",
+      "display_name": "Ticket Bot",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "public_peer_1",
+      "display_name": "Вболівальник",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "public_peer_2",
+      "display_name": "Підписник",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "family_group",
+      "display_name": "Сім'я Миколи",
+      "conversation_type": "group",
+      "member_count": 3
+    },
+    {
+      "id": "class_6a",
+      "display_name": "6-А клас",
+      "conversation_type": "group",
+      "member_count": 27
+    },
+    {
+      "id": "team_chat",
+      "display_name": "Команда",
+      "conversation_type": "group",
+      "member_count": 18
+    },
+    {
+      "id": "coach_parent_loop",
+      "display_name": "Тренер + батьки",
+      "conversation_type": "group",
+      "member_count": 5
+    },
+    {
+      "id": "public_video_comments",
+      "display_name": "Коментарі до відео",
+      "conversation_type": "group",
+      "member_count": 140
+    },
+    {
+      "id": "scout_dm",
+      "display_name": "Scout30 DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "scout_backup_dm",
+      "display_name": "Scout Backup DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "fake_teammate_dm",
+      "display_name": "Ігор DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "promo_dm",
+      "display_name": "Promo DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "private_notes",
+      "display_name": "Особисті нотатки",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-24T17:20:00+02:00",
+      "sender_id": "public_commenter_1",
+      "conversation_id": "public_video_comments",
+      "text": "Ти дуже сильний як для 12, напиши мені в приват, маю пропозицію.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-01-26T21:30:00+02:00",
+      "sender_id": "older_scout_30",
+      "conversation_id": "scout_dm",
+      "text": "Я можу подарувати тобі рідкісний скін, тільки не роби з цього шум.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-02T22:10:00+02:00",
+      "sender_id": "older_scout_30",
+      "conversation_id": "scout_dm",
+      "text": "Це наш маленький секрет, не розказуй батькам про наші чати.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-02-10T21:45:00+02:00",
+      "sender_id": "older_scout_30",
+      "conversation_id": "scout_dm",
+      "text": "Давай перейдемо в інший додаток, тут батьки можуть побачити повідомлення.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-05T18:20:00+02:00",
+      "sender_id": "kit_bot",
+      "conversation_id": "promo_dm",
+      "text": "Claim free sports kit now: http://kit-prize-login.xyz login and get prize today",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-04-15T14:30:00+03:00",
+      "sender_id": "dima_13",
+      "conversation_id": "class_6a",
+      "text": "Якщо не скинеш відповіді з математики, я покажу всім той скрін.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-05-10T19:00:00+03:00",
+      "sender_id": "mykola_12",
+      "conversation_id": "team_chat",
+      "text": "Мій номер 0671234567, дзвони після тренування якщо що.",
+      "expect_threat": "pii_leakage",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-06-12T20:40:00+03:00",
+      "sender_id": "fake_teammate_16",
+      "conversation_id": "fake_teammate_dm",
+      "text": "Тільки не кажи мамі, вона не зрозуміє, що ми просто спілкуємось.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    },
+    {
+      "at": "2026-08-01T21:50:00+03:00",
+      "sender_id": "older_scout_backup",
+      "conversation_id": "scout_backup_dm",
+      "text": "Не ігноруй мене. Якщо батьки питають, кажи що я однокласник.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-09-18T18:10:00+03:00",
+      "sender_id": "public_commenter_2",
+      "conversation_id": "public_video_comments",
+      "language": "en",
+      "text": "Mykola lives at 245 Maple Drive Apt 4B. His phone is 312-555-0140. Share it everywhere.",
+      "expect_threat": "doxxing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-11-06T22:05:00+02:00",
+      "sender_id": "older_scout_backup",
+      "conversation_id": "scout_backup_dm",
+      "text": "Це наш маленький секрет, не розказуй батькам про наші чати.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn",
+      "expect_min_alert": "high"
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "family_clean",
+      "start_at": "2026-01-10T07:30:00+02:00",
+      "count": 3,
+      "interval_minutes": 300,
+      "day_repeats": 365,
+      "day_stride_days": 1,
+      "sender_ids": [
+        "mama_mykola",
+        "mykola_12",
+        "tato_mykola"
+      ],
+      "conversation_ids": [
+        "family_group"
+      ],
+      "texts": [
+        "Доброго ранку, гарного дня.",
+        "Я після школи напишу.",
+        "Ввечері перевіримо речі на тренування."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 3,
+      "expect_clean": true
+    },
+    {
+      "label": "team_clean",
+      "start_at": "2026-01-12T17:00:00+02:00",
+      "count": 6,
+      "interval_minutes": 18,
+      "day_repeats": 72,
+      "day_stride_days": 5,
+      "sender_ids": [
+        "mykola_12",
+        "taras_12",
+        "oleh_12",
+        "sasha_12",
+        "vlad_13",
+        "coach_serhii"
+      ],
+      "conversation_ids": [
+        "team_chat"
+      ],
+      "texts": [
+        "Тренування завтра о п'ятій.",
+        "Я принесу м'яч.",
+        "Після гри зробимо розтяжку.",
+        "Не забудьте воду.",
+        "Хто може взяти конуси?",
+        "Гарна командна робота сьогодні."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 18,
+      "expect_clean": true
+    },
+    {
+      "label": "class_clean",
+      "start_at": "2026-01-20T10:00:00+02:00",
+      "count": 5,
+      "interval_minutes": 18,
+      "day_repeats": 52,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "teacher_ira",
+        "taras_12",
+        "oleh_12",
+        "sasha_12",
+        "mykola_12"
+      ],
+      "conversation_ids": [
+        "class_6a"
+      ],
+      "texts": [
+        "Не забудьте про презентацію.",
+        "У кого є фото дошки?",
+        "Контрольна буде після вихідних.",
+        "Я додам список джерел.",
+        "Дякую, я записав домашнє."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 27,
+      "expect_clean": true
+    },
+    {
+      "label": "coach_parent_clean",
+      "start_at": "2026-02-01T15:30:00+02:00",
+      "count": 4,
+      "interval_minutes": 30,
+      "day_repeats": 36,
+      "day_stride_days": 10,
+      "sender_ids": [
+        "coach_serhii",
+        "mama_mykola",
+        "mykola_12",
+        "tato_mykola"
+      ],
+      "conversation_ids": [
+        "coach_parent_loop"
+      ],
+      "texts": [
+        "Матч у суботу о 12:00, батьки можуть бути присутні.",
+        "Дякую, підтверджую.",
+        "Микола буде після школи.",
+        "Офіційний розклад тут у чаті."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 5,
+      "expect_clean": true
+    },
+    {
+      "label": "public_comments_clean",
+      "start_at": "2026-01-25T19:00:00+02:00",
+      "count": 5,
+      "interval_minutes": 20,
+      "day_repeats": 48,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "public_peer_1",
+        "public_peer_2",
+        "taras_12",
+        "mykola_12",
+        "coach_serhii"
+      ],
+      "conversation_ids": [
+        "public_video_comments"
+      ],
+      "texts": [
+        "Класний гол у другому таймі.",
+        "Гарне відео з тренування.",
+        "Команда добре зіграла.",
+        "Наступного разу буде ще краще.",
+        "Дякую за підтримку."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 140,
+      "expect_clean": true
+    }
+  ]
+}

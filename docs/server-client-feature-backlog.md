@@ -18,10 +18,12 @@ Recent component state:
   metadata alone.
 - `world_sim` has quality metrics and CI-style gates for labeled recall and
   clean false-positive rate.
-- Dense two-year lifecycle fixture exists:
+- Dense lifecycle fixtures exist, including:
   `crates/aura-core/data/world_lifecycle_suite/sofia_13_to_15_dense_2y.json`.
+- Expanded lifecycle suite now includes clean-only, gaming-heavy,
+  multilingual creator, and unknown-adult-network worlds.
 
-Latest known dense lifecycle gate:
+Latest known dense single-world gate:
 
 - actors: 56
 - conversations: 25
@@ -29,6 +31,19 @@ Latest known dense lifecycle gate:
 - labeled events: 6,833
 - positives: 25
 - clean labeled background: 6,808
+- false negatives: 0
+- clean false positives: 0
+- recall: 100%
+- precision: 100%
+- clean false-positive rate: 0%
+
+Latest known expanded lifecycle-suite gate:
+
+- worlds: 11
+- total events: 19,796
+- labeled events: 19,789
+- positives: 83
+- clean labeled background: 19,706
 - false negatives: 0
 - clean false positives: 0
 - recall: 100%

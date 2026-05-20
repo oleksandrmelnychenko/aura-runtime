@@ -1,0 +1,484 @@
+{
+  "label": "anastasia_12_to_14_clean_negative_2y",
+  "description": "Two-year clean negative-control lifecycle for a protected teen: many family, school, sport, art, public comment, volunteer, and service-notification messages with no expected threats.",
+  "owner": {
+    "id": "anastasia_12",
+    "display_name": "Анастасія",
+    "age": 12
+  },
+  "config": {
+    "account_type": "teen",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 12,
+    "ttl_days": 365
+  },
+  "actors": [
+    {
+      "id": "anastasia_12",
+      "display_name": "Анастасія"
+    },
+    {
+      "id": "mama_nastia",
+      "display_name": "Мама Насті",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "tato_nastia",
+      "display_name": "Тато Насті",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "brother_petro",
+      "display_name": "Петро",
+      "trusted": true,
+      "sender_relationship": "sibling",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "olena_12",
+      "display_name": "Олена",
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "maria_13",
+      "display_name": "Марія",
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "roman_13",
+      "display_name": "Роман",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "katia_13",
+      "display_name": "Катя",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "bohdan_13",
+      "display_name": "Богдан",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "ira_14",
+      "display_name": "Іра",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "vlad_14",
+      "display_name": "Влад",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "sofia_13",
+      "display_name": "Софія",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "maksym_13",
+      "display_name": "Максим",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "polina_13",
+      "display_name": "Поліна",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "teacher_lesia",
+      "display_name": "Пані Леся",
+      "trusted": true,
+      "sender_relationship": "teacher",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "coach_oleh",
+      "display_name": "Тренер Олег",
+      "trusted": true,
+      "sender_relationship": "coach",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "art_teacher_marta",
+      "display_name": "Викладачка Марта",
+      "trusted": true,
+      "sender_relationship": "teacher",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "volunteer_lead",
+      "display_name": "Координаторка",
+      "trusted": true,
+      "sender_relationship": "authority",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "school_bot",
+      "display_name": "School Bot",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "club_news_bot",
+      "display_name": "Club News",
+      "sender_relationship": "service",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "public_peer_1",
+      "display_name": "Коментаторка",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "public_peer_2",
+      "display_name": "Коментатор",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "camp_friend_1",
+      "display_name": "Ліза з табору",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "camp_friend_2",
+      "display_name": "Данило з табору",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "user_verified"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "family_group",
+      "display_name": "Сімейний чат",
+      "conversation_type": "group",
+      "member_count": 4
+    },
+    {
+      "id": "best_friends",
+      "display_name": "Найкращі друзі",
+      "conversation_type": "group",
+      "member_count": 5
+    },
+    {
+      "id": "class_7v",
+      "display_name": "7-В клас",
+      "conversation_type": "group",
+      "member_count": 28
+    },
+    {
+      "id": "class_8v",
+      "display_name": "8-В клас",
+      "conversation_type": "group",
+      "member_count": 30
+    },
+    {
+      "id": "homework_help",
+      "display_name": "Домашка разом",
+      "conversation_type": "group",
+      "member_count": 12
+    },
+    {
+      "id": "sport_parent_loop",
+      "display_name": "Спорт + батьки",
+      "conversation_type": "group",
+      "member_count": 5
+    },
+    {
+      "id": "art_club",
+      "display_name": "Арт-клуб",
+      "conversation_type": "group",
+      "member_count": 16
+    },
+    {
+      "id": "art_public_comments",
+      "display_name": "Коментарі до робіт",
+      "conversation_type": "group",
+      "member_count": 95
+    },
+    {
+      "id": "volunteer_group",
+      "display_name": "Волонтерська група",
+      "conversation_type": "group",
+      "member_count": 20
+    },
+    {
+      "id": "summer_camp",
+      "display_name": "Літній табір",
+      "conversation_type": "group",
+      "member_count": 24
+    },
+    {
+      "id": "service_updates",
+      "display_name": "Оновлення школи",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-10T09:00:00+02:00",
+      "sender_id": "mama_nastia",
+      "conversation_id": "family_group",
+      "text": "Гарного дня, напиши після школи.",
+      "expect_clean": true
+    },
+    {
+      "at": "2027-12-20T19:00:00+02:00",
+      "sender_id": "teacher_lesia",
+      "conversation_id": "class_8v",
+      "text": "Дякую всім за семестр. Домашнє завдання буде в журналі.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "daily_family_clean",
+      "start_at": "2026-01-10T07:20:00+02:00",
+      "count": 3,
+      "interval_minutes": 300,
+      "day_repeats": 730,
+      "day_stride_days": 1,
+      "sender_ids": [
+        "mama_nastia",
+        "anastasia_12",
+        "tato_nastia",
+        "brother_petro"
+      ],
+      "conversation_ids": [
+        "family_group"
+      ],
+      "texts": [
+        "Доброго ранку, гарного дня.",
+        "Я після уроків напишу, як доберусь.",
+        "Ввечері можемо разом зробити вечерю."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 4,
+      "expect_clean": true
+    },
+    {
+      "label": "weekly_friends_clean",
+      "start_at": "2026-01-12T16:00:00+02:00",
+      "count": 6,
+      "interval_minutes": 12,
+      "day_repeats": 104,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "olena_12",
+        "maria_13",
+        "anastasia_12",
+        "katia_13",
+        "sofia_13"
+      ],
+      "conversation_ids": [
+        "best_friends"
+      ],
+      "texts": [
+        "Хто завтра йде в бібліотеку?",
+        "Я можу взяти конспект.",
+        "Давайте після уроків погуляємо в парку.",
+        "Мем смішний, але не спойлеріть серію.",
+        "Я принесу печиво на зустріч.",
+        "Домовились, побачимось завтра."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 5,
+      "expect_clean": true
+    },
+    {
+      "label": "school_background_clean",
+      "start_at": "2026-01-20T10:00:00+02:00",
+      "count": 8,
+      "interval_minutes": 15,
+      "day_repeats": 96,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "roman_13",
+        "bohdan_13",
+        "ira_14",
+        "vlad_14",
+        "maksym_13",
+        "polina_13",
+        "teacher_lesia",
+        "anastasia_12"
+      ],
+      "conversation_ids": [
+        "class_7v",
+        "class_8v",
+        "homework_help"
+      ],
+      "texts": [
+        "Не забудьте про презентацію.",
+        "У кого є фото дошки з біології?",
+        "Контрольна буде після вихідних.",
+        "Я додам список джерел у документ.",
+        "Хто бере маркери для плаката?",
+        "Параграф починається зі сторінки 42.",
+        "Дякую, я вже записала домашку.",
+        "Зустріч гуртка перенесли на четвер."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 30,
+      "expect_clean": true
+    },
+    {
+      "label": "sport_parent_loop_clean",
+      "start_at": "2026-02-05T15:30:00+02:00",
+      "count": 4,
+      "interval_minutes": 30,
+      "day_repeats": 64,
+      "day_stride_days": 10,
+      "sender_ids": [
+        "coach_oleh",
+        "mama_nastia",
+        "tato_nastia",
+        "anastasia_12"
+      ],
+      "conversation_ids": [
+        "sport_parent_loop"
+      ],
+      "texts": [
+        "Тренування завтра о 16:00, батьки можуть бути присутні.",
+        "Дякую, підтверджую участь.",
+        "Після заняття напишемо підсумки.",
+        "Форма і вода обов'язково."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 5,
+      "expect_clean": true
+    },
+    {
+      "label": "art_public_clean",
+      "start_at": "2026-02-15T18:00:00+02:00",
+      "count": 5,
+      "interval_minutes": 20,
+      "day_repeats": 72,
+      "day_stride_days": 10,
+      "sender_ids": [
+        "art_teacher_marta",
+        "anastasia_12",
+        "public_peer_1",
+        "public_peer_2",
+        "club_news_bot"
+      ],
+      "conversation_ids": [
+        "art_club",
+        "art_public_comments"
+      ],
+      "texts": [
+        "Класна робота з кольором.",
+        "Мені подобається композиція.",
+        "Наступного разу беремо акварель.",
+        "Додайте назву роботи до опису.",
+        "Голосування відкриється у понеділок."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 95,
+      "expect_clean": true
+    },
+    {
+      "label": "volunteer_clean",
+      "start_at": "2026-09-01T13:00:00+03:00",
+      "count": 5,
+      "interval_minutes": 25,
+      "day_repeats": 64,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "volunteer_lead",
+        "anastasia_12",
+        "olena_12",
+        "roman_13",
+        "katia_13"
+      ],
+      "conversation_ids": [
+        "volunteer_group"
+      ],
+      "texts": [
+        "Завтра сортуємо книги після уроків.",
+        "Я можу принести коробки.",
+        "Давайте зробимо список чергувань.",
+        "Підпишемо пакети за класами.",
+        "Дякую всім за допомогу."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 20,
+      "expect_clean": true
+    },
+    {
+      "label": "camp_clean",
+      "start_at": "2026-07-01T10:00:00+03:00",
+      "count": 5,
+      "interval_minutes": 30,
+      "day_repeats": 18,
+      "day_stride_days": 2,
+      "sender_ids": [
+        "camp_friend_1",
+        "camp_friend_2",
+        "anastasia_12",
+        "coach_oleh"
+      ],
+      "conversation_ids": [
+        "summer_camp"
+      ],
+      "texts": [
+        "Збір біля входу о десятій.",
+        "Не забудьте воду і кепку.",
+        "Після майстер-класу буде обід.",
+        "Я принесу настільну гру.",
+        "Фото з екскурсії додамо в альбом."
+      ],
+      "language": "uk",
+      "conversation_type": "group",
+      "member_count": 24,
+      "expect_clean": true
+    },
+    {
+      "label": "service_updates_clean",
+      "start_at": "2026-01-21T12:00:00+02:00",
+      "count": 2,
+      "interval_minutes": 240,
+      "day_repeats": 120,
+      "day_stride_days": 5,
+      "sender_ids": [
+        "school_bot",
+        "club_news_bot"
+      ],
+      "conversation_ids": [
+        "service_updates"
+      ],
+      "texts": [
+        "Нагадування: дедлайн подачі заявки у п'ятницю.",
+        "Офіційна зустріч відбудеться в актовій залі."
+      ],
+      "language": "uk",
+      "conversation_type": "direct",
+      "expect_clean": true
+    }
+  ]
+}
