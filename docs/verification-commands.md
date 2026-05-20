@@ -43,6 +43,10 @@ cargo run -p aura-core --example world_sim -- \
   --input /tmp/safety_world_v2_projected_world_sim.json \
   --summary-only \
   --require-clean
+cargo test -p aura-core --example safety_world_v2_platform_seed
+cargo run -p aura-core --example safety_world_v2_platform_seed -- \
+  --input crates/aura-core/data/safety_world_v2_schema.example.json \
+  --output /tmp/safety_world_v2_platform_seed.json
 ```
 
 ## Full Workspace Validation

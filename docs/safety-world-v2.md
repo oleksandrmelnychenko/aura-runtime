@@ -328,5 +328,17 @@ cargo run -p aura-core --example world_sim -- \
   --require-clean
 ```
 
+Current privacy-preserving platform seed export command:
+
+```bash
+cargo run -p aura-core --example safety_world_v2_platform_seed -- \
+  --input crates/aura-core/data/safety_world_v2_schema.example.json \
+  --output /tmp/safety_world_v2_platform_seed.json
+```
+
+Private and guardian-visible messages are exported as metadata-only opaque
+fixture references with hashes, not plaintext. Public or moderator-visible
+surfaces may carry plaintext for server-side search and moderation tests.
+
 See `crates/aura-core/data/safety_world_v2_schema.example.json` for a compact
 example instance.
