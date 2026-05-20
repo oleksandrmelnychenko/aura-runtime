@@ -304,5 +304,12 @@ Before a v2 artifact is promoted, validation should check:
 - platform expectations are present for public or guardian-visible surfaces
 - smoke, CI, and nightly run sizes are defined
 
+Current validation command:
+
+```bash
+cargo run -p aura-core --example safety_world_v2_validate -- \
+  --input crates/aura-core/data/safety_world_v2_schema.example.json
+```
+
 See `crates/aura-core/data/safety_world_v2_schema.example.json` for a compact
 example instance.
