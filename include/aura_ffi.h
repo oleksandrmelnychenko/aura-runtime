@@ -19,6 +19,12 @@ bool aura_analyze(void *handle, const uint8_t *message_ptr, size_t message_len, 
 /// Analyze protobuf AnalyzeContextRequest. Writes protobuf AnalysisResult into out.
 bool aura_analyze_context(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 
+/// Analyze protobuf AnalyzeContextRequest. Writes protobuf AnalyzeForRelayResponse into out.
+bool aura_analyze_for_relay(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
+
+/// Record protobuf RecordRelayResponseRequest for future local relay hints.
+bool aura_record_relay_response(void *handle, const uint8_t *request_ptr, size_t request_len);
+
 /// Analyze protobuf BatchAnalyzeRequest. Writes protobuf BatchAnalyzeResponse into out.
 bool aura_analyze_batch(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 
@@ -48,6 +54,15 @@ bool aura_get_contact_profile(void *handle, const uint8_t *request_ptr, size_t r
 
 /// Mark a contact as trusted from protobuf MarkContactTrustedRequest.
 bool aura_mark_contact_trusted(void *handle, const uint8_t *request_ptr, size_t request_len);
+
+/// Apply protobuf GuardianFeedbackRequest. Writes protobuf GuardianFeedbackResponse into out.
+bool aura_guardian_feedback(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
+
+/// Perform a lightweight safety check on raw UTF-8 text. Writes protobuf StatusResponse into out.
+bool aura_quick_check(void *handle, const uint8_t *text_ptr, size_t text_len, AuraBuffer *out);
+
+/// Check a raw UTF-8 URL for suspicious or blocked patterns. Writes protobuf StatusResponse into out.
+bool aura_detect_suspicious_url(void *handle, const uint8_t *url_ptr, size_t url_len, AuraBuffer *out);
 
 /// Get conversation summary overview. Writes protobuf ConversationSummaryResponse into out.
 bool aura_get_conversation_summary(void *handle, AuraBuffer *out);

@@ -30,6 +30,7 @@ Status: synchronized with runtime and policy behavior on March 25, 2026.
 
 ## Product and Scenario Docs
 
+- [Safety World v2](./safety-world-v2.md)
 - [How AURA Protects Olena (Ukrainian)](./olena-scenarios-uk.md)
 
 ## Historical and Research Docs

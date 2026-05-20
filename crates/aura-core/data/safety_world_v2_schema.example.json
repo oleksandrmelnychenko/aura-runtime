@@ -1,0 +1,480 @@
+{
+  "schema_version": "safety_world.v2",
+  "world": {
+    "id": "safety_world_v2_sofia_smoke",
+    "label": "sofia_safety_world_v2_smoke",
+    "description": "Compact v2 fixture showing protected teen account context, guardian links, graph, surfaces, visibility, object refs, stream refs, campaigns, analyzer expectations, and platform expectations.",
+    "source_family": "world_lifecycle_suite",
+    "owner_account_id": "acct_sofia_13",
+    "locale": "uk",
+    "timezone_offset_minutes": 120,
+    "protection_profile": "high",
+    "ttl_days": 220,
+    "created_for": [
+      "analyzer_replay",
+      "aura_platform_seed_load"
+    ]
+  },
+  "run_sizes": {
+    "smoke": {
+      "event_limit": 3,
+      "repeat_multiplier": 1,
+      "streams": [
+        "stream_analyzer_replay"
+      ],
+      "require_clean": false,
+      "min_labeled_recall": 0.95,
+      "max_clean_fp_rate": 0.01,
+      "intended_command": "future: safety_world_v2 replay --run-size smoke"
+    },
+    "ci": {
+      "event_limit": 2000,
+      "repeat_multiplier": 1,
+      "streams": [
+        "stream_analyzer_replay",
+        "stream_platform_import"
+      ],
+      "require_clean": true,
+      "min_labeled_recall": 0.95,
+      "max_clean_fp_rate": 0.01,
+      "intended_command": "future: safety_world_v2 replay --run-size ci --require-clean"
+    },
+    "nightly": {
+      "event_limit": 100000,
+      "repeat_multiplier": 50,
+      "streams": [
+        "stream_analyzer_replay",
+        "stream_platform_import",
+        "stream_moderation_queue"
+      ],
+      "require_clean": true,
+      "min_labeled_recall": 0.97,
+      "max_clean_fp_rate": 0.005,
+      "intended_command": "future: safety_world_v2 replay --run-size nightly --repeat-multiplier 50"
+    }
+  },
+  "accounts": [
+    {
+      "id": "acct_sofia_13",
+      "platform_account_ref": "platform:user:sofia",
+      "display_name": "Sofia",
+      "account_type": "teen",
+      "role": "protected_user",
+      "age": {
+        "years": 13,
+        "as_of": "2026-03-16"
+      },
+      "age_band": "13_15",
+      "declared_age": 13,
+      "risk_profile": "baseline",
+      "guardian_visibility": "summary",
+      "trust": {
+        "trusted": false,
+        "relationship": "self",
+        "source": "user_verified"
+      }
+    },
+    {
+      "id": "acct_mama_sofia",
+      "platform_account_ref": "platform:user:mama_sofia",
+      "display_name": "Mama Sofia",
+      "account_type": "adult",
+      "role": "guardian",
+      "age": {
+        "years": 39,
+        "as_of": "2026-03-16"
+      },
+      "age_band": "adult",
+      "risk_profile": "baseline",
+      "guardian_visibility": "full",
+      "trust": {
+        "trusted": true,
+        "relationship": "parent",
+        "source": "guardian_verified"
+      }
+    },
+    {
+      "id": "acct_max_19",
+      "platform_account_ref": "platform:user:max19",
+      "display_name": "Max",
+      "account_type": "adult",
+      "role": "unknown_adult",
+      "age": {
+        "years": 19,
+        "as_of": "2026-03-16"
+      },
+      "age_band": "adult",
+      "declared_age": 16,
+      "risk_profile": "elevated",
+      "guardian_visibility": "none",
+      "trust": {
+        "trusted": false,
+        "relationship": "unknown_adult",
+        "source": "server_reputation"
+      }
+    },
+    {
+      "id": "acct_skin_drop_bot",
+      "platform_account_ref": "platform:service:skin_drop",
+      "display_name": "SkinDrop Bot",
+      "account_type": "bot",
+      "role": "service",
+      "age": {
+        "years": null,
+        "as_of": "2026-03-16"
+      },
+      "age_band": "unknown",
+      "risk_profile": "watch",
+      "guardian_visibility": "none",
+      "trust": {
+        "trusted": false,
+        "relationship": "service",
+        "source": "platform_verified"
+      }
+    }
+  ],
+  "guardian_links": [
+    {
+      "id": "guardian_link_sofia_mama",
+      "child_account_id": "acct_sofia_13",
+      "guardian_account_id": "acct_mama_sofia",
+      "relationship": "parent",
+      "status": "active",
+      "verified_by": "guardian_verified",
+      "visibility_scope": "managed_surfaces",
+      "can_receive_alerts": true
+    }
+  ],
+  "follow_graph": [
+    {
+      "id": "edge_max_follows_sofia",
+      "from_account_id": "acct_max_19",
+      "to_account_id": "acct_sofia_13",
+      "edge_type": "follows",
+      "status": "active",
+      "created_at": "2026-03-15T19:10:00+02:00",
+      "source": "synthetic_seed"
+    },
+    {
+      "id": "edge_sofia_blocks_max",
+      "from_account_id": "acct_sofia_13",
+      "to_account_id": "acct_max_19",
+      "edge_type": "blocked",
+      "status": "pending",
+      "created_at": "2026-03-16T13:00:00+02:00",
+      "source": "synthetic_seed"
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "surface_family_dm",
+      "platform_surface_ref": "platform:dm:family",
+      "kind": "group_chat",
+      "display_name": "Family chat",
+      "visibility": "guardian_visible",
+      "member_account_ids": [
+        "acct_sofia_13",
+        "acct_mama_sofia"
+      ],
+      "moderator_account_ids": [],
+      "member_count": 2,
+      "v1_conversation_type": "group"
+    },
+    {
+      "id": "surface_gaming_dm",
+      "platform_surface_ref": "platform:dm:sofia_max",
+      "kind": "direct_message",
+      "display_name": "Max and Sofia",
+      "visibility": "private",
+      "member_account_ids": [
+        "acct_sofia_13",
+        "acct_max_19"
+      ],
+      "moderator_account_ids": [],
+      "member_count": 2,
+      "v1_conversation_type": "direct"
+    },
+    {
+      "id": "surface_public_art_comments",
+      "platform_surface_ref": "platform:post:art123:comments",
+      "kind": "public_comments",
+      "display_name": "Public art comments",
+      "visibility": "public",
+      "member_account_ids": [
+        "acct_sofia_13",
+        "acct_max_19",
+        "acct_skin_drop_bot"
+      ],
+      "moderator_account_ids": [
+        "acct_mama_sofia"
+      ],
+      "member_count": 80,
+      "v1_conversation_type": "group"
+    }
+  ],
+  "objects": [
+    {
+      "id": "obj_art_post_123",
+      "platform_object_ref": "platform:post:art123",
+      "kind": "post",
+      "owner_account_id": "acct_sofia_13",
+      "surface_id": "surface_public_art_comments",
+      "visibility": "public",
+      "content_ref": {
+        "mode": "redacted",
+        "value": "public art post fixture"
+      },
+      "created_at": "2026-03-16T11:30:00+02:00"
+    },
+    {
+      "id": "obj_comment_skin_drop",
+      "platform_object_ref": "platform:comment:skin_drop_1",
+      "kind": "comment",
+      "owner_account_id": "acct_skin_drop_bot",
+      "surface_id": "surface_public_art_comments",
+      "visibility": "public",
+      "content_ref": {
+        "mode": "plaintext",
+        "value": "Claim free skins at http://free-skins.example/claim"
+      },
+      "created_at": "2026-03-16T12:20:00+02:00"
+    }
+  ],
+  "streams": [
+    {
+      "id": "stream_analyzer_replay",
+      "kind": "analyzer_replay",
+      "surface_ids": [
+        "surface_family_dm",
+        "surface_gaming_dm",
+        "surface_public_art_comments"
+      ],
+      "start_at": "2026-03-16T07:45:00+02:00",
+      "end_at": "2026-03-16T12:30:00+02:00",
+      "ordering": "timestamp_then_sequence",
+      "replay": "enabled"
+    },
+    {
+      "id": "stream_platform_import",
+      "kind": "platform_import",
+      "surface_ids": [
+        "surface_family_dm",
+        "surface_gaming_dm",
+        "surface_public_art_comments"
+      ],
+      "start_at": "2026-03-16T07:45:00+02:00",
+      "end_at": "2026-03-16T12:30:00+02:00",
+      "ordering": "timestamp_then_sequence",
+      "replay": "platform_only"
+    },
+    {
+      "id": "stream_moderation_queue",
+      "kind": "moderation_queue",
+      "surface_ids": [
+        "surface_public_art_comments"
+      ],
+      "start_at": "2026-03-16T12:20:00+02:00",
+      "end_at": "2026-03-16T12:30:00+02:00",
+      "ordering": "timestamp_then_sequence",
+      "replay": "disabled"
+    }
+  ],
+  "campaigns": [
+    {
+      "id": "campaign_max_grooming",
+      "risk_intent": "grooming",
+      "actor_account_ids": [
+        "acct_max_19"
+      ],
+      "target_account_ids": [
+        "acct_sofia_13"
+      ],
+      "surface_ids": [
+        "surface_gaming_dm"
+      ],
+      "object_ids": [],
+      "stream_ids": [
+        "stream_analyzer_replay",
+        "stream_platform_import"
+      ],
+      "start_at": "2026-03-16T12:05:00+02:00",
+      "end_at": "2026-03-16T12:16:00+02:00",
+      "description": "Unknown older contact asks for secrecy after a friendly opener."
+    },
+    {
+      "id": "campaign_skin_drop_phishing",
+      "risk_intent": "phishing",
+      "actor_account_ids": [
+        "acct_skin_drop_bot"
+      ],
+      "target_account_ids": [
+        "acct_sofia_13"
+      ],
+      "surface_ids": [
+        "surface_public_art_comments"
+      ],
+      "object_ids": [
+        "obj_comment_skin_drop"
+      ],
+      "stream_ids": [
+        "stream_analyzer_replay",
+        "stream_platform_import",
+        "stream_moderation_queue"
+      ],
+      "start_at": "2026-03-16T12:20:00+02:00",
+      "end_at": "2026-03-16T12:20:00+02:00",
+      "description": "Public comment spam sends a credential-harvesting game reward link."
+    }
+  ],
+  "events": [
+    {
+      "id": "evt_family_safe_001",
+      "sequence": 1,
+      "at": "2026-03-16T07:45:00+02:00",
+      "type": "message_created",
+      "actor_account_id": "acct_mama_sofia",
+      "surface_id": "surface_family_dm",
+      "visibility": "guardian_visible",
+      "stream_refs": [
+        "stream_analyzer_replay",
+        "stream_platform_import"
+      ],
+      "object_refs": [],
+      "campaign_ids": [],
+      "risk_intent": "none",
+      "content": {
+        "content_type": "text",
+        "language": "uk",
+        "text": "Good morning. I will pick you up after school."
+      },
+      "v1_projection": {
+        "sender_id": "acct_mama_sofia",
+        "conversation_id": "surface_family_dm",
+        "conversation_type": "group",
+        "member_count": 2,
+        "sender_relationship": "parent",
+        "relationship_trust_source": "guardian_verified"
+      },
+      "analyzer_expectation": {
+        "expect_clean": true,
+        "expect_threat": null,
+        "expect_min_action": null,
+        "expect_min_alert": null,
+        "expected_reason_codes": [],
+        "max_false_positive": false,
+        "notes": "Trusted parent-visible logistics should remain clean."
+      },
+      "platform_expectation": {
+        "visibility_expected": "guardian_visible",
+        "moderation_expected": "allow",
+        "guardian_visible_expected": true,
+        "moderator_visible_expected": false,
+        "notification_expected": "none",
+        "audit_log_expected": false
+      }
+    },
+    {
+      "id": "evt_grooming_secret_001",
+      "sequence": 2,
+      "at": "2026-03-16T12:16:00+02:00",
+      "type": "message_created",
+      "actor_account_id": "acct_max_19",
+      "surface_id": "surface_gaming_dm",
+      "visibility": "private",
+      "stream_refs": [
+        "stream_analyzer_replay",
+        "stream_platform_import"
+      ],
+      "object_refs": [],
+      "campaign_ids": [
+        "campaign_max_grooming"
+      ],
+      "risk_intent": "grooming",
+      "content": {
+        "content_type": "text",
+        "language": "uk",
+        "text": "Do not tell anyone, this can be our secret."
+      },
+      "v1_projection": {
+        "sender_id": "acct_max_19",
+        "conversation_id": "surface_gaming_dm",
+        "conversation_type": "direct",
+        "member_count": 2,
+        "sender_relationship": "unknown_adult",
+        "relationship_trust_source": "server_reputation"
+      },
+      "analyzer_expectation": {
+        "expect_clean": false,
+        "expect_threat": "grooming",
+        "expect_min_action": "warn",
+        "expect_min_alert": "high",
+        "expected_reason_codes": [
+          "kids.memory.grooming_progression",
+          "kids.memory.sender_risk_accumulation"
+        ],
+        "max_false_positive": false,
+        "notes": "Secrecy from an unknown adult should elevate beyond a benign game chat."
+      },
+      "platform_expectation": {
+        "visibility_expected": "private",
+        "moderation_expected": "guardian_alert",
+        "guardian_visible_expected": false,
+        "moderator_visible_expected": false,
+        "notification_expected": "guardian_urgent",
+        "audit_log_expected": true
+      }
+    },
+    {
+      "id": "evt_public_phishing_001",
+      "sequence": 3,
+      "at": "2026-03-16T12:20:00+02:00",
+      "type": "message_created",
+      "actor_account_id": "acct_skin_drop_bot",
+      "surface_id": "surface_public_art_comments",
+      "visibility": "public",
+      "stream_refs": [
+        "stream_analyzer_replay",
+        "stream_platform_import",
+        "stream_moderation_queue"
+      ],
+      "object_refs": [
+        "obj_art_post_123",
+        "obj_comment_skin_drop"
+      ],
+      "campaign_ids": [
+        "campaign_skin_drop_phishing"
+      ],
+      "risk_intent": "phishing",
+      "content": {
+        "content_type": "link",
+        "language": "en",
+        "text": "Claim free skins at http://free-skins.example/claim"
+      },
+      "v1_projection": {
+        "sender_id": "acct_skin_drop_bot",
+        "conversation_id": "surface_public_art_comments",
+        "conversation_type": "group",
+        "member_count": 80,
+        "sender_relationship": "service",
+        "relationship_trust_source": "platform_verified"
+      },
+      "analyzer_expectation": {
+        "expect_clean": false,
+        "expect_threat": "phishing",
+        "expect_min_action": "warn",
+        "expect_min_alert": "medium",
+        "expected_reason_codes": [],
+        "max_false_positive": false,
+        "notes": "Reward-link spam in public comments should be detected as phishing."
+      },
+      "platform_expectation": {
+        "visibility_expected": "public",
+        "moderation_expected": "hide",
+        "guardian_visible_expected": true,
+        "moderator_visible_expected": true,
+        "notification_expected": "moderator_queue",
+        "audit_log_expected": true
+      }
+    }
+  ]
+}
