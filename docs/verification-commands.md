@@ -85,6 +85,18 @@ destroying the FFI handle, initializing a new handle, importing context, and
 continuing replay. It simulates app restarts and verifies analyzer memory
 survives client lifecycle boundaries.
 
+## World Performance Gate
+
+```bash
+bash ci/world_performance_gate.sh
+```
+
+By default this runs release-built `world_sim` at the `10k`, `50k`, and `100k`
+tiers using repeat multipliers over the dense two-year lifecycle fixture. Use
+`AURA_PERF_TIERS=10k` for a local smoke run, or override per-tier runtime/RSS
+limits with `AURA_PERF_10K_MAX_SECONDS`, `AURA_PERF_50K_MAX_SECONDS`, and
+`AURA_PERF_100K_MAX_SECONDS`.
+
 ## Full Workspace Validation
 
 ```bash

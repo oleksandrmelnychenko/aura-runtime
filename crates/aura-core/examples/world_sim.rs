@@ -57,7 +57,13 @@ fn main() {
         print_suite_summary(&suite_report);
 
         if let Some(path) = args.output.as_deref() {
-            write_json_report(&suite_report, path, "suite report", args.redact_text);
+            write_json_report(
+                &suite_report,
+                path,
+                "suite report",
+                args.redact_text,
+                args.omit_event_log,
+            );
         }
 
         if args.require_clean && suite_report.total_findings != 0 {
@@ -89,7 +95,13 @@ fn main() {
     print_summary(&report, args.top_contacts);
 
     if let Some(path) = args.output.as_deref() {
-        write_json_report(&report, path, "JSON report", args.redact_text);
+        write_json_report(
+            &report,
+            path,
+            "JSON report",
+            args.redact_text,
+            args.omit_event_log,
+        );
     }
 
     if args.shadow_output.is_some() || args.shadow_output_proto.is_some() {
@@ -125,6 +137,7 @@ struct Args {
     min_labeled_recall: Option<f64>,
     max_clean_fp_rate: Option<f64>,
     redact_text: bool,
+    omit_event_log: bool,
     help: bool,
 }
 
@@ -173,6 +186,7 @@ impl Args {
                         .map_err(|_| format!("invalid --top-contacts value: {raw}"))?;
                 }
                 "--redact-text" => self.redact_text = true,
+                "--omit-event-log" => self.omit_event_log = true,
                 "--help" | "-h" => self.help = true,
                 other => return Err(format!("unknown argument: {other}")),
             }
@@ -221,6 +235,7 @@ fn print_help() {
         "  --max-clean-fp-rate <rate> fail if clean labeled false-positive rate is above rate"
     );
     println!("  --redact-text          replace event text in JSON reports with a redaction marker");
+    println!("  --omit-event-log       omit full event_log arrays from JSON reports");
     println!("  --help                 show this message");
 }
 
@@ -381,6 +396,7 @@ struct WorldSimReport {
     threat_counts: BTreeMap<String, usize>,
     alert_counts: BTreeMap<String, usize>,
     metrics: WorldMetricsReport,
+    context_store: WorldContextStoreSummary,
     findings: Vec<SimulationFinding>,
     event_log: Vec<EventOutcome>,
     conversations: Vec<ConversationSummary>,
@@ -480,6 +496,16 @@ struct WorldMetricsReport {
     by_surface: Vec<WorldMetricSlice>,
     by_language: Vec<WorldMetricSlice>,
     by_expected_threat: Vec<WorldMetricSlice>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WorldContextStoreSummary {
+    timeline_count: usize,
+    total_timeline_events: usize,
+    max_timeline_events: usize,
+    contact_profile_count: usize,
+    max_contact_conversations: usize,
+    max_contact_messages: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -810,6 +836,7 @@ fn run_world_simulation(
         analyzer.context_tracker().contact_profiler(),
     );
     let metrics = build_metrics_report(event_log.iter());
+    let context_store = build_context_store_summary(&analyzer);
 
     let started_at = resolved_events
         .first()
@@ -841,6 +868,7 @@ fn run_world_simulation(
         threat_counts,
         alert_counts,
         metrics,
+        context_store,
         findings,
         event_log,
         conversations,
@@ -1156,6 +1184,44 @@ fn build_contact_summaries(
             })
         })
         .collect()
+}
+
+fn build_context_store_summary(analyzer: &Analyzer) -> WorldContextStoreSummary {
+    let state = analyzer.export_context_state();
+    let total_timeline_events = state
+        .timelines
+        .iter()
+        .map(|timeline| timeline.events.len())
+        .sum();
+    let max_timeline_events = state
+        .timelines
+        .iter()
+        .map(|timeline| timeline.events.len())
+        .max()
+        .unwrap_or(0);
+    let max_contact_conversations = state
+        .contact_profiler
+        .profiles
+        .iter()
+        .map(|profile| profile.conversations.len())
+        .max()
+        .unwrap_or(0);
+    let max_contact_messages = state
+        .contact_profiler
+        .profiles
+        .iter()
+        .map(|profile| profile.total_messages)
+        .max()
+        .unwrap_or(0);
+
+    WorldContextStoreSummary {
+        timeline_count: state.timelines.len(),
+        total_timeline_events,
+        max_timeline_events,
+        contact_profile_count: state.contact_profiler.profiles.len(),
+        max_contact_conversations,
+        max_contact_messages,
+    }
 }
 
 fn build_metrics_report<'a, I>(events: I) -> WorldMetricsReport
@@ -1599,16 +1665,22 @@ fn build_shadow_bundle(report: &WorldSimReport, input_path: &Path) -> ShadowMode
     )
 }
 
-fn write_json_report<T: Serialize>(report: &T, output_path: &Path, label: &str, redact_text: bool) {
+fn write_json_report<T: Serialize>(
+    report: &T,
+    output_path: &Path,
+    label: &str,
+    redact_text: bool,
+    omit_event_log: bool,
+) {
     if let Some(parent) = output_path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent).expect("create output directory");
         }
     }
-    let json = if redact_text {
+    let json = if redact_text || omit_event_log {
         let mut value = serde_json::to_value(report).expect("serializable world sim report");
-        redact_text_fields(&mut value);
-        serde_json::to_string_pretty(&value).expect("serializable redacted world sim report")
+        sanitize_json_report(&mut value, redact_text, omit_event_log);
+        serde_json::to_string_pretty(&value).expect("serializable sanitized world sim report")
     } else {
         serde_json::to_string_pretty(report).expect("serializable world sim report")
     };
@@ -1617,24 +1689,32 @@ fn write_json_report<T: Serialize>(report: &T, output_path: &Path, label: &str, 
     println!("Wrote {label} to {}", output_path.display());
 }
 
-fn redact_text_fields(value: &mut serde_json::Value) {
+fn sanitize_json_report(value: &mut serde_json::Value, redact_text: bool, omit_event_log: bool) {
     match value {
         serde_json::Value::Object(map) => {
+            if omit_event_log {
+                map.remove("event_log");
+            }
             for (key, value) in map {
-                if key == "text" {
+                if redact_text && key == "text" {
                     *value = serde_json::Value::String("[redacted]".to_string());
                 } else {
-                    redact_text_fields(value);
+                    sanitize_json_report(value, redact_text, omit_event_log);
                 }
             }
         }
         serde_json::Value::Array(values) => {
             for value in values {
-                redact_text_fields(value);
+                sanitize_json_report(value, redact_text, omit_event_log);
             }
         }
         _ => {}
     }
+}
+
+#[cfg(test)]
+fn redact_text_fields(value: &mut serde_json::Value) {
+    sanitize_json_report(value, true, false);
 }
 
 fn write_shadow_bundle_json(bundle: &ShadowModeBundle, output_path: &Path) {
@@ -2786,7 +2866,7 @@ mod tests {
             .expect("world should run");
         let path = unique_temp_dir("redacted_report").with_extension("json");
 
-        write_json_report(&report, &path, "unit report", true);
+        write_json_report(&report, &path, "unit report", true, false);
         let json = fs::read_to_string(&path).expect("read redacted report");
         fs::remove_file(&path).expect("cleanup redacted report");
 
@@ -2814,6 +2894,31 @@ mod tests {
         assert!(!json.contains("raw result text"), "{json}");
         assert!(!json.contains("raw summary text"), "{json}");
         assert_eq!(json.matches("[redacted]").count(), 3);
+    }
+
+    #[test]
+    fn sanitized_json_report_can_omit_nested_event_logs() {
+        let mut value = serde_json::json!({
+            "reports": [
+                {
+                    "event_log": [
+                        { "text": "raw nested text" }
+                    ],
+                    "context_store": { "timeline_count": 1 }
+                }
+            ],
+            "event_log": [
+                { "text": "raw top-level text" }
+            ]
+        });
+
+        sanitize_json_report(&mut value, true, true);
+
+        let json = serde_json::to_string(&value).expect("serialize sanitized value");
+        assert!(!json.contains("event_log"), "{json}");
+        assert!(!json.contains("raw nested text"), "{json}");
+        assert!(!json.contains("raw top-level text"), "{json}");
+        assert!(json.contains("context_store"), "{json}");
     }
 
     fn test_world(events: Vec<WorldEvent>) -> SimulationWorld {

@@ -74,8 +74,9 @@ Latest known expanded lifecycle-suite gate:
 - [x] Add client-boundary replay that imports/exports conversation state during
   long world simulations to verify persistence across app restarts:
   `bash ci/client_boundary_replay_gate.sh`.
-- [ ] Add performance gates for 10k, 50k, and 100k message runs:
-  runtime, memory growth, and context-store bounds.
+- [x] Add performance gates for 10k, 50k, and 100k message runs:
+  runtime, memory growth, and context-store bounds:
+  `bash ci/world_performance_gate.sh`.
 - [ ] Add a release report section that records world-simulation metrics by
   relationship, surface, language, and expected threat.
 
