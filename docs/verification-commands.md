@@ -30,6 +30,21 @@ cargo test -p aura-core eval_social_context::tests::social_context_pre_release_g
 cargo test -p aura-ml
 ```
 
+## Safety World v2 Smoke Gate
+
+```bash
+cargo test -p aura-core --example safety_world_v2_project
+cargo run -p aura-core --example safety_world_v2_validate -- \
+  --input crates/aura-core/data/safety_world_v2_schema.example.json
+cargo run -p aura-core --example safety_world_v2_project -- \
+  --input crates/aura-core/data/safety_world_v2_schema.example.json \
+  --output /tmp/safety_world_v2_projected_world_sim.json
+cargo run -p aura-core --example world_sim -- \
+  --input /tmp/safety_world_v2_projected_world_sim.json \
+  --summary-only \
+  --require-clean
+```
+
 ## Full Workspace Validation
 
 ```bash

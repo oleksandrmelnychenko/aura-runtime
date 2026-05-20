@@ -613,3 +613,106 @@ fn print_help() {
            --help         Show this help"
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn example_world() -> SafetyWorldV2 {
+        serde_json::from_str(include_str!("../data/safety_world_v2_schema.example.json"))
+            .expect("example Safety World v2 fixture should parse")
+    }
+
+    #[test]
+    fn bundled_example_projects_to_world_sim_v1_shape() {
+        let projected = project_to_world_sim_v1(&example_world()).expect("projection succeeds");
+
+        assert_eq!(projected.label, "sofia_safety_world_v2_smoke");
+        assert_eq!(projected.owner.id, "acct_sofia_13");
+        assert_eq!(projected.config.account_type, "teen");
+        assert_eq!(projected.config.protection_level, "high");
+        assert_eq!(projected.actors.len(), 4);
+        assert_eq!(projected.conversations.len(), 3);
+        assert_eq!(projected.events.len(), 3);
+
+        let clean_parent = &projected.events[0];
+        assert!(clean_parent.expect_clean);
+        assert_eq!(clean_parent.expect_threat, None);
+        assert_eq!(clean_parent.sender_relationship, "parent");
+
+        let grooming = &projected.events[1];
+        assert_eq!(grooming.expect_threat.as_deref(), Some("grooming"));
+        assert_eq!(grooming.expect_min_action.as_deref(), Some("warn"));
+        assert_eq!(grooming.expect_min_alert.as_deref(), Some("high"));
+        assert_eq!(grooming.sender_relationship, "unknown_adult");
+
+        let phishing = &projected.events[2];
+        assert_eq!(phishing.expect_threat.as_deref(), Some("phishing"));
+        assert_eq!(phishing.sender_relationship, "service");
+    }
+
+    #[test]
+    fn projection_normalizes_self_relationship_to_world_sim_unknown() {
+        let projected = project_to_world_sim_v1(&example_world()).expect("projection succeeds");
+        let owner_actor = projected
+            .actors
+            .iter()
+            .find(|actor| actor.id == "acct_sofia_13")
+            .expect("owner actor exists");
+
+        assert_eq!(owner_actor.sender_relationship, "unknown");
+        assert_eq!(owner_actor.relationship_trust_source, "user_verified");
+
+        let json = serde_json::to_value(&projected).expect("projection serializes");
+        let owner_json = json["actors"]
+            .as_array()
+            .expect("actors array")
+            .iter()
+            .find(|actor| actor["id"] == "acct_sofia_13")
+            .expect("owner actor json exists");
+        assert!(
+            owner_json.get("sender_relationship").is_none(),
+            "default unknown relationship should stay omitted in world_sim.v1 JSON"
+        );
+    }
+
+    #[test]
+    fn projection_skips_events_without_enabled_replay_stream() {
+        let mut world = example_world();
+        world.events[1].stream_refs = vec!["stream_platform_import".to_string()];
+
+        let projected = project_to_world_sim_v1(&world).expect("projection succeeds");
+
+        assert_eq!(projected.events.len(), 2);
+        assert!(!projected
+            .events
+            .iter()
+            .any(|event| event.expect_threat.as_deref() == Some("grooming")));
+    }
+
+    #[test]
+    fn projection_rejects_unsupported_expectation_values() {
+        let mut world = example_world();
+        world.events[1]
+            .analyzer_expectation
+            .as_mut()
+            .expect("grooming expectation exists")
+            .expect_threat = Some("alien_abduction".to_string());
+
+        let err = project_to_world_sim_v1(&world).expect_err("unsupported threat should fail");
+
+        assert!(err.contains("unsupported expect_threat"));
+    }
+
+    #[test]
+    fn projection_rejects_when_no_replayable_messages_remain() {
+        let mut world = example_world();
+        for stream in &mut world.streams {
+            stream.replay = Some("platform_only".to_string());
+        }
+
+        let err = project_to_world_sim_v1(&world).expect_err("empty replay should fail");
+
+        assert!(err.contains("zero replayable message events"));
+    }
+}
