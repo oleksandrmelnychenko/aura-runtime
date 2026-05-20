@@ -65,8 +65,9 @@ Latest known expanded lifecycle-suite gate:
 
 ## P0 Integration Gates
 
-- [ ] Add a CI command for the dense two-year world gate:
-  `cargo run -p aura-core --example world_sim -- --input crates/aura-core/data/world_lifecycle_suite/sofia_13_to_15_dense_2y.json --summary-only --require-clean --min-labeled-recall 0.95 --max-clean-fp-rate 0.01`.
+- [x] Add a CI command for the dense two-year world gate and expanded
+  lifecycle suite:
+  `bash ci/world_lifecycle_gate.sh`.
 - [ ] Add FFI replay coverage for the six-month and two-year world fixtures,
   not only direct `aura-core` execution.
 - [ ] Add client-boundary replay that imports/exports conversation state during

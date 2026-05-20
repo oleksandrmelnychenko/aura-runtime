@@ -55,6 +55,16 @@ cargo run -p aura-core --example safety_world_v2_platform_seed -- \
   --output /tmp/safety_world_v2_platform_seed.json
 ```
 
+## World Lifecycle Gate
+
+```bash
+bash ci/world_lifecycle_gate.sh
+```
+
+This writes redacted reports to `artifacts/world-lifecycle-dense-2y-report.json`
+and `artifacts/world-lifecycle-suite-report.json`. For nightly scale, raise
+`AURA_LIFECYCLE_REPEAT_MULTIPLIER` without changing the fixture files.
+
 ## Full Workspace Validation
 
 ```bash
