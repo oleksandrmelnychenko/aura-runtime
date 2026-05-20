@@ -33,6 +33,12 @@ cargo test -p aura-ml
 ## Safety World v2 Smoke Gate
 
 ```bash
+bash ci/safety_world_v2_smoke.sh
+```
+
+Expanded commands:
+
+```bash
 cargo test -p aura-core --example safety_world_v2_project
 cargo run -p aura-core --example safety_world_v2_validate -- \
   --input crates/aura-core/data/safety_world_v2_schema.example.json
