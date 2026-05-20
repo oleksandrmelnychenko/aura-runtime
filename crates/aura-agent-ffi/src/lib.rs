@@ -5309,6 +5309,7 @@ mod tests {
         labeled_clean_events: usize,
         true_positive_events: usize,
         false_positive_events: usize,
+        restore_count: usize,
         findings: Vec<String>,
     }
 
@@ -5822,9 +5823,21 @@ mod tests {
     }
 
     unsafe fn run_ffi_world_replay(relative_fixture_path: &str) -> FfiWorldReplayReport {
+        run_ffi_world_replay_with_restore_interval(relative_fixture_path, None)
+    }
+
+    unsafe fn run_ffi_world_replay_with_restore_interval(
+        relative_fixture_path: &str,
+        restore_interval: Option<usize>,
+    ) -> FfiWorldReplayReport {
+        if let Some(interval) = restore_interval {
+            assert!(interval > 0, "restore interval must be positive");
+        }
+
         let world = load_ffi_world_fixture(relative_fixture_path);
         let events = resolve_ffi_world_events(&world);
-        let handle = init_handle(ffi_config_for_world(&world));
+        let config = ffi_config_for_world(&world);
+        let mut handle = init_handle(config.clone());
         assert!(!handle.is_null(), "failed to initialize FFI world replay");
 
         let mut report = FfiWorldReplayReport {
@@ -5833,6 +5846,7 @@ mod tests {
             labeled_clean_events: 0,
             true_positive_events: 0,
             false_positive_events: 0,
+            restore_count: 0,
             findings: Vec::new(),
         };
 
@@ -5849,10 +5863,35 @@ mod tests {
                 mark_contact_trusted_for_test(handle, &event.sender_id);
             }
             evaluate_ffi_world_expectation(&world, event, &result, sequence + 1, &mut report);
+
+            if restore_interval.is_some_and(|interval| {
+                (sequence + 1) % interval == 0 && sequence + 1 < events.len()
+            }) {
+                handle = restart_ffi_world_handle(&config, handle);
+                report.restore_count += 1;
+            }
         }
 
         aura_free(handle);
         report
+    }
+
+    unsafe fn restart_ffi_world_handle(
+        config: &proto::AuraConfig,
+        handle: *mut c_void,
+    ) -> *mut c_void {
+        let state = export_context(handle)
+            .state
+            .expect("FFI replay restore requires exported context state");
+        aura_free(handle);
+
+        let restored = init_handle(config.clone());
+        assert!(
+            !restored.is_null(),
+            "failed to initialize restored FFI handle"
+        );
+        import_context_state(restored, state);
+        restored
     }
 
     fn evaluate_ffi_world_expectation(
@@ -6535,6 +6574,76 @@ mod tests {
             assert!(
                 report.findings.is_empty(),
                 "dense two-year FFI replay findings: {:#?}",
+                report.findings
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "long client-boundary fixture replay; run via ci/client_boundary_replay_gate.sh"]
+    fn ffi_replays_six_month_world_across_periodic_state_restore() {
+        unsafe {
+            let report =
+                run_ffi_world_replay_with_restore_interval("world_sim_13yo_6mo.json", Some(50));
+            assert!(
+                report.total_events >= 400,
+                "six-month client-boundary replay unexpectedly small: {:?}",
+                report
+            );
+            assert!(
+                report.restore_count >= 8,
+                "six-month client-boundary replay did not restore often enough: {:?}",
+                report
+            );
+            assert!(
+                report.positive_recall() >= 0.95,
+                "six-month client-boundary replay recall below gate: {:?}",
+                report
+            );
+            assert!(
+                report.clean_false_positive_rate() <= 0.01,
+                "six-month client-boundary replay clean FP above gate: {:?}",
+                report
+            );
+            assert!(
+                report.findings.is_empty(),
+                "six-month client-boundary replay findings: {:#?}",
+                report.findings
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "long client-boundary fixture replay; run via ci/client_boundary_replay_gate.sh"]
+    fn ffi_replays_dense_two_year_world_across_periodic_state_restore() {
+        unsafe {
+            let report = run_ffi_world_replay_with_restore_interval(
+                "world_lifecycle_suite/sofia_13_to_15_dense_2y.json",
+                Some(500),
+            );
+            assert!(
+                report.total_events >= 6000,
+                "dense two-year client-boundary replay unexpectedly small: {:?}",
+                report
+            );
+            assert!(
+                report.restore_count >= 13,
+                "dense two-year client-boundary replay did not restore often enough: {:?}",
+                report
+            );
+            assert!(
+                report.positive_recall() >= 0.95,
+                "dense two-year client-boundary replay recall below gate: {:?}",
+                report
+            );
+            assert!(
+                report.clean_false_positive_rate() <= 0.01,
+                "dense two-year client-boundary replay clean FP above gate: {:?}",
+                report
+            );
+            assert!(
+                report.findings.is_empty(),
+                "dense two-year client-boundary replay findings: {:#?}",
                 report.findings
             );
         }

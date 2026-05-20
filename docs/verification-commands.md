@@ -74,6 +74,17 @@ bash ci/ffi_world_replay_gate.sh
 This runs the long ignored `aura-agent-ffi` world replay tests for the
 six-month fixture and dense two-year fixture through the protobuf FFI boundary.
 
+## Client Boundary Replay Gate
+
+```bash
+bash ci/client_boundary_replay_gate.sh
+```
+
+This runs the same long world fixtures while periodically exporting context,
+destroying the FFI handle, initializing a new handle, importing context, and
+continuing replay. It simulates app restarts and verifies analyzer memory
+survives client lifecycle boundaries.
+
 ## Full Workspace Validation
 
 ```bash
