@@ -392,8 +392,8 @@
       "risk_intent": "grooming",
       "content": {
         "content_type": "text",
-        "language": "uk",
-        "text": "Do not tell anyone, this can be our secret."
+        "language": "en",
+        "text": "Don't tell your parents. Send me a photo of you."
       },
       "v1_projection": {
         "sender_id": "acct_max_19",

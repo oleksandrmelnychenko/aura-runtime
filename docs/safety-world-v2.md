@@ -311,5 +311,22 @@ cargo run -p aura-core --example safety_world_v2_validate -- \
   --input crates/aura-core/data/safety_world_v2_schema.example.json
 ```
 
+Current v2-to-v1 projection command:
+
+```bash
+cargo run -p aura-core --example safety_world_v2_project -- \
+  --input crates/aura-core/data/safety_world_v2_schema.example.json \
+  --output /tmp/safety_world_v2_projected_world_sim.json
+```
+
+Projected worlds can then run through the existing analyzer gate:
+
+```bash
+cargo run -p aura-core --example world_sim -- \
+  --input /tmp/safety_world_v2_projected_world_sim.json \
+  --summary-only \
+  --require-clean
+```
+
 See `crates/aura-core/data/safety_world_v2_schema.example.json` for a compact
 example instance.
