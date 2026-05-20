@@ -641,9 +641,9 @@ fn doxxing_has_address_fragment(normalized: &str) -> bool {
     );
     let has_digit = normalized.chars().any(|ch| ch.is_ascii_digit());
 
-    (has_digit && has_street_type)
-        || (has_street_type
-            && contains_any(
+    has_street_type
+        && (has_digit
+            || contains_any(
                 normalized,
                 &[
                     "lives at",
@@ -804,8 +804,7 @@ fn contains_any(text: &str, needles: &[&str]) -> bool {
 }
 
 fn contains_token(text: &str, tokens: &[&str]) -> bool {
-    text.split_whitespace()
-        .any(|word| tokens.iter().any(|token| word == *token))
+    text.split_whitespace().any(|word| tokens.contains(&word))
 }
 
 fn looks_like_coordinate_warning_fragment(normalized: &str) -> bool {

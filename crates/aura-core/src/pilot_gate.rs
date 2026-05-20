@@ -804,8 +804,10 @@ mod tests {
 
     #[test]
     fn pilot_gate_fails_when_kids_memory_health_is_required_but_not_pass() {
-        let mut config = PilotGateConfig::default();
-        config.require_kids_memory_pass = true;
+        let config = PilotGateConfig {
+            require_kids_memory_pass: true,
+            ..PilotGateConfig::default()
+        };
         let mut kids_memory = healthy_kids_memory_snapshot();
         kids_memory.overall_status = "warn".to_string();
         kids_memory.missing_mandatory_reason_codes =
@@ -829,8 +831,10 @@ mod tests {
 
     #[test]
     fn pilot_gate_fails_when_kids_preprod_dry_run_is_required_but_not_pass() {
-        let mut config = PilotGateConfig::default();
-        config.require_kids_preprod_dry_run_pass = true;
+        let config = PilotGateConfig {
+            require_kids_preprod_dry_run_pass: true,
+            ..PilotGateConfig::default()
+        };
         let mut dry_run = healthy_kids_preprod_dry_run_snapshot();
         dry_run.overall_status = "fail".to_string();
         dry_run.checks_failed = 2;

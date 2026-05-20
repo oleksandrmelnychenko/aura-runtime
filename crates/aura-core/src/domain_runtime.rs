@@ -1223,8 +1223,10 @@ mod tests {
             ThreatType::Propaganda
         );
         assert_eq!(threat_priority_for_sort(ThreatType::Threat), 3);
-        let mut config = AuraConfig::default();
-        config.enabled = false;
+        let config = AuraConfig {
+            enabled: false,
+            ..AuraConfig::default()
+        };
         assert!(!detection_enabled_for_threat(&config, ThreatType::Threat));
         assert_eq!(
             domain_signal_threat_type(Some("military_social_eng")),

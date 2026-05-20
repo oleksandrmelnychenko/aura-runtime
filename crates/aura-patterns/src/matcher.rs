@@ -389,10 +389,8 @@ impl PatternMatcher {
         }
 
         let normalized = self.normalizer.normalize(text);
-        if normalized != lower {
-            if self.has_threat_in(&normalized) {
-                return true;
-            }
+        if normalized != lower && self.has_threat_in(&normalized) {
+            return true;
         }
 
         let leet_words = self.normalizer.normalize_known_leet_words(&normalized);

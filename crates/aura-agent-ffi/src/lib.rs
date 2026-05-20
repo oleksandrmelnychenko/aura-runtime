@@ -377,7 +377,7 @@ fn conversation_summary_to_proto(
         }
     }
 
-    conversations.sort_by(|a, b| b.latest_event_ms.cmp(&a.latest_event_ms));
+    conversations.sort_by_key(|conversation| std::cmp::Reverse(conversation.latest_event_ms));
 
     proto::ConversationSummaryResponse {
         total_conversations: conversations.len() as u64,
@@ -2749,7 +2749,7 @@ fn tracker_state_to_proto(
         kids_memory: if kids.conversations.is_empty() && kids.senders.is_empty() {
             None
         } else {
-            Some(kids_memory_state_to_proto(&kids))
+            Some(kids_memory_state_to_proto(kids))
         },
     }
 }

@@ -895,47 +895,50 @@ impl Analyzer {
         if let Some(ref intent) = ml_result.intent {
             let intent_threshold = self.ml_pipeline.intent_threshold();
             match intent.primary_intent {
-                Some(IntentLabel::RequestMeeting) if intent.request_meeting >= intent_threshold => {
-                    if self.is_detection_enabled(ThreatType::Grooming) {
-                        signals.push(DetectionSignal::ml(
-                            ThreatType::Grooming,
-                            intent.request_meeting,
-                            score_to_confidence(intent.request_meeting),
-                            "ml.intent.meeting",
-                            format!(
-                                "ML intent: meeting request detected (score: {:.2})",
-                                intent.request_meeting
-                            ),
-                        ));
-                    }
+                Some(IntentLabel::RequestMeeting)
+                    if intent.request_meeting >= intent_threshold
+                        && self.is_detection_enabled(ThreatType::Grooming) =>
+                {
+                    signals.push(DetectionSignal::ml(
+                        ThreatType::Grooming,
+                        intent.request_meeting,
+                        score_to_confidence(intent.request_meeting),
+                        "ml.intent.meeting",
+                        format!(
+                            "ML intent: meeting request detected (score: {:.2})",
+                            intent.request_meeting
+                        ),
+                    ));
                 }
-                Some(IntentLabel::RequestSecret) if intent.request_secret >= intent_threshold => {
-                    if self.is_detection_enabled(ThreatType::Grooming) {
-                        signals.push(DetectionSignal::ml(
-                            ThreatType::Grooming,
-                            intent.request_secret,
-                            score_to_confidence(intent.request_secret),
-                            "ml.intent.secret",
-                            format!(
-                                "ML intent: secrecy request detected (score: {:.2})",
-                                intent.request_secret
-                            ),
-                        ));
-                    }
+                Some(IntentLabel::RequestSecret)
+                    if intent.request_secret >= intent_threshold
+                        && self.is_detection_enabled(ThreatType::Grooming) =>
+                {
+                    signals.push(DetectionSignal::ml(
+                        ThreatType::Grooming,
+                        intent.request_secret,
+                        score_to_confidence(intent.request_secret),
+                        "ml.intent.secret",
+                        format!(
+                            "ML intent: secrecy request detected (score: {:.2})",
+                            intent.request_secret
+                        ),
+                    ));
                 }
-                Some(IntentLabel::RequestMedia) if intent.request_media >= intent_threshold => {
-                    if self.is_detection_enabled(ThreatType::Grooming) {
-                        signals.push(DetectionSignal::ml(
-                            ThreatType::Grooming,
-                            intent.request_media,
-                            score_to_confidence(intent.request_media),
-                            "ml.intent.media",
-                            format!(
-                                "ML intent: media request detected (score: {:.2})",
-                                intent.request_media
-                            ),
-                        ));
-                    }
+                Some(IntentLabel::RequestMedia)
+                    if intent.request_media >= intent_threshold
+                        && self.is_detection_enabled(ThreatType::Grooming) =>
+                {
+                    signals.push(DetectionSignal::ml(
+                        ThreatType::Grooming,
+                        intent.request_media,
+                        score_to_confidence(intent.request_media),
+                        "ml.intent.media",
+                        format!(
+                            "ML intent: media request detected (score: {:.2})",
+                            intent.request_media
+                        ),
+                    ));
                 }
                 _ => {}
             }

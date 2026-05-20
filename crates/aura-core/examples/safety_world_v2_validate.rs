@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
@@ -844,7 +844,7 @@ fn array_len(value: Option<&Value>) -> usize {
     value.and_then(Value::as_array).map_or(0, Vec::len)
 }
 
-fn print_report(input: &PathBuf, report: &ValidationReport) {
+fn print_report(input: &Path, report: &ValidationReport) {
     if report.ok {
         println!("Safety World v2 validation passed: {}", input.display());
     } else {

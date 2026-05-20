@@ -505,6 +505,7 @@ fn normalize_account_type(value: Option<&str>) -> String {
     .to_string()
 }
 
+#[allow(clippy::manual_unwrap_or)]
 fn normalize_protection_level(value: Option<&str>) -> String {
     match value {
         Some(level @ ("off" | "low" | "medium" | "high")) => level,

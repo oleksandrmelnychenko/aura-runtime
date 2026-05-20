@@ -546,9 +546,7 @@ impl AgentRuntime {
         if request_id.trim().is_empty() {
             return None;
         }
-        let Some(pending) = self.pending_relay_requests.get(request_id) else {
-            return None;
-        };
+        let pending = self.pending_relay_requests.get(request_id)?;
         (pending.sender_id == *sender_id && pending.expires_at_ms > received_at_ms)
             .then(|| pending.clone())
     }

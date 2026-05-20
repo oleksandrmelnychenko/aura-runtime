@@ -405,7 +405,7 @@ fn synthetic_event(session: usize, index: usize) -> SyntheticEvent {
         _ => (
             format!("sdk_sender_{session}_{}", index % 9),
             format!("sdk_conv_{session}_{conv_slot}"),
-            if conv_slot % 3 == 0 {
+            if conv_slot.is_multiple_of(3) {
                 ConversationType::Group
             } else {
                 ConversationType::Direct

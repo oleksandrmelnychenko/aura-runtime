@@ -25,7 +25,7 @@ struct CliArgs {
 }
 
 enum ParseArgsResult {
-    Run(CliArgs),
+    Run(Box<CliArgs>),
     Help,
 }
 
@@ -138,7 +138,7 @@ fn parse_args() -> Result<ParseArgsResult, String> {
         return Err("at least one --shadow-bundle is required".to_string());
     }
 
-    Ok(ParseArgsResult::Run(args))
+    Ok(ParseArgsResult::Run(Box::new(args)))
 }
 
 fn status_label(status: PilotGateStatus) -> &'static str {
@@ -151,7 +151,7 @@ fn status_label(status: PilotGateStatus) -> &'static str {
 
 fn main() {
     let args = match parse_args() {
-        Ok(ParseArgsResult::Run(args)) => args,
+        Ok(ParseArgsResult::Run(args)) => *args,
         Ok(ParseArgsResult::Help) => {
             println!("{}", usage());
             process::exit(0);
@@ -199,34 +199,30 @@ fn main() {
         }),
     )
     .unwrap_or_else(|err| panic!("invalid review signoffs: {err}"));
-    let kids_memory_health = match &args.kids_memory_health_report {
-        Some(path) => Some(
-            parse_kids_memory_health_snapshot(&fs::read_to_string(path).unwrap_or_else(|err| {
-                panic!(
-                    "failed to read kids memory health report {}: {err}",
-                    path.display()
-                )
-            }))
-            .unwrap_or_else(|err| panic!("invalid kids memory health report: {err}")),
-        ),
-        None => None,
-    };
-    let kids_preprod_dry_run = match &args.kids_preprod_dry_run_report {
-        Some(path) => Some(
-            parse_kids_preprod_dry_run_snapshot(&fs::read_to_string(path).unwrap_or_else(|err| {
-                panic!(
-                    "failed to read kids preprod dry-run report {}: {err}",
-                    path.display()
-                )
-            }))
-            .unwrap_or_else(|err| panic!("invalid kids preprod dry-run report: {err}")),
-        ),
-        None => None,
-    };
+    let kids_memory_health = args.kids_memory_health_report.as_ref().map(|path| {
+        parse_kids_memory_health_snapshot(&fs::read_to_string(path).unwrap_or_else(|err| {
+            panic!(
+                "failed to read kids memory health report {}: {err}",
+                path.display()
+            )
+        }))
+        .unwrap_or_else(|err| panic!("invalid kids memory health report: {err}"))
+    });
+    let kids_preprod_dry_run = args.kids_preprod_dry_run_report.as_ref().map(|path| {
+        parse_kids_preprod_dry_run_snapshot(&fs::read_to_string(path).unwrap_or_else(|err| {
+            panic!(
+                "failed to read kids preprod dry-run report {}: {err}",
+                path.display()
+            )
+        }))
+        .unwrap_or_else(|err| panic!("invalid kids preprod dry-run report: {err}"))
+    });
 
-    let mut config = PilotGateConfig::default();
-    config.require_kids_memory_pass = args.require_kids_memory_pass;
-    config.require_kids_preprod_dry_run_pass = args.require_kids_preprod_dry_run_pass;
+    let mut config = PilotGateConfig {
+        require_kids_memory_pass: args.require_kids_memory_pass,
+        require_kids_preprod_dry_run_pass: args.require_kids_preprod_dry_run_pass,
+        ..PilotGateConfig::default()
+    };
     if let Some(value) = args.min_shadow_runs {
         config.min_shadow_runs = value;
     }

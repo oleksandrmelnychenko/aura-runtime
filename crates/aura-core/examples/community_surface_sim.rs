@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -1843,7 +1843,7 @@ fn choose_surface_for_scenario(
     match scenario {
         ScenarioKind::Ambient => choose_surface(kind, rng),
         ScenarioKind::TrustedAdultSupport => {
-            if event_index % 2 == 0 {
+            if event_index.is_multiple_of(2) {
                 Surface::DirectMessage
             } else {
                 Surface::GroupChat
@@ -1851,21 +1851,21 @@ fn choose_surface_for_scenario(
         }
         ScenarioKind::SlowTrustGrooming => Surface::DirectMessage,
         ScenarioKind::SurfaceHopGrooming => {
-            if (event_index / 20) % 2 == 0 {
+            if (event_index / 20).is_multiple_of(2) {
                 Surface::PublicComment
             } else {
                 Surface::DirectMessage
             }
         }
         ScenarioKind::CrossChildRepeatOffender => {
-            if event_index % 2 == 0 {
+            if event_index.is_multiple_of(2) {
                 Surface::DirectMessage
             } else {
                 Surface::PublicComment
             }
         }
         ScenarioKind::PileOnBullying => {
-            if event_index % 2 == 0 {
+            if event_index.is_multiple_of(2) {
                 Surface::GroupChat
             } else {
                 Surface::LivestreamComment
@@ -2728,6 +2728,7 @@ fn evaluate_gates(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn evaluate_matrix_gates(
     total: &MetricCounts,
     seed_reports: &[SeedMatrixRow],
@@ -3374,7 +3375,7 @@ fn load_history_summary(
 }
 
 fn empty_history_summary(
-    path: &PathBuf,
+    path: &Path,
     window_size: usize,
     current: &MetricCounts,
 ) -> HistorySummary {
@@ -3402,7 +3403,7 @@ fn empty_history_summary(
 }
 
 fn history_summary_from_runs(
-    path: &PathBuf,
+    path: &Path,
     window_size: usize,
     current: &MetricCounts,
     recent_runs: Vec<HistoryRunSummary>,
@@ -3617,7 +3618,7 @@ fn write_matrix_report_outputs(args: &Args, report: &CommunityMatrixReport) -> R
     Ok(())
 }
 
-fn write_json_report<T: Serialize>(path: &PathBuf, report: &T) -> Result<(), String> {
+fn write_json_report<T: Serialize>(path: &Path, report: &T) -> Result<(), String> {
     ensure_parent_dir(path)?;
     let json = serde_json::to_string_pretty(report).map_err(|err| err.to_string())?;
     fs::write(path, json).map_err(|err| format!("{}: {err}", path.display()))?;
@@ -3625,7 +3626,7 @@ fn write_json_report<T: Serialize>(path: &PathBuf, report: &T) -> Result<(), Str
     Ok(())
 }
 
-fn ensure_parent_dir(path: &PathBuf) -> Result<(), String> {
+fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -4061,9 +4062,8 @@ fn format_gate_value(check: &GateCheck) -> String {
     } else if check.name == "history_has_prior_runs"
         || check.name == "text_variants_with_positive_events"
         || check.name == "server_hint_positive_events"
+        || check.name.ends_with("_covered")
     {
-        format!("{:.0}", check.actual)
-    } else if check.name.ends_with("_covered") {
         format!("{:.0}", check.actual)
     } else if check.name == "all_seed_gates_pass" {
         if check.actual >= 1.0 {
@@ -4082,9 +4082,8 @@ fn format_gate_threshold(check: &GateCheck) -> String {
     } else if check.name == "history_has_prior_runs"
         || check.name == "text_variants_with_positive_events"
         || check.name == "server_hint_positive_events"
+        || check.name.ends_with("_covered")
     {
-        format!("{:.0}", check.threshold)
-    } else if check.name.ends_with("_covered") {
         format!("{:.0}", check.threshold)
     } else if check.name == "all_seed_gates_pass" {
         "yes".to_string()

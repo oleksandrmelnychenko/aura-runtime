@@ -1574,7 +1574,7 @@ impl ContactProfiler {
                     for entry in &local.weekly_propaganda_counts {
                         merged_weekly.push(*entry);
                     }
-                    merged_weekly.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+                    merged_weekly.sort_unstable_by_key(|entry| entry.0);
                     if merged_weekly.len() > MAX_WEEKLY_PROPAGANDA_BUCKETS {
                         let overflow = merged_weekly.len() - MAX_WEEKLY_PROPAGANDA_BUCKETS;
                         merged_weekly.drain(0..overflow);

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -157,6 +157,7 @@ struct GateConfig {
     fail_on_gate: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_volume_report(
     prefix: &str,
     suite: impl Into<String>,
@@ -293,7 +294,7 @@ fn print_gate_summary(gates: &GateReport) {
     }
 }
 
-fn ensure_parent_dir(path: &PathBuf) -> Result<(), String> {
+fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
