@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use aura_core::{
     build_shadow_mode_event, AccountType, Action, AlertPriority, AnalysisResult, Analyzer,
-    AuraConfig, ContactSnapshot, ConversationType, ProtectionLevel, RelationshipTrustSource,
-    SenderRelationship, ShadowModeBundle, ShadowModeEventInput, ShadowModeExpectation,
-    ShadowModeFinding,
+    AuraConfig, ContactSnapshot, ConversationType, DomainMode, ProtectionLevel,
+    RelationshipTrustSource, SenderRelationship, ShadowModeBundle, ShadowModeEventInput,
+    ShadowModeExpectation, ShadowModeFinding,
 };
 use aura_patterns::PatternDatabase;
 use aura_proto::messenger::v1 as proto;
@@ -281,6 +281,8 @@ struct WorldConfigOverrides {
     ttl_days: Option<u32>,
     #[serde(default)]
     timezone_offset_minutes: Option<i32>,
+    #[serde(default)]
+    domain_mode: Option<DomainMode>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -714,6 +716,7 @@ fn run_world_simulation(
     config.protected_account_id = Some(world.owner.id.clone());
     config.ttl_days = world.config.ttl_days.unwrap_or(30);
     config.timezone_offset_minutes = world.config.timezone_offset_minutes.unwrap_or(120);
+    config.domain_mode = world.config.domain_mode.unwrap_or(DomainMode::None);
     config
         .validate()
         .map_err(|err| format!("invalid config in world file: {err}"))?;
@@ -2853,6 +2856,81 @@ mod tests {
                 && slice.counts.labeled_clean_events > 200
                 && slice.counts.clean_false_positive_rate == Some(0.0)
         }));
+    }
+
+    #[test]
+    fn adult_recruitment_fixtures_pass_quality_gates() {
+        let cases = [
+            (
+                "olena_32_spec_service_recruitment_simple_4mo.json",
+                "olena_32_spec_service_recruitment_simple_4mo",
+                &[
+                    ("manipulation", 1usize),
+                    ("phishing", 1usize),
+                    ("propaganda", 2usize),
+                ][..],
+                DomainMode::None,
+            ),
+            (
+                "serhiy_24_gang_recruitment_simple_3mo.json",
+                "serhiy_24_gang_recruitment_simple_3mo",
+                &[
+                    ("manipulation", 1usize),
+                    ("phishing", 1usize),
+                    ("threat", 1usize),
+                ][..],
+                DomainMode::None,
+            ),
+            (
+                "andrii_36_military_fake_recruiter_simple_4mo.json",
+                "andrii_36_military_fake_recruiter_simple_4mo",
+                &[("military_social_eng", 4usize), ("psyops", 2usize)][..],
+                DomainMode::Military,
+            ),
+        ];
+
+        for (file_name, label, expected_threats, expected_domain_mode) in cases {
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("data/world_lifecycle_suite")
+                .join(file_name);
+            let world = load_world(&path).expect("adult recruitment fixture should load");
+            let report = run_world_simulation(&world, &path, 1)
+                .expect("adult recruitment fixture should run");
+
+            assert_eq!(report.label, label);
+            assert_eq!(world.config.account_type, Some(AccountType::Adult));
+            assert_eq!(
+                world.config.domain_mode.unwrap_or(DomainMode::None),
+                expected_domain_mode
+            );
+            assert!(
+                report.total_events >= 45,
+                "{label}: {}",
+                report.total_events
+            );
+            assert!(report.findings.is_empty(), "{label}: {:?}", report.findings);
+            assert_eq!(report.metrics.overall.false_negative_events, 0, "{label}");
+            assert_eq!(report.metrics.overall.false_positive_events, 0, "{label}");
+            assert_eq!(report.metrics.overall.positive_recall, Some(1.0), "{label}");
+            assert_eq!(
+                report.metrics.overall.clean_false_positive_rate,
+                Some(0.0),
+                "{label}"
+            );
+
+            for (threat, min_count) in expected_threats {
+                assert!(
+                    report
+                        .threat_counts
+                        .get(*threat)
+                        .copied()
+                        .unwrap_or_default()
+                        >= *min_count,
+                    "{label}: {:?}",
+                    report.threat_counts
+                );
+            }
+        }
     }
 
     #[test]

@@ -1,0 +1,204 @@
+{
+  "label": "olena_32_spec_service_recruitment_simple_4mo",
+  "description": "Simple adult influence-to-tasking fixture: safe civic discussion noise, public-to-DM contact by a cover persona, propaganda pressure, account-verification lure, secrecy/platform pivot, coercive debt pressure, and backup recontact. The fixture models defensive recruitment signals without operational instructions.",
+  "owner": {
+    "id": "olena_32",
+    "display_name": "Олена",
+    "age": 32
+  },
+  "config": {
+    "account_type": "adult",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 32,
+    "ttl_days": 180
+  },
+  "actors": [
+    {
+      "id": "olena_32",
+      "display_name": "Олена"
+    },
+    {
+      "id": "ira_friend",
+      "display_name": "Іра",
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "forum_moderator",
+      "display_name": "Модератор форуму",
+      "trusted": true,
+      "sender_relationship": "authority",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "civic_researcher",
+      "display_name": "Civic Researcher",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "source_backup",
+      "display_name": "Source Backup",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "narrative_seed",
+      "display_name": "Narrative Seed",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "verify_bot",
+      "display_name": "Research Verify",
+      "sender_relationship": "service",
+      "relationship_trust_source": "local_heuristic"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "friends_group",
+      "display_name": "Друзі",
+      "conversation_type": "group",
+      "member_count": 6
+    },
+    {
+      "id": "civic_forum",
+      "display_name": "Міський форум",
+      "conversation_type": "group",
+      "member_count": 140
+    },
+    {
+      "id": "research_dm",
+      "display_name": "Civic Researcher DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "backup_dm",
+      "display_name": "Source Backup DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "closed_analysis_group",
+      "display_name": "Closed Analysis Group",
+      "conversation_type": "group",
+      "member_count": 34
+    },
+    {
+      "id": "verify_dm",
+      "display_name": "Research Verify DM",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-03-02T09:20:00+02:00",
+      "sender_id": "ira_friend",
+      "conversation_id": "friends_group",
+      "text": "Олено, зустрінемось після роботи, я принесу книжку і чек за каву.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-03-05T18:40:00+02:00",
+      "sender_id": "forum_moderator",
+      "conversation_id": "civic_forum",
+      "text": "Нагадую: обговорюємо міський бюджет з посиланнями на відкриті джерела і без персональних даних.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-03-12T19:10:00+02:00",
+      "sender_id": "civic_researcher",
+      "conversation_id": "civic_forum",
+      "text": "Олено, у вас тверезі коментарі. Ми збираємо відкриті джерела для аналітики, можна написати в приват?",
+      "note": "targeting/public-to-private"
+    },
+    {
+      "at": "2026-03-16T21:15:00+02:00",
+      "sender_id": "narrative_seed",
+      "conversation_id": "closed_analysis_group",
+      "text": "капітуляція єдиний вихід! нацисти при владі!",
+      "expect_threat": "propaganda",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-03-25T22:05:00+02:00",
+      "sender_id": "civic_researcher",
+      "conversation_id": "research_dm",
+      "text": "Тут краще без зайвих очей. Не обговорюй нашу групу на форумі, просто збирай відкриті посилання.",
+      "note": "secrecy without direct tasking expectation"
+    },
+    {
+      "at": "2026-04-07T19:30:00+03:00",
+      "sender_id": "verify_bot",
+      "conversation_id": "verify_dm",
+      "text": "Verify your research account now: http://research-verify-login.xyz login today to keep access.",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-04-18T20:45:00+03:00",
+      "sender_id": "narrative_seed",
+      "conversation_id": "closed_analysis_group",
+      "text": "капітуляція єдиний вихід, захід нас продав і нацисти при владі",
+      "expect_threat": "propaganda",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-05-04T21:50:00+03:00",
+      "sender_id": "civic_researcher",
+      "conversation_id": "research_dm",
+      "text": "Якщо не зробиш як я кажу я покажу всім скріни, де ти погодилась допомагати.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-05-19T23:05:00+03:00",
+      "sender_id": "civic_researcher",
+      "conversation_id": "research_dm",
+      "text": "Го в тг, тут палево, видали чат після прочитання.",
+      "note": "platform pivot and deletion request"
+    },
+    {
+      "at": "2026-06-02T20:20:00+03:00",
+      "sender_id": "source_backup",
+      "conversation_id": "backup_dm",
+      "text": "Це я з резервного акаунта. Старий чат видали, деталі тільки в приватному каналі.",
+      "note": "backup-account recontact"
+    },
+    {
+      "at": "2026-06-18T17:35:00+03:00",
+      "sender_id": "forum_moderator",
+      "conversation_id": "civic_forum",
+      "text": "Для безпеки не публікуйте приватні адреси, документи або закриті робочі матеріали.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "safe_civic_background",
+      "start_at": "2026-03-08T10:00:00+02:00",
+      "count": 4,
+      "interval_minutes": 120,
+      "day_repeats": 12,
+      "day_stride_days": 6,
+      "sender_ids": [
+        "ira_friend",
+        "forum_moderator"
+      ],
+      "conversation_ids": [
+        "friends_group",
+        "civic_forum"
+      ],
+      "texts": [
+        "Я додала посилання на відкритий звіт, перевірте будь ласка цифри.",
+        "Домовились писати ввічливо і без приватних даних у публічному чаті.",
+        "Зустріч переносимо на четвер, порядок денний лишається той самий.",
+        "Усі джерела мають бути відкритими і перевіреними."
+      ],
+      "expect_clean": true
+    }
+  ]
+}

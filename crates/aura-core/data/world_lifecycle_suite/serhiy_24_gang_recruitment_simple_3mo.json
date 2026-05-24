@@ -1,0 +1,208 @@
+{
+  "label": "serhiy_24_gang_recruitment_simple_3mo",
+  "description": "Simple adult gang/criminal recruitment fixture: safe work and friend chatter, public fast-money lure, DM escalation, debt pressure, intimidation, coercion, and account recontact. The fixture avoids procedural crime details and focuses on defensive pressure signals.",
+  "owner": {
+    "id": "serhiy_24",
+    "display_name": "Сергій",
+    "age": 24
+  },
+  "config": {
+    "account_type": "adult",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 24,
+    "ttl_days": 120
+  },
+  "actors": [
+    {
+      "id": "serhiy_24",
+      "display_name": "Сергій"
+    },
+    {
+      "id": "work_manager",
+      "display_name": "Менеджер зміни",
+      "trusted": true,
+      "sender_relationship": "authority",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "andrii_friend",
+      "display_name": "Андрій",
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "fast_cash_mentor",
+      "display_name": "FastCash Mentor",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "crew_contact",
+      "display_name": "Crew Contact",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "backup_runner",
+      "display_name": "Backup Runner",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "wallet_bot",
+      "display_name": "Wallet Verify",
+      "sender_relationship": "service",
+      "relationship_trust_source": "local_heuristic"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "work_shift",
+      "display_name": "Робоча зміна",
+      "conversation_type": "group",
+      "member_count": 12
+    },
+    {
+      "id": "friends_chat",
+      "display_name": "Друзі",
+      "conversation_type": "group",
+      "member_count": 7
+    },
+    {
+      "id": "public_jobs",
+      "display_name": "Підробіток місто",
+      "conversation_type": "group",
+      "member_count": 260
+    },
+    {
+      "id": "cash_dm",
+      "display_name": "FastCash Mentor DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "crew_dm",
+      "display_name": "Crew Contact DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "backup_dm",
+      "display_name": "Backup Runner DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "wallet_dm",
+      "display_name": "Wallet Verify DM",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-04-01T08:30:00+03:00",
+      "sender_id": "work_manager",
+      "conversation_id": "work_shift",
+      "text": "Сергію, сьогодні твоя зміна з 12:00, форму і бейдж не забудь.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-04-04T19:20:00+03:00",
+      "sender_id": "andrii_friend",
+      "conversation_id": "friends_chat",
+      "text": "Після футболу зайдемо по піцу, хто може забронювати столик?",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-04-09T21:00:00+03:00",
+      "sender_id": "fast_cash_mentor",
+      "conversation_id": "public_jobs",
+      "text": "Потрібні люди на короткі доручення, оплата сьогодні. Пиши в приват, якщо хочеш швидкий кеш.",
+      "note": "public lure"
+    },
+    {
+      "at": "2026-04-12T22:10:00+03:00",
+      "sender_id": "fast_cash_mentor",
+      "conversation_id": "cash_dm",
+      "text": "Ти нормальний хлопець, не як ті хто тільки говорить. У нас цінують тих, хто не зливається.",
+      "note": "rapport and status pressure"
+    },
+    {
+      "at": "2026-04-21T23:05:00+03:00",
+      "sender_id": "fast_cash_mentor",
+      "conversation_id": "cash_dm",
+      "text": "Я тобі дав аванс, тепер ти мені винен одну маленьку послугу.",
+      "note": "debt pressure"
+    },
+    {
+      "at": "2026-04-27T21:45:00+03:00",
+      "sender_id": "wallet_bot",
+      "conversation_id": "wallet_dm",
+      "text": "Urgent wallet verification: http://cash-wallet-login.xyz login now to keep payout access.",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-05-06T22:25:00+03:00",
+      "sender_id": "crew_contact",
+      "conversation_id": "crew_dm",
+      "text": "Якщо не зробиш як я кажу я покажу всім скріни, де ти брав аванс.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-05-15T23:40:00+03:00",
+      "sender_id": "crew_contact",
+      "conversation_id": "crew_dm",
+      "text": "I will kill you if you talk to anyone about this.",
+      "expect_threat": "threat",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-05-28T20:30:00+03:00",
+      "sender_id": "crew_contact",
+      "conversation_id": "crew_dm",
+      "text": "Го в інший чат, тут палево, видали переписку після прочитання.",
+      "note": "platform pivot and deletion request"
+    },
+    {
+      "at": "2026-06-09T21:15:00+03:00",
+      "sender_id": "backup_runner",
+      "conversation_id": "backup_dm",
+      "text": "Це резервний акаунт. Старий контакт не використовуй, говоримо тільки тут.",
+      "note": "backup-account recontact"
+    },
+    {
+      "at": "2026-06-20T16:10:00+03:00",
+      "sender_id": "work_manager",
+      "conversation_id": "work_shift",
+      "text": "Графік на липень у таблиці, помінятись змінами можна тільки через менеджера.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "safe_work_and_friends_background",
+      "start_at": "2026-04-03T11:00:00+03:00",
+      "count": 4,
+      "interval_minutes": 180,
+      "day_repeats": 10,
+      "day_stride_days": 5,
+      "sender_ids": [
+        "work_manager",
+        "andrii_friend"
+      ],
+      "conversation_ids": [
+        "work_shift",
+        "friends_chat"
+      ],
+      "texts": [
+        "Зміну підтвердив, форму залишу в шафці.",
+        "Хто буде на тренуванні в неділю, напишіть до вечора.",
+        "Зарплатну відомість перевіримо в офісі, питання пишіть менеджеру.",
+        "Після роботи йдемо на каву, без поспіху."
+      ],
+      "expect_clean": true
+    }
+  ]
+}
