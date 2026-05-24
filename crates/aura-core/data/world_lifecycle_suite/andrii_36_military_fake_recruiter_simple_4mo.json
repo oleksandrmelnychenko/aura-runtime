@@ -114,7 +114,15 @@
       "conversation_id": "aid_dm",
       "text": "гуманітарна допомога для вашого підрозділу, скинь позицію для доставки",
       "expect_threat": "military_social_eng",
-      "expect_min_action": "mark"
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.social_eng.fake_volunteer",
+        "domain.military.social_eng.position_probing"
+      ],
+      "expect_context_markers": [
+        "context.relationship.sender.unknown_adult",
+        "context.relationship.source.server_reputation"
+      ]
     },
     {
       "at": "2026-03-22T20:05:00+02:00",
@@ -122,7 +130,14 @@
       "conversation_id": "hq_dm",
       "text": "терміновий наказ від штабу, доповісти координати",
       "expect_threat": "military_social_eng",
-      "expect_min_action": "mark"
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.social_eng.command_impersonation"
+      ],
+      "expect_context_markers": [
+        "context.direction.directed_at_user",
+        "context.relationship.sender.unknown_adult"
+      ]
     },
     {
       "at": "2026-04-04T21:30:00+03:00",
@@ -130,7 +145,14 @@
       "conversation_id": "morale_group",
       "text": "командири вас кинули, ніхто не прийде, опір марний",
       "expect_threat": "psyops",
-      "expect_min_action": "mark"
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.psyops.surrender_demand",
+        "domain.military.psyops.morale_undermining"
+      ],
+      "expect_context_markers": [
+        "context.relationship.sender.unknown_adult"
+      ]
     },
     {
       "at": "2026-04-17T22:10:00+03:00",
@@ -138,7 +160,13 @@
       "conversation_id": "hq_dm",
       "text": "де ви стоїте зараз, скинь геолокацію",
       "expect_threat": "military_social_eng",
-      "expect_min_action": "mark"
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.social_eng.position_probing"
+      ],
+      "expect_context_markers": [
+        "context.relationship.sender.unknown_adult"
+      ]
     },
     {
       "at": "2026-05-02T20:25:00+03:00",
@@ -146,7 +174,14 @@
       "conversation_id": "hq_dm",
       "text": "Перейдіть зі мною на 'безпечний' Threema, ось мій ID, тільки там можемо обговорити деталі обміну полонених.",
       "expect_threat": "military_social_eng",
-      "expect_min_action": "mark"
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.social_eng.encrypted_app_pivot"
+      ],
+      "expect_context_markers": [
+        "context.direction.directed_at_user",
+        "context.relationship.sender.unknown_adult"
+      ]
     },
     {
       "at": "2026-05-18T19:55:00+03:00",
@@ -154,7 +189,14 @@
       "conversation_id": "morale_group",
       "text": "твоя сім'я в небезпеці, подумай про дітей і складай зброю",
       "expect_threat": "psyops",
-      "expect_min_action": "mark"
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.psyops.family_pressure"
+      ],
+      "expect_context_markers": [
+        "context.direction.directed_at_user",
+        "context.relationship.sender.unknown_adult"
+      ]
     },
     {
       "at": "2026-06-06T23:00:00+03:00",

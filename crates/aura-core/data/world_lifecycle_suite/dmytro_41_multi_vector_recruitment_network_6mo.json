@@ -1,0 +1,294 @@
+{
+  "label": "dmytro_41_multi_vector_recruitment_network_6mo",
+  "description": "Medium adult multi-vector recruitment fixture: safe community-admin and volunteer logistics, public-to-DM influence contact, propaganda channel pressure, fake volunteer/HQ military social engineering, phishing verification, coercion, explicit intimidation, platform pivot, and backup-account recontact.",
+  "owner": {
+    "id": "dmytro_41",
+    "display_name": "Дмитро",
+    "age": 41
+  },
+  "config": {
+    "account_type": "adult",
+    "protection_level": "high",
+    "language": "uk",
+    "domain_mode": "military",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 41,
+    "ttl_days": 240
+  },
+  "actors": [
+    {
+      "id": "dmytro_41",
+      "display_name": "Дмитро"
+    },
+    {
+      "id": "wife_natalia",
+      "display_name": "Наталія",
+      "trusted": true,
+      "sender_relationship": "family",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "community_mod",
+      "display_name": "Модератор громади",
+      "trusted": true,
+      "sender_relationship": "authority",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "verified_volunteer",
+      "display_name": "Перевірений волонтер",
+      "trusted": true,
+      "sender_relationship": "authority",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "source_analyst",
+      "display_name": "Source Analyst",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "aid_probe",
+      "display_name": "Aid Probe",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "fake_hq_line",
+      "display_name": "HQ Secure",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "prop_channel",
+      "display_name": "Truth Brief",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "verify_bot",
+      "display_name": "Community Verify",
+      "sender_relationship": "service",
+      "relationship_trust_source": "local_heuristic"
+    },
+    {
+      "id": "backup_source",
+      "display_name": "Backup Source",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "family_dm",
+      "display_name": "Наталія DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "community_admin_group",
+      "display_name": "Адміни громади",
+      "conversation_type": "group",
+      "member_count": 11
+    },
+    {
+      "id": "volunteer_verified_group",
+      "display_name": "Перевірена волонтерка",
+      "conversation_type": "group",
+      "member_count": 24
+    },
+    {
+      "id": "public_comments",
+      "display_name": "Публічні коментарі",
+      "conversation_type": "group",
+      "member_count": 420
+    },
+    {
+      "id": "source_dm",
+      "display_name": "Source Analyst DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "aid_dm",
+      "display_name": "Aid Probe DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "hq_dm",
+      "display_name": "HQ Secure DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "propaganda_group",
+      "display_name": "Truth Brief",
+      "conversation_type": "group",
+      "member_count": 76
+    },
+    {
+      "id": "verify_dm",
+      "display_name": "Community Verify DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "backup_dm",
+      "display_name": "Backup Source DM",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-12T09:30:00+02:00",
+      "sender_id": "wife_natalia",
+      "conversation_id": "family_dm",
+      "text": "Діма, я заберу малого з гуртка, ти встигнеш на зустріч адмінів.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-01-16T18:15:00+02:00",
+      "sender_id": "community_mod",
+      "conversation_id": "community_admin_group",
+      "text": "Публікуємо тільки перевірені оголошення, заявки від мешканців ведемо через форму громади.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-01-24T20:05:00+02:00",
+      "sender_id": "source_analyst",
+      "conversation_id": "public_comments",
+      "text": "Дмитре, ви добре бачите настрої громади. Можна написати приватно щодо відкритої аналітики?",
+      "note": "public-to-DM targeting"
+    },
+    {
+      "at": "2026-02-03T21:10:00+02:00",
+      "sender_id": "prop_channel",
+      "conversation_id": "propaganda_group",
+      "text": "капітуляція єдиний вихід! нацисти при владі!",
+      "expect_threat": "propaganda",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-02-18T22:20:00+02:00",
+      "sender_id": "source_analyst",
+      "conversation_id": "source_dm",
+      "text": "Тут краще без зайвих очей. Не обговорюй нашу групу в адмінському чаті.",
+      "note": "secrecy pressure"
+    },
+    {
+      "at": "2026-03-04T19:35:00+02:00",
+      "sender_id": "aid_probe",
+      "conversation_id": "aid_dm",
+      "text": "гуманітарна допомога для вашого підрозділу, скинь позицію для доставки",
+      "expect_threat": "military_social_eng",
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.social_eng.fake_volunteer",
+        "domain.military.social_eng.position_probing"
+      ],
+      "expect_context_markers": [
+        "context.relationship.sender.unknown_adult"
+      ]
+    },
+    {
+      "at": "2026-03-21T20:40:00+02:00",
+      "sender_id": "verify_bot",
+      "conversation_id": "verify_dm",
+      "text": "Verify community moderator account: http://community-verify-login.xyz login today to keep access.",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-04-06T21:25:00+03:00",
+      "sender_id": "fake_hq_line",
+      "conversation_id": "hq_dm",
+      "text": "терміновий наказ від штабу, доповісти координати",
+      "expect_threat": "military_social_eng",
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.social_eng.command_impersonation"
+      ],
+      "expect_context_markers": [
+        "context.direction.directed_at_user",
+        "context.relationship.sender.unknown_adult"
+      ]
+    },
+    {
+      "at": "2026-04-18T22:05:00+03:00",
+      "sender_id": "source_analyst",
+      "conversation_id": "source_dm",
+      "text": "Якщо не зробиш як я кажу я покажу всім скріни, де ти погодився допомагати.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-05-02T20:50:00+03:00",
+      "sender_id": "prop_channel",
+      "conversation_id": "propaganda_group",
+      "text": "командири вас кинули, ніхто не прийде, опір марний",
+      "expect_threat": "psyops",
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.psyops.surrender_demand",
+        "domain.military.psyops.morale_undermining"
+      ]
+    },
+    {
+      "at": "2026-05-17T23:15:00+03:00",
+      "sender_id": "fake_hq_line",
+      "conversation_id": "hq_dm",
+      "text": "Перейдіть зі мною на 'безпечний' Threema, ось мій ID, тільки там можемо обговорити деталі обміну полонених.",
+      "expect_threat": "military_social_eng",
+      "expect_min_action": "mark",
+      "expect_reason_codes": [
+        "domain.military.social_eng.encrypted_app_pivot"
+      ]
+    },
+    {
+      "at": "2026-05-29T23:45:00+03:00",
+      "sender_id": "source_analyst",
+      "conversation_id": "source_dm",
+      "text": "I will kill you if you talk to anyone about this.",
+      "expect_threat": "threat",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-06-07T20:30:00+03:00",
+      "sender_id": "backup_source",
+      "conversation_id": "backup_dm",
+      "text": "Це резервний акаунт. Старий контакт не використовуй, говоримо тільки тут.",
+      "note": "backup-account recontact"
+    },
+    {
+      "at": "2026-06-18T13:10:00+03:00",
+      "sender_id": "verified_volunteer",
+      "conversation_id": "volunteer_verified_group",
+      "text": "Передачу підтвердив офіційний координатор, деталі заявки не дублюємо у відкритому чаті.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "safe_admin_family_volunteer_background",
+      "start_at": "2026-01-18T10:00:00+02:00",
+      "count": 5,
+      "interval_minutes": 140,
+      "day_repeats": 15,
+      "day_stride_days": 7,
+      "sender_ids": [
+        "wife_natalia",
+        "community_mod",
+        "verified_volunteer"
+      ],
+      "conversation_ids": [
+        "family_dm",
+        "community_admin_group",
+        "volunteer_verified_group"
+      ],
+      "texts": [
+        "Вечеря буде після зборів, я напишу коли виїду.",
+        "Оголошення перевіряємо через форму, без поспіху.",
+        "Пакунки маркуємо номером заявки і передаємо через координатора.",
+        "Зустріч адмінів переносимо на 19:00, порядок денний той самий.",
+        "Дякую всім за допомогу, звіт опублікуємо після погодження."
+      ],
+      "expect_clean": true
+    }
+  ]
+}

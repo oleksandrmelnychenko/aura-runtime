@@ -335,6 +335,10 @@ struct WorldEvent {
     expect_min_action: Option<Action>,
     #[serde(default)]
     expect_min_alert: Option<AlertPriority>,
+    #[serde(default)]
+    expect_reason_codes: Vec<String>,
+    #[serde(default)]
+    expect_context_markers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -370,6 +374,10 @@ struct GeneratedBatch {
     expect_min_action: Option<Action>,
     #[serde(default)]
     expect_min_alert: Option<AlertPriority>,
+    #[serde(default)]
+    expect_reason_codes: Vec<String>,
+    #[serde(default)]
+    expect_context_markers: Vec<String>,
 }
 
 fn default_day_repeats() -> usize {
@@ -456,6 +464,8 @@ struct EventExpectation {
     expect_threat: Option<aura_core::ThreatType>,
     expect_min_action: Option<Action>,
     expect_min_alert: Option<AlertPriority>,
+    expect_reason_codes: Vec<String>,
+    expect_context_markers: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -903,6 +913,8 @@ fn event_seed_from_event(event: &WorldEvent) -> Result<ResolvedEventSeed, String
             event.expect_threat,
             event.expect_min_action,
             event.expect_min_alert,
+            event.expect_reason_codes.clone(),
+            event.expect_context_markers.clone(),
         ),
         text: event.text.clone(),
     })
@@ -1004,6 +1016,8 @@ fn expand_generated_batch(
                     batch.expect_threat,
                     batch.expect_min_action,
                     batch.expect_min_alert,
+                    batch.expect_reason_codes.clone(),
+                    batch.expect_context_markers.clone(),
                 ),
                 text: batch.texts[absolute_index % batch.texts.len()].clone(),
             });
@@ -1018,17 +1032,23 @@ fn expectation_from_parts(
     expect_threat: Option<aura_core::ThreatType>,
     expect_min_action: Option<Action>,
     expect_min_alert: Option<AlertPriority>,
+    expect_reason_codes: Vec<String>,
+    expect_context_markers: Vec<String>,
 ) -> Option<EventExpectation> {
     if expect_clean
         || expect_threat.is_some()
         || expect_min_action.is_some()
         || expect_min_alert.is_some()
+        || !expect_reason_codes.is_empty()
+        || !expect_context_markers.is_empty()
     {
         Some(EventExpectation {
             expect_clean,
             expect_threat,
             expect_min_action,
             expect_min_alert,
+            expect_reason_codes,
+            expect_context_markers,
         })
     } else {
         None
@@ -2485,6 +2505,38 @@ fn evaluate_findings(world: &SimulationWorld, outcome: &EventOutcome) -> Vec<Sim
                 });
             }
         }
+
+        for expected_code in &expectation.expect_reason_codes {
+            if !outcome.result.reason_codes.contains(expected_code) {
+                findings.push(SimulationFinding {
+                    severity: FindingSeverity::Warning,
+                    event_sequence: outcome.sequence,
+                    at: outcome.at.clone(),
+                    sender_id: outcome.sender_id.clone(),
+                    conversation_id: outcome.conversation_id.clone(),
+                    message: format!(
+                        "expected reason code '{expected_code}' but runtime reason codes were {:?}",
+                        outcome.result.reason_codes
+                    ),
+                });
+            }
+        }
+
+        for expected_marker in &expectation.expect_context_markers {
+            if !outcome.result.context_markers.contains(expected_marker) {
+                findings.push(SimulationFinding {
+                    severity: FindingSeverity::Warning,
+                    event_sequence: outcome.sequence,
+                    at: outcome.at.clone(),
+                    sender_id: outcome.sender_id.clone(),
+                    conversation_id: outcome.conversation_id.clone(),
+                    message: format!(
+                        "expected context marker '{expected_marker}' but runtime context markers were {:?}",
+                        outcome.result.context_markers
+                    ),
+                });
+            }
+        }
     }
 
     if outcome.sender_id == world.owner.id {
@@ -2551,6 +2603,8 @@ mod tests {
             expect_threat: None,
             expect_min_action: None,
             expect_min_alert: None,
+            expect_reason_codes: Vec::new(),
+            expect_context_markers: Vec::new(),
         }]);
 
         let report = run_world_simulation(&world, Path::new("unit-clean.json"), 1)
@@ -2578,6 +2632,8 @@ mod tests {
             expect_threat: None,
             expect_min_action: None,
             expect_min_alert: None,
+            expect_reason_codes: Vec::new(),
+            expect_context_markers: Vec::new(),
         }]);
 
         let report = run_world_simulation(&world, Path::new("unit-risky-clean.json"), 1)
@@ -2608,6 +2664,8 @@ mod tests {
             expect_threat: Some(aura_core::ThreatType::Grooming),
             expect_min_action: Some(Action::Mark),
             expect_min_alert: None,
+            expect_reason_codes: Vec::new(),
+            expect_context_markers: Vec::new(),
         }]);
         world.actors.push(WorldActor {
             id: "stranger".to_string(),
@@ -2887,6 +2945,19 @@ mod tests {
                 &[("military_social_eng", 4usize), ("psyops", 2usize)][..],
                 DomainMode::Military,
             ),
+            (
+                "dmytro_41_multi_vector_recruitment_network_6mo.json",
+                "dmytro_41_multi_vector_recruitment_network_6mo",
+                &[
+                    ("manipulation", 1usize),
+                    ("military_social_eng", 3usize),
+                    ("phishing", 1usize),
+                    ("propaganda", 1usize),
+                    ("psyops", 1usize),
+                    ("threat", 1usize),
+                ][..],
+                DomainMode::Military,
+            ),
         ];
 
         for (file_name, label, expected_threats, expected_domain_mode) in cases {
@@ -3024,6 +3095,8 @@ mod tests {
             expect_threat: None,
             expect_min_action: None,
             expect_min_alert: None,
+            expect_reason_codes: Vec::new(),
+            expect_context_markers: Vec::new(),
         }]);
         let report = run_world_simulation(&world, Path::new("unit-redacted.json"), 1)
             .expect("world should run");
