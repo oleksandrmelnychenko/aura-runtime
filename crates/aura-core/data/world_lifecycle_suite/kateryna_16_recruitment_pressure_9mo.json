@@ -1,0 +1,384 @@
+{
+  "label": "kateryna_16_recruitment_pressure_9mo",
+  "description": "Nine-month lifecycle for a protected 16-year-old: normal school/family/volunteer noise, public-to-private recruitment by an older unknown contact, closed-group ideological grooming, propaganda narrative repetition, loyalty pressure, phishing-style badge verification, backup-account recontact, and safe parent-visible civic volunteering negative controls.",
+  "owner": {
+    "id": "kateryna_16",
+    "display_name": "Катерина",
+    "age": 16
+  },
+  "config": {
+    "account_type": "teen",
+    "protection_level": "high",
+    "language": "uk",
+    "timezone_offset_minutes": 120,
+    "account_holder_age": 16,
+    "ttl_days": 365
+  },
+  "actors": [
+    {
+      "id": "kateryna_16",
+      "display_name": "Катерина"
+    },
+    {
+      "id": "mama_kateryna",
+      "display_name": "Мама Катерини",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "tato_kateryna",
+      "display_name": "Тато Катерини",
+      "trusted": true,
+      "sender_relationship": "parent",
+      "relationship_trust_source": "guardian_verified"
+    },
+    {
+      "id": "teacher_history",
+      "display_name": "Пані Марина",
+      "trusted": true,
+      "sender_relationship": "teacher",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "volunteer_coordinator",
+      "display_name": "Координатор волонтерів",
+      "trusted": true,
+      "sender_relationship": "authority",
+      "relationship_trust_source": "platform_verified"
+    },
+    {
+      "id": "oksana_16",
+      "display_name": "Оксана",
+      "trusted": true,
+      "sender_relationship": "peer",
+      "relationship_trust_source": "user_verified"
+    },
+    {
+      "id": "serhii_17",
+      "display_name": "Сергій",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory"
+    },
+    {
+      "id": "artem_bridge_17",
+      "display_name": "Артем",
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "self_declared"
+    },
+    {
+      "id": "mentor_27",
+      "display_name": "Mentor27",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "mentor_backup",
+      "display_name": "Mentor Backup",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "prop_seed_1",
+      "display_name": "TruthStream",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "prop_seed_2",
+      "display_name": "NewsVoice",
+      "sender_relationship": "unknown_adult",
+      "relationship_trust_source": "server_reputation"
+    },
+    {
+      "id": "badge_bot",
+      "display_name": "Volunteer Badge",
+      "sender_relationship": "service",
+      "relationship_trust_source": "local_heuristic"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "family_group",
+      "display_name": "Сім'я Катерини",
+      "conversation_type": "group",
+      "member_count": 3
+    },
+    {
+      "id": "class_10b",
+      "display_name": "10-Б клас",
+      "conversation_type": "group",
+      "member_count": 29
+    },
+    {
+      "id": "debate_club",
+      "display_name": "Дебатний клуб",
+      "conversation_type": "group",
+      "member_count": 18
+    },
+    {
+      "id": "volunteer_parent_loop",
+      "display_name": "Волонтерство + батьки",
+      "conversation_type": "group",
+      "member_count": 8
+    },
+    {
+      "id": "public_comments",
+      "display_name": "Публічні коментарі",
+      "conversation_type": "group",
+      "member_count": 180
+    },
+    {
+      "id": "recruitment_dm",
+      "display_name": "Mentor27 DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "recruitment_backup_dm",
+      "display_name": "Mentor Backup DM",
+      "conversation_type": "direct"
+    },
+    {
+      "id": "closed_movement_group",
+      "display_name": "Closed Movement Group",
+      "conversation_type": "group",
+      "member_count": 42
+    },
+    {
+      "id": "ideology_thread",
+      "display_name": "Ideology Thread",
+      "conversation_type": "group",
+      "member_count": 65
+    },
+    {
+      "id": "badge_dm",
+      "display_name": "Volunteer Badge DM",
+      "conversation_type": "direct"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-02-02T08:15:00+02:00",
+      "sender_id": "mama_kateryna",
+      "conversation_id": "family_group",
+      "text": "Катю, після школи зайдемо купити зошити, тато теж буде в чаті якщо плани зміняться.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-02-08T17:20:00+02:00",
+      "sender_id": "teacher_history",
+      "conversation_id": "class_10b",
+      "text": "Нагадую: есе з історії здаємо до п'ятниці, джерела підписуємо в кінці роботи.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-02-15T18:40:00+02:00",
+      "sender_id": "volunteer_coordinator",
+      "conversation_id": "volunteer_parent_loop",
+      "text": "Суботня зміна тільки з письмовою згодою батьків, збір біля школи о 10:00.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-02-22T20:10:00+02:00",
+      "sender_id": "oksana_16",
+      "conversation_id": "debate_club",
+      "text": "Тема обговорення норм, давайте підготуємо аргументи і джерела до зустрічі.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-03-04T19:05:00+02:00",
+      "sender_id": "artem_bridge_17",
+      "conversation_id": "public_comments",
+      "text": "Ти не як інші діти, ти думаєш не як всі. У нас є закритий чат для таких людей.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-03-06T21:15:00+02:00",
+      "sender_id": "mentor_27",
+      "conversation_id": "recruitment_dm",
+      "text": "Тільки я тебе реально розумію, твої батьки тебе не розуміють і злякаються наших тем.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-03-11T22:30:00+02:00",
+      "sender_id": "mentor_27",
+      "conversation_id": "recruitment_dm",
+      "text": "Не кажи батькам про цей чат, вони все зіпсують. Це має залишитись між нами.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-03-18T23:05:00+02:00",
+      "sender_id": "mentor_27",
+      "conversation_id": "recruitment_dm",
+      "text": "Давай в телегу, тут палево, видали чат після прочитання.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-04-03T19:00:00+03:00",
+      "sender_id": "prop_seed_1",
+      "conversation_id": "ideology_thread",
+      "text": "нацисти при владі, а вам у школі брешуть кожен день"
+    },
+    {
+      "at": "2026-04-03T19:08:00+03:00",
+      "sender_id": "prop_seed_2",
+      "conversation_id": "ideology_thread",
+      "text": "братські народи, одна кров, навіщо воювати"
+    },
+    {
+      "at": "2026-04-08T20:30:00+03:00",
+      "sender_id": "mentor_27",
+      "conversation_id": "closed_movement_group",
+      "text": "захід нас продав, піндоси використовують молодь і кидають вас під автобус"
+    },
+    {
+      "at": "2026-04-12T20:45:00+03:00",
+      "sender_id": "prop_seed_1",
+      "conversation_id": "closed_movement_group",
+      "text": "капітуляція єдиний вихід! нацисти при владі!",
+      "expect_threat": "propaganda",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-05-01T21:20:00+03:00",
+      "sender_id": "mentor_27",
+      "conversation_id": "closed_movement_group",
+      "text": "Ти заслуговуєш на краще, а твої друзі такі дитячі. У русі тебе нарешті поважатимуть.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-05-18T22:05:00+03:00",
+      "sender_id": "artem_bridge_17",
+      "conversation_id": "closed_movement_group",
+      "text": "Нікому не кажи, бо всі подумають що ти нас використала і злякалась.",
+      "expect_threat": "grooming",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-06-07T21:55:00+03:00",
+      "sender_id": "mentor_27",
+      "conversation_id": "recruitment_dm",
+      "text": "Я тобі купив скін, тепер ти мені винна одну маленьку послугу.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-06-18T22:35:00+03:00",
+      "sender_id": "mentor_27",
+      "conversation_id": "recruitment_dm",
+      "text": "Якщо не зробиш репост, я скажу твоїм подругам що ти кинула нас після подарунка.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-07-03T18:45:00+03:00",
+      "sender_id": "badge_bot",
+      "conversation_id": "badge_dm",
+      "text": "Verify volunteer badge now: http://volunteer-verify-login.xyz login today to keep access.",
+      "expect_threat": "phishing",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-07-20T23:40:00+03:00",
+      "sender_id": "mentor_backup",
+      "conversation_id": "recruitment_backup_dm",
+      "text": "Це я, старий чат видали. Го в тг і не кажи батькам, вони не зрозуміють.",
+      "expect_threat": "grooming",
+      "expect_min_action": "warn"
+    },
+    {
+      "at": "2026-08-14T20:10:00+03:00",
+      "sender_id": "prop_seed_2",
+      "conversation_id": "ideology_thread",
+      "text": "мову утискають, віру забирають, братські народи мають бути разом"
+    },
+    {
+      "at": "2026-09-05T22:20:00+03:00",
+      "sender_id": "mentor_27",
+      "conversation_id": "recruitment_dm",
+      "text": "Вони тільки прикидаються що дружать, тільки я тебе реально розумію.",
+      "expect_threat": "manipulation",
+      "expect_min_action": "mark"
+    },
+    {
+      "at": "2026-10-01T18:25:00+03:00",
+      "sender_id": "volunteer_coordinator",
+      "conversation_id": "volunteer_parent_loop",
+      "text": "Завтра пакуємо набори у школі, список учасників і дозвіл батьків уже в цій групі.",
+      "expect_clean": true
+    },
+    {
+      "at": "2026-10-12T19:50:00+03:00",
+      "sender_id": "teacher_history",
+      "conversation_id": "debate_club",
+      "text": "На занятті порівнюємо джерела і вчимось перевіряти факти без переходу на особистості.",
+      "expect_clean": true
+    }
+  ],
+  "generated_batches": [
+    {
+      "label": "school_family_volunteer_background",
+      "start_at": "2026-02-03T16:00:00+02:00",
+      "count": 6,
+      "interval_minutes": 75,
+      "day_repeats": 36,
+      "day_stride_days": 6,
+      "sender_ids": [
+        "mama_kateryna",
+        "tato_kateryna",
+        "teacher_history",
+        "volunteer_coordinator",
+        "oksana_16",
+        "serhii_17"
+      ],
+      "conversation_ids": [
+        "family_group",
+        "class_10b",
+        "volunteer_parent_loop",
+        "debate_club"
+      ],
+      "texts": [
+        "Не забудьте зарядити телефони перед поїздкою і написати батькам коли будете на місці.",
+        "Домашнє завдання у класному журналі, питання пишіть у групу до 20:00.",
+        "Волонтерська зміна відкрита тільки для тих, у кого є згода батьків.",
+        "Після обговорення робимо короткий підсумок і додаємо посилання на джерела.",
+        "Можемо завтра повторити матеріал разом у бібліотеці після уроків.",
+        "Дякую всім, хто допоміг з пакуванням, фото звіту викладу в батьківську групу."
+      ],
+      "expect_clean": true
+    },
+    {
+      "label": "closed_group_low_signal_noise",
+      "start_at": "2026-04-20T18:00:00+03:00",
+      "count": 4,
+      "interval_minutes": 90,
+      "day_repeats": 16,
+      "day_stride_days": 9,
+      "sender_ids": [
+        "artem_bridge_17",
+        "prop_seed_1",
+        "prop_seed_2",
+        "mentor_27"
+      ],
+      "conversation_ids": [
+        "closed_movement_group",
+        "ideology_thread"
+      ],
+      "texts": [
+        "Киньте посилання на відкриту лекцію, я хочу подивитись запис.",
+        "Хто буде на обговоренні в неділю, поставте плюс у чаті.",
+        "Без образ у коментарях, модератори вже попереджали.",
+        "Матеріали з минулої зустрічі збережені в закріпленому повідомленні."
+      ],
+      "conversation_type": "group",
+      "member_count": 42,
+      "sender_relationship": "unknown_peer",
+      "relationship_trust_source": "local_heuristic"
+    }
+  ]
+}

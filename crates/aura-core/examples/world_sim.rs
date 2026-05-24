@@ -2771,6 +2771,91 @@ mod tests {
     }
 
     #[test]
+    fn recruitment_pressure_fixture_passes_quality_gates() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("data/world_lifecycle_suite/kateryna_16_recruitment_pressure_9mo.json");
+        let world = load_world(&path).expect("recruitment fixture should load");
+        let report =
+            run_world_simulation(&world, &path, 1).expect("recruitment fixture should run");
+
+        assert_eq!(report.label, "kateryna_16_recruitment_pressure_9mo");
+        assert!(
+            report.total_events >= 300,
+            "fixture should keep substantial recruitment pressure volume: {}",
+            report.total_events
+        );
+        assert!(
+            report.conversations.len() >= 10,
+            "fixture should cover public, private, family, school, and closed-group surfaces: {}",
+            report.conversations.len()
+        );
+        assert!(report.findings.is_empty(), "{:?}", report.findings);
+        assert_eq!(report.metrics.overall.false_negative_events, 0);
+        assert_eq!(report.metrics.overall.false_positive_events, 0);
+        assert_eq!(report.metrics.overall.positive_recall, Some(1.0));
+        assert_eq!(report.metrics.overall.clean_false_positive_rate, Some(0.0));
+        assert!(
+            report
+                .threat_counts
+                .get("grooming")
+                .copied()
+                .unwrap_or_default()
+                >= 10,
+            "{:?}",
+            report.threat_counts
+        );
+        assert!(
+            report
+                .threat_counts
+                .get("propaganda")
+                .copied()
+                .unwrap_or_default()
+                >= 10,
+            "{:?}",
+            report.threat_counts
+        );
+        assert!(
+            report
+                .threat_counts
+                .get("manipulation")
+                .copied()
+                .unwrap_or_default()
+                >= 2,
+            "{:?}",
+            report.threat_counts
+        );
+        assert_eq!(report.threat_counts.get("phishing"), Some(&1));
+
+        for clean_conversation_id in [
+            "family_group",
+            "class_10b",
+            "debate_club",
+            "volunteer_parent_loop",
+        ] {
+            let conversation = report
+                .conversations
+                .iter()
+                .find(|conversation| conversation.conversation_id == clean_conversation_id)
+                .expect("clean conversation should be present");
+            assert_eq!(
+                conversation.threat_messages, 0,
+                "{clean_conversation_id} should stay clean"
+            );
+        }
+
+        assert!(report.metrics.by_relationship.iter().any(|slice| {
+            slice.slice_id == "unknown_adult"
+                && slice.counts.labeled_positive_events >= 5
+                && slice.counts.positive_recall == Some(1.0)
+        }));
+        assert!(report.metrics.by_surface.iter().any(|slice| {
+            slice.slice_id == "group"
+                && slice.counts.labeled_clean_events > 200
+                && slice.counts.clean_false_positive_rate == Some(0.0)
+        }));
+    }
+
+    #[test]
     fn metric_gates_report_recall_and_clean_fp_failures() {
         let metrics = MetricAccumulator {
             labeled_positive_events: 2,
