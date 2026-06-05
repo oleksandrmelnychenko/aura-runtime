@@ -65,7 +65,7 @@ lto = "fat"
 codegen-units = 1
 strip = "symbols"
 opt-level = "s"
-panic = "abort"
+panic = "unwind"
 
 # Release with debug info preserved for profiling and crash analysis.
 # Use: cargo build --profile release-with-debug -p aura-agent-ffi

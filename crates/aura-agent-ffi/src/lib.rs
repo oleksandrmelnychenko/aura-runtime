@@ -84,6 +84,26 @@ fn set_last_error(msg: impl Into<String>) {
     });
 }
 
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "unknown panic".to_string()
+    }
+}
+
+fn ffi_guard<R>(default: R, body: impl FnOnce() -> R) -> R {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+        Ok(value) => value,
+        Err(payload) => {
+            set_last_error(format!("panic in FFI export: {}", panic_message(&*payload)));
+            default
+        }
+    }
+}
+
 fn clear_last_error() {
     LAST_ERROR.with(|e| {
         *e.borrow_mut() = None;
@@ -388,23 +408,25 @@ fn conversation_summary_to_proto(
 /// Initializes a new AURA instance from a protobuf-encoded configuration.
 #[no_mangle]
 pub unsafe extern "C" fn aura_init(config_ptr: *const u8, config_len: usize) -> *mut c_void {
-    clear_last_error();
+    ffi_guard(std::ptr::null_mut(), move || {
+        clear_last_error();
 
-    let config = match decode_config_request(config_ptr, config_len) {
-        Ok(config) => config,
-        Err(e) => {
-            set_last_error(e);
-            return std::ptr::null_mut();
-        }
-    };
+        let config = match decode_config_request(config_ptr, config_len) {
+            Ok(config) => config,
+            Err(e) => {
+                set_last_error(e);
+                return std::ptr::null_mut();
+            }
+        };
 
-    match build_instance(config) {
-        Ok(handle) => handle,
-        Err(e) => {
-            set_last_error(e);
-            std::ptr::null_mut()
+        match build_instance(config) {
+            Ok(handle) => handle,
+            Err(e) => {
+                set_last_error(e);
+                std::ptr::null_mut()
+            }
         }
-    }
+    })
 }
 
 /// Analyzes a single message and writes the protobuf-encoded result to the output buffer.
@@ -415,38 +437,40 @@ pub unsafe extern "C" fn aura_analyze(
     request_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    let input = match decode_message_request(request_ptr, request_len) {
-        Ok(input) => input,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
             return false;
         }
-    };
 
-    match with_instance(handle, |instance| {
-        let result = instance.analyzer.analyze_local(&input);
-        write_proto_message(
-            out,
-            &analysis_result_to_proto(
-                &result,
-                Some(input.conversation_id.0.as_str()),
-                Some(input.sender_id.0.as_str()),
-            ),
-        )
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        let input = match decode_message_request(request_ptr, request_len) {
+            Ok(input) => input,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
+
+        match with_instance(handle, |instance| {
+            let result = instance.analyzer.analyze_local(&input);
+            write_proto_message(
+                out,
+                &analysis_result_to_proto(
+                    &result,
+                    Some(input.conversation_id.0.as_str()),
+                    Some(input.sender_id.0.as_str()),
+                ),
+            )
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Analyzes a message with full conversation context and writes the result to the output buffer.
@@ -457,51 +481,53 @@ pub unsafe extern "C" fn aura_analyze_context(
     request_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    let request: proto::AnalyzeContextRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "analyze_context request",
-        MAX_ANALYZE_CONTEXT_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
             return false;
         }
-    };
 
-    let Some(message) = request.message else {
-        set_last_error("missing message in analyze_context request");
-        return false;
-    };
-    let input = message_input_from_proto(message);
+        let request: proto::AnalyzeContextRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "analyze_context request",
+            MAX_ANALYZE_CONTEXT_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
 
-    match with_instance(handle, |instance| {
-        let result = instance
-            .analyzer
-            .analyze_local_with_context(&input, request.timestamp_ms);
-        write_proto_message(
-            out,
-            &analysis_result_to_proto(
-                &result,
-                Some(input.conversation_id.0.as_str()),
-                Some(input.sender_id.0.as_str()),
-            ),
-        )
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        let Some(message) = request.message else {
+            set_last_error("missing message in analyze_context request");
+            return false;
+        };
+        let input = message_input_from_proto(message);
+
+        match with_instance(handle, |instance| {
+            let result = instance
+                .analyzer
+                .analyze_local_with_context(&input, request.timestamp_ms);
+            write_proto_message(
+                out,
+                &analysis_result_to_proto(
+                    &result,
+                    Some(input.conversation_id.0.as_str()),
+                    Some(input.sender_id.0.as_str()),
+                ),
+            )
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Analyzes a message and returns both the local result and optional relay request.
@@ -512,52 +538,54 @@ pub unsafe extern "C" fn aura_analyze_for_relay(
     request_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    let request: proto::AnalyzeContextRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "analyze_for_relay request",
-        MAX_ANALYZE_CONTEXT_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
             return false;
         }
-    };
 
-    let Some(message) = request.message else {
-        set_last_error("missing message in analyze_for_relay request");
-        return false;
-    };
-    let input = message_input_from_proto(message);
-
-    match with_instance(handle, |instance| {
-        let envelope = instance
-            .analyzer
-            .analyze_for_relay(&input, request.timestamp_ms);
-        let response = proto::AnalyzeForRelayResponse {
-            local_result: Some(analysis_result_to_proto(
-                &envelope.local_result,
-                Some(input.conversation_id.0.as_str()),
-                Some(input.sender_id.0.as_str()),
-            )),
-            relay_request: envelope.relay_request.as_ref().map(relay_request_to_proto),
+        let request: proto::AnalyzeContextRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "analyze_for_relay request",
+            MAX_ANALYZE_CONTEXT_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
         };
-        write_proto_message(out, &response)
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+
+        let Some(message) = request.message else {
+            set_last_error("missing message in analyze_for_relay request");
+            return false;
+        };
+        let input = message_input_from_proto(message);
+
+        match with_instance(handle, |instance| {
+            let envelope = instance
+                .analyzer
+                .analyze_for_relay(&input, request.timestamp_ms);
+            let response = proto::AnalyzeForRelayResponse {
+                local_result: Some(analysis_result_to_proto(
+                    &envelope.local_result,
+                    Some(input.conversation_id.0.as_str()),
+                    Some(input.sender_id.0.as_str()),
+                )),
+                relay_request: envelope.relay_request.as_ref().map(relay_request_to_proto),
+            };
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Records a relay response for a sender so future local analysis can apply the server hint.
@@ -567,49 +595,51 @@ pub unsafe extern "C" fn aura_record_relay_response(
     request_ptr: *const u8,
     request_len: usize,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    let request: proto::RecordRelayResponseRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "record_relay_response request",
-        MAX_MESSAGE_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
-            set_last_error(e);
+        let request: proto::RecordRelayResponseRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "record_relay_response request",
+            MAX_MESSAGE_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
+
+        let sender_id = request.sender_id.trim();
+        if sender_id.is_empty() {
+            set_last_error("record_relay_response sender_id is empty");
             return false;
         }
-    };
 
-    let sender_id = request.sender_id.trim();
-    if sender_id.is_empty() {
-        set_last_error("record_relay_response sender_id is empty");
-        return false;
-    }
+        let Some(response) = request.response else {
+            set_last_error("missing relay response in record_relay_response request");
+            return false;
+        };
+        let response = relay_response_from_proto(response);
 
-    let Some(response) = request.response else {
-        set_last_error("missing relay response in record_relay_response request");
-        return false;
-    };
-    let response = relay_response_from_proto(response);
-
-    match with_instance(handle, |instance| {
-        let accepted = instance.analyzer.record_relay_response_for_sender(
-            &aura_agent_core::SenderId(sender_id.to_string()),
-            &response,
-            request.received_at_ms,
-        );
-        accepted
-            .then_some(())
-            .ok_or_else(|| "relay response rejected".to_string())
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        match with_instance(handle, |instance| {
+            let accepted = instance.analyzer.record_relay_response_for_sender(
+                &aura_agent_core::SenderId(sender_id.to_string()),
+                &response,
+                request.received_at_ms,
+            );
+            accepted
+                .then_some(())
+                .ok_or_else(|| "relay response rejected".to_string())
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Analyzes a batch of messages and writes the protobuf-encoded results to the output buffer.
@@ -620,64 +650,66 @@ pub unsafe extern "C" fn aura_analyze_batch(
     request_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    let request: proto::BatchAnalyzeRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "batch analyze request",
-        MAX_BATCH_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
             return false;
         }
-    };
 
-    if request.items.len() > MAX_BATCH_SIZE {
-        set_last_error(format!(
-            "batch size {} exceeds limit of {MAX_BATCH_SIZE}",
-            request.items.len()
-        ));
-        return false;
-    }
+        let request: proto::BatchAnalyzeRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "batch analyze request",
+            MAX_BATCH_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
 
-    let items = match validate_batch_items(request.items) {
-        Ok(items) => items,
-        Err(e) => {
-            set_last_error(e);
-            return false;
-        }
-    };
-
-    match with_instance(handle, |instance| {
-        let mut results = Vec::with_capacity(items.len());
-        for (input, timestamp_ms) in items {
-            let result = match timestamp_ms {
-                Some(ts) => instance.analyzer.analyze_local_with_context(&input, ts),
-                None => instance.analyzer.analyze_local(&input),
-            };
-            results.push(analysis_result_to_proto(
-                &result,
-                Some(input.conversation_id.0.as_str()),
-                Some(input.sender_id.0.as_str()),
+        if request.items.len() > MAX_BATCH_SIZE {
+            set_last_error(format!(
+                "batch size {} exceeds limit of {MAX_BATCH_SIZE}",
+                request.items.len()
             ));
+            return false;
         }
 
-        write_proto_message(out, &proto::BatchAnalyzeResponse { results })
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        let items = match validate_batch_items(request.items) {
+            Ok(items) => items,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
+
+        match with_instance(handle, |instance| {
+            let mut results = Vec::with_capacity(items.len());
+            for (input, timestamp_ms) in items {
+                let result = match timestamp_ms {
+                    Some(ts) => instance.analyzer.analyze_local_with_context(&input, ts),
+                    None => instance.analyzer.analyze_local(&input),
+                };
+                results.push(analysis_result_to_proto(
+                    &result,
+                    Some(input.conversation_id.0.as_str()),
+                    Some(input.sender_id.0.as_str()),
+                ));
+            }
+
+            write_proto_message(out, &proto::BatchAnalyzeResponse { results })
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Builds a protobuf ShadowModeBundle from a sequence of AnalyzeContextRequest items.
@@ -688,92 +720,94 @@ pub unsafe extern "C" fn aura_build_shadow_bundle(
     request_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    let request: proto::BuildShadowModeBundleRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "build_shadow_bundle request",
-        MAX_SHADOW_BUNDLE_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
             return false;
         }
-    };
 
-    if request.owner_id.is_empty() {
-        set_last_error("missing owner_id in build_shadow_bundle request");
-        return false;
-    }
-    if request.items.is_empty() {
-        set_last_error("build_shadow_bundle request must include at least one item");
-        return false;
-    }
+        let request: proto::BuildShadowModeBundleRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "build_shadow_bundle request",
+            MAX_SHADOW_BUNDLE_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
 
-    let items = match validate_shadow_mode_items(request.items) {
-        Ok(items) => items,
-        Err(e) => {
-            set_last_error(e);
+        if request.owner_id.is_empty() {
+            set_last_error("missing owner_id in build_shadow_bundle request");
             return false;
         }
-    };
+        if request.items.is_empty() {
+            set_last_error("build_shadow_bundle request must include at least one item");
+            return false;
+        }
 
-    match with_instance(handle, |instance| {
-        let protection_level = instance.analyzer.protection_level();
-        let mut events = Vec::with_capacity(items.len());
-        let mut findings = Vec::new();
+        let items = match validate_shadow_mode_items(request.items) {
+            Ok(items) => items,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
 
-        for (index, item) in items.into_iter().enumerate() {
-            let result = instance
-                .analyzer
-                .analyze_local_with_context(&item.input, item.timestamp_ms);
-            let event = build_shadow_mode_event(ShadowModeEventInput {
-                request_id: &item.request_id,
-                sequence: index + 1,
-                timestamp_ms: item.timestamp_ms,
-                sender_id: item.input.sender_id.as_ref(),
-                conversation_id: item.input.conversation_id.as_ref(),
-                language: item.input.language.as_deref().unwrap_or("und"),
-                conversation_type: item.input.conversation_type,
-                member_count: item.input.member_count,
-                expectation: item.expectation.clone(),
+        match with_instance(handle, |instance| {
+            let protection_level = instance.analyzer.protection_level();
+            let mut events = Vec::with_capacity(items.len());
+            let mut findings = Vec::new();
+
+            for (index, item) in items.into_iter().enumerate() {
+                let result = instance
+                    .analyzer
+                    .analyze_local_with_context(&item.input, item.timestamp_ms);
+                let event = build_shadow_mode_event(ShadowModeEventInput {
+                    request_id: &item.request_id,
+                    sequence: index + 1,
+                    timestamp_ms: item.timestamp_ms,
+                    sender_id: item.input.sender_id.as_ref(),
+                    conversation_id: item.input.conversation_id.as_ref(),
+                    language: item.input.language.as_deref().unwrap_or("und"),
+                    conversation_type: item.input.conversation_type,
+                    member_count: item.input.member_count,
+                    expectation: item.expectation.clone(),
+                    protection_level,
+                    result: &result,
+                });
+                findings.extend(shadow_mode_findings_for_event(
+                    index + 1,
+                    &item.request_id,
+                    item.timestamp_ms,
+                    item.expectation.as_ref(),
+                    &result,
+                ));
+                events.push(event);
+            }
+
+            let bundle = ShadowModeBundle::from_events(
+                non_empty_or(request.source_kind, "ffi_shadow"),
+                non_empty_or(request.source_label, "ffi_shadow_bundle"),
+                non_empty_or(request.source_input, "ffi"),
+                &request.owner_id,
                 protection_level,
-                result: &result,
-            });
-            findings.extend(shadow_mode_findings_for_event(
-                index + 1,
-                &item.request_id,
-                item.timestamp_ms,
-                item.expectation.as_ref(),
-                &result,
-            ));
-            events.push(event);
+                findings,
+                events,
+            );
+            write_proto_message(out, &shadow_mode_bundle_to_proto(&bundle))
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-
-        let bundle = ShadowModeBundle::from_events(
-            non_empty_or(request.source_kind, "ffi_shadow"),
-            non_empty_or(request.source_label, "ffi_shadow_bundle"),
-            non_empty_or(request.source_input, "ffi"),
-            &request.owner_id,
-            protection_level,
-            findings,
-            events,
-        );
-        write_proto_message(out, &shadow_mode_bundle_to_proto(&bundle))
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
-        }
-    }
+    })
 }
 
 /// Updates the analyzer configuration on a live instance.
@@ -783,30 +817,32 @@ pub unsafe extern "C" fn aura_update_config(
     config_ptr: *const u8,
     config_len: usize,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    let config = match decode_config_request(config_ptr, config_len) {
-        Ok(config) => config,
-        Err(e) => {
-            set_last_error(e);
-            return false;
-        }
-    };
+        let config = match decode_config_request(config_ptr, config_len) {
+            Ok(config) => config,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
 
-    match with_instance(handle, |instance| {
-        config
-            .aura_config
-            .validate()
-            .map_err(|e| format!("config validation failed: {e}"))?;
-        apply_config_update(instance, config);
-        Ok(())
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        match with_instance(handle, |instance| {
+            config
+                .aura_config
+                .validate()
+                .map_err(|e| format!("config validation failed: {e}"))?;
+            apply_config_update(instance, config);
+            Ok(())
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Reloads the pattern database from a protobuf-encoded request.
@@ -817,105 +853,109 @@ pub unsafe extern "C" fn aura_reload_patterns(
     request_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    let request: proto::ReloadPatternsRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "reload_patterns request",
-        MAX_SMALL_CONTROL_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
             return false;
         }
-    };
 
-    match with_instance(handle, |instance| {
-        let patterns_path = request.patterns_path.trim();
-        if patterns_path.is_empty() {
-            return Err("patterns_path must not be empty".to_string());
-        }
-        if patterns_path.len() > PATTERN_RELOAD_PATH_MAX_BYTES {
-            return Err(format!(
-                "patterns_path exceeds {} bytes",
-                PATTERN_RELOAD_PATH_MAX_BYTES
-            ));
-        }
-        if !patterns_path.ends_with(".json") {
-            return Err("patterns_path must reference a .json file".to_string());
-        }
-
-        let now = Instant::now();
-        let cooldown = pattern_reload_backoff(instance.pattern_reload_failures);
-        if let Some(last_attempt) = instance.last_pattern_reload_attempt {
-            let elapsed = now.saturating_duration_since(last_attempt);
-            if elapsed < cooldown {
-                let retry_after_ms = (cooldown - elapsed).as_millis();
-                return Err(format!(
-                    "pattern reload is rate-limited; retry after {retry_after_ms}ms"
-                ));
-            }
-        }
-        instance.last_pattern_reload_attempt = Some(now);
-
-        let db = match PatternDatabase::from_file(patterns_path) {
-            Ok(db) => db,
+        let request: proto::ReloadPatternsRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "reload_patterns request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
             Err(e) => {
-                instance.pattern_reload_failures =
-                    instance.pattern_reload_failures.saturating_add(1);
-                return Err(format!("pattern load failed: {e}"));
+                set_last_error(e);
+                return false;
             }
         };
 
-        instance.analyzer.reload_patterns(&db);
-        instance.pattern_db = db;
-        instance.pattern_reload_failures = 0;
-        write_proto_message(
-            out,
-            &proto::StatusResponse {
-                ok: true,
-                message: None,
-            },
-        )
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        match with_instance(handle, |instance| {
+            let patterns_path = request.patterns_path.trim();
+            if patterns_path.is_empty() {
+                return Err("patterns_path must not be empty".to_string());
+            }
+            if patterns_path.len() > PATTERN_RELOAD_PATH_MAX_BYTES {
+                return Err(format!(
+                    "patterns_path exceeds {} bytes",
+                    PATTERN_RELOAD_PATH_MAX_BYTES
+                ));
+            }
+            if !patterns_path.ends_with(".json") {
+                return Err("patterns_path must reference a .json file".to_string());
+            }
+
+            let now = Instant::now();
+            let cooldown = pattern_reload_backoff(instance.pattern_reload_failures);
+            if let Some(last_attempt) = instance.last_pattern_reload_attempt {
+                let elapsed = now.saturating_duration_since(last_attempt);
+                if elapsed < cooldown {
+                    let retry_after_ms = (cooldown - elapsed).as_millis();
+                    return Err(format!(
+                        "pattern reload is rate-limited; retry after {retry_after_ms}ms"
+                    ));
+                }
+            }
+            instance.last_pattern_reload_attempt = Some(now);
+
+            let db = match PatternDatabase::from_file(patterns_path) {
+                Ok(db) => db,
+                Err(e) => {
+                    instance.pattern_reload_failures =
+                        instance.pattern_reload_failures.saturating_add(1);
+                    return Err(format!("pattern load failed: {e}"));
+                }
+            };
+
+            instance.analyzer.reload_patterns(&db);
+            instance.pattern_db = db;
+            instance.pattern_reload_failures = 0;
+            write_proto_message(
+                out,
+                &proto::StatusResponse {
+                    ok: true,
+                    message: None,
+                },
+            )
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Exports the current conversation context state as a protobuf-encoded buffer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_export_context(handle: *mut c_void, out: *mut AuraBuffer) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    match with_instance(handle, |instance| {
-        let state = tracker_state_to_proto(
-            &instance.analyzer.export_context_state(),
-            &instance.analyzer.export_kids_memory_state(),
-        );
-        write_proto_message(out, &proto::ExportContextResponse { state: Some(state) })
-    }) {
-        Ok(()) => true,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
-            false
+            return false;
         }
-    }
+
+        match with_instance(handle, |instance| {
+            let state = tracker_state_to_proto(
+                &instance.analyzer.export_context_state(),
+                &instance.analyzer.export_kids_memory_state(),
+            );
+            write_proto_message(out, &proto::ExportContextResponse { state: Some(state) })
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
+        }
+    })
 }
 
 /// Imports a previously exported conversation context state.
@@ -925,57 +965,59 @@ pub unsafe extern "C" fn aura_import_context(
     request_ptr: *const u8,
     request_len: usize,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    let request: proto::ImportContextRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "import_context request",
-        MAX_IMPORT_CONTEXT_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
-            set_last_error(e);
+        let request: proto::ImportContextRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "import_context request",
+            MAX_IMPORT_CONTEXT_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
+
+        let Some(state) = request.state else {
+            set_last_error("missing state in import_context request");
             return false;
-        }
-    };
+        };
 
-    let Some(state) = request.state else {
-        set_last_error("missing state in import_context request");
-        return false;
-    };
+        let state = match tracker_state_from_proto(state) {
+            Ok(state) => state,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
 
-    let state = match tracker_state_from_proto(state) {
-        Ok(state) => state,
-        Err(e) => {
-            set_last_error(e);
-            return false;
-        }
-    };
+        let ImportTrackerState {
+            core_state,
+            kids_state,
+        } = state;
 
-    let ImportTrackerState {
-        core_state,
-        kids_state,
-    } = state;
-
-    match with_instance(handle, |instance| {
-        instance
-            .analyzer
-            .import_context_state(core_state)
-            .map_err(|e| format!("import failed: {e}"))?;
-        if let Some(kids_state) = kids_state {
-            instance.analyzer.import_kids_memory_state(&kids_state);
-        } else {
-            instance.analyzer.clear_kids_memory_state();
+        match with_instance(handle, |instance| {
+            instance
+                .analyzer
+                .import_context_state(core_state)
+                .map_err(|e| format!("import failed: {e}"))?;
+            if let Some(kids_state) = kids_state {
+                instance.analyzer.import_kids_memory_state(&kids_state);
+            } else {
+                instance.analyzer.clear_kids_memory_state();
+            }
+            Ok(())
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-        Ok(())
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
-        }
-    }
+    })
 }
 
 /// Removes expired conversation timelines and contact profiles.
@@ -1011,18 +1053,20 @@ pub unsafe extern "C" fn aura_import_context(
 /// ```
 #[no_mangle]
 pub unsafe extern "C" fn aura_cleanup_context(handle: *mut c_void, now_ms: u64) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    match with_instance(handle, |instance| {
-        instance.analyzer.cleanup_context(now_ms);
-        Ok(())
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        match with_instance(handle, |instance| {
+            instance.analyzer.cleanup_context(now_ms);
+            Ok(())
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Returns all tracked contacts sorted by risk score as a protobuf-encoded buffer.
@@ -1031,31 +1075,33 @@ pub unsafe extern "C" fn aura_get_contacts_by_risk(
     handle: *mut c_void,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    match with_instance(handle, |instance| {
-        let profiler = instance.analyzer.context_tracker().contact_profiler();
-        let contacts = profiler
-            .contacts_by_risk()
-            .iter()
-            .map(|contact| {
-                contact_profile_to_proto(contact, profiler.is_new_contact(&contact.sender_id))
-            })
-            .collect();
-
-        write_proto_message(out, &proto::ContactsByRiskResponse { contacts })
-    }) {
-        Ok(()) => true,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
-            false
+            return false;
         }
-    }
+
+        match with_instance(handle, |instance| {
+            let profiler = instance.analyzer.context_tracker().contact_profiler();
+            let contacts = profiler
+                .contacts_by_risk()
+                .iter()
+                .map(|contact| {
+                    contact_profile_to_proto(contact, profiler.is_new_contact(&contact.sender_id))
+                })
+                .collect();
+
+            write_proto_message(out, &proto::ContactsByRiskResponse { contacts })
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
+        }
+    })
 }
 
 /// Returns the behavioral profile of a specific contact as a protobuf-encoded buffer.
@@ -1066,50 +1112,52 @@ pub unsafe extern "C" fn aura_get_contact_profile(
     request_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    let request: proto::ContactProfileRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "contact profile request",
-        MAX_SMALL_CONTROL_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
             return false;
         }
-    };
 
-    match with_instance(handle, |instance| {
-        let profiler = instance.analyzer.context_tracker().contact_profiler();
-        let response = match profiler.profile(&request.sender_id) {
-            Some(profile) => proto::ContactProfileResponse {
-                found: true,
-                profile: Some(contact_profile_to_proto(
-                    profile,
-                    profiler.is_new_contact(&profile.sender_id),
-                )),
-            },
-            None => proto::ContactProfileResponse {
-                found: false,
-                profile: None,
-            },
+        let request: proto::ContactProfileRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "contact profile request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
         };
 
-        write_proto_message(out, &response)
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        match with_instance(handle, |instance| {
+            let profiler = instance.analyzer.context_tracker().contact_profiler();
+            let response = match profiler.profile(&request.sender_id) {
+                Some(profile) => proto::ContactProfileResponse {
+                    found: true,
+                    profile: Some(contact_profile_to_proto(
+                        profile,
+                        profiler.is_new_contact(&profile.sender_id),
+                    )),
+                },
+                None => proto::ContactProfileResponse {
+                    found: false,
+                    profile: None,
+                },
+            };
+
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Marks a contact as trusted, suppressing future risk signals for that contact.
@@ -1119,31 +1167,33 @@ pub unsafe extern "C" fn aura_mark_contact_trusted(
     request_ptr: *const u8,
     request_len: usize,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    let request: proto::MarkContactTrustedRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "mark_contact_trusted request",
-        MAX_SMALL_CONTROL_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
-            set_last_error(e);
-            return false;
-        }
-    };
+        let request: proto::MarkContactTrustedRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "mark_contact_trusted request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
+        };
 
-    match with_instance(handle, |instance| {
-        instance.analyzer.mark_contact_trusted(&request.sender_id);
-        Ok(())
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        match with_instance(handle, |instance| {
+            instance.analyzer.mark_contact_trusted(&request.sender_id);
+            Ok(())
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Processes guardian feedback to adjust kids memory state.
@@ -1158,63 +1208,65 @@ pub unsafe extern "C" fn aura_guardian_feedback(
     request_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    let request: proto::GuardianFeedbackRequest = match decode_proto_bounded(
-        request_ptr,
-        request_len,
-        "guardian_feedback request",
-        MAX_SMALL_CONTROL_REQUEST_BYTES,
-    ) {
-        Ok(request) => request,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
             return false;
         }
-    };
 
-    let verdict = match proto::GuardianVerdict::try_from(request.verdict) {
-        Ok(proto::GuardianVerdict::Trusted) => {
-            aura_agent_core::aura_kids::pipeline::GuardianVerdict::Trusted
-        }
-        Ok(proto::GuardianVerdict::Block) => {
-            aura_agent_core::aura_kids::pipeline::GuardianVerdict::Block
-        }
-        Ok(proto::GuardianVerdict::Monitor) => {
-            aura_agent_core::aura_kids::pipeline::GuardianVerdict::Monitor
-        }
-        Ok(proto::GuardianVerdict::FalsePositive) => {
-            aura_agent_core::aura_kids::pipeline::GuardianVerdict::FalsePositive
-        }
-        Ok(proto::GuardianVerdict::Unspecified) | Err(_) => {
-            set_last_error("unspecified or invalid guardian verdict".to_string());
-            return false;
-        }
-    };
-
-    match with_instance(handle, |_instance| {
-        aura_agent_core::aura_kids::pipeline::apply_guardian_feedback(
-            &request.sender_id,
-            &request.conversation_id,
-            verdict,
-        );
-        let response = proto::GuardianFeedbackResponse {
-            ok: true,
-            message: None,
+        let request: proto::GuardianFeedbackRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "guardian_feedback request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(e) => {
+                set_last_error(e);
+                return false;
+            }
         };
-        write_proto_message(out, &response)
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+
+        let verdict = match proto::GuardianVerdict::try_from(request.verdict) {
+            Ok(proto::GuardianVerdict::Trusted) => {
+                aura_agent_core::aura_kids::pipeline::GuardianVerdict::Trusted
+            }
+            Ok(proto::GuardianVerdict::Block) => {
+                aura_agent_core::aura_kids::pipeline::GuardianVerdict::Block
+            }
+            Ok(proto::GuardianVerdict::Monitor) => {
+                aura_agent_core::aura_kids::pipeline::GuardianVerdict::Monitor
+            }
+            Ok(proto::GuardianVerdict::FalsePositive) => {
+                aura_agent_core::aura_kids::pipeline::GuardianVerdict::FalsePositive
+            }
+            Ok(proto::GuardianVerdict::Unspecified) | Err(_) => {
+                set_last_error("unspecified or invalid guardian verdict".to_string());
+                return false;
+            }
+        };
+
+        match with_instance(handle, |_instance| {
+            aura_agent_core::aura_kids::pipeline::apply_guardian_feedback(
+                &request.sender_id,
+                &request.conversation_id,
+                verdict,
+            );
+            let response = proto::GuardianFeedbackResponse {
+                ok: true,
+                message: None,
+            };
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Performs a lightweight safety check on raw UTF-8 text for notification filtering.
@@ -1235,66 +1287,68 @@ pub unsafe extern "C" fn aura_quick_check(
     text_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    if text_ptr.is_null() {
-        set_last_error("null text pointer");
-        return false;
-    }
-
-    if text_len == 0 || text_len > MAX_QUICK_CHECK_TEXT_BYTES {
-        set_last_error(format!(
-            "text length {text_len} out of range (1..{MAX_QUICK_CHECK_TEXT_BYTES})"
-        ));
-        return false;
-    }
-
-    let text_bytes = std::slice::from_raw_parts(text_ptr, text_len);
-    let text = match std::str::from_utf8(text_bytes) {
-        Ok(s) => s.to_string(),
-        Err(e) => {
-            set_last_error(format!("invalid UTF-8 in text input: {e}"));
+        if let Err(e) = prepare_output(out) {
+            set_last_error(e);
             return false;
         }
-    };
 
-    match with_instance(handle, |instance| {
-        let input = MessageInput {
-            content_type: aura_agent_core::ContentType::Text,
-            text: Some(text),
-            image_data: None,
-            sender_id: aura_agent_core::SenderId::from("notification"),
-            conversation_id: aura_agent_core::ConversationId::from("notification"),
-            language: None,
-            conversation_type: aura_agent_core::ConversationType::Direct,
-            member_count: None,
-            server_sender_risk_hint: None,
-            sender_relationship: Default::default(),
-            relationship_trust_source: Default::default(),
-        };
-        let result = instance.analyzer.analyze_local(&input);
-        let safe = match result.action {
-            Action::Allow | Action::Mark => true,
-            Action::Blur | Action::Warn | Action::Block => false,
-        };
-        let message = match safe {
-            true => None,
-            false => Some(format!("{:?}", result.threat_type)),
-        };
-        let response = proto::StatusResponse { ok: safe, message };
-        write_proto_message(out, &response)
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+        if text_ptr.is_null() {
+            set_last_error("null text pointer");
+            return false;
         }
-    }
+
+        if text_len == 0 || text_len > MAX_QUICK_CHECK_TEXT_BYTES {
+            set_last_error(format!(
+                "text length {text_len} out of range (1..{MAX_QUICK_CHECK_TEXT_BYTES})"
+            ));
+            return false;
+        }
+
+        let text_bytes = std::slice::from_raw_parts(text_ptr, text_len);
+        let text = match std::str::from_utf8(text_bytes) {
+            Ok(s) => s.to_string(),
+            Err(e) => {
+                set_last_error(format!("invalid UTF-8 in text input: {e}"));
+                return false;
+            }
+        };
+
+        match with_instance(handle, |instance| {
+            let input = MessageInput {
+                content_type: aura_agent_core::ContentType::Text,
+                text: Some(text),
+                image_data: None,
+                sender_id: aura_agent_core::SenderId::from("notification"),
+                conversation_id: aura_agent_core::ConversationId::from("notification"),
+                language: None,
+                conversation_type: aura_agent_core::ConversationType::Direct,
+                member_count: None,
+                server_sender_risk_hint: None,
+                sender_relationship: Default::default(),
+                relationship_trust_source: Default::default(),
+            };
+            let result = instance.analyzer.analyze_local(&input);
+            let safe = match result.action {
+                Action::Allow | Action::Mark => true,
+                Action::Blur | Action::Warn | Action::Block => false,
+            };
+            let message = match safe {
+                true => None,
+                false => Some(format!("{:?}", result.threat_type)),
+            };
+            let response = proto::StatusResponse { ok: safe, message };
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
+        }
+    })
 }
 
 /// Checks a single URL for phishing or malicious patterns.
@@ -1310,67 +1364,69 @@ pub unsafe extern "C" fn aura_detect_suspicious_url(
     url_len: usize,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    if url_ptr.is_null() {
-        set_last_error("null url pointer");
-        return false;
-    }
-
-    if url_len == 0 || url_len > MAX_URL_INPUT_BYTES {
-        set_last_error(format!(
-            "url length {url_len} out of range (1..{MAX_URL_INPUT_BYTES})"
-        ));
-        return false;
-    }
-
-    let url_bytes = std::slice::from_raw_parts(url_ptr, url_len);
-    let url = match std::str::from_utf8(url_bytes) {
-        Ok(s) => s.to_string(),
-        Err(e) => {
-            set_last_error(format!("invalid UTF-8 in url input: {e}"));
+        if let Err(e) = prepare_output(out) {
+            set_last_error(e);
             return false;
         }
-    };
 
-    match with_instance(handle, |instance| {
-        let checker = aura_patterns::UrlChecker::from_database(&instance.pattern_db);
-
-        let blocked_matches = checker.find_blocked_matches(&url);
-        if let Some(hit) = blocked_matches.first() {
-            let response = proto::StatusResponse {
-                ok: false,
-                message: Some(format!("{}: {}", hit.threat_type, hit.explanation)),
-            };
-            return write_proto_message(out, &response);
+        if url_ptr.is_null() {
+            set_last_error("null url pointer");
+            return false;
         }
 
-        let suspicious = checker.find_suspicious_urls(&url);
-        if let Some(hit) = suspicious.first() {
-            let response = proto::StatusResponse {
-                ok: false,
-                message: Some(hit.explanation.clone()),
-            };
-            return write_proto_message(out, &response);
+        if url_len == 0 || url_len > MAX_URL_INPUT_BYTES {
+            set_last_error(format!(
+                "url length {url_len} out of range (1..{MAX_URL_INPUT_BYTES})"
+            ));
+            return false;
         }
 
-        let response = proto::StatusResponse {
-            ok: true,
-            message: None,
+        let url_bytes = std::slice::from_raw_parts(url_ptr, url_len);
+        let url = match std::str::from_utf8(url_bytes) {
+            Ok(s) => s.to_string(),
+            Err(e) => {
+                set_last_error(format!("invalid UTF-8 in url input: {e}"));
+                return false;
+            }
         };
-        write_proto_message(out, &response)
-    }) {
-        Ok(()) => true,
-        Err(e) => {
-            set_last_error(e);
-            false
+
+        match with_instance(handle, |instance| {
+            let checker = aura_patterns::UrlChecker::from_database(&instance.pattern_db);
+
+            let blocked_matches = checker.find_blocked_matches(&url);
+            if let Some(hit) = blocked_matches.first() {
+                let response = proto::StatusResponse {
+                    ok: false,
+                    message: Some(format!("{}: {}", hit.threat_type, hit.explanation)),
+                };
+                return write_proto_message(out, &response);
+            }
+
+            let suspicious = checker.find_suspicious_urls(&url);
+            if let Some(hit) = suspicious.first() {
+                let response = proto::StatusResponse {
+                    ok: false,
+                    message: Some(hit.explanation.clone()),
+                };
+                return write_proto_message(out, &response);
+            }
+
+            let response = proto::StatusResponse {
+                ok: true,
+                message: None,
+            };
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
         }
-    }
+    })
 }
 
 /// Returns a summary of all tracked conversations as a protobuf-encoded buffer.
@@ -1379,39 +1435,45 @@ pub unsafe extern "C" fn aura_get_conversation_summary(
     handle: *mut c_void,
     out: *mut AuraBuffer,
 ) -> bool {
-    clear_last_error();
+    ffi_guard(false, move || {
+        clear_last_error();
 
-    if let Err(e) = prepare_output(out) {
-        set_last_error(e);
-        return false;
-    }
-
-    match with_instance(handle, |instance| {
-        let summary = conversation_summary_to_proto(instance.analyzer.context_tracker());
-        write_proto_message(out, &summary)
-    }) {
-        Ok(()) => true,
-        Err(e) => {
+        if let Err(e) = prepare_output(out) {
             set_last_error(e);
-            false
+            return false;
         }
-    }
+
+        match with_instance(handle, |instance| {
+            let summary = conversation_summary_to_proto(instance.analyzer.context_tracker());
+            write_proto_message(out, &summary)
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
+        }
+    })
 }
 
 /// Frees an AURA instance and all associated resources.
 #[no_mangle]
 pub unsafe extern "C" fn aura_free(handle: *mut c_void) {
-    if !handle.is_null() {
-        drop(Box::from_raw(handle as *mut Mutex<AuraInstance>));
-    }
+    ffi_guard((), move || {
+        if !handle.is_null() {
+            drop(Box::from_raw(handle as *mut Mutex<AuraInstance>));
+        }
+    })
 }
 
 /// Frees a C string previously returned by the FFI layer.
 #[no_mangle]
 pub unsafe extern "C" fn aura_free_string(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        drop(CString::from_raw(ptr));
-    }
+    ffi_guard((), move || {
+        if !ptr.is_null() {
+            drop(CString::from_raw(ptr));
+        }
+    })
 }
 
 /// Frees an `AuraBuffer` previously returned by the FFI layer.
@@ -1440,29 +1502,35 @@ pub unsafe extern "C" fn aura_free_string(ptr: *mut c_char) {
 /// ```
 #[no_mangle]
 pub unsafe extern "C" fn aura_free_buffer(buf: AuraBuffer) {
-    if !buf.ptr.is_null() && buf.len > 0 {
-        drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-            buf.ptr, buf.len,
-        )));
-    }
+    ffi_guard((), move || {
+        if !buf.ptr.is_null() && buf.len > 0 {
+            drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                buf.ptr, buf.len,
+            )));
+        }
+    })
 }
 
 /// Returns a pointer to the null-terminated version string of the AURA library.
 #[no_mangle]
 pub extern "C" fn aura_version() -> *const c_char {
-    static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
-    VERSION.as_ptr() as *const c_char
+    ffi_guard(std::ptr::null(), move || {
+        static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
+        VERSION.as_ptr() as *const c_char
+    })
 }
 
 /// Returns the last error message as a C string, or null if no error occurred.
 #[no_mangle]
 pub extern "C" fn aura_last_error() -> *mut c_char {
-    LAST_ERROR.with(|e| {
-        let borrow = e.borrow();
-        match borrow.as_ref() {
-            Some(msg) => string_to_c(msg.clone()),
-            None => std::ptr::null_mut(),
-        }
+    ffi_guard(std::ptr::null_mut(), move || {
+        LAST_ERROR.with(|e| {
+            let borrow = e.borrow();
+            match borrow.as_ref() {
+                Some(msg) => string_to_c(msg.clone()),
+                None => std::ptr::null_mut(),
+            }
+        })
     })
 }
 

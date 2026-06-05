@@ -1,0 +1,4 @@
+module AuraAgentFFI {
+    header "aura_ffi.h"
+    export *
+}
