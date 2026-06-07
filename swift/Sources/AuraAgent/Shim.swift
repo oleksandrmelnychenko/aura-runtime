@@ -19,6 +19,21 @@ internal func native_aura_agent_analyze_context(
     _ out: UnsafeMutablePointer<NativeAuraAgentBuffer>?
 ) -> Bool
 
+@_silgen_name("aura_analyze_for_relay")
+internal func native_aura_agent_analyze_for_relay(
+    _ handle: UnsafeMutableRawPointer?,
+    _ requestPtr: UnsafePointer<UInt8>?,
+    _ requestLen: Int,
+    _ out: UnsafeMutablePointer<NativeAuraAgentBuffer>?
+) -> Bool
+
+@_silgen_name("aura_record_relay_response")
+internal func native_aura_agent_record_relay_response(
+    _ handle: UnsafeMutableRawPointer?,
+    _ requestPtr: UnsafePointer<UInt8>?,
+    _ requestLen: Int
+) -> Bool
+
 @_silgen_name("aura_export_context")
 internal func native_aura_agent_export_context(
     _ handle: UnsafeMutableRawPointer?,

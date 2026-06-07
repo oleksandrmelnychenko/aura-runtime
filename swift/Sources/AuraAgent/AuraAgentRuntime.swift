@@ -35,6 +35,23 @@ public final class AuraAgentRuntime: @unchecked Sendable {
         }
     }
 
+    public func analyzeForRelay(requestBytes: Data) throws -> Data {
+        try withOutputBuffer { out in
+            try Self.withBytePointer(requestBytes) { ptr, count in
+                native_aura_agent_analyze_for_relay(handle, ptr, count, out)
+            }
+        }
+    }
+
+    public func recordRelayResponse(requestBytes: Data) throws {
+        let ok = try Self.withBytePointer(requestBytes) { ptr, count in
+            native_aura_agent_record_relay_response(handle, ptr, count)
+        }
+        guard ok else {
+            throw AuraAgentError.callFailed(Self.consumeLastError())
+        }
+    }
+
     public func exportContext() throws -> Data {
         try withOutputBuffer { out in
             native_aura_agent_export_context(handle, out)
