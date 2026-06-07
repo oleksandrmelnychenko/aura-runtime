@@ -80,6 +80,7 @@ use aura_contracts::{
 };
 use aura_core::context::tracker::TrackerWireState;
 use aura_patterns::PatternDatabase;
+use zeroize::Zeroize;
 
 const DEFAULT_RELAY_SENDER_HINT_TTL_MS: u64 = 6 * 60 * 60 * 1_000;
 const DEFAULT_PENDING_RELAY_RESPONSE_TTL_MS: u64 = 5 * 60 * 1_000;
@@ -147,6 +148,21 @@ pub struct RelayRequestAuthKey {
 pub struct RelayResponseAuthKey {
     pub key_id: String,
     pub secret: Vec<u8>,
+}
+
+// Zeroize on-device relay auth secrets on drop (incl. rotation/clear, when the old
+// Vec is replaced + dropped) so they don't linger in the agent runtime's memory.
+// Manual Drop keeps `secret` a plain Vec<u8>, so all call sites are unchanged.
+impl Drop for RelayRequestAuthKey {
+    fn drop(&mut self) {
+        self.secret.zeroize();
+    }
+}
+
+impl Drop for RelayResponseAuthKey {
+    fn drop(&mut self) {
+        self.secret.zeroize();
+    }
 }
 
 #[derive(Debug, Clone)]

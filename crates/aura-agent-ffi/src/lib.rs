@@ -327,7 +327,10 @@ fn apply_relay_request_auth_key(
     relay_request_auth_key: Option<RelayRequestAuthKey>,
 ) {
     match relay_request_auth_key {
-        Some(key) => runtime.set_relay_request_auth_key(key.key_id, key.secret),
+        // Clone out (not partial-move): RelayRequestAuthKey now zeroizes its secret on
+        // drop, which disallows moving fields out. The original `key` is zeroized when
+        // it drops here; the runtime keeps its own (also zeroize-on-drop) copy.
+        Some(key) => runtime.set_relay_request_auth_key(key.key_id.clone(), key.secret.clone()),
         None => runtime.clear_relay_request_auth_key(),
     }
 }
