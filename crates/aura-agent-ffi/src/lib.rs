@@ -428,19 +428,27 @@ fn conversation_summary_to_proto(
 #[no_mangle]
 pub unsafe extern "C" fn aura_init(config_ptr: *const u8, config_len: usize) -> *mut c_void {
     ffi_guard(std::ptr::null_mut(), move || {
+        // TEMP DIAGNOSTIC (build marker globalfix-v3): proves on-device which
+        // binary is running and the exact init outcome. Remove once resolved.
+        eprintln!("[aura_ffi] aura_init enter build=globalfix-v3 config_len={config_len}");
         clear_last_error();
 
         let config = match decode_config_request(config_ptr, config_len) {
             Ok(config) => config,
             Err(e) => {
+                eprintln!("[aura_ffi] aura_init DECODE failed: {e}");
                 set_last_error(e);
                 return std::ptr::null_mut();
             }
         };
 
         match build_instance(config) {
-            Ok(handle) => handle,
+            Ok(handle) => {
+                eprintln!("[aura_ffi] aura_init OK");
+                handle
+            }
             Err(e) => {
+                eprintln!("[aura_ffi] aura_init BUILD_INSTANCE failed: {e}");
                 set_last_error(e);
                 std::ptr::null_mut()
             }
