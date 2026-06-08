@@ -78,10 +78,26 @@ thread_local! {
     static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
+/// Process-global mirror of the most recent error message.
+///
+/// `LAST_ERROR` (thread-local, errno-style) is the primary store, but in some
+/// static-library / iOS link configurations a thread-local write is not
+/// observed by a subsequent read, which surfaced on the Swift side as
+/// "unknown error" even though an error message *was* set (e.g. a real
+/// `aura_init` failure whose reason was silently dropped). This sticky global
+/// guarantees the last error set by any export remains retrievable as a
+/// fallback. It is intentionally NOT reset by `clear_last_error` so a failure's
+/// reason cannot be wiped by a concurrent call before the caller reads it.
+static LAST_ERROR_GLOBAL: Mutex<Option<String>> = Mutex::new(None);
+
 fn set_last_error(msg: impl Into<String>) {
+    let msg = msg.into();
     LAST_ERROR.with(|e| {
-        *e.borrow_mut() = Some(msg.into());
+        *e.borrow_mut() = Some(msg.clone());
     });
+    if let Ok(mut guard) = LAST_ERROR_GLOBAL.lock() {
+        *guard = Some(msg);
+    }
 }
 
 fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
@@ -1527,13 +1543,16 @@ pub extern "C" fn aura_version() -> *const c_char {
 #[no_mangle]
 pub extern "C" fn aura_last_error() -> *mut c_char {
     ffi_guard(std::ptr::null_mut(), move || {
-        LAST_ERROR.with(|e| {
-            let borrow = e.borrow();
-            match borrow.as_ref() {
-                Some(msg) => string_to_c(msg.clone()),
-                None => std::ptr::null_mut(),
-            }
-        })
+        // Prefer the thread-local (correct per-thread semantics); fall back to
+        // the process-global mirror when the thread-local read comes back empty
+        // (see LAST_ERROR_GLOBAL) so a real error is never reported as null.
+        let message = LAST_ERROR
+            .with(|e| e.borrow().clone())
+            .or_else(|| LAST_ERROR_GLOBAL.lock().ok().and_then(|guard| guard.clone()));
+        match message {
+            Some(msg) => string_to_c(msg),
+            None => std::ptr::null_mut(),
+        }
     })
 }
 
