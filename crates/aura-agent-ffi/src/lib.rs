@@ -425,7 +425,12 @@ fn conversation_summary_to_proto(
 }
 
 /// Initializes a new AURA instance from a protobuf-encoded configuration.
-#[no_mangle]
+///
+/// Exported as `aura_agent_init` (NOT `aura_init`) to avoid a C-symbol collision
+/// with aura-protected-protocol's `aura_init` when both static libs are linked
+/// into the same iOS app target — otherwise the linker resolves `aura_init` to
+/// whichever archive comes first, silently hijacking the agent runtime's init.
+#[export_name = "aura_agent_init"]
 pub unsafe extern "C" fn aura_init(config_ptr: *const u8, config_len: usize) -> *mut c_void {
     ffi_guard(std::ptr::null_mut(), move || {
         // TEMP DIAGNOSTIC (build marker globalfix-v3): proves on-device which
@@ -1539,7 +1544,10 @@ pub unsafe extern "C" fn aura_free_buffer(buf: AuraBuffer) {
 }
 
 /// Returns a pointer to the null-terminated version string of the AURA library.
-#[no_mangle]
+///
+/// Exported as `aura_agent_version` to avoid colliding with
+/// aura-protected-protocol's `aura_version` (both linked into the iOS app).
+#[export_name = "aura_agent_version"]
 pub extern "C" fn aura_version() -> *const c_char {
     ffi_guard(std::ptr::null(), move || {
         // TEMP build marker (gfx-v4): lets the iOS side prove via os_log which

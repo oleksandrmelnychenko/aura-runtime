@@ -11,7 +11,9 @@ typedef struct {
 } AuraBuffer;
 
 /// Initialize AURA with protobuf AuraConfig bytes. Returns opaque handle or NULL.
-void *aura_init(const uint8_t *config_ptr, size_t config_len);
+/// Symbol exported as `aura_agent_init` to avoid colliding with
+/// aura-protected-protocol's `aura_init` when co-linked.
+void *aura_agent_init(const uint8_t *config_ptr, size_t config_len);
 
 /// Analyze protobuf MessageInput. Writes protobuf AnalysisResult into out.
 bool aura_analyze(void *handle, const uint8_t *message_ptr, size_t message_len, AuraBuffer *out);
@@ -68,7 +70,9 @@ bool aura_detect_suspicious_url(void *handle, const uint8_t *url_ptr, size_t url
 bool aura_get_conversation_summary(void *handle, AuraBuffer *out);
 
 /// Get AURA version string. Do NOT free the returned pointer.
-const char *aura_version(void);
+/// Symbol exported as `aura_agent_version` to avoid colliding with
+/// aura-protected-protocol's `aura_version` when co-linked.
+const char *aura_agent_version(void);
 
 /// Returns the last error message, or NULL if no error occurred.
 /// Caller must free with aura_free_string.

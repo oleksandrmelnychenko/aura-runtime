@@ -5,7 +5,7 @@ internal struct NativeAuraAgentBuffer {
     var len: Int
 }
 
-@_silgen_name("aura_init")
+@_silgen_name("aura_agent_init")
 internal func native_aura_agent_init(
     _ configPtr: UnsafePointer<UInt8>?,
     _ configLen: Int
@@ -61,7 +61,7 @@ internal func native_aura_agent_free_string(_ ptr: UnsafeMutablePointer<CChar>?)
 @_silgen_name("aura_free_buffer")
 internal func native_aura_agent_free_buffer(_ buffer: NativeAuraAgentBuffer)
 
-@_silgen_name("aura_version")
+@_silgen_name("aura_agent_version")
 internal func native_aura_agent_version() -> UnsafePointer<CChar>?
 
 @_silgen_name("aura_last_error")
