@@ -1542,7 +1542,10 @@ pub unsafe extern "C" fn aura_free_buffer(buf: AuraBuffer) {
 #[no_mangle]
 pub extern "C" fn aura_version() -> *const c_char {
     ffi_guard(std::ptr::null(), move || {
-        static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
+        // TEMP build marker (gfx-v4): lets the iOS side prove via os_log which
+        // binary is actually linked/running, independent of the init/last_error
+        // path. Revert the "+gfx-v4" suffix once the AuraAgent issue is closed.
+        static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "+gfx-v4\0").as_bytes();
         VERSION.as_ptr() as *const c_char
     })
 }
