@@ -4019,6 +4019,71 @@ mod tests {
         }
     }
 
+    // Reproduces the EXACT config the iOS app's AuraRuntimeService.makeConfig builds
+    // for the local-analysis path: ProtectionLevel::Medium, AccountType::Adult,
+    // language "en", NO cultural_context, ttl 30, DomainMode::None, and a relay
+    // policy with enabled=false, MetadataOnly, a base64 protected_account_id, and
+    // NO auth keys. On device this aura_init returns null and the Swift side only
+    // sees "unknown error"; this test surfaces the real failure on the host.
+    #[test]
+    fn ios_local_analysis_config_initializes() {
+        unsafe {
+            let config = proto::AuraConfig {
+                protection_level: proto::ProtectionLevel::Medium as i32,
+                account_type: proto::AccountType::Adult as i32,
+                language: "en".to_string(),
+                cultural_context: None,
+                enabled: true,
+                patterns_path: None,
+                models_path: None,
+                account_holder_age: None,
+                ttl_days: 30,
+                timezone_offset_minutes: 120,
+                domain_mode: proto::DomainMode::None as i32,
+                relay_policy: Some(proto::AgentRelayPolicy {
+                    enabled: Some(false),
+                    privacy_mode: proto::RelayPrivacyMode::MetadataOnly as i32,
+                    protected_account_id: Some("QTNGNUVDRA==".to_string()),
+                    ..Default::default()
+                }),
+            };
+            let bytes = encode_proto(&config);
+            let handle = aura_init(bytes.as_ptr(), bytes.len());
+            if handle.is_null() {
+                let err = aura_last_error();
+                let msg = if err.is_null() {
+                    "<null last_error>".to_string()
+                } else {
+                    let s = std::ffi::CStr::from_ptr(err).to_string_lossy().into_owned();
+                    aura_free_string(err);
+                    s
+                };
+                panic!("ios_local_analysis_config init FAILED: {msg}");
+            }
+            aura_free(handle);
+        }
+    }
+
+    // Directly validates the device-symptom fix: when the thread-local LAST_ERROR
+    // read comes back empty (the static-lib/iOS behavior that produced
+    // "unknown error"), aura_last_error must still surface the message from the
+    // sticky process-global mirror.
+    #[test]
+    fn last_error_global_fallback_survives_threadlocal_clear() {
+        unsafe {
+            set_last_error("boom-global-fallback-xyz");
+            // Simulate the iOS symptom: thread-local does not retain the write.
+            LAST_ERROR.with(|e| {
+                *e.borrow_mut() = None;
+            });
+            let err = aura_last_error();
+            assert!(!err.is_null(), "global fallback must surface the error");
+            let s = std::ffi::CStr::from_ptr(err).to_string_lossy().into_owned();
+            aura_free_string(err);
+            assert!(s.contains("boom-global-fallback-xyz"), "got: {s}");
+        }
+    }
+
     #[test]
     fn domain_mode_defaults_to_none_for_core_only_config() {
         let config = aura_config_from_proto(proto_config(proto::AccountType::Adult, true))
