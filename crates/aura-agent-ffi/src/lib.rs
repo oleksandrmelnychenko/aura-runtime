@@ -433,27 +433,19 @@ fn conversation_summary_to_proto(
 #[export_name = "aura_agent_init"]
 pub unsafe extern "C" fn aura_init(config_ptr: *const u8, config_len: usize) -> *mut c_void {
     ffi_guard(std::ptr::null_mut(), move || {
-        // TEMP DIAGNOSTIC (build marker globalfix-v3): proves on-device which
-        // binary is running and the exact init outcome. Remove once resolved.
-        eprintln!("[aura_ffi] aura_init enter build=globalfix-v3 config_len={config_len}");
         clear_last_error();
 
         let config = match decode_config_request(config_ptr, config_len) {
             Ok(config) => config,
             Err(e) => {
-                eprintln!("[aura_ffi] aura_init DECODE failed: {e}");
                 set_last_error(e);
                 return std::ptr::null_mut();
             }
         };
 
         match build_instance(config) {
-            Ok(handle) => {
-                eprintln!("[aura_ffi] aura_init OK");
-                handle
-            }
+            Ok(handle) => handle,
             Err(e) => {
-                eprintln!("[aura_ffi] aura_init BUILD_INSTANCE failed: {e}");
                 set_last_error(e);
                 std::ptr::null_mut()
             }
@@ -1550,10 +1542,7 @@ pub unsafe extern "C" fn aura_free_buffer(buf: AuraBuffer) {
 #[export_name = "aura_agent_version"]
 pub extern "C" fn aura_version() -> *const c_char {
     ffi_guard(std::ptr::null(), move || {
-        // TEMP build marker (gfx-v4): lets the iOS side prove via os_log which
-        // binary is actually linked/running, independent of the init/last_error
-        // path. Revert the "+gfx-v4" suffix once the AuraAgent issue is closed.
-        static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "+gfx-v4\0").as_bytes();
+        static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
         VERSION.as_ptr() as *const c_char
     })
 }
