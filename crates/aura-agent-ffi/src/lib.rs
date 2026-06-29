@@ -1554,9 +1554,12 @@ pub extern "C" fn aura_last_error() -> *mut c_char {
         // Prefer the thread-local (correct per-thread semantics); fall back to
         // the process-global mirror when the thread-local read comes back empty
         // (see LAST_ERROR_GLOBAL) so a real error is never reported as null.
-        let message = LAST_ERROR
-            .with(|e| e.borrow().clone())
-            .or_else(|| LAST_ERROR_GLOBAL.lock().ok().and_then(|guard| guard.clone()));
+        let message = LAST_ERROR.with(|e| e.borrow().clone()).or_else(|| {
+            LAST_ERROR_GLOBAL
+                .lock()
+                .ok()
+                .and_then(|guard| guard.clone())
+        });
         match message {
             Some(msg) => string_to_c(msg),
             None => std::ptr::null_mut(),
