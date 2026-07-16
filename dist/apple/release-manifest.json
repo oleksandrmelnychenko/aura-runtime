@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "source_revision": "d462fdb8f8aaa4c9052bdf5200b675aad54ef253",
+  "source_tree_dirty": false,
+  "cargo_profile": "release",
+  "cargo_locked": true,
+  "cargo_features": [],
+  "minimum_ios_version": "18.0",
+  "target_triples": [
+    "aarch64-apple-ios",
+    "aarch64-apple-ios-sim",
+    "x86_64-apple-ios",
+    "aarch64-apple-ios-macabi",
+    "x86_64-apple-ios-macabi"
+  ],
+  "aura_ffi_header_sha256": "374f1b052170b1f4f115859983266e42f174e375ad3dd88c6dcce14a6066d2ab",
+  "xcframework_info_plist_sha256": "b44c6a2dd464f217c817c25474bd5ed990630200d3921948465877f672934c00",
+  "binary_sha256": {
+    "ios-arm64": "fd893d5702f4a813172b35e72e9b13c054010cd7d482b4448e7b88df038892d0",
+    "ios-arm64_x86_64-simulator": "605539ebc97948beabf7922bb0b8074afd3d410307816d2fac76d1a730c7db4c",
+    "ios-arm64_x86_64-maccatalyst": "11b82f0cb952ef1c1c968a32f468bfd408911d22389feb81f6112b28e87cd0f7"
+  },
+  "model_bundle_included": false
+}
