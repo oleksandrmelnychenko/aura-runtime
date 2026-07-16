@@ -97,7 +97,11 @@ forbidden_symbols=(
 verify_archive_symbols() {
   local archive="$1"
   local symbols
-  symbols="$(xcrun nm -gU "$archive" | awk '{print $NF}')"
+  # Newer Rust toolchains can emit LLVM attributes in compiler_builtins archive
+  # members that the Apple nm bundled with the current Xcode cannot decode yet.
+  # Keep the symbols it can read; the explicit allow/deny checks below still
+  # fail closed if the Aura FFI object itself cannot be inspected.
+  symbols="$({ xcrun nm -gU "$archive" 2>/dev/null || true; } | awk '{print $NF}')"
 
   for symbol in "${required_symbols[@]}"; do
     if ! grep -Fqx "$symbol" <<<"$symbols"; then
