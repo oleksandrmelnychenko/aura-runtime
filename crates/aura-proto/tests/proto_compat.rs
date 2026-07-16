@@ -114,6 +114,7 @@ fn aura_config_relay_policy_round_trip() {
             }),
             require_protected_account_attestation: Some(true),
         }),
+        product_rollout_mode: proto::ProductRolloutMode::GuardianEnabled as i32,
     };
 
     let bytes = original.encode_to_vec();
@@ -161,99 +162,6 @@ fn aura_config_relay_policy_round_trip() {
     assert_eq!(
         relay_policy.require_protected_account_attestation,
         Some(true)
-    );
-}
-
-#[test]
-fn analyze_for_relay_response_round_trip() {
-    let original = proto::AnalyzeForRelayResponse {
-        local_result: Some(analysis_result_fixture()),
-        relay_request: Some(proto::RelayAnalyzeRequest {
-            schema_version: "aura.relay.v1alpha1".to_string(),
-            request_id: "req_token".to_string(),
-            message_id: "msg_token".to_string(),
-            sender_token: Some("snd_token".to_string()),
-            protected_account_token: Some("acct_token".to_string()),
-            conversation_token: Some("conv_token".to_string()),
-            account_type: proto::AccountType::Child as i32,
-            protection_level: proto::ProtectionLevel::High as i32,
-            conversation_type: proto::ConversationType::Direct as i32,
-            language: Some("en".to_string()),
-            text: String::new(),
-            local_observations: vec![proto::RelayObservation {
-                threat_type: proto::ThreatType::Grooming as i32,
-                threat_subtype: String::new(),
-                layer: proto::DetectionLayer::PatternMatching as i32,
-                score: 0.91,
-                confidence: proto::Confidence::High as i32,
-                reason_code: "grooming.secrecy".to_string(),
-                explanation: String::new(),
-            }],
-            local_context_summary: Some(proto::RelayLocalContextSummary {
-                context_markers: vec!["relationship.new_contact".to_string()],
-                recent_observations: Vec::new(),
-            }),
-            local_safety_telemetry: vec![proto::RelaySafetyTelemetryEvent {
-                event_id: "evt_token".to_string(),
-                sender_token: "snd_token".to_string(),
-                protected_account_token: "acct_token".to_string(),
-                conversation_token: Some("conv_token".to_string()),
-                surface: proto::SafetyTelemetrySurface::DirectMessage as i32,
-                threat_type: proto::ThreatType::Grooming as i32,
-                severity: proto::SafetyTelemetrySeverity::High as i32,
-                confidence: proto::Confidence::High as i32,
-                action: proto::SafetyTelemetryAction::Warn as i32,
-                timestamp_bucket_ms: 1_700_000_000_000,
-                reason_family: Some("grooming".to_string()),
-            }],
-            recent_message_window: Vec::new(),
-            server_sender_risk_hint: Some(0.4),
-            sender_relationship: proto::SenderRelationship::UnknownAdult as i32,
-            relationship_trust_source: proto::RelationshipTrustSource::ServerReputation as i32,
-            privacy_mode: proto::RelayPrivacyMode::MetadataOnly as i32,
-            capabilities: Some(proto::RelayAgentCapabilities {
-                local_context_interpreter: true,
-                local_tracker: true,
-                supports_remote_correlation: true,
-                relay_timeout_ms: Some(300),
-            }),
-            deadline_ms: Some(300),
-            auth: Some(proto::RelayRequestAuth {
-                key_id: "relay-req-key-1".to_string(),
-                alg: "hmac-sha256-v1".to_string(),
-                tag: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string(),
-            }),
-            protected_account_attestation: Some(proto::ProtectedAccountTokenAttestation {
-                key_id: "acct-attest-key-1".to_string(),
-                alg: "hmac-sha256-v1".to_string(),
-                protected_account_token: "acct_token".to_string(),
-                expires_at_ms: 1_900_000_000_000,
-                tag: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string(),
-            }),
-        }),
-    };
-
-    let bytes = original.encode_to_vec();
-    let decoded =
-        proto::AnalyzeForRelayResponse::decode(bytes.as_slice()).expect("decode relay response");
-
-    assert_eq!(decoded, original);
-    let relay_request = decoded.relay_request.expect("missing relay request");
-    assert!(relay_request.text.is_empty());
-    assert_eq!(relay_request.sender_token.as_deref(), Some("snd_token"));
-    assert_eq!(relay_request.local_safety_telemetry.len(), 1);
-    assert_eq!(
-        relay_request.sender_relationship,
-        proto::SenderRelationship::UnknownAdult as i32
-    );
-    assert_eq!(
-        relay_request.relationship_trust_source,
-        proto::RelationshipTrustSource::ServerReputation as i32
-    );
-    assert_eq!(relay_request.auth.unwrap().alg, "hmac-sha256-v1");
-    assert_eq!(
-        relay_request.protected_account_attestation.unwrap().key_id,
-        "acct-attest-key-1"
     );
 }
 
@@ -399,106 +307,6 @@ fn analysis_result_with_kids_memory_round_trip() {
 }
 
 #[test]
-fn guardian_feedback_request_trusted_round_trip() {
-    let original = proto::GuardianFeedbackRequest {
-        sender_id: "sender_abc".to_string(),
-        conversation_id: "conv_xyz".to_string(),
-        verdict: proto::GuardianVerdict::Trusted as i32,
-    };
-    let bytes = original.encode_to_vec();
-    let decoded =
-        proto::GuardianFeedbackRequest::decode(bytes.as_slice()).expect("decode guardian trusted");
-    assert_eq!(decoded, original);
-    assert_eq!(decoded.verdict, proto::GuardianVerdict::Trusted as i32);
-}
-
-#[test]
-fn guardian_feedback_request_block_round_trip() {
-    let original = proto::GuardianFeedbackRequest {
-        sender_id: "sender_abc".to_string(),
-        conversation_id: "conv_xyz".to_string(),
-        verdict: proto::GuardianVerdict::Block as i32,
-    };
-    let bytes = original.encode_to_vec();
-    let decoded =
-        proto::GuardianFeedbackRequest::decode(bytes.as_slice()).expect("decode guardian block");
-    assert_eq!(decoded, original);
-    assert_eq!(decoded.verdict, proto::GuardianVerdict::Block as i32);
-}
-
-#[test]
-fn guardian_feedback_request_monitor_round_trip() {
-    let original = proto::GuardianFeedbackRequest {
-        sender_id: "s1".to_string(),
-        conversation_id: "c1".to_string(),
-        verdict: proto::GuardianVerdict::Monitor as i32,
-    };
-    let bytes = original.encode_to_vec();
-    let decoded =
-        proto::GuardianFeedbackRequest::decode(bytes.as_slice()).expect("decode guardian monitor");
-    assert_eq!(decoded, original);
-    assert_eq!(decoded.verdict, proto::GuardianVerdict::Monitor as i32);
-}
-
-#[test]
-fn guardian_feedback_request_false_positive_round_trip() {
-    let original = proto::GuardianFeedbackRequest {
-        sender_id: "s1".to_string(),
-        conversation_id: "c1".to_string(),
-        verdict: proto::GuardianVerdict::FalsePositive as i32,
-    };
-    let bytes = original.encode_to_vec();
-    let decoded = proto::GuardianFeedbackRequest::decode(bytes.as_slice())
-        .expect("decode guardian false positive");
-    assert_eq!(decoded, original);
-    assert_eq!(
-        decoded.verdict,
-        proto::GuardianVerdict::FalsePositive as i32
-    );
-}
-
-#[test]
-fn guardian_feedback_request_unspecified_round_trip() {
-    let original = proto::GuardianFeedbackRequest {
-        sender_id: "s1".to_string(),
-        conversation_id: "c1".to_string(),
-        verdict: proto::GuardianVerdict::Unspecified as i32,
-    };
-    let bytes = original.encode_to_vec();
-    let decoded = proto::GuardianFeedbackRequest::decode(bytes.as_slice())
-        .expect("decode guardian unspecified");
-    assert_eq!(decoded, original);
-}
-
-#[test]
-fn guardian_feedback_response_round_trip() {
-    let original = proto::GuardianFeedbackResponse {
-        ok: true,
-        message: Some("action applied".to_string()),
-    };
-    let bytes = original.encode_to_vec();
-    let decoded = proto::GuardianFeedbackResponse::decode(bytes.as_slice())
-        .expect("decode guardian feedback response");
-    assert_eq!(decoded, original);
-    assert!(decoded.ok);
-    assert_eq!(decoded.message.as_deref(), Some("action applied"));
-}
-
-#[test]
-fn guardian_feedback_response_no_message_round_trip() {
-    let original = proto::GuardianFeedbackResponse {
-        ok: false,
-        message: None,
-    };
-    let bytes = original.encode_to_vec();
-    let decoded = proto::GuardianFeedbackResponse::decode(bytes.as_slice())
-        .expect("decode guardian feedback response no msg");
-    assert_eq!(decoded, original);
-    assert!(!decoded.ok);
-    assert!(decoded.message.is_none());
-}
-
-#[test]
 fn tracker_state_with_kids_memory_round_trip() {
     let kids_memory = proto::KidsMemoryState {
         conversations: vec![proto::KidsConversationMemoryState {
@@ -530,6 +338,8 @@ fn tracker_state_with_kids_memory_round_trip() {
                 },
             ],
             message_index: 2,
+            last_activity_index: None,
+            last_emitted: Vec::new(),
         }],
         senders: vec![proto::KidsSenderMemoryState {
             sender_id: "sender_a".to_string(),
@@ -538,7 +348,10 @@ fn tracker_state_with_kids_memory_round_trip() {
                 "conv_kids_1".to_string(),
                 "conv_kids_2".to_string(),
             ],
+            last_activity_index: None,
+            last_emitted: Vec::new(),
         }],
+        schema_version: 0,
     };
 
     let original = proto::TrackerState {
@@ -635,6 +448,7 @@ fn tracker_state_empty_kids_memory_round_trip() {
         kids_memory: Some(proto::KidsMemoryState {
             conversations: Vec::new(),
             senders: Vec::new(),
+            schema_version: 0,
         }),
     };
     let bytes = original.encode_to_vec();

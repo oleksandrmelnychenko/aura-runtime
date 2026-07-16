@@ -126,21 +126,6 @@ pub struct ScenarioRunResult {
     pub lead_time: Option<LeadTimeResult>,
 }
 
-struct EvalKidsMemoryGuard;
-
-impl EvalKidsMemoryGuard {
-    fn new() -> Self {
-        aura_kids::pipeline::clear_kids_memory();
-        Self
-    }
-}
-
-impl Drop for EvalKidsMemoryGuard {
-    fn drop(&mut self) {
-        aura_kids::pipeline::clear_kids_memory();
-    }
-}
-
 pub struct ScenarioCaseRunner<'a> {
     pattern_db: &'a PatternDatabase,
     analyzers: HashMap<String, Analyzer>,
@@ -155,7 +140,6 @@ impl<'a> ScenarioCaseRunner<'a> {
     }
 
     pub fn run(&mut self, case: &ScenarioCase) -> ScenarioRunResult {
-        let _kids_memory_guard = EvalKidsMemoryGuard::new();
         let key = scenario_config_key(&case.config);
         let analyzer = self
             .analyzers
@@ -656,7 +640,6 @@ pub fn summarize_runs_by_language(
 }
 
 pub fn run_scenario_case(pattern_db: &PatternDatabase, case: &ScenarioCase) -> ScenarioRunResult {
-    let _kids_memory_guard = EvalKidsMemoryGuard::new();
     let mut analyzer = Analyzer::new(case.config.clone(), pattern_db);
     run_scenario_case_on_analyzer(&mut analyzer, case)
 }

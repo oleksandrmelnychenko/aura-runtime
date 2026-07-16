@@ -1,6 +1,9 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
+
+#[cfg(test)]
+use std::sync::OnceLock;
 
 use aura_domain::{
     promote_action_to_warn, DomainAction, DomainConversationType, DomainInput, DomainOutput,
@@ -11,6 +14,7 @@ use crate::detectors::{bullying, grooming, manipulation, selfharm};
 use crate::lexicon;
 use crate::policy::{guardian, intervention};
 
+#[cfg(test)]
 pub fn run_kids_pipeline(input: &DomainInput) -> DomainOutput {
     run_kids_pipeline_with_memory(input, global_kids_memory())
 }
@@ -76,7 +80,7 @@ struct MessageRiskSnapshot {
 struct ConversationRiskMemory {
     entries: VecDeque<(Option<String>, MessageRiskSnapshot)>,
     message_index: u64,
-    last_emitted: HashMap<&'static str, u64>,
+    last_emitted: HashMap<String, u64>,
     /// Monotonic counter updated on every message — used for LRU eviction.
     last_activity_index: u64,
 }
@@ -97,20 +101,29 @@ struct KidsProfileSettings {
 
 const MAX_TRACKED_CONVERSATIONS: usize = 2000;
 const MAX_TRACKED_SENDERS: usize = 4000;
+const MAX_CONVERSATION_MEMORY_WINDOW: usize = 18;
 const SENDER_RISK_CONVERSATION_WINDOW: usize = 12;
 
-/// Global monotonic counter for LRU eviction ordering across all conversations/senders.
-static GLOBAL_ACTIVITY_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Current nested schema version for persisted kids-domain memory.
+pub const KIDS_MEMORY_STATE_VERSION: u32 = 1;
 
-fn next_global_activity() -> u64 {
-    GLOBAL_ACTIVITY_COUNTER.fetch_add(1, Ordering::Relaxed) + 1
-}
+const CONVERSATION_EMISSION_KEYS: &[&str] = &[
+    "grooming_progression",
+    "sustained_sextortion",
+    "bullying_cascade_selfharm",
+    "sender_risk_accumulation",
+    "new_sender_fast_escalation",
+    "victim_vulnerability_targeting",
+];
+const SENDER_EMISSION_KEYS: &[&str] = &["cross_conversation_repeat_offender"];
 
+#[cfg(test)]
 static GLOBAL_KIDS_MEMORY: OnceLock<KidsPipelineMemory> = OnceLock::new();
 
 pub struct KidsPipelineMemory {
     conversation_memory: Mutex<HashMap<String, ConversationRiskMemory>>,
     sender_memory: Mutex<HashMap<String, SenderRiskMemory>>,
+    activity_counter: AtomicU64,
 }
 
 impl KidsPipelineMemory {
@@ -128,12 +141,18 @@ impl Default for KidsPipelineMemory {
         Self {
             conversation_memory: Mutex::new(HashMap::new()),
             sender_memory: Mutex::new(HashMap::new()),
+            activity_counter: AtomicU64::new(0),
         }
     }
 }
 
+#[cfg(test)]
 fn global_kids_memory() -> &'static KidsPipelineMemory {
     GLOBAL_KIDS_MEMORY.get_or_init(KidsPipelineMemory::default)
+}
+
+fn next_activity(memory_store: &KidsPipelineMemory) -> u64 {
+    memory_store.activity_counter.fetch_add(1, Ordering::Relaxed) + 1
 }
 
 fn conversation_memory(
@@ -148,7 +167,7 @@ struct SenderRiskMemory {
     recent_high_risk_conversations: VecDeque<String>,
     /// Monotonic counter updated on every event — used for LRU eviction.
     last_activity_index: u64,
-    last_emitted: HashMap<&'static str, u64>,
+    last_emitted: HashMap<String, u64>,
 }
 
 fn sender_memory(memory: &KidsPipelineMemory) -> &Mutex<HashMap<String, SenderRiskMemory>> {
@@ -264,7 +283,7 @@ fn apply_kids_conversation_memory_amplifiers(
         .entry(conversation_id.to_string())
         .or_insert_with(ConversationRiskMemory::default);
     memory.message_index = memory.message_index.saturating_add(1);
-    memory.last_activity_index = next_global_activity();
+    memory.last_activity_index = next_activity(memory_store);
     let now_index = memory.message_index;
     memory.entries.push_back((sender.clone(), current));
     while memory.entries.len() > settings.memory_window_messages {
@@ -460,12 +479,14 @@ fn clear_kids_memory_internal(memory_store: &KidsPipelineMemory) {
         return;
     };
     guard.clear();
+    memory_store.activity_counter.store(0, Ordering::Relaxed);
 }
 
 pub fn clear_kids_memory_in(memory_store: &KidsPipelineMemory) {
     clear_kids_memory_internal(memory_store);
 }
 
+#[cfg(test)]
 pub fn clear_kids_memory() {
     clear_kids_memory_internal(global_kids_memory());
 }
@@ -505,7 +526,7 @@ fn apply_cross_conversation_sender_amplifier(
         .entry(sender_id.to_string())
         .or_insert_with(SenderRiskMemory::default);
     memory.event_index = memory.event_index.saturating_add(1);
-    memory.last_activity_index = next_global_activity();
+    memory.last_activity_index = next_activity(memory_store);
     let now_index = memory.event_index;
 
     let mut existing_idx = None;
@@ -615,7 +636,7 @@ fn mark_memory_signal_emitted(
     key: &'static str,
     now_index: u64,
 ) {
-    memory.last_emitted.insert(key, now_index);
+    memory.last_emitted.insert(key.to_string(), now_index);
 }
 
 fn should_emit_sender_memory_signal(
@@ -635,7 +656,7 @@ fn mark_sender_memory_signal_emitted(
     key: &'static str,
     now_index: u64,
 ) {
-    memory.last_emitted.insert(key, now_index);
+    memory.last_emitted.insert(key.to_string(), now_index);
 }
 
 fn profile_settings(
@@ -752,6 +773,7 @@ pub struct ExportedConversationMemory {
     pub entries: Vec<ExportedMessageSnapshot>,
     pub message_index: u64,
     pub last_activity_index: u64,
+    pub last_emitted: Vec<ExportedEmissionCheckpoint>,
 }
 
 /// Exported per-sender memory.
@@ -761,13 +783,46 @@ pub struct ExportedSenderMemory {
     pub event_index: u64,
     pub recent_high_risk_conversations: Vec<String>,
     pub last_activity_index: u64,
+    pub last_emitted: Vec<ExportedEmissionCheckpoint>,
+}
+
+/// Persisted cooldown checkpoint for one kids-memory alert family.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportedEmissionCheckpoint {
+    pub reason_code: String,
+    pub emitted_at_index: u64,
 }
 
 /// Full kids memory state for export.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ExportedKidsMemoryState {
+    pub schema_version: u32,
     pub conversations: Vec<ExportedConversationMemory>,
     pub senders: Vec<ExportedSenderMemory>,
+}
+
+impl Default for ExportedKidsMemoryState {
+    fn default() -> Self {
+        Self {
+            schema_version: KIDS_MEMORY_STATE_VERSION,
+            conversations: Vec::new(),
+            senders: Vec::new(),
+        }
+    }
+}
+
+fn export_emission_checkpoints(
+    last_emitted: &HashMap<String, u64>,
+) -> Vec<ExportedEmissionCheckpoint> {
+    let mut checkpoints: Vec<_> = last_emitted
+        .iter()
+        .map(|(reason_code, emitted_at_index)| ExportedEmissionCheckpoint {
+            reason_code: reason_code.clone(),
+            emitted_at_index: *emitted_at_index,
+        })
+        .collect();
+    checkpoints.sort_by(|left, right| left.reason_code.cmp(&right.reason_code));
+    checkpoints
 }
 
 pub fn export_kids_memory_from(memory_store: &KidsPipelineMemory) -> ExportedKidsMemoryState {
@@ -795,6 +850,7 @@ pub fn export_kids_memory_from(memory_store: &KidsPipelineMemory) -> ExportedKid
                 entries,
                 message_index: memory.message_index,
                 last_activity_index: memory.last_activity_index,
+                last_emitted: export_emission_checkpoints(&memory.last_emitted),
             });
         }
     }
@@ -810,6 +866,7 @@ pub fn export_kids_memory_from(memory_store: &KidsPipelineMemory) -> ExportedKid
                     .cloned()
                     .collect(),
                 last_activity_index: memory.last_activity_index,
+                last_emitted: export_emission_checkpoints(&memory.last_emitted),
             });
         }
     }
@@ -818,71 +875,188 @@ pub fn export_kids_memory_from(memory_store: &KidsPipelineMemory) -> ExportedKid
 }
 
 /// Export the current kids memory state for persistence/transfer.
+#[cfg(test)]
 pub fn export_kids_memory() -> ExportedKidsMemoryState {
     export_kids_memory_from(global_kids_memory())
 }
 
-pub fn import_kids_memory_into(memory_store: &KidsPipelineMemory, state: &ExportedKidsMemoryState) {
-    if let Ok(mut guard) = conversation_memory(memory_store).lock() {
-        guard.clear();
-        for conv in &state.conversations {
-            let mut entries = VecDeque::with_capacity(conv.entries.len());
-            for snap in &conv.entries {
-                entries.push_back((
-                    snap.sender_id.clone(),
-                    MessageRiskSnapshot {
-                        has_grooming: snap.has_grooming,
-                        has_manipulation: snap.has_manipulation,
-                        has_bullying: snap.has_bullying,
-                        has_self_harm: snap.has_self_harm,
-                        has_blackmail_or_sextortion: snap.has_blackmail_or_sextortion,
-                        ml_grooming: snap.ml_grooming,
-                        ml_bullying: snap.ml_bullying,
-                        ml_self_harm: snap.ml_self_harm,
-                        ml_manipulation: snap.ml_manipulation,
-                    },
-                ));
-            }
-            guard.insert(
-                conv.conversation_id.clone(),
-                ConversationRiskMemory {
-                    entries,
-                    message_index: conv.message_index,
-                    last_emitted: HashMap::new(),
-                    last_activity_index: conv.last_activity_index,
-                },
-            );
-        }
+pub fn import_kids_memory_into(
+    memory_store: &KidsPipelineMemory,
+    state: &ExportedKidsMemoryState,
+) -> bool {
+    if state.schema_version > KIDS_MEMORY_STATE_VERSION {
+        return false;
     }
 
-    if let Ok(mut guard) = sender_memory(memory_store).lock() {
-        guard.clear();
-        for sender in &state.senders {
-            guard.insert(
-                sender.sender_id.clone(),
-                SenderRiskMemory {
-                    event_index: sender.event_index,
-                    recent_high_risk_conversations: sender
-                        .recent_high_risk_conversations
-                        .iter()
-                        .cloned()
-                        .collect(),
-                    last_activity_index: sender.last_activity_index,
-                    last_emitted: HashMap::new(),
-                },
-            );
-        }
-    }
+    let conversations = bounded_conversation_memory(state);
+    let senders = bounded_sender_memory(state);
+    let max_activity_index = conversations
+        .values()
+        .map(|memory| memory.last_activity_index)
+        .chain(senders.values().map(|memory| memory.last_activity_index))
+        .max()
+        .unwrap_or(0);
+
+    let Ok(mut conversation_guard) = conversation_memory(memory_store).lock() else {
+        return false;
+    };
+    let Ok(mut sender_guard) = sender_memory(memory_store).lock() else {
+        return false;
+    };
+
+    *conversation_guard = conversations;
+    *sender_guard = senders;
+    memory_store
+        .activity_counter
+        .fetch_max(max_activity_index, Ordering::Relaxed);
+    true
 }
 
 /// Import kids memory state (replaces current in-process state).
-pub fn import_kids_memory(state: &ExportedKidsMemoryState) {
-    import_kids_memory_into(global_kids_memory(), state);
+#[cfg(test)]
+pub fn import_kids_memory(state: &ExportedKidsMemoryState) -> bool {
+    import_kids_memory_into(global_kids_memory(), state)
 }
 
-/// Query the current conversation risk score for a given conversation.
-pub fn conversation_risk_score(conversation_id: &str) -> f32 {
-    let Ok(guard) = conversation_memory(global_kids_memory()).lock() else {
+fn bounded_conversation_memory(
+    state: &ExportedKidsMemoryState,
+) -> HashMap<String, ConversationRiskMemory> {
+    let mut ordered: Vec<_> = state.conversations.iter().collect();
+    ordered.sort_by(|left, right| {
+        right
+            .last_activity_index
+            .cmp(&left.last_activity_index)
+            .then_with(|| left.conversation_id.cmp(&right.conversation_id))
+    });
+
+    let mut result = HashMap::with_capacity(ordered.len().min(MAX_TRACKED_CONVERSATIONS));
+    for conversation in ordered {
+        if result.len() >= MAX_TRACKED_CONVERSATIONS {
+            break;
+        }
+        if conversation.conversation_id.is_empty()
+            || result.contains_key(&conversation.conversation_id)
+        {
+            continue;
+        }
+
+        let entry_start = conversation
+            .entries
+            .len()
+            .saturating_sub(MAX_CONVERSATION_MEMORY_WINDOW);
+        let entries = conversation.entries[entry_start..]
+            .iter()
+            .map(|snapshot| {
+                (
+                    snapshot.sender_id.clone(),
+                    MessageRiskSnapshot {
+                        has_grooming: snapshot.has_grooming,
+                        has_manipulation: snapshot.has_manipulation,
+                        has_bullying: snapshot.has_bullying,
+                        has_self_harm: snapshot.has_self_harm,
+                        has_blackmail_or_sextortion: snapshot.has_blackmail_or_sextortion,
+                        ml_grooming: snapshot.ml_grooming,
+                        ml_bullying: snapshot.ml_bullying,
+                        ml_self_harm: snapshot.ml_self_harm,
+                        ml_manipulation: snapshot.ml_manipulation,
+                    },
+                )
+            })
+            .collect();
+        result.insert(
+            conversation.conversation_id.clone(),
+            ConversationRiskMemory {
+                entries,
+                message_index: conversation.message_index,
+                last_activity_index: conversation.last_activity_index,
+                last_emitted: bounded_emission_checkpoints(
+                    &conversation.last_emitted,
+                    CONVERSATION_EMISSION_KEYS,
+                    conversation.message_index,
+                ),
+            },
+        );
+    }
+    result
+}
+
+fn bounded_sender_memory(state: &ExportedKidsMemoryState) -> HashMap<String, SenderRiskMemory> {
+    let mut ordered: Vec<_> = state.senders.iter().collect();
+    ordered.sort_by(|left, right| {
+        right
+            .last_activity_index
+            .cmp(&left.last_activity_index)
+            .then_with(|| left.sender_id.cmp(&right.sender_id))
+    });
+
+    let mut result = HashMap::with_capacity(ordered.len().min(MAX_TRACKED_SENDERS));
+    for sender in ordered {
+        if result.len() >= MAX_TRACKED_SENDERS {
+            break;
+        }
+        if sender.sender_id.is_empty() || result.contains_key(&sender.sender_id) {
+            continue;
+        }
+        result.insert(
+            sender.sender_id.clone(),
+            SenderRiskMemory {
+                event_index: sender.event_index,
+                recent_high_risk_conversations: bounded_recent_conversations(
+                    &sender.recent_high_risk_conversations,
+                ),
+                last_activity_index: sender.last_activity_index,
+                last_emitted: bounded_emission_checkpoints(
+                    &sender.last_emitted,
+                    SENDER_EMISSION_KEYS,
+                    sender.event_index,
+                ),
+            },
+        );
+    }
+    result
+}
+
+fn bounded_recent_conversations(conversations: &[String]) -> VecDeque<String> {
+    let mut seen = HashSet::with_capacity(SENDER_RISK_CONVERSATION_WINDOW);
+    let mut newest_first = Vec::with_capacity(SENDER_RISK_CONVERSATION_WINDOW);
+    for conversation_id in conversations.iter().rev() {
+        if conversation_id.is_empty() || !seen.insert(conversation_id.as_str()) {
+            continue;
+        }
+        newest_first.push(conversation_id.clone());
+        if newest_first.len() == SENDER_RISK_CONVERSATION_WINDOW {
+            break;
+        }
+    }
+    newest_first.reverse();
+    newest_first.into()
+}
+
+fn bounded_emission_checkpoints(
+    checkpoints: &[ExportedEmissionCheckpoint],
+    allowed_reason_codes: &[&str],
+    current_index: u64,
+) -> HashMap<String, u64> {
+    checkpoints
+        .iter()
+        .filter(|checkpoint| {
+            allowed_reason_codes.contains(&checkpoint.reason_code.as_str())
+        })
+        .map(|checkpoint| {
+            (
+                checkpoint.reason_code.clone(),
+                checkpoint.emitted_at_index.min(current_index),
+            )
+        })
+        .collect()
+}
+
+/// Query the current conversation risk score in the supplied memory store.
+pub fn conversation_risk_score_from(
+    memory_store: &KidsPipelineMemory,
+    conversation_id: &str,
+) -> f32 {
+    let Ok(guard) = conversation_memory(memory_store).lock() else {
         return 0.0;
     };
     let Some(memory) = guard.get(conversation_id) else {
@@ -911,9 +1085,18 @@ pub fn conversation_risk_score(conversation_id: &str) -> f32 {
     score
 }
 
-/// Query the number of tracked messages in a conversation.
-pub fn conversation_escalation_message_count(conversation_id: &str) -> u32 {
-    let Ok(guard) = conversation_memory(global_kids_memory()).lock() else {
+/// Query the current conversation risk score in process-global memory.
+#[cfg(test)]
+pub fn conversation_risk_score(conversation_id: &str) -> f32 {
+    conversation_risk_score_from(global_kids_memory(), conversation_id)
+}
+
+/// Query the number of tracked messages in a supplied memory store.
+pub fn conversation_escalation_message_count_from(
+    memory_store: &KidsPipelineMemory,
+    conversation_id: &str,
+) -> u32 {
+    let Ok(guard) = conversation_memory(memory_store).lock() else {
         return 0;
     };
     let Some(memory) = guard.get(conversation_id) else {
@@ -922,15 +1105,27 @@ pub fn conversation_escalation_message_count(conversation_id: &str) -> u32 {
     memory.entries.len() as u32
 }
 
-/// Query the sender risk score across conversations.
-pub fn sender_cross_risk_score(sender_id: &str) -> f32 {
-    let Ok(guard) = sender_memory(global_kids_memory()).lock() else {
+/// Query the number of tracked messages in a process-global conversation.
+#[cfg(test)]
+pub fn conversation_escalation_message_count(conversation_id: &str) -> u32 {
+    conversation_escalation_message_count_from(global_kids_memory(), conversation_id)
+}
+
+/// Query the sender risk score across conversations in a supplied memory store.
+pub fn sender_cross_risk_score_from(memory_store: &KidsPipelineMemory, sender_id: &str) -> f32 {
+    let Ok(guard) = sender_memory(memory_store).lock() else {
         return 0.0;
     };
     let Some(memory) = guard.get(sender_id) else {
         return 0.0;
     };
     memory.recent_high_risk_conversations.len() as f32
+}
+
+/// Query the sender risk score across conversations in process-global memory.
+#[cfg(test)]
+pub fn sender_cross_risk_score(sender_id: &str) -> f32 {
+    sender_cross_risk_score_from(global_kids_memory(), sender_id)
 }
 
 // ── Guardian Feedback ──────────────────────────────────────────────────
@@ -951,13 +1146,18 @@ pub enum GuardianVerdict {
 /// - `Block`: marks sender as maximum risk across all conversations
 /// - `Monitor`: no memory change (app-layer behavior)
 /// - `FalsePositive`: removes risk entries for this conversation
-pub fn apply_guardian_feedback(sender_id: &str, conversation_id: &str, verdict: GuardianVerdict) {
+pub fn apply_guardian_feedback_to(
+    memory_store: &KidsPipelineMemory,
+    sender_id: &str,
+    conversation_id: &str,
+    verdict: GuardianVerdict,
+) {
     match verdict {
         GuardianVerdict::Trusted => {
-            if let Ok(mut guard) = sender_memory(global_kids_memory()).lock() {
+            if let Ok(mut guard) = sender_memory(memory_store).lock() {
                 guard.remove(sender_id);
             }
-            if let Ok(mut guard) = conversation_memory(global_kids_memory()).lock() {
+            if let Ok(mut guard) = conversation_memory(memory_store).lock() {
                 if let Some(memory) = guard.get_mut(conversation_id) {
                     memory
                         .entries
@@ -966,7 +1166,7 @@ pub fn apply_guardian_feedback(sender_id: &str, conversation_id: &str, verdict: 
             }
         }
         GuardianVerdict::Block => {
-            if let Ok(mut guard) = sender_memory(global_kids_memory()).lock() {
+            if let Ok(mut guard) = sender_memory(memory_store).lock() {
                 let memory = guard
                     .entry(sender_id.to_string())
                     .or_insert_with(SenderRiskMemory::default);
@@ -993,11 +1193,17 @@ pub fn apply_guardian_feedback(sender_id: &str, conversation_id: &str, verdict: 
             // AURA continues normal detection with existing thresholds.
         }
         GuardianVerdict::FalsePositive => {
-            if let Ok(mut guard) = conversation_memory(global_kids_memory()).lock() {
+            if let Ok(mut guard) = conversation_memory(memory_store).lock() {
                 guard.remove(conversation_id);
             }
         }
     }
+}
+
+/// Process guardian feedback in process-global kids memory.
+#[cfg(test)]
+pub fn apply_guardian_feedback(sender_id: &str, conversation_id: &str, verdict: GuardianVerdict) {
+    apply_guardian_feedback_to(global_kids_memory(), sender_id, conversation_id, verdict);
 }
 
 #[cfg(test)]
@@ -1916,5 +2122,204 @@ mod tests {
         super::import_kids_memory(&exported);
         // Should not crash or corrupt state
         assert_eq!(super::conversation_risk_score("nonexistent"), 0.0);
+    }
+
+    fn exported_conversation(
+        conversation_id: impl Into<String>,
+        message_index: u64,
+        last_activity_index: u64,
+    ) -> super::ExportedConversationMemory {
+        super::ExportedConversationMemory {
+            conversation_id: conversation_id.into(),
+            entries: Vec::new(),
+            message_index,
+            last_activity_index,
+            last_emitted: Vec::new(),
+        }
+    }
+
+    fn exported_sender(
+        sender_id: impl Into<String>,
+        event_index: u64,
+        last_activity_index: u64,
+    ) -> super::ExportedSenderMemory {
+        super::ExportedSenderMemory {
+            sender_id: sender_id.into(),
+            event_index,
+            recent_high_risk_conversations: Vec::new(),
+            last_activity_index,
+            last_emitted: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn import_preserves_conversation_alert_cooldown() {
+        let memory = super::KidsPipelineMemory::new();
+        let mut conversation = exported_conversation("conv_cooldown", 7, 91);
+        conversation
+            .last_emitted
+            .push(super::ExportedEmissionCheckpoint {
+                reason_code: "grooming_progression".to_string(),
+                emitted_at_index: 6,
+            });
+        let state = super::ExportedKidsMemoryState {
+            schema_version: super::KIDS_MEMORY_STATE_VERSION,
+            conversations: vec![conversation],
+            senders: Vec::new(),
+        };
+
+        let imported = super::import_kids_memory_into(&memory, &state);
+        let guard = super::conversation_memory(&memory)
+            .lock()
+            .expect("conversation memory lock");
+        let cooldown_ready = super::should_emit_memory_signal(
+            guard.get("conv_cooldown").expect("imported conversation"),
+            "grooming_progression",
+            7,
+            3,
+        );
+
+        assert_eq!((imported, cooldown_ready), (true, false));
+    }
+
+    #[test]
+    fn import_preserves_exact_indices_and_emission_checkpoints() {
+        let memory = super::KidsPipelineMemory::new();
+        let mut conversation = exported_conversation("conv_exact", 17, 901);
+        conversation
+            .last_emitted
+            .push(super::ExportedEmissionCheckpoint {
+                reason_code: "sustained_sextortion".to_string(),
+                emitted_at_index: 16,
+            });
+        let mut sender = exported_sender("sender_exact", 23, 902);
+        sender
+            .last_emitted
+            .push(super::ExportedEmissionCheckpoint {
+                reason_code: "cross_conversation_repeat_offender".to_string(),
+                emitted_at_index: 22,
+            });
+        let state = super::ExportedKidsMemoryState {
+            schema_version: super::KIDS_MEMORY_STATE_VERSION,
+            conversations: vec![conversation],
+            senders: vec![sender],
+        };
+
+        assert!(super::import_kids_memory_into(&memory, &state));
+        let exported = super::export_kids_memory_from(&memory);
+        let actual = (
+            exported.conversations[0].message_index,
+            exported.conversations[0].last_activity_index,
+            exported.conversations[0].last_emitted.clone(),
+            exported.senders[0].event_index,
+            exported.senders[0].last_activity_index,
+            exported.senders[0].last_emitted.clone(),
+        );
+        let expected = (
+            17,
+            901,
+            vec![super::ExportedEmissionCheckpoint {
+                reason_code: "sustained_sextortion".to_string(),
+                emitted_at_index: 16,
+            }],
+            23,
+            902,
+            vec![super::ExportedEmissionCheckpoint {
+                reason_code: "cross_conversation_repeat_offender".to_string(),
+                emitted_at_index: 22,
+            }],
+        );
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn import_reapplies_conversation_and_sender_bounds() {
+        let memory = super::KidsPipelineMemory::new();
+        let conversations = (0..=super::MAX_TRACKED_CONVERSATIONS)
+            .map(|index| exported_conversation(format!("conv_{index}"), index as u64, index as u64))
+            .collect();
+        let senders = (0..=super::MAX_TRACKED_SENDERS)
+            .map(|index| exported_sender(format!("sender_{index}"), index as u64, index as u64))
+            .collect();
+        let state = super::ExportedKidsMemoryState {
+            schema_version: super::KIDS_MEMORY_STATE_VERSION,
+            conversations,
+            senders,
+        };
+
+        assert!(super::import_kids_memory_into(&memory, &state));
+        let exported = super::export_kids_memory_from(&memory);
+
+        assert_eq!(
+            (exported.conversations.len(), exported.senders.len()),
+            (super::MAX_TRACKED_CONVERSATIONS, super::MAX_TRACKED_SENDERS)
+        );
+    }
+
+    #[test]
+    fn import_reapplies_kids_memory_windows() {
+        let memory = super::KidsPipelineMemory::new();
+        let snapshot = super::ExportedMessageSnapshot {
+            sender_id: Some("sender_window".to_string()),
+            has_grooming: false,
+            has_manipulation: false,
+            has_bullying: false,
+            has_self_harm: false,
+            has_blackmail_or_sextortion: false,
+            ml_grooming: 0.0,
+            ml_bullying: 0.0,
+            ml_self_harm: 0.0,
+            ml_manipulation: 0.0,
+        };
+        let mut conversation = exported_conversation("conv_window", 19, 19);
+        conversation.entries = vec![snapshot; super::MAX_CONVERSATION_MEMORY_WINDOW + 1];
+        let mut sender = exported_sender("sender_window", 13, 20);
+        sender.recent_high_risk_conversations = (0..=super::SENDER_RISK_CONVERSATION_WINDOW)
+            .map(|index| format!("conv_{index}"))
+            .collect();
+        let state = super::ExportedKidsMemoryState {
+            schema_version: super::KIDS_MEMORY_STATE_VERSION,
+            conversations: vec![conversation],
+            senders: vec![sender],
+        };
+
+        assert!(super::import_kids_memory_into(&memory, &state));
+        let exported = super::export_kids_memory_from(&memory);
+
+        assert_eq!(
+            (
+                exported.conversations[0].entries.len(),
+                exported.senders[0].recent_high_risk_conversations.len(),
+            ),
+            (
+                super::MAX_CONVERSATION_MEMORY_WINDOW,
+                super::SENDER_RISK_CONVERSATION_WINDOW,
+            )
+        );
+    }
+
+    #[test]
+    fn future_kids_schema_is_rejected_without_mutation() {
+        let memory = super::KidsPipelineMemory::new();
+        let current = super::ExportedKidsMemoryState {
+            schema_version: super::KIDS_MEMORY_STATE_VERSION,
+            conversations: vec![exported_conversation("conv_existing", 3, 3)],
+            senders: Vec::new(),
+        };
+        assert!(super::import_kids_memory_into(&memory, &current));
+
+        let future = super::ExportedKidsMemoryState {
+            schema_version: super::KIDS_MEMORY_STATE_VERSION + 1,
+            conversations: vec![exported_conversation("conv_future", 99, 99)],
+            senders: Vec::new(),
+        };
+        let rejected = !super::import_kids_memory_into(&memory, &future);
+        let exported = super::export_kids_memory_from(&memory);
+
+        assert_eq!(
+            (rejected, exported.conversations[0].conversation_id.as_str()),
+            (true, "conv_existing")
+        );
     }
 }

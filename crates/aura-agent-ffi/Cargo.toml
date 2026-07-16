@@ -16,10 +16,10 @@ aura-agent-core = { path = "../aura-agent-core" }
 aura-proto = { path = "../aura-proto" }
 aura-patterns = { path = "../aura-patterns" }
 prost.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-aura-relay-api = { path = "../aura-relay-api" }
 chrono = { version = "0.4", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true

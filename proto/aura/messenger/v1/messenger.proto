@@ -373,6 +373,43 @@ message AuraConfig {
   // Account-level domain mode and the only effective domain selector.
   DomainMode domain_mode = 11;
   optional AgentRelayPolicy relay_policy = 12;
+  // Product delivery rollout. Unspecified is interpreted as shadow mode.
+  ProductRolloutMode product_rollout_mode = 13;
+}
+
+// The inference implementation that is actually active in this runtime.
+enum RuntimeBackend {
+  RUNTIME_BACKEND_UNSPECIFIED = 0;
+  RUNTIME_BACKEND_RULES_FALLBACK = 1;
+  RUNTIME_BACKEND_ONNX = 2;
+}
+
+// Input modalities implemented by this runtime build.
+enum RuntimeModality {
+  RUNTIME_MODALITY_UNSPECIFIED = 0;
+  RUNTIME_MODALITY_TEXT = 1;
+  RUNTIME_MODALITY_URL = 2;
+}
+
+// Identity of an inference model that was successfully loaded.
+message RuntimeModelIdentity {
+  string component = 1;
+  string identifier = 2;
+  // Present only when the runtime can attest the loaded artifact hash.
+  optional string sha256 = 3;
+}
+
+// Read-only, versioned description of the initialized runtime.
+message RuntimeCapabilities {
+  string schema_version = 1;
+  string runtime_version = 2;
+  RuntimeBackend backend = 3;
+  repeated RuntimeModality supported_modalities = 4;
+  repeated RuntimeModelIdentity models = 5;
+  string policy_schema_version = 6;
+  string product_schema_version = 7;
+  uint32 state_schema_version = 8;
+  ProductRolloutMode product_rollout_mode = 9;
 }
 
 message AgentRelayPolicy {
@@ -528,11 +565,6 @@ message RelayAnalyzeRequest {
   RelationshipTrustSource relationship_trust_source = 23;
 }
 
-message AnalyzeForRelayResponse {
-  AnalysisResult local_result = 1;
-  RelayAnalyzeRequest relay_request = 2;
-}
-
 message RelayRemoteFinding {
   ThreatType threat_type = 1;
   float score = 2;
@@ -569,12 +601,6 @@ message RelayAnalyzeResponse {
   optional float sender_reputation_hint = 12;
   repeated string correlation_findings = 13;
   RelayResponseAuth auth = 14;
-}
-
-message RecordRelayResponseRequest {
-  string sender_id = 1;
-  RelayAnalyzeResponse response = 2;
-  uint64 received_at_ms = 3;
 }
 
 message ThreatScore {
@@ -706,6 +732,126 @@ message AnalysisResult {
   KidsMemoryExplainability kids_memory = 15;
 }
 
+// Host-owned, content-free identity for exactly-once longitudinal ingestion.
+// None of these opaque keys may be derived from message content or a verdict.
+message CanonicalSafetyEventIdentity {
+  string account_key = 1;
+  string subject_key = 2;
+  string conversation_key = 3;
+  string event_id = 4;
+  uint32 revision = 5;
+  uint64 occurred_at_ms = 6;
+  uint64 observed_at_ms = 7;
+}
+
+message CanonicalSafetyAnalyzeRequest {
+  MessageInput message = 1;
+  CanonicalSafetyEventIdentity identity = 2;
+}
+
+enum SafetyCaseLifecycleStatus {
+  SAFETY_CASE_LIFECYCLE_STATUS_UNSPECIFIED = 0;
+  SAFETY_CASE_LIFECYCLE_STATUS_OBSERVING = 1;
+  SAFETY_CASE_LIFECYCLE_STATUS_OPEN = 2;
+  SAFETY_CASE_LIFECYCLE_STATUS_ESCALATED = 3;
+  SAFETY_CASE_LIFECYCLE_STATUS_URGENT = 4;
+  SAFETY_CASE_LIFECYCLE_STATUS_RESOLVED = 5;
+  SAFETY_CASE_LIFECYCLE_STATUS_DISMISSED = 6;
+}
+
+enum CanonicalSafetyDisposition {
+  CANONICAL_SAFETY_DISPOSITION_UNSPECIFIED = 0;
+  CANONICAL_SAFETY_DISPOSITION_PROCESSED_IGNORED = 1;
+  CANONICAL_SAFETY_DISPOSITION_PROCESSED_REDUCED = 2;
+  // Analysis mutated context, but projection was rejected. A durable rejection
+  // receipt is retained so the host must not retry this source revision.
+  CANONICAL_SAFETY_DISPOSITION_PROCESSED_REJECTED = 3;
+  CANONICAL_SAFETY_DISPOSITION_DUPLICATE_IGNORED = 4;
+  CANONICAL_SAFETY_DISPOSITION_DUPLICATE_APPLIED = 5;
+  CANONICAL_SAFETY_DISPOSITION_DUPLICATE_REJECTED = 6;
+  CANONICAL_SAFETY_DISPOSITION_STALE_IGNORED = 7;
+}
+
+message CanonicalSafetyAnalyzeResponse {
+  CanonicalSafetyDisposition disposition = 1;
+  // Present only on the first processed attempt. Duplicate/stale responses are
+  // deliberately content-free and never cache an AnalysisResult.
+  AnalysisResult local_result = 2;
+  optional string ignored_reason = 3;
+  optional string case_id = 4;
+  optional uint64 case_revision = 5;
+  SafetyCaseLifecycleStatus case_status = 6;
+  optional uint32 latest_revision = 7;
+  // UTF-8 JSON SafetyCaseDecision. It is content-free, versioned by the Rust
+  // decision schema, and bounded by the response size contract.
+  optional bytes decision_json = 8;
+  string runtime_state_schema_version = 9;
+  // Present for reduced/applied outcomes. Zero is the legacy initial episode.
+  optional uint64 case_generation = 10;
+}
+
+// Account-scoped lifecycle mutation allowed at the native boundary.
+enum SafetyCaseLifecycleCommandType {
+  SAFETY_CASE_LIFECYCLE_COMMAND_TYPE_UNSPECIFIED = 0;
+  SAFETY_CASE_LIFECYCLE_COMMAND_TYPE_RESOLVE = 1;
+  SAFETY_CASE_LIFECYCLE_COMMAND_TYPE_DISMISS = 2;
+}
+
+message SafetyCaseLifecycleCommandRequest {
+  string account_key = 1;
+  string case_id = 2;
+  SafetyCaseLifecycleCommandType command_type = 3;
+  uint64 at_ms = 4;
+  // Bounded machine-readable code, never user-facing free text.
+  string reason_code = 5;
+}
+
+message SafetyCaseLifecycleCommandResponse {
+  string case_id = 1;
+  uint64 case_revision = 2;
+  SafetyCaseLifecycleStatus case_status = 3;
+  // UTF-8 JSON SafetyCaseDecision, using its embedded decision schema.
+  bytes decision_json = 4;
+  string runtime_state_schema_version = 5;
+  optional uint64 case_generation = 6;
+}
+
+enum SafetyCaseSuccessorActivationDisposition {
+  SAFETY_CASE_SUCCESSOR_ACTIVATION_DISPOSITION_UNSPECIFIED = 0;
+  SAFETY_CASE_SUCCESSOR_ACTIVATION_DISPOSITION_ACTIVATED = 1;
+  SAFETY_CASE_SUCCESSOR_ACTIVATION_DISPOSITION_ALREADY_ACTIVATED = 2;
+}
+
+// Explicit host-authorized successor activation. Ingestion never invokes it.
+message SafetyCaseSuccessorActivationRequest {
+  string account_key = 1;
+  string predecessor_case_id = 2;
+  // Presence is required because generation zero is valid.
+  optional uint64 expected_case_generation = 3;
+  uint64 expected_case_revision = 4;
+  uint64 activated_at_ms = 5;
+}
+
+message SafetyCaseSuccessorActivationResponse {
+  SafetyCaseSuccessorActivationDisposition disposition = 1;
+  string predecessor_case_id = 2;
+  uint64 predecessor_case_generation = 3;
+  string successor_case_id = 4;
+  uint64 successor_case_generation = 5;
+  uint64 activated_at_ms = 6;
+  string runtime_state_schema_version = 7;
+}
+
+message SafetyCaseAccountRemovalRequest {
+  string account_key = 1;
+}
+
+message SafetyCaseAccountRemovalResponse {
+  uint64 removed_cases = 1;
+  uint64 removed_source_receipts = 2;
+  string runtime_state_schema_version = 3;
+}
+
 message ContactProfileRequest {
   string sender_id = 1;
 }
@@ -757,29 +903,6 @@ message ReloadPatternsRequest {
 
 message MarkContactTrustedRequest {
   string sender_id = 1;
-}
-
-enum GuardianVerdict {
-  GUARDIAN_VERDICT_UNSPECIFIED = 0;
-  // Guardian confirms contact is safe (e.g., known family member).
-  GUARDIAN_VERDICT_TRUSTED = 1;
-  // Guardian requests immediate block of this contact.
-  GUARDIAN_VERDICT_BLOCK = 2;
-  // Guardian wants continued monitoring with lower escalation threshold.
-  GUARDIAN_VERDICT_MONITOR = 3;
-  // Guardian marks the escalation as a false positive.
-  GUARDIAN_VERDICT_FALSE_POSITIVE = 4;
-}
-
-message GuardianFeedbackRequest {
-  string sender_id = 1;
-  string conversation_id = 2;
-  GuardianVerdict verdict = 3;
-}
-
-message GuardianFeedbackResponse {
-  bool ok = 1;
-  optional string message = 2;
 }
 
 message StatusResponse {
@@ -931,6 +1054,10 @@ message KidsConversationMemoryState {
   string conversation_id = 1;
   repeated KidsMessageRiskSnapshot entries = 2;
   uint64 message_index = 3;
+  // Exact process-wide LRU position. Absent in legacy kids state.
+  optional uint64 last_activity_index = 4;
+  // Per-reason emission checkpoints used to preserve alert cooldowns.
+  repeated KidsEmissionCheckpoint last_emitted = 5;
 }
 
 // Per-sender cross-conversation risk memory in kids module.
@@ -938,10 +1065,22 @@ message KidsSenderMemoryState {
   string sender_id = 1;
   uint64 event_index = 2;
   repeated string recent_high_risk_conversations = 3;
+  // Exact process-wide LRU position. Absent in legacy kids state.
+  optional uint64 last_activity_index = 4;
+  // Per-reason emission checkpoints used to preserve alert cooldowns.
+  repeated KidsEmissionCheckpoint last_emitted = 5;
+}
+
+// Monotonic checkpoint for one kids-memory alert family.
+message KidsEmissionCheckpoint {
+  string reason_code = 1;
+  uint64 emitted_at_index = 2;
 }
 
 // Full kids memory state for export/import.
 message KidsMemoryState {
   repeated KidsConversationMemoryState conversations = 1;
   repeated KidsSenderMemoryState senders = 2;
+  // 0 identifies legacy state emitted before this nested schema was versioned.
+  uint32 schema_version = 3;
 }

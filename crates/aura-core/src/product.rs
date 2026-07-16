@@ -6,10 +6,12 @@ use crate::{
 };
 
 pub const PRODUCT_DECISION_SURFACE_SCHEMA_VERSION: &str = "aura.product_decision_surface.v1";
+pub const PRODUCT_POLICY_SCHEMA_VERSION: &str = "aura.product_policy.v1";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProductRolloutMode {
+    #[default]
     Shadow,
     StagingPilot,
     GuardianEnabled,

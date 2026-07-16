@@ -2,7 +2,12 @@
 
 Date: 2026-03-25
 
-## Current Model Set
+## Referenced Model Set
+
+The manifest references the following files, but the current checkout does not
+contain the ONNX graphs, external tensor data, or `vocab.txt`. This document
+records a prior validation run; it is not evidence that the current Apple
+artifact contains or activates those models.
 
 - `models/safety.onnx`
   - Source model: `aura-native-5label-bert-base-multilingual-cased-wave1`
@@ -41,14 +46,27 @@ Date: 2026-03-25
   - `models.safety.source_model_id = aura-native-5label-bert-base-multilingual-cased-wave1`
 - Safety/intent ONNX load tests are gated behind `AURA_RUN_SAFETY_INTENT_ONNX=1` to prevent platform-specific hangs during default CI/local runs.
 
-## Latest Gate Snapshot
+## Recorded Gate Snapshot
 
-- `release_report`: **Pass**.
-- `pilot_regression`: **Pass**.
-- Rollout decision: native safety model is eligible for production promotion under current Wave1 gates.
+- The 2026-03-25 run recorded `release_report`: **Pass**.
+- The 2026-03-25 run recorded `pilot_regression`: **Pass**.
+- Current checkout rollout decision: **Blocked** until the referenced model
+  files are restored from a governed artifact, their hashes match the manifest,
+  the Apple FFI is built with the `onnx` feature, and the app supplies a valid
+  `models_path`.
+
+`MlPipeline::is_active()` may also be true for a rules/lexicon fallback. Product
+diagnostics and release evidence must identify the actual backend and model
+hash rather than treating `ml_active` as proof that ONNX is running.
 
 ## Next Hardening Steps
 
+- Materialize the governed model bundle and verify every manifest hash.
+- Build the Apple XCFramework with `AURA_AGENT_ONNX=1` and record enabled Cargo
+  features in the release artifact manifest.
+- Bundle or securely provision the models and pass their path in `AuraConfig`.
+- Expose backend identity, model identifier, and model hash in runtime
+  capabilities and diagnostics.
 - Run focused regression slices for:
   - `self_harm`, `grooming`, `manipulation` recall
   - safe-cohort false-positive budget

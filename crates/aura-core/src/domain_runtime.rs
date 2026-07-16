@@ -67,12 +67,38 @@ impl AuraDomainRuntime {
         self.kids_module.export_memory()
     }
 
-    pub fn import_kids_memory(&self, state: &aura_kids::pipeline::ExportedKidsMemoryState) {
-        self.kids_module.import_memory(state);
+    pub fn import_kids_memory(
+        &self,
+        state: &aura_kids::pipeline::ExportedKidsMemoryState,
+    ) -> bool {
+        self.kids_module.import_memory(state)
     }
 
     pub fn clear_kids_memory(&self) {
         self.kids_module.clear_memory();
+    }
+
+    pub fn kids_conversation_risk_score(&self, conversation_id: &str) -> f32 {
+        self.kids_module.conversation_risk_score(conversation_id)
+    }
+
+    pub fn kids_conversation_escalation_message_count(&self, conversation_id: &str) -> u32 {
+        self.kids_module
+            .conversation_escalation_message_count(conversation_id)
+    }
+
+    pub fn kids_sender_cross_risk_score(&self, sender_id: &str) -> f32 {
+        self.kids_module.sender_cross_risk_score(sender_id)
+    }
+
+    pub fn apply_kids_guardian_feedback(
+        &self,
+        sender_id: &str,
+        conversation_id: &str,
+        verdict: aura_kids::pipeline::GuardianVerdict,
+    ) {
+        self.kids_module
+            .apply_guardian_feedback(sender_id, conversation_id, verdict);
     }
 
     pub fn analyze_for_mode(

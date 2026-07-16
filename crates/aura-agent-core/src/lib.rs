@@ -8,6 +8,9 @@
 //! - relay escalation is an explicit policy decision
 //! - relay requests are built from typed shared contracts
 
+/// Instance-local longitudinal safety-case projection and deduplication.
+pub mod safety_case_runtime;
+
 // ── Transitional re-exports ─────────────────────────────────────────
 // These allow downstream crates (aura-agent-ffi) to depend solely on
 // aura-agent-core instead of reaching into aura-core directly.
@@ -25,6 +28,7 @@ pub use aura_core::ids;
 pub use aura_core::pilot;
 pub use aura_core::pilot_gate;
 pub use aura_core::product;
+pub use aura_core::runtime_capabilities;
 pub use aura_core::types;
 
 // Re-export the same root-level convenience aliases that aura-core provides.
@@ -39,12 +43,31 @@ pub use aura_core::{
     SignalFamily, ThreatType, UiAction, UncertaintyLevel,
 };
 
+pub use aura_agent_policy::safety_case::{
+    ConversationEventKey, SafetyCaseCommand, SafetyCaseDecision, SafetyCaseId, SafetyCaseStatus,
+    SafetyCaseSubjectKey, SafetyReasonCode, SourceEventId,
+};
+pub use safety_case_runtime::{
+    ExportedSafetyCaseRuntimeState, SafetyAccountKey, SafetyAccountKeyError,
+    SafetyCaseAccountRemoval, SafetyCaseGeneration, SafetyCaseIgnoredReason,
+    SafetyCaseIngestIdentity, SafetyCaseIngestOutcome, SafetyCaseRuntime, SafetyCaseRuntimeConfig,
+    SafetyCaseRuntimeError, SafetyCaseSourcePreflight, SafetyCaseSourceReceipt,
+    SafetyCaseSuccessorActivationDisposition, SafetyCaseSuccessorActivationOutcome,
+    SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES, SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
+};
+
 // Product surface
 pub use aura_core::{
     build_product_decision_surface, ProductChildIntervention, ProductChildSurface,
     ProductDecisionSurface, ProductDeliveryMode, ProductGuardianSurface, ProductReviewSurface,
     ProductReviewUrgency, ProductRolloutMode, ProductUncertaintyDisposition,
-    PRODUCT_DECISION_SURFACE_SCHEMA_VERSION,
+    PRODUCT_DECISION_SURFACE_SCHEMA_VERSION, PRODUCT_POLICY_SCHEMA_VERSION,
+};
+
+// Runtime capability surface
+pub use aura_core::{
+    RuntimeBackend, RuntimeCapabilities, RuntimeModality, RuntimeModelIdentity,
+    RUNTIME_CAPABILITIES_SCHEMA_VERSION,
 };
 
 // Audit
@@ -129,8 +152,34 @@ pub struct AgentAnalysisEnvelope {
     pub relay_request: Option<AgentAnalyzeRequest>,
 }
 
+/// Exactly-once output from canonical local analysis and case projection.
+#[derive(Debug, Clone)]
+pub enum CanonicalSafetyAnalysisOutcome {
+    /// This source revision was analyzed for the first time.
+    ///
+    /// Projection failures are returned alongside the ephemeral local result;
+    /// a rejected source receipt is still retained to prevent context replay.
+    Processed {
+        /// Analyzer output returned to the caller but not retained by the runtime.
+        local_result: Box<AnalysisResult>,
+        /// Case projection result for the first processing attempt.
+        safety_case: Result<SafetyCaseIngestOutcome, SafetyCaseRuntimeError>,
+    },
+    /// The source revision was already processed, so analysis was skipped.
+    DuplicateIgnored {
+        /// Content-free receipt from the first processing attempt.
+        receipt: SafetyCaseSourceReceipt,
+    },
+    /// A newer edit was already processed, so analysis was skipped.
+    StaleIgnored {
+        /// Highest processed revision for the canonical source event.
+        latest_revision: u32,
+    },
+}
+
 pub struct AgentRuntime {
     analyzer: Analyzer,
+    safety_cases: SafetyCaseRuntime,
     relay_policy: AgentRelayPolicy,
     relay_sender_hints: HashMap<SenderId, CachedRelaySenderHint>,
     pending_relay_requests: HashMap<String, PendingRelayRequest>,
@@ -182,6 +231,7 @@ impl AgentRuntime {
     pub fn new(config: AuraConfig, pattern_db: &PatternDatabase) -> Self {
         Self {
             analyzer: Analyzer::new(config, pattern_db),
+            safety_cases: SafetyCaseRuntime::default(),
             relay_policy: AgentRelayPolicy::default(),
             relay_sender_hints: HashMap::new(),
             pending_relay_requests: HashMap::new(),
@@ -290,6 +340,139 @@ impl AgentRuntime {
     ) -> AnalysisResult {
         let input = self.input_with_cached_relay_hint(input, timestamp_ms);
         self.analyzer.analyze_with_context(&input, timestamp_ms)
+    }
+
+    /// Analyzes and projects one canonical event exactly once.
+    ///
+    /// Duplicate source revisions return a content-free receipt without calling
+    /// the analyzer, so tracker and Kids context cannot be mutated twice. The
+    /// first attempt returns the local result but does not retain it.
+    pub fn analyze_local_with_canonical_safety_case(
+        &mut self,
+        input: &MessageInput,
+        identity: &SafetyCaseIngestIdentity,
+    ) -> Result<CanonicalSafetyAnalysisOutcome, SafetyCaseRuntimeError> {
+        self.analyze_local_with_canonical_safety_case_guarded(input, identity, |_| Ok(()))
+    }
+
+    /// Canonically analyzes one event and rolls back all persisted analyzer
+    /// state when the supplied host-persistence postcondition fails.
+    ///
+    /// A failed first attempt still records a rejected source receipt after
+    /// rollback, preserving exactly-once behavior without retaining the event's
+    /// context or case mutation.
+    pub fn analyze_local_with_canonical_safety_case_guarded<F>(
+        &mut self,
+        input: &MessageInput,
+        identity: &SafetyCaseIngestIdentity,
+        persistence_guard: F,
+    ) -> Result<CanonicalSafetyAnalysisOutcome, SafetyCaseRuntimeError>
+    where
+        F: FnOnce(&Self) -> Result<(), SafetyCaseRuntimeError>,
+    {
+        match self.safety_cases.preflight_source(identity)? {
+            SafetyCaseSourcePreflight::Duplicate(receipt) => {
+                return Ok(CanonicalSafetyAnalysisOutcome::DuplicateIgnored { receipt });
+            }
+            SafetyCaseSourcePreflight::Stale { latest_revision } => {
+                return Ok(CanonicalSafetyAnalysisOutcome::StaleIgnored { latest_revision });
+            }
+            SafetyCaseSourcePreflight::Ready => {}
+        }
+
+        let context_snapshot = self.analyzer.export_context_state();
+        let kids_snapshot = self.analyzer.export_kids_memory_state();
+        let safety_case_snapshot = self.safety_cases.clone();
+        let timestamp_ms = identity.observed_at_ms();
+        let input = self.input_with_cached_relay_hint(input, timestamp_ms);
+        let local_result = self.analyzer.analyze_with_context(&input, timestamp_ms);
+        let safety_case = self.safety_cases.ingest_analysis(identity, &local_result);
+        if let Err(persistence_error) = persistence_guard(self) {
+            self.analyzer.reset_runtime_state();
+            self.safety_cases = safety_case_snapshot;
+            let context_restored = self.analyzer.import_context_state(context_snapshot).is_ok();
+            let kids_restored = self.analyzer.import_kids_memory_state(&kids_snapshot);
+            self.safety_cases.remember_rejected_source(identity)?;
+            if !context_restored || !kids_restored {
+                return Err(SafetyCaseRuntimeError::CanonicalContextRollbackFailed);
+            }
+            return Ok(CanonicalSafetyAnalysisOutcome::Processed {
+                local_result: Box::new(local_result),
+                safety_case: Err(persistence_error),
+            });
+        }
+        Ok(CanonicalSafetyAnalysisOutcome::Processed {
+            local_result: Box::new(local_result),
+            safety_case,
+        })
+    }
+
+    /// Returns this runtime's instance-local safety-case state.
+    pub const fn safety_cases(&self) -> &SafetyCaseRuntime {
+        &self.safety_cases
+    }
+
+    /// Returns mutable safety-case state for explicit lifecycle commands.
+    pub fn safety_cases_mut(&mut self) -> &mut SafetyCaseRuntime {
+        &mut self.safety_cases
+    }
+
+    /// Applies an account-scoped lifecycle command transactionally against a
+    /// host persistence postcondition.
+    pub fn apply_safety_case_lifecycle_guarded<F>(
+        &mut self,
+        account_key: &SafetyAccountKey,
+        case_id: &SafetyCaseId,
+        command: SafetyCaseCommand,
+        persistence_guard: F,
+    ) -> Result<SafetyCaseDecision, SafetyCaseRuntimeError>
+    where
+        F: FnOnce(&Self) -> Result<(), SafetyCaseRuntimeError>,
+    {
+        let snapshot = self.safety_cases.clone();
+        let decision =
+            self.safety_cases
+                .apply_account_lifecycle_command(account_key, case_id, command)?;
+        if let Err(error) = persistence_guard(self) {
+            self.safety_cases = snapshot;
+            return Err(error);
+        }
+        Ok(decision)
+    }
+
+    /// Explicitly activates one successor generation transactionally against a
+    /// host persistence postcondition. No ingestion path calls this automatically.
+    pub fn activate_safety_case_successor_guarded<F>(
+        &mut self,
+        account_key: &SafetyAccountKey,
+        predecessor_case_id: &SafetyCaseId,
+        expected_generation: SafetyCaseGeneration,
+        expected_case_revision: u64,
+        activated_at_ms: u64,
+        persistence_guard: F,
+    ) -> Result<SafetyCaseSuccessorActivationOutcome, SafetyCaseRuntimeError>
+    where
+        F: FnOnce(&Self) -> Result<(), SafetyCaseRuntimeError>,
+    {
+        let snapshot = self.safety_cases.clone();
+        let outcome = self.safety_cases.activate_successor(
+            account_key,
+            predecessor_case_id,
+            expected_generation,
+            expected_case_revision,
+            activated_at_ms,
+        )?;
+        if let Err(error) = persistence_guard(self) {
+            self.safety_cases = snapshot;
+            return Err(error);
+        }
+        Ok(outcome)
+    }
+
+    /// Replaces the empty/default safety-case runtime with host configuration.
+    pub fn with_safety_case_runtime(mut self, safety_cases: SafetyCaseRuntime) -> Self {
+        self.safety_cases = safety_cases;
+        self
     }
 
     pub fn analyze_for_relay(
@@ -641,6 +824,14 @@ impl AgentRuntime {
         self.analyzer.protection_level()
     }
 
+    pub fn product_rollout_mode(&self) -> ProductRolloutMode {
+        self.analyzer.product_rollout_mode()
+    }
+
+    pub fn runtime_capabilities(&self) -> RuntimeCapabilities {
+        self.analyzer.runtime_capabilities()
+    }
+
     pub fn context_tracker(&self) -> &aura_core::ConversationTracker {
         self.analyzer.context_tracker()
     }
@@ -663,12 +854,35 @@ impl AgentRuntime {
     pub fn import_kids_memory_state(
         &mut self,
         state: &aura_kids::pipeline::ExportedKidsMemoryState,
-    ) {
-        self.analyzer.import_kids_memory_state(state);
+    ) -> bool {
+        self.analyzer.import_kids_memory_state(state)
     }
 
     pub fn clear_kids_memory_state(&mut self) {
         self.analyzer.clear_kids_memory_state();
+    }
+
+    pub fn kids_conversation_risk_score(&self, conversation_id: &str) -> f32 {
+        self.analyzer.kids_conversation_risk_score(conversation_id)
+    }
+
+    pub fn kids_conversation_escalation_message_count(&self, conversation_id: &str) -> u32 {
+        self.analyzer
+            .kids_conversation_escalation_message_count(conversation_id)
+    }
+
+    pub fn kids_sender_cross_risk_score(&self, sender_id: &str) -> f32 {
+        self.analyzer.kids_sender_cross_risk_score(sender_id)
+    }
+
+    pub fn apply_kids_guardian_feedback(
+        &mut self,
+        sender_id: &str,
+        conversation_id: &str,
+        verdict: aura_kids::pipeline::GuardianVerdict,
+    ) {
+        self.analyzer
+            .apply_kids_guardian_feedback(sender_id, conversation_id, verdict);
     }
 
     pub fn cleanup_context(&mut self, now_ms: u64) {
@@ -1299,7 +1513,6 @@ mod tests {
 
     #[test]
     fn relay_response_hint_is_cached_and_applied_to_future_analysis() {
-        aura_kids::pipeline::clear_kids_memory();
         let pattern_db = PatternDatabase::default_mvp();
         let config = AuraConfig {
             account_type: AccountType::Child,

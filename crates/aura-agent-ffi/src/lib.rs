@@ -12,14 +12,9 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use aura_agent_core::aura_contracts::{
-    AgentAnalyzeRequest as RelayAnalyzeRequestContract, ClientSafetyTelemetryEvent,
-    DetectionLayer as RelayDetectionLayer,
+    AgentAnalyzeRequest as RelayAnalyzeRequestContract,
     ProtectedAccountTokenAttestation as ProtectedAccountTokenAttestationContract,
-    RelationshipTrustSource, RelayAnalyzeResponse as RelayAnalyzeResponseContract,
-    RelayPrivacyMode, RelayRequestAuth as RelayRequestAuthContract,
-    RelayResponseAuth as RelayResponseAuthContract, RemoteFinding as RelayRemoteFindingContract,
-    RemoteInferenceSummary as RelayRemoteInferenceSummaryContract, RiskHorizon as RelayRiskHorizon,
-    SafetyTelemetryAction, SafetyTelemetrySeverity, SafetyTelemetrySurface, SenderRelationship,
+    RelationshipTrustSource, RelayPrivacyMode, SenderRelationship,
     PROTECTED_ACCOUNT_TOKEN_ATTESTATION_ALG,
 };
 use aura_agent_core::context::contact::{
@@ -38,8 +33,15 @@ use aura_agent_core::context::tracker::{
 };
 use aura_agent_core::{
     build_product_decision_surface, build_shadow_mode_event, config::CulturalContext, Action,
-    AlertPriority, AuraConfig, MessageInput, ProductRolloutMode, ShadowModeBundle,
-    ShadowModeEventInput, ShadowModeExpectation, ShadowModeFinding,
+    AlertPriority, AuraConfig, CanonicalSafetyAnalysisOutcome, ConversationEventKey,
+    ExportedSafetyCaseRuntimeState, MessageInput, RuntimeBackend, RuntimeCapabilities,
+    RuntimeModality, SafetyAccountKey, SafetyCaseCommand, SafetyCaseDecision, SafetyCaseGeneration,
+    SafetyCaseId, SafetyCaseIgnoredReason, SafetyCaseIngestIdentity, SafetyCaseIngestOutcome,
+    SafetyCaseRuntimeError, SafetyCaseSourcePreflight, SafetyCaseSourceReceipt, SafetyCaseStatus,
+    SafetyCaseSubjectKey, SafetyCaseSuccessorActivationDisposition,
+    SafetyCaseSuccessorActivationOutcome, SafetyReasonCode, ShadowModeBundle, ShadowModeEventInput,
+    ShadowModeExpectation, ShadowModeFinding, SourceEventId, SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES,
+    SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
 };
 use aura_agent_core::{AgentRelayPolicy, AgentRuntime, RelayRequestAuthKey, RelayResponseAuthKey};
 use aura_patterns::PatternDatabase;
@@ -58,6 +60,13 @@ const MAX_ANALYZE_CONTEXT_REQUEST_BYTES: usize = 1024 * 1024;
 const MAX_BATCH_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SHADOW_BUNDLE_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_IMPORT_CONTEXT_REQUEST_BYTES: usize = 4 * 1024 * 1024;
+const MAX_CANONICAL_SAFETY_REQUEST_BYTES: usize = 1024 * 1024;
+const MAX_SAFETY_CASE_DECISION_BYTES: usize = 64 * 1024;
+// Matches the host store's release limits for the two native-owned payloads.
+// Guardian outbox and envelope overhead have separate host-owned budgets.
+const MAX_CANONICAL_CONTEXT_STATE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_CANONICAL_COMBINED_STATE_BYTES: usize =
+    SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES + MAX_CANONICAL_CONTEXT_STATE_BYTES;
 const MAX_SMALL_CONTROL_REQUEST_BYTES: usize = 16 * 1024;
 const MAX_QUICK_CHECK_TEXT_BYTES: usize = 64 * 1024;
 const MAX_URL_INPUT_BYTES: usize = 4096;
@@ -84,10 +93,10 @@ thread_local! {
 /// static-library / iOS link configurations a thread-local write is not
 /// observed by a subsequent read, which surfaced on the Swift side as
 /// "unknown error" even though an error message *was* set (e.g. a real
-/// `aura_init` failure whose reason was silently dropped). This sticky global
-/// guarantees the last error set by any export remains retrievable as a
-/// fallback. It is intentionally NOT reset by `clear_last_error` so a failure's
-/// reason cannot be wiped by a concurrent call before the caller reads it.
+/// `aura_init` failure whose reason was silently dropped). The mirror is a
+/// one-shot cross-thread fallback: reading the matching thread-local error, or
+/// reading the fallback directly, consumes the global copy so a later
+/// successful operation cannot observe a stale failure.
 static LAST_ERROR_GLOBAL: Mutex<Option<String>> = Mutex::new(None);
 
 fn set_last_error(msg: impl Into<String>) {
@@ -121,9 +130,15 @@ fn ffi_guard<R>(default: R, body: impl FnOnce() -> R) -> R {
 }
 
 fn clear_last_error() {
-    LAST_ERROR.with(|e| {
-        *e.borrow_mut() = None;
-    });
+    let previous = LAST_ERROR.with(|error| error.borrow_mut().take());
+    let Some(previous) = previous else {
+        return;
+    };
+    if let Ok(mut guard) = LAST_ERROR_GLOBAL.lock() {
+        if guard.as_deref() == Some(previous.as_str()) {
+            *guard = None;
+        }
+    }
 }
 
 struct AuraInstance {
@@ -277,6 +292,357 @@ fn decode_message_request(
         )?
     };
     Ok(message_input_from_proto(message))
+}
+
+fn canonical_safety_identity_from_proto(
+    identity: proto::CanonicalSafetyEventIdentity,
+    input: &MessageInput,
+) -> Result<SafetyCaseIngestIdentity, String> {
+    let account_key =
+        SafetyAccountKey::new(identity.account_key).map_err(|error| error.to_string())?;
+    let subject_key =
+        SafetyCaseSubjectKey::new(identity.subject_key).map_err(|error| error.to_string())?;
+    let conversation_key =
+        ConversationEventKey::new(identity.conversation_key).map_err(|error| error.to_string())?;
+    if conversation_key.as_str() != input.conversation_id.0.as_str() {
+        return Err(
+            "canonical conversation key does not match message conversation id".to_string(),
+        );
+    }
+    let event_id = SourceEventId::new(identity.event_id).map_err(|error| error.to_string())?;
+    if identity.observed_at_ms < identity.occurred_at_ms {
+        return Err("canonical observation timestamp predates source event".to_string());
+    }
+    Ok(SafetyCaseIngestIdentity::new(
+        account_key,
+        subject_key,
+        conversation_key,
+        event_id,
+        identity.revision,
+        identity.occurred_at_ms,
+        identity.observed_at_ms,
+    ))
+}
+
+unsafe fn decode_safety_account_key(
+    ptr: *const u8,
+    len: usize,
+) -> Result<SafetyAccountKey, String> {
+    if ptr.is_null() {
+        return Err("null safety account key pointer".to_string());
+    }
+    if len == 0 || len > 256 {
+        return Err("safety account key must contain 1..=256 bytes".to_string());
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
+    let value = std::str::from_utf8(bytes)
+        .map_err(|_| "safety account key is not valid UTF-8".to_string())?;
+    SafetyAccountKey::new(value.to_string()).map_err(|error| error.to_string())
+}
+
+fn canonical_safety_response_to_proto(
+    outcome: CanonicalSafetyAnalysisOutcome,
+    conversation_id: &str,
+    sender_id: &str,
+    runtime: &AgentRuntime,
+) -> Result<proto::CanonicalSafetyAnalyzeResponse, String> {
+    let mut response = proto::CanonicalSafetyAnalyzeResponse {
+        disposition: proto::CanonicalSafetyDisposition::Unspecified as i32,
+        local_result: None,
+        ignored_reason: None,
+        case_id: None,
+        case_revision: None,
+        case_status: proto::SafetyCaseLifecycleStatus::Unspecified as i32,
+        latest_revision: None,
+        decision_json: None,
+        runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION.to_string(),
+        case_generation: None,
+    };
+
+    match outcome {
+        CanonicalSafetyAnalysisOutcome::Processed {
+            local_result,
+            safety_case,
+        } => {
+            response.local_result = Some(analysis_result_to_proto(
+                &local_result,
+                Some(conversation_id),
+                Some(sender_id),
+                runtime,
+            ));
+            match safety_case {
+                Ok(SafetyCaseIngestOutcome::Ignored(reason)) => {
+                    response.disposition =
+                        proto::CanonicalSafetyDisposition::ProcessedIgnored as i32;
+                    response.ignored_reason = Some(safety_case_ignored_reason(reason).to_string());
+                }
+                Ok(SafetyCaseIngestOutcome::Reduced(decision)) => {
+                    response.disposition =
+                        proto::CanonicalSafetyDisposition::ProcessedReduced as i32;
+                    response.case_id = Some(decision.case_id().to_string());
+                    response.case_revision = Some(decision.case_revision());
+                    response.case_status = proto_safety_case_status(decision.status()) as i32;
+                    response.case_generation = Some(
+                        runtime
+                            .safety_cases()
+                            .case_generation_by_id(decision.case_id())
+                            .ok_or_else(|| {
+                                "canonical safety decision is missing its case generation"
+                                    .to_string()
+                            })?
+                            .value(),
+                    );
+                    response.decision_json = Some(encode_safety_case_decision(&decision)?);
+                }
+                Ok(_) => {
+                    return Err(
+                        "canonical safety runtime returned an inconsistent processed outcome"
+                            .to_string(),
+                    );
+                }
+                Err(
+                    SafetyCaseRuntimeError::AccountStateByteBudgetExceeded { .. }
+                    | SafetyCaseRuntimeError::CombinedPersistenceByteBudgetExceeded { .. },
+                ) => {
+                    response.disposition =
+                        proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
+                    response.ignored_reason = Some("persistence_byte_budget_exceeded".to_string());
+                }
+                Err(_) => {
+                    response.disposition =
+                        proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
+                    response.ignored_reason = Some("projection_rejected".to_string());
+                }
+            }
+        }
+        CanonicalSafetyAnalysisOutcome::DuplicateIgnored { receipt } => match receipt {
+            SafetyCaseSourceReceipt::Ignored(reason) => {
+                response.disposition = proto::CanonicalSafetyDisposition::DuplicateIgnored as i32;
+                response.ignored_reason = Some(safety_case_ignored_reason(reason).to_string());
+            }
+            SafetyCaseSourceReceipt::Applied {
+                case_id,
+                case_revision,
+                status,
+            } => {
+                response.disposition = proto::CanonicalSafetyDisposition::DuplicateApplied as i32;
+                response.case_id = Some(case_id.to_string());
+                response.case_revision = Some(case_revision);
+                response.case_status = proto_safety_case_status(status) as i32;
+                response.case_generation = Some(
+                    runtime
+                        .safety_cases()
+                        .case_generation_by_id(&case_id)
+                        .ok_or_else(|| {
+                            "canonical safety receipt is missing its case generation".to_string()
+                        })?
+                        .value(),
+                );
+            }
+            SafetyCaseSourceReceipt::Rejected => {
+                response.disposition = proto::CanonicalSafetyDisposition::DuplicateRejected as i32;
+            }
+            _ => return Err("unsupported canonical safety receipt".to_string()),
+        },
+        CanonicalSafetyAnalysisOutcome::StaleIgnored { latest_revision } => {
+            response.disposition = proto::CanonicalSafetyDisposition::StaleIgnored as i32;
+            response.latest_revision = Some(latest_revision);
+        }
+    }
+
+    Ok(response)
+}
+
+fn canonical_persistence_state_lengths(
+    runtime: &AgentRuntime,
+    account_key: &SafetyAccountKey,
+) -> Result<(usize, usize, usize), SafetyCaseRuntimeError> {
+    let case_state_len =
+        serde_json::to_vec(&runtime.safety_cases().export_account_state(account_key))
+            .map_err(|error| SafetyCaseRuntimeError::StateSerialization(error.to_string()))?
+            .len();
+    let context_state = tracker_state_to_proto(
+        &runtime.export_context_state(),
+        &runtime.export_kids_memory_state(),
+    );
+    let context_state_len = proto::ExportContextResponse {
+        state: Some(context_state),
+    }
+    .encoded_len();
+    let combined = case_state_len.checked_add(context_state_len).ok_or(
+        SafetyCaseRuntimeError::CombinedPersistenceByteBudgetExceeded {
+            maximum: MAX_CANONICAL_COMBINED_STATE_BYTES,
+            current: usize::MAX,
+            required_reserve: 0,
+        },
+    )?;
+    Ok((case_state_len, context_state_len, combined))
+}
+
+fn ensure_canonical_persistence_within_budget(
+    runtime: &AgentRuntime,
+    account_key: &SafetyAccountKey,
+) -> Result<(), SafetyCaseRuntimeError> {
+    let (case_state_len, context_state_len, combined) =
+        canonical_persistence_state_lengths(runtime, account_key)?;
+    if case_state_len > SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES {
+        return Err(SafetyCaseRuntimeError::AccountStateByteBudgetExceeded {
+            maximum: SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES,
+            current: case_state_len,
+            required_reserve: 0,
+        });
+    }
+    if context_state_len > MAX_CANONICAL_CONTEXT_STATE_BYTES {
+        return Err(
+            SafetyCaseRuntimeError::CombinedPersistenceByteBudgetExceeded {
+                maximum: MAX_CANONICAL_CONTEXT_STATE_BYTES,
+                current: context_state_len,
+                required_reserve: 0,
+            },
+        );
+    }
+    if combined > MAX_CANONICAL_COMBINED_STATE_BYTES {
+        return Err(
+            SafetyCaseRuntimeError::CombinedPersistenceByteBudgetExceeded {
+                maximum: MAX_CANONICAL_COMBINED_STATE_BYTES,
+                current: combined,
+                required_reserve: 0,
+            },
+        );
+    }
+    Ok(())
+}
+
+fn safety_case_ignored_reason(reason: SafetyCaseIgnoredReason) -> &'static str {
+    match reason {
+        SafetyCaseIgnoredReason::NoThreat => "no_threat",
+        SafetyCaseIgnoredReason::NonActionable => "non_actionable",
+        SafetyCaseIgnoredReason::ZeroRisk => "zero_risk",
+        _ => "unknown",
+    }
+}
+
+fn proto_safety_case_status(status: SafetyCaseStatus) -> proto::SafetyCaseLifecycleStatus {
+    match status {
+        SafetyCaseStatus::Observing => proto::SafetyCaseLifecycleStatus::Observing,
+        SafetyCaseStatus::Open => proto::SafetyCaseLifecycleStatus::Open,
+        SafetyCaseStatus::Escalated => proto::SafetyCaseLifecycleStatus::Escalated,
+        SafetyCaseStatus::Urgent => proto::SafetyCaseLifecycleStatus::Urgent,
+        SafetyCaseStatus::Resolved => proto::SafetyCaseLifecycleStatus::Resolved,
+        SafetyCaseStatus::Dismissed => proto::SafetyCaseLifecycleStatus::Dismissed,
+        _ => proto::SafetyCaseLifecycleStatus::Unspecified,
+    }
+}
+
+fn safety_case_lifecycle_command_from_proto(
+    request: proto::SafetyCaseLifecycleCommandRequest,
+) -> Result<(SafetyAccountKey, SafetyCaseId, SafetyCaseCommand), String> {
+    let account_key =
+        SafetyAccountKey::new(request.account_key).map_err(|error| error.to_string())?;
+    let case_id = SafetyCaseId::new(request.case_id).map_err(|error| error.to_string())?;
+    if request.at_ms == 0 {
+        return Err("safety case lifecycle timestamp must be non-zero".to_string());
+    }
+    let reason_code =
+        SafetyReasonCode::new(request.reason_code).map_err(|error| error.to_string())?;
+    let command_type = proto::SafetyCaseLifecycleCommandType::try_from(request.command_type)
+        .map_err(|_| "unsupported safety case lifecycle command type".to_string())?;
+    let command = match command_type {
+        proto::SafetyCaseLifecycleCommandType::Resolve => SafetyCaseCommand::Resolve {
+            at_ms: request.at_ms,
+            reason_code,
+        },
+        proto::SafetyCaseLifecycleCommandType::Dismiss => SafetyCaseCommand::Dismiss {
+            at_ms: request.at_ms,
+            reason_code,
+        },
+        proto::SafetyCaseLifecycleCommandType::Unspecified => {
+            return Err("safety case lifecycle command type is unspecified".to_string());
+        }
+    };
+    Ok((account_key, case_id, command))
+}
+
+fn safety_case_lifecycle_response_to_proto(
+    decision: &SafetyCaseDecision,
+    case_generation: SafetyCaseGeneration,
+) -> Result<proto::SafetyCaseLifecycleCommandResponse, String> {
+    let decision_json = encode_safety_case_decision(decision)?;
+    Ok(proto::SafetyCaseLifecycleCommandResponse {
+        case_id: decision.case_id().to_string(),
+        case_revision: decision.case_revision(),
+        case_status: proto_safety_case_status(decision.status()) as i32,
+        decision_json,
+        runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION.to_string(),
+        case_generation: Some(case_generation.value()),
+    })
+}
+
+fn safety_case_successor_activation_from_proto(
+    request: proto::SafetyCaseSuccessorActivationRequest,
+) -> Result<
+    (
+        SafetyAccountKey,
+        SafetyCaseId,
+        SafetyCaseGeneration,
+        u64,
+        u64,
+    ),
+    String,
+> {
+    let account_key =
+        SafetyAccountKey::new(request.account_key).map_err(|error| error.to_string())?;
+    let predecessor_case_id =
+        SafetyCaseId::new(request.predecessor_case_id).map_err(|error| error.to_string())?;
+    let expected_generation = request
+        .expected_case_generation
+        .ok_or_else(|| "expected safety case generation is missing".to_string())?;
+    if request.expected_case_revision == 0 {
+        return Err("expected safety case revision must be non-zero".to_string());
+    }
+    if request.activated_at_ms == 0 {
+        return Err("safety case successor activation timestamp must be non-zero".to_string());
+    }
+    Ok((
+        account_key,
+        predecessor_case_id,
+        SafetyCaseGeneration::new(expected_generation),
+        request.expected_case_revision,
+        request.activated_at_ms,
+    ))
+}
+
+fn safety_case_successor_activation_to_proto(
+    outcome: &SafetyCaseSuccessorActivationOutcome,
+) -> proto::SafetyCaseSuccessorActivationResponse {
+    let disposition = match outcome.disposition() {
+        SafetyCaseSuccessorActivationDisposition::Activated => {
+            proto::SafetyCaseSuccessorActivationDisposition::Activated
+        }
+        SafetyCaseSuccessorActivationDisposition::AlreadyActivated => {
+            proto::SafetyCaseSuccessorActivationDisposition::AlreadyActivated
+        }
+    };
+    proto::SafetyCaseSuccessorActivationResponse {
+        disposition: disposition as i32,
+        predecessor_case_id: outcome.predecessor_case_id().to_string(),
+        predecessor_case_generation: outcome.predecessor_generation().value(),
+        successor_case_id: outcome.successor_case_id().to_string(),
+        successor_case_generation: outcome.successor_generation().value(),
+        activated_at_ms: outcome.activated_at_ms(),
+        runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION.to_string(),
+    }
+}
+
+fn encode_safety_case_decision(decision: &SafetyCaseDecision) -> Result<Vec<u8>, String> {
+    let bytes = serde_json::to_vec(decision)
+        .map_err(|error| format!("failed to encode safety case decision: {error}"))?;
+    if bytes.len() > MAX_SAFETY_CASE_DECISION_BYTES {
+        return Err(format!(
+            "safety case decision exceeds limit of {MAX_SAFETY_CASE_DECISION_BYTES} bytes"
+        ));
+    }
+    Ok(bytes)
 }
 
 fn validate_batch_items(
@@ -485,6 +851,7 @@ pub unsafe extern "C" fn aura_analyze(
                     &result,
                     Some(input.conversation_id.0.as_str()),
                     Some(input.sender_id.0.as_str()),
+                    &instance.analyzer,
                 ),
             )
         }) {
@@ -542,6 +909,7 @@ pub unsafe extern "C" fn aura_analyze_context(
                     &result,
                     Some(input.conversation_id.0.as_str()),
                     Some(input.sender_id.0.as_str()),
+                    &instance.analyzer,
                 ),
             )
         }) {
@@ -554,9 +922,14 @@ pub unsafe extern "C" fn aura_analyze_context(
     })
 }
 
-/// Analyzes a message and returns both the local result and optional relay request.
+/// Canonically analyzes one source event and reduces it into Safety Case state.
+///
+/// Exact duplicates and stale revisions are returned without invoking the
+/// analyzer, so conversation and Kids context remain exactly-once per revision.
+/// First attempts are committed only when compact case JSON plus the exact
+/// ExportContextResponse encoding fit the host's shared persistence envelope.
 #[no_mangle]
-pub unsafe extern "C" fn aura_analyze_for_relay(
+pub unsafe extern "C" fn aura_analyze_canonical_safety(
     handle: *mut c_void,
     request_ptr: *const u8,
     request_len: usize,
@@ -565,101 +938,261 @@ pub unsafe extern "C" fn aura_analyze_for_relay(
     ffi_guard(false, move || {
         clear_last_error();
 
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
             return false;
         }
 
-        let request: proto::AnalyzeContextRequest = match decode_proto_bounded(
+        let request: proto::CanonicalSafetyAnalyzeRequest = match decode_proto_bounded(
             request_ptr,
             request_len,
-            "analyze_for_relay request",
-            MAX_ANALYZE_CONTEXT_REQUEST_BYTES,
+            "canonical safety request",
+            MAX_CANONICAL_SAFETY_REQUEST_BYTES,
         ) {
             Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let Some(message) = request.message else {
+            set_last_error("missing message in canonical safety request");
+            return false;
+        };
+        let Some(identity) = request.identity else {
+            set_last_error("missing identity in canonical safety request");
+            return false;
+        };
+        let input = message_input_from_proto(message);
+        let identity = match canonical_safety_identity_from_proto(identity, &input) {
+            Ok(identity) => identity,
+            Err(error) => {
+                set_last_error(error);
                 return false;
             }
         };
 
-        let Some(message) = request.message else {
-            set_last_error("missing message in analyze_for_relay request");
-            return false;
-        };
-        let input = message_input_from_proto(message);
-
         match with_instance(handle, |instance| {
-            let envelope = instance
+            if matches!(
+                instance
+                    .analyzer
+                    .safety_cases()
+                    .preflight_source(&identity)
+                    .map_err(|error| error.to_string())?,
+                SafetyCaseSourcePreflight::Ready
+            ) {
+                ensure_canonical_persistence_within_budget(
+                    &instance.analyzer,
+                    identity.account_key(),
+                )
+                .map_err(|error| error.to_string())?;
+            }
+            let account_key = identity.account_key().clone();
+            let outcome = instance
                 .analyzer
-                .analyze_for_relay(&input, request.timestamp_ms);
-            let response = proto::AnalyzeForRelayResponse {
-                local_result: Some(analysis_result_to_proto(
-                    &envelope.local_result,
-                    Some(input.conversation_id.0.as_str()),
-                    Some(input.sender_id.0.as_str()),
-                )),
-                relay_request: envelope.relay_request.as_ref().map(relay_request_to_proto),
-            };
+                .analyze_local_with_canonical_safety_case_guarded(&input, &identity, |runtime| {
+                    ensure_canonical_persistence_within_budget(runtime, &account_key)
+                })
+                .map_err(|error| error.to_string())?;
+            let response = canonical_safety_response_to_proto(
+                outcome,
+                input.conversation_id.0.as_str(),
+                input.sender_id.0.as_str(),
+                &instance.analyzer,
+            )?;
             write_proto_message(out, &response)
         }) {
             Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
                 false
             }
         }
     })
 }
 
-/// Records a relay response for a sender so future local analysis can apply the server hint.
+/// Applies one bounded, account-scoped resolve or dismiss command.
 #[no_mangle]
-pub unsafe extern "C" fn aura_record_relay_response(
+pub unsafe extern "C" fn aura_apply_safety_case_lifecycle(
     handle: *mut c_void,
     request_ptr: *const u8,
     request_len: usize,
+    out: *mut AuraBuffer,
 ) -> bool {
     ffi_guard(false, move || {
         clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
 
-        let request: proto::RecordRelayResponseRequest = match decode_proto_bounded(
+        let request: proto::SafetyCaseLifecycleCommandRequest = match decode_proto_bounded(
             request_ptr,
             request_len,
-            "record_relay_response request",
-            MAX_MESSAGE_REQUEST_BYTES,
+            "safety case lifecycle request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
         ) {
             Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let (account_key, case_id, command) =
+            match safety_case_lifecycle_command_from_proto(request) {
+                Ok(command) => command,
+                Err(error) => {
+                    set_last_error(error);
+                    return false;
+                }
+            };
+
+        match with_instance(handle, |instance| {
+            let decision = instance
+                .analyzer
+                .apply_safety_case_lifecycle_guarded(&account_key, &case_id, command, |runtime| {
+                    ensure_canonical_persistence_within_budget(runtime, &account_key)
+                })
+                .map_err(|error| error.to_string())?;
+            let generation = instance
+                .analyzer
+                .safety_cases()
+                .case_generation_by_id(&case_id)
+                .ok_or_else(|| "safety case lifecycle generation is missing".to_string())?;
+            let response = safety_case_lifecycle_response_to_proto(&decision, generation)?;
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Explicitly activates one successor generation from an active terminal case.
+/// No analysis or lifecycle path invokes this operation automatically.
+#[no_mangle]
+pub unsafe extern "C" fn aura_activate_safety_case_successor(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
+
+        let request: proto::SafetyCaseSuccessorActivationRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "safety case successor activation request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let (
+            account_key,
+            predecessor_case_id,
+            expected_generation,
+            expected_case_revision,
+            activated_at_ms,
+        ) = match safety_case_successor_activation_from_proto(request) {
+            Ok(values) => values,
+            Err(error) => {
+                set_last_error(error);
                 return false;
             }
         };
 
-        let sender_id = request.sender_id.trim();
-        if sender_id.is_empty() {
-            set_last_error("record_relay_response sender_id is empty");
+        match with_instance(handle, |instance| {
+            let outcome = instance
+                .analyzer
+                .activate_safety_case_successor_guarded(
+                    &account_key,
+                    &predecessor_case_id,
+                    expected_generation,
+                    expected_case_revision,
+                    activated_at_ms,
+                    |runtime| ensure_canonical_persistence_within_budget(runtime, &account_key),
+                )
+                .map_err(|error| error.to_string())?;
+            write_proto_message(out, &safety_case_successor_activation_to_proto(&outcome))
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Purges one account's Safety Case state and exactly-once receipts from memory.
+#[no_mangle]
+pub unsafe extern "C" fn aura_remove_safety_case_account(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
             return false;
         }
 
-        let Some(response) = request.response else {
-            set_last_error("missing relay response in record_relay_response request");
-            return false;
+        let request: proto::SafetyCaseAccountRemovalRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "safety case account removal request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
         };
-        let response = relay_response_from_proto(response);
+        let account_key = match SafetyAccountKey::new(request.account_key) {
+            Ok(account_key) => account_key,
+            Err(error) => {
+                set_last_error(error.to_string());
+                return false;
+            }
+        };
 
         match with_instance(handle, |instance| {
-            let accepted = instance.analyzer.record_relay_response_for_sender(
-                &aura_agent_core::SenderId(sender_id.to_string()),
-                &response,
-                request.received_at_ms,
-            );
-            accepted
-                .then_some(())
-                .ok_or_else(|| "relay response rejected".to_string())
+            let removal = instance
+                .analyzer
+                .safety_cases_mut()
+                .remove_account(&account_key);
+            let removed_cases = u64::try_from(removal.removed_cases())
+                .map_err(|_| "removed safety case count exceeds u64".to_string())?;
+            let removed_source_receipts = u64::try_from(removal.removed_source_receipts())
+                .map_err(|_| "removed safety receipt count exceeds u64".to_string())?;
+            write_proto_message(
+                out,
+                &proto::SafetyCaseAccountRemovalResponse {
+                    removed_cases,
+                    removed_source_receipts,
+                    runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION
+                        .to_string(),
+                },
+            )
         }) {
             Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
                 false
             }
         }
@@ -722,6 +1255,7 @@ pub unsafe extern "C" fn aura_analyze_batch(
                     &result,
                     Some(input.conversation_id.0.as_str()),
                     Some(input.sender_id.0.as_str()),
+                    &instance.analyzer,
                 ));
             }
 
@@ -982,6 +1516,115 @@ pub unsafe extern "C" fn aura_export_context(handle: *mut c_void, out: *mut Aura
     })
 }
 
+/// Exports versioned, content-free Safety Case state as UTF-8 JSON.
+/// The host must encrypt these bytes per account before persistence.
+#[no_mangle]
+pub unsafe extern "C" fn aura_export_safety_case_state(
+    handle: *mut c_void,
+    account_key_ptr: *const u8,
+    account_key_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
+        let account_key =
+            match unsafe { decode_safety_account_key(account_key_ptr, account_key_len) } {
+                Ok(account_key) => account_key,
+                Err(error) => {
+                    set_last_error(error);
+                    return false;
+                }
+            };
+
+        match with_instance(handle, |instance| {
+            let state = instance
+                .analyzer
+                .safety_cases()
+                .export_account_state(&account_key);
+            let bytes = serde_json::to_vec(&state)
+                .map_err(|error| format!("failed to encode safety case state: {error}"))?;
+            if bytes.len() > SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES {
+                return Err(format!(
+                    "safety case state exceeds limit of {SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES} bytes"
+                ));
+            }
+            unsafe {
+                *out = bytes_to_buffer(bytes);
+            }
+            Ok(())
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Imports encrypted-host-restored Safety Case JSON after bounded decoding and
+/// deep runtime validation. Existing state is unchanged on failure.
+#[no_mangle]
+pub unsafe extern "C" fn aura_import_safety_case_state(
+    handle: *mut c_void,
+    account_key_ptr: *const u8,
+    account_key_len: usize,
+    state_ptr: *const u8,
+    state_len: usize,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        let account_key =
+            match unsafe { decode_safety_account_key(account_key_ptr, account_key_len) } {
+                Ok(account_key) => account_key,
+                Err(error) => {
+                    set_last_error(error);
+                    return false;
+                }
+            };
+        if state_ptr.is_null() {
+            set_last_error("null safety case state pointer");
+            return false;
+        }
+        if state_len == 0 {
+            set_last_error("safety case state is empty");
+            return false;
+        }
+        if state_len > SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES {
+            set_last_error(format!(
+                "safety case state exceeds limit of {SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES} bytes"
+            ));
+            return false;
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(state_ptr, state_len) };
+        let state: ExportedSafetyCaseRuntimeState = match serde_json::from_slice(bytes) {
+            Ok(state) => state,
+            Err(error) => {
+                set_last_error(format!("invalid safety case state JSON: {error}"));
+                return false;
+            }
+        };
+
+        match with_instance(handle, |instance| {
+            instance
+                .analyzer
+                .safety_cases_mut()
+                .import_account_state(&account_key, &state)
+                .map_err(|error| error.to_string())
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
 /// Imports a previously exported conversation context state.
 #[no_mangle]
 pub unsafe extern "C" fn aura_import_context(
@@ -1029,7 +1672,9 @@ pub unsafe extern "C" fn aura_import_context(
                 .import_context_state(core_state)
                 .map_err(|e| format!("import failed: {e}"))?;
             if let Some(kids_state) = kids_state {
-                instance.analyzer.import_kids_memory_state(&kids_state);
+                if !instance.analyzer.import_kids_memory_state(&kids_state) {
+                    return Err("kids memory import failed".to_string());
+                }
             } else {
                 instance.analyzer.clear_kids_memory_state();
             }
@@ -1210,79 +1855,6 @@ pub unsafe extern "C" fn aura_mark_contact_trusted(
         match with_instance(handle, |instance| {
             instance.analyzer.mark_contact_trusted(&request.sender_id);
             Ok(())
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Processes guardian feedback to adjust kids memory state.
-///
-/// Accepts a protobuf-encoded `GuardianFeedbackRequest` and applies the
-/// guardian's verdict (Trusted, Block, Monitor, FalsePositive) to the
-/// kids conversation and sender memory.
-#[no_mangle]
-pub unsafe extern "C" fn aura_guardian_feedback(
-    handle: *mut c_void,
-    request_ptr: *const u8,
-    request_len: usize,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        let request: proto::GuardianFeedbackRequest = match decode_proto_bounded(
-            request_ptr,
-            request_len,
-            "guardian_feedback request",
-            MAX_SMALL_CONTROL_REQUEST_BYTES,
-        ) {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
-
-        let verdict = match proto::GuardianVerdict::try_from(request.verdict) {
-            Ok(proto::GuardianVerdict::Trusted) => {
-                aura_agent_core::aura_kids::pipeline::GuardianVerdict::Trusted
-            }
-            Ok(proto::GuardianVerdict::Block) => {
-                aura_agent_core::aura_kids::pipeline::GuardianVerdict::Block
-            }
-            Ok(proto::GuardianVerdict::Monitor) => {
-                aura_agent_core::aura_kids::pipeline::GuardianVerdict::Monitor
-            }
-            Ok(proto::GuardianVerdict::FalsePositive) => {
-                aura_agent_core::aura_kids::pipeline::GuardianVerdict::FalsePositive
-            }
-            Ok(proto::GuardianVerdict::Unspecified) | Err(_) => {
-                set_last_error("unspecified or invalid guardian verdict".to_string());
-                return false;
-            }
-        };
-
-        match with_instance(handle, |_instance| {
-            aura_agent_core::aura_kids::pipeline::apply_guardian_feedback(
-                &request.sender_id,
-                &request.conversation_id,
-                verdict,
-            );
-            let response = proto::GuardianFeedbackResponse {
-                ok: true,
-                message: None,
-            };
-            write_proto_message(out, &response)
         }) {
             Ok(()) => true,
             Err(e) => {
@@ -1480,6 +2052,34 @@ pub unsafe extern "C" fn aura_get_conversation_summary(
     })
 }
 
+/// Returns the initialized runtime's actual capabilities as protobuf bytes.
+#[no_mangle]
+pub unsafe extern "C" fn aura_get_runtime_capabilities(
+    handle: *mut c_void,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+
+        if let Err(e) = prepare_output(out) {
+            set_last_error(e);
+            return false;
+        }
+
+        match with_instance(handle, |instance| {
+            let capabilities =
+                runtime_capabilities_to_proto(&instance.analyzer.runtime_capabilities());
+            write_proto_message(out, &capabilities)
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(e);
+                false
+            }
+        }
+    })
+}
+
 /// Frees an AURA instance and all associated resources.
 #[no_mangle]
 pub unsafe extern "C" fn aura_free(handle: *mut c_void) {
@@ -1554,12 +2154,21 @@ pub extern "C" fn aura_last_error() -> *mut c_char {
         // Prefer the thread-local (correct per-thread semantics); fall back to
         // the process-global mirror when the thread-local read comes back empty
         // (see LAST_ERROR_GLOBAL) so a real error is never reported as null.
-        let message = LAST_ERROR.with(|e| e.borrow().clone()).or_else(|| {
-            LAST_ERROR_GLOBAL
+        let local_message = LAST_ERROR.with(|error| error.borrow().clone());
+        let message = match local_message {
+            Some(message) => {
+                if let Ok(mut guard) = LAST_ERROR_GLOBAL.lock() {
+                    if guard.as_deref() == Some(message.as_str()) {
+                        *guard = None;
+                    }
+                }
+                Some(message)
+            }
+            None => LAST_ERROR_GLOBAL
                 .lock()
                 .ok()
-                .and_then(|guard| guard.clone())
-        });
+                .and_then(|mut guard| guard.take()),
+        };
         match message {
             Some(msg) => string_to_c(msg),
             None => std::ptr::null_mut(),
@@ -1647,6 +2256,7 @@ fn aura_config_from_proto(config: proto::AuraConfig) -> Result<AuraConfig, Strin
         protected_account_id: None,
         // Domain mode is the only account-level selector.
         domain_mode: domain_mode_from_proto(config.domain_mode),
+        product_rollout_mode: product_rollout_mode_from_proto(config.product_rollout_mode),
     })
 }
 
@@ -2173,20 +2783,28 @@ fn kids_memory_explainability_to_proto(
     reason_codes: &[String],
     conversation_id: Option<&str>,
     sender_id: Option<&str>,
+    runtime: Option<&AgentRuntime>,
 ) -> Option<proto::KidsMemoryExplainability> {
     let reason_codes = kids_memory_reason_codes(reason_codes);
     if reason_codes.is_empty() {
         return None;
     }
-    let conversation_risk_score = conversation_id
-        .map(aura_agent_core::aura_kids::pipeline::conversation_risk_score)
-        .unwrap_or(0.0);
-    let sender_risk_score = sender_id
-        .map(aura_agent_core::aura_kids::pipeline::sender_cross_risk_score)
-        .unwrap_or(0.0);
-    let escalation_message_count = conversation_id
-        .map(aura_agent_core::aura_kids::pipeline::conversation_escalation_message_count)
-        .unwrap_or(0);
+    let conversation_risk_score = match (runtime, conversation_id) {
+        (Some(runtime), Some(conversation_id)) => {
+            runtime.kids_conversation_risk_score(conversation_id)
+        }
+        _ => 0.0,
+    };
+    let sender_risk_score = match (runtime, sender_id) {
+        (Some(runtime), Some(sender_id)) => runtime.kids_sender_cross_risk_score(sender_id),
+        _ => 0.0,
+    };
+    let escalation_message_count = match (runtime, conversation_id) {
+        (Some(runtime), Some(conversation_id)) => {
+            runtime.kids_conversation_escalation_message_count(conversation_id)
+        }
+        _ => 0,
+    };
     Some(proto::KidsMemoryExplainability {
         reason_codes: reason_codes.clone(),
         mandatory_guardian_escalation: has_mandatory_kids_memory_reason(&reason_codes),
@@ -2200,6 +2818,7 @@ fn analysis_result_to_proto(
     result: &aura_agent_core::AnalysisResult,
     conversation_id: Option<&str>,
     sender_id: Option<&str>,
+    runtime: &AgentRuntime,
 ) -> proto::AnalysisResult {
     proto::AnalysisResult {
         threat_type: proto_threat_type(result.threat_type) as i32,
@@ -2233,12 +2852,13 @@ fn analysis_result_to_proto(
         analysis_time_us: result.analysis_time_us,
         inference: Some(inference_summary_to_proto(&result.inference)),
         product_surface: Some(product_decision_surface_to_proto(
-            &build_product_decision_surface(result, ProductRolloutMode::GuardianEnabled),
+            &build_product_decision_surface(result, runtime.product_rollout_mode()),
         )),
         kids_memory: kids_memory_explainability_to_proto(
             &result.reason_codes,
             conversation_id,
             sender_id,
+            Some(runtime),
         ),
     }
 }
@@ -2258,6 +2878,39 @@ fn product_decision_surface_to_proto(
         uncertainty_disposition: proto_product_uncertainty_disposition(
             surface.uncertainty_disposition,
         ) as i32,
+    }
+}
+
+fn runtime_capabilities_to_proto(capabilities: &RuntimeCapabilities) -> proto::RuntimeCapabilities {
+    proto::RuntimeCapabilities {
+        schema_version: capabilities.schema_version.clone(),
+        runtime_version: capabilities.runtime_version.clone(),
+        backend: match capabilities.backend {
+            RuntimeBackend::RulesFallback => proto::RuntimeBackend::RulesFallback as i32,
+            RuntimeBackend::Onnx => proto::RuntimeBackend::Onnx as i32,
+        },
+        supported_modalities: capabilities
+            .supported_modalities
+            .iter()
+            .map(|modality| match modality {
+                RuntimeModality::Text => proto::RuntimeModality::Text as i32,
+                RuntimeModality::Url => proto::RuntimeModality::Url as i32,
+            })
+            .collect(),
+        models: capabilities
+            .models
+            .iter()
+            .take(8)
+            .map(|model| proto::RuntimeModelIdentity {
+                component: model.component.clone(),
+                identifier: model.identifier.clone(),
+                sha256: model.sha256.clone(),
+            })
+            .collect(),
+        policy_schema_version: capabilities.policy_schema_version.clone(),
+        product_schema_version: capabilities.product_schema_version.clone(),
+        state_schema_version: capabilities.state_schema_version,
+        product_rollout_mode: proto_product_rollout_mode(capabilities.product_rollout_mode) as i32,
     }
 }
 
@@ -2319,181 +2972,6 @@ fn detection_signal_to_proto(signal: &aura_agent_core::DetectionSignal) -> proto
         reason_code: signal.reason_code.clone(),
         explanation: signal.explanation.clone(),
         threat_subtype: signal.threat_subtype.clone(),
-    }
-}
-
-fn relay_request_to_proto(request: &RelayAnalyzeRequestContract) -> proto::RelayAnalyzeRequest {
-    proto::RelayAnalyzeRequest {
-        schema_version: request.schema_version.clone(),
-        request_id: request.request_id.clone(),
-        message_id: request.message_id.clone(),
-        sender_token: request.sender_token.clone(),
-        protected_account_token: request.protected_account_token.clone(),
-        conversation_token: request.conversation_token.clone(),
-        account_type: proto_account_type(request.account_type) as i32,
-        protection_level: proto_protection_level(request.protection_level) as i32,
-        conversation_type: proto_conversation_type(request.conversation_type) as i32,
-        language: request.language.clone(),
-        text: request.text.clone(),
-        local_observations: request
-            .local_observations
-            .iter()
-            .map(relay_observation_to_proto)
-            .collect(),
-        local_context_summary: Some(relay_local_context_summary_to_proto(
-            &request.local_context_summary,
-        )),
-        local_safety_telemetry: request
-            .local_safety_telemetry
-            .iter()
-            .map(relay_safety_telemetry_to_proto)
-            .collect(),
-        recent_message_window: request
-            .recent_message_window
-            .iter()
-            .map(|entry| proto::RelayMessageWindowEntry {
-                sender_id: entry.sender_id.clone(),
-                text: entry.text.clone(),
-                timestamp_ms: entry.timestamp_ms,
-            })
-            .collect(),
-        server_sender_risk_hint: request.server_sender_risk_hint,
-        sender_relationship: proto_sender_relationship(request.sender_relationship) as i32,
-        relationship_trust_source: proto_relationship_trust_source(
-            request.relationship_trust_source,
-        ) as i32,
-        privacy_mode: proto_relay_privacy_mode(request.privacy_mode) as i32,
-        capabilities: Some(proto::RelayAgentCapabilities {
-            local_context_interpreter: request.capabilities.local_context_interpreter,
-            local_tracker: request.capabilities.local_tracker,
-            supports_remote_correlation: request.capabilities.supports_remote_correlation,
-            relay_timeout_ms: request.capabilities.relay_timeout_ms,
-        }),
-        deadline_ms: request.deadline_ms,
-        protected_account_attestation: request
-            .protected_account_attestation
-            .as_ref()
-            .map(protected_account_attestation_to_proto),
-        auth: request.auth.as_ref().map(relay_request_auth_to_proto),
-    }
-}
-
-fn protected_account_attestation_to_proto(
-    attestation: &ProtectedAccountTokenAttestationContract,
-) -> proto::ProtectedAccountTokenAttestation {
-    proto::ProtectedAccountTokenAttestation {
-        key_id: attestation.key_id.clone(),
-        alg: attestation.alg.clone(),
-        protected_account_token: attestation.protected_account_token.clone(),
-        expires_at_ms: attestation.expires_at_ms,
-        tag: attestation.tag.clone(),
-    }
-}
-
-fn relay_request_auth_to_proto(auth: &RelayRequestAuthContract) -> proto::RelayRequestAuth {
-    proto::RelayRequestAuth {
-        key_id: auth.key_id.clone(),
-        alg: auth.alg.clone(),
-        tag: auth.tag.clone(),
-    }
-}
-
-fn relay_local_context_summary_to_proto(
-    summary: &aura_agent_core::aura_contracts::LocalContextSummary,
-) -> proto::RelayLocalContextSummary {
-    proto::RelayLocalContextSummary {
-        context_markers: summary.context_markers.clone(),
-        recent_observations: summary
-            .recent_observations
-            .iter()
-            .map(relay_observation_to_proto)
-            .collect(),
-    }
-}
-
-fn relay_observation_to_proto(
-    observation: &aura_agent_core::aura_contracts::RawObservation,
-) -> proto::RelayObservation {
-    proto::RelayObservation {
-        threat_type: proto_threat_type(observation.threat_type) as i32,
-        threat_subtype: observation.threat_subtype.clone(),
-        layer: proto_relay_detection_layer(observation.layer) as i32,
-        score: observation.score,
-        confidence: proto_confidence(observation.confidence) as i32,
-        reason_code: observation.reason_code.clone(),
-        explanation: observation.explanation.clone(),
-    }
-}
-
-fn relay_safety_telemetry_to_proto(
-    event: &ClientSafetyTelemetryEvent,
-) -> proto::RelaySafetyTelemetryEvent {
-    proto::RelaySafetyTelemetryEvent {
-        event_id: event.event_id.clone(),
-        sender_token: event.sender_token.clone(),
-        protected_account_token: event.protected_account_token.clone(),
-        conversation_token: event.conversation_token.clone(),
-        surface: proto_safety_telemetry_surface(event.surface) as i32,
-        threat_type: proto_threat_type(event.threat_type) as i32,
-        severity: proto_safety_telemetry_severity(event.severity) as i32,
-        confidence: proto_confidence(event.confidence) as i32,
-        action: proto_safety_telemetry_action(event.action) as i32,
-        timestamp_bucket_ms: event.timestamp_bucket_ms,
-        reason_family: event.reason_family.clone(),
-    }
-}
-
-fn relay_response_from_proto(
-    response: proto::RelayAnalyzeResponse,
-) -> RelayAnalyzeResponseContract {
-    RelayAnalyzeResponseContract {
-        schema_version: response.schema_version,
-        request_id: response.request_id,
-        findings: response
-            .findings
-            .into_iter()
-            .map(relay_remote_finding_from_proto)
-            .collect(),
-        inference: response.inference.map(relay_remote_inference_from_proto),
-        reason_codes: response.reason_codes,
-        context_markers: response.context_markers,
-        confidence: confidence_from_proto(response.confidence),
-        expires_at_ms: response.expires_at_ms,
-        sender_reputation_hint: response.sender_reputation_hint,
-        correlation_findings: response.correlation_findings,
-        auth: response.auth.map(relay_response_auth_from_proto),
-        ..RelayAnalyzeResponseContract::default()
-    }
-}
-
-fn relay_response_auth_from_proto(auth: proto::RelayResponseAuth) -> RelayResponseAuthContract {
-    RelayResponseAuthContract {
-        key_id: auth.key_id,
-        alg: auth.alg,
-        tag: auth.tag,
-    }
-}
-
-fn relay_remote_finding_from_proto(
-    finding: proto::RelayRemoteFinding,
-) -> RelayRemoteFindingContract {
-    RelayRemoteFindingContract {
-        threat_type: threat_type_from_proto(finding.threat_type),
-        score: finding.score,
-        confidence: confidence_from_proto(finding.confidence),
-        reason_code: finding.reason_code,
-        explanation: finding.explanation,
-    }
-}
-
-fn relay_remote_inference_from_proto(
-    inference: proto::RelayRemoteInferenceSummary,
-) -> RelayRemoteInferenceSummaryContract {
-    RelayRemoteInferenceSummaryContract {
-        primary_threat: threat_type_from_proto(inference.primary_threat),
-        score: inference.score,
-        confidence: confidence_from_proto(inference.confidence),
-        risk_horizon: relay_risk_horizon_from_proto(inference.risk_horizon),
     }
 }
 
@@ -2632,7 +3110,7 @@ fn audit_record_to_proto(record: &aura_agent_core::AuditRecord) -> proto::AuditR
             .conversation_token
             .as_ref()
             .map(protected_identifier_to_proto),
-        kids_memory: kids_memory_explainability_to_proto(&record.reason_codes, None, None),
+        kids_memory: kids_memory_explainability_to_proto(&record.reason_codes, None, None, None),
     }
 }
 
@@ -2767,7 +3245,7 @@ fn shadow_mode_decision_to_proto(
             .map(shadow_mode_contact_summary_to_proto),
         mirror: Some(shadow_mode_mirror_to_proto(&decision.mirror)),
         product_surface: Some(product_decision_surface_to_proto(&decision.product_surface)),
-        kids_memory: kids_memory_explainability_to_proto(&decision.reason_codes, None, None),
+        kids_memory: kids_memory_explainability_to_proto(&decision.reason_codes, None, None, None),
     }
 }
 
@@ -2861,7 +3339,11 @@ struct ImportTrackerState {
 }
 
 fn tracker_state_from_proto(state: proto::TrackerState) -> Result<ImportTrackerState, String> {
-    let kids_state = state.kids_memory.as_ref().map(kids_memory_state_from_proto);
+    let kids_state = state
+        .kids_memory
+        .as_ref()
+        .map(kids_memory_state_from_proto)
+        .transpose()?;
     Ok(ImportTrackerState {
         core_state: CoreTrackerWireState {
             schema_version: state.schema_version,
@@ -2885,12 +3367,22 @@ fn kids_memory_state_to_proto(
     state: &aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState,
 ) -> proto::KidsMemoryState {
     proto::KidsMemoryState {
+        schema_version: state.schema_version,
         conversations: state
             .conversations
             .iter()
             .map(|conv| proto::KidsConversationMemoryState {
                 conversation_id: conv.conversation_id.clone(),
                 message_index: conv.message_index,
+                last_activity_index: Some(conv.last_activity_index),
+                last_emitted: conv
+                    .last_emitted
+                    .iter()
+                    .map(|checkpoint| proto::KidsEmissionCheckpoint {
+                        reason_code: checkpoint.reason_code.clone(),
+                        emitted_at_index: checkpoint.emitted_at_index,
+                    })
+                    .collect(),
                 entries: conv
                     .entries
                     .iter()
@@ -2916,6 +3408,15 @@ fn kids_memory_state_to_proto(
                 sender_id: sender.sender_id.clone(),
                 event_index: sender.event_index,
                 recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
+                last_activity_index: Some(sender.last_activity_index),
+                last_emitted: sender
+                    .last_emitted
+                    .iter()
+                    .map(|checkpoint| proto::KidsEmissionCheckpoint {
+                        reason_code: checkpoint.reason_code.clone(),
+                        emitted_at_index: checkpoint.emitted_at_index,
+                    })
+                    .collect(),
             })
             .collect(),
     }
@@ -2923,50 +3424,73 @@ fn kids_memory_state_to_proto(
 
 fn kids_memory_state_from_proto(
     state: &proto::KidsMemoryState,
-) -> aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState {
-    aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState {
+) -> Result<aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState, String> {
+    use aura_agent_core::aura_kids::pipeline::{
+        ExportedConversationMemory, ExportedEmissionCheckpoint, ExportedKidsMemoryState,
+        ExportedMessageSnapshot, ExportedSenderMemory, KIDS_MEMORY_STATE_VERSION,
+    };
+
+    if state.schema_version > KIDS_MEMORY_STATE_VERSION {
+        return Err(format!(
+            "incompatible kids memory state version: found {}, supported {}",
+            state.schema_version, KIDS_MEMORY_STATE_VERSION
+        ));
+    }
+
+    Ok(ExportedKidsMemoryState {
+        schema_version: KIDS_MEMORY_STATE_VERSION,
         conversations: state
             .conversations
             .iter()
-            .map(
-                |conv| aura_agent_core::aura_kids::pipeline::ExportedConversationMemory {
-                    conversation_id: conv.conversation_id.clone(),
-                    message_index: conv.message_index,
-                    last_activity_index: conv.message_index,
-                    entries: conv
-                        .entries
-                        .iter()
-                        .map(
-                            |snap| aura_agent_core::aura_kids::pipeline::ExportedMessageSnapshot {
-                                sender_id: snap.sender_id.clone(),
-                                has_grooming: snap.has_grooming,
-                                has_manipulation: snap.has_manipulation,
-                                has_bullying: snap.has_bullying,
-                                has_self_harm: snap.has_self_harm,
-                                has_blackmail_or_sextortion: snap.has_blackmail_or_sextortion,
-                                ml_grooming: snap.ml_grooming,
-                                ml_bullying: snap.ml_bullying,
-                                ml_self_harm: snap.ml_self_harm,
-                                ml_manipulation: snap.ml_manipulation,
-                            },
-                        )
-                        .collect(),
-                },
-            )
+            .map(|conv| ExportedConversationMemory {
+                conversation_id: conv.conversation_id.clone(),
+                message_index: conv.message_index,
+                last_activity_index: conv.last_activity_index.unwrap_or(conv.message_index),
+                last_emitted: conv
+                    .last_emitted
+                    .iter()
+                    .map(|checkpoint| ExportedEmissionCheckpoint {
+                        reason_code: checkpoint.reason_code.clone(),
+                        emitted_at_index: checkpoint.emitted_at_index,
+                    })
+                    .collect(),
+                entries: conv
+                    .entries
+                    .iter()
+                    .map(|snap| ExportedMessageSnapshot {
+                        sender_id: snap.sender_id.clone(),
+                        has_grooming: snap.has_grooming,
+                        has_manipulation: snap.has_manipulation,
+                        has_bullying: snap.has_bullying,
+                        has_self_harm: snap.has_self_harm,
+                        has_blackmail_or_sextortion: snap.has_blackmail_or_sextortion,
+                        ml_grooming: snap.ml_grooming,
+                        ml_bullying: snap.ml_bullying,
+                        ml_self_harm: snap.ml_self_harm,
+                        ml_manipulation: snap.ml_manipulation,
+                    })
+                    .collect(),
+            })
             .collect(),
         senders: state
             .senders
             .iter()
-            .map(
-                |sender| aura_agent_core::aura_kids::pipeline::ExportedSenderMemory {
-                    sender_id: sender.sender_id.clone(),
-                    event_index: sender.event_index,
-                    last_activity_index: sender.event_index,
-                    recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
-                },
-            )
+            .map(|sender| ExportedSenderMemory {
+                sender_id: sender.sender_id.clone(),
+                event_index: sender.event_index,
+                last_activity_index: sender.last_activity_index.unwrap_or(sender.event_index),
+                last_emitted: sender
+                    .last_emitted
+                    .iter()
+                    .map(|checkpoint| ExportedEmissionCheckpoint {
+                        reason_code: checkpoint.reason_code.clone(),
+                        emitted_at_index: checkpoint.emitted_at_index,
+                    })
+                    .collect(),
+                recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
+            })
             .collect(),
-    }
+    })
 }
 
 fn conversation_timeline_state_to_proto(
@@ -3363,14 +3887,6 @@ fn proto_protection_level(value: aura_agent_core::ProtectionLevel) -> proto::Pro
     }
 }
 
-fn proto_account_type(value: aura_agent_core::AccountType) -> proto::AccountType {
-    match value {
-        aura_agent_core::AccountType::Adult => proto::AccountType::Adult,
-        aura_agent_core::AccountType::Teen => proto::AccountType::Teen,
-        aura_agent_core::AccountType::Child => proto::AccountType::Child,
-    }
-}
-
 fn domain_mode_from_proto(value: i32) -> aura_agent_core::DomainMode {
     match proto::DomainMode::try_from(value).unwrap_or(proto::DomainMode::Unspecified) {
         proto::DomainMode::Unspecified | proto::DomainMode::None => {
@@ -3445,23 +3961,6 @@ fn sender_relationship_from_proto(value: i32) -> SenderRelationship {
     }
 }
 
-fn proto_sender_relationship(value: SenderRelationship) -> proto::SenderRelationship {
-    match value {
-        SenderRelationship::Unknown => proto::SenderRelationship::Unknown,
-        SenderRelationship::Parent => proto::SenderRelationship::Parent,
-        SenderRelationship::Guardian => proto::SenderRelationship::Guardian,
-        SenderRelationship::Family => proto::SenderRelationship::Family,
-        SenderRelationship::Sibling => proto::SenderRelationship::Sibling,
-        SenderRelationship::Peer => proto::SenderRelationship::Peer,
-        SenderRelationship::Teacher => proto::SenderRelationship::Teacher,
-        SenderRelationship::Coach => proto::SenderRelationship::Coach,
-        SenderRelationship::Authority => proto::SenderRelationship::Authority,
-        SenderRelationship::Service => proto::SenderRelationship::Service,
-        SenderRelationship::UnknownAdult => proto::SenderRelationship::UnknownAdult,
-        SenderRelationship::UnknownPeer => proto::SenderRelationship::UnknownPeer,
-    }
-}
-
 fn relationship_trust_source_from_proto(value: i32) -> RelationshipTrustSource {
     match proto::RelationshipTrustSource::try_from(value)
         .unwrap_or(proto::RelationshipTrustSource::Unspecified)
@@ -3482,62 +3981,6 @@ fn relationship_trust_source_from_proto(value: i32) -> RelationshipTrustSource {
         proto::RelationshipTrustSource::SelfDeclared => RelationshipTrustSource::SelfDeclared,
         proto::RelationshipTrustSource::Unspecified | proto::RelationshipTrustSource::Unknown => {
             RelationshipTrustSource::Unknown
-        }
-    }
-}
-
-fn proto_relationship_trust_source(
-    value: RelationshipTrustSource,
-) -> proto::RelationshipTrustSource {
-    match value {
-        RelationshipTrustSource::Unknown => proto::RelationshipTrustSource::Unknown,
-        RelationshipTrustSource::UserVerified => proto::RelationshipTrustSource::UserVerified,
-        RelationshipTrustSource::GuardianVerified => {
-            proto::RelationshipTrustSource::GuardianVerified
-        }
-        RelationshipTrustSource::PlatformVerified => {
-            proto::RelationshipTrustSource::PlatformVerified
-        }
-        RelationshipTrustSource::AddressBook => proto::RelationshipTrustSource::AddressBook,
-        RelationshipTrustSource::SchoolDirectory => proto::RelationshipTrustSource::SchoolDirectory,
-        RelationshipTrustSource::ServerReputation => {
-            proto::RelationshipTrustSource::ServerReputation
-        }
-        RelationshipTrustSource::LocalHeuristic => proto::RelationshipTrustSource::LocalHeuristic,
-        RelationshipTrustSource::SelfDeclared => proto::RelationshipTrustSource::SelfDeclared,
-    }
-}
-
-fn proto_relay_privacy_mode(value: RelayPrivacyMode) -> proto::RelayPrivacyMode {
-    match value {
-        RelayPrivacyMode::MetadataOnly => proto::RelayPrivacyMode::MetadataOnly,
-        RelayPrivacyMode::MessageOnly => proto::RelayPrivacyMode::MessageOnly,
-        RelayPrivacyMode::MessageAndWindow => proto::RelayPrivacyMode::MessageAndWindow,
-    }
-}
-
-fn threat_type_from_proto(value: i32) -> aura_agent_core::ThreatType {
-    match proto::ThreatType::try_from(value).unwrap_or(proto::ThreatType::None) {
-        proto::ThreatType::Bullying => aura_agent_core::ThreatType::Bullying,
-        proto::ThreatType::Grooming => aura_agent_core::ThreatType::Grooming,
-        proto::ThreatType::Explicit => aura_agent_core::ThreatType::Explicit,
-        proto::ThreatType::Threat => aura_agent_core::ThreatType::Threat,
-        proto::ThreatType::SelfHarm => aura_agent_core::ThreatType::SelfHarm,
-        proto::ThreatType::Spam => aura_agent_core::ThreatType::Spam,
-        proto::ThreatType::Scam => aura_agent_core::ThreatType::Scam,
-        proto::ThreatType::Phishing => aura_agent_core::ThreatType::Phishing,
-        proto::ThreatType::Manipulation => aura_agent_core::ThreatType::Manipulation,
-        proto::ThreatType::Nsfw => aura_agent_core::ThreatType::Nsfw,
-        proto::ThreatType::HateSpeech => aura_agent_core::ThreatType::HateSpeech,
-        proto::ThreatType::Doxxing => aura_agent_core::ThreatType::Doxxing,
-        proto::ThreatType::PiiLeakage => aura_agent_core::ThreatType::PiiLeakage,
-        proto::ThreatType::Propaganda => aura_agent_core::ThreatType::Propaganda,
-        proto::ThreatType::OpsecViolation => aura_agent_core::ThreatType::OpsecViolation,
-        proto::ThreatType::Psyops => aura_agent_core::ThreatType::Psyops,
-        proto::ThreatType::MilitarySocialEng => aura_agent_core::ThreatType::MilitarySocialEng,
-        proto::ThreatType::CoordinateLeak => aura_agent_core::ThreatType::CoordinateLeak,
-        proto::ThreatType::Unspecified | proto::ThreatType::None => {
-            aura_agent_core::ThreatType::None
         }
     }
 }
@@ -3566,14 +4009,6 @@ fn proto_threat_type(value: aura_agent_core::ThreatType) -> proto::ThreatType {
     }
 }
 
-fn confidence_from_proto(value: i32) -> aura_agent_core::Confidence {
-    match proto::Confidence::try_from(value).unwrap_or(proto::Confidence::Low) {
-        proto::Confidence::Medium => aura_agent_core::Confidence::Medium,
-        proto::Confidence::High => aura_agent_core::Confidence::High,
-        proto::Confidence::Unspecified | proto::Confidence::Low => aura_agent_core::Confidence::Low,
-    }
-}
-
 fn proto_confidence(value: aura_agent_core::Confidence) -> proto::Confidence {
     match value {
         aura_agent_core::Confidence::Low => proto::Confidence::Low,
@@ -3599,62 +4034,6 @@ fn proto_detection_layer(value: aura_agent_core::DetectionLayer) -> proto::Detec
             proto::DetectionLayer::MlClassification
         }
         aura_agent_core::DetectionLayer::ContextAnalysis => proto::DetectionLayer::ContextAnalysis,
-    }
-}
-
-fn proto_relay_detection_layer(value: RelayDetectionLayer) -> proto::DetectionLayer {
-    match value {
-        RelayDetectionLayer::PatternMatching => proto::DetectionLayer::PatternMatching,
-        RelayDetectionLayer::MlClassification => proto::DetectionLayer::MlClassification,
-        RelayDetectionLayer::DomainHeuristic => proto::DetectionLayer::DomainHeuristic,
-        RelayDetectionLayer::ContextAnalysis => proto::DetectionLayer::ContextAnalysis,
-        RelayDetectionLayer::RelayInference => proto::DetectionLayer::RelayInference,
-    }
-}
-
-fn proto_safety_telemetry_surface(value: SafetyTelemetrySurface) -> proto::SafetyTelemetrySurface {
-    match value {
-        SafetyTelemetrySurface::Unknown => proto::SafetyTelemetrySurface::Unspecified,
-        SafetyTelemetrySurface::DirectMessage => proto::SafetyTelemetrySurface::DirectMessage,
-        SafetyTelemetrySurface::GroupChat => proto::SafetyTelemetrySurface::GroupChat,
-        SafetyTelemetrySurface::PublicComment => proto::SafetyTelemetrySurface::PublicComment,
-        SafetyTelemetrySurface::LivestreamComment => {
-            proto::SafetyTelemetrySurface::LivestreamComment
-        }
-    }
-}
-
-fn proto_safety_telemetry_severity(
-    value: SafetyTelemetrySeverity,
-) -> proto::SafetyTelemetrySeverity {
-    match value {
-        SafetyTelemetrySeverity::Low => proto::SafetyTelemetrySeverity::Low,
-        SafetyTelemetrySeverity::Medium => proto::SafetyTelemetrySeverity::Medium,
-        SafetyTelemetrySeverity::High => proto::SafetyTelemetrySeverity::High,
-        SafetyTelemetrySeverity::Critical => proto::SafetyTelemetrySeverity::Critical,
-    }
-}
-
-fn proto_safety_telemetry_action(value: SafetyTelemetryAction) -> proto::SafetyTelemetryAction {
-    match value {
-        SafetyTelemetryAction::None => proto::SafetyTelemetryAction::None,
-        SafetyTelemetryAction::Mark => proto::SafetyTelemetryAction::Mark,
-        SafetyTelemetryAction::Blur => proto::SafetyTelemetryAction::Blur,
-        SafetyTelemetryAction::Warn => proto::SafetyTelemetryAction::Warn,
-        SafetyTelemetryAction::Block => proto::SafetyTelemetryAction::Block,
-        SafetyTelemetryAction::GuardianAlert => proto::SafetyTelemetryAction::GuardianAlert,
-        SafetyTelemetryAction::ReportQueued => proto::SafetyTelemetryAction::ReportQueued,
-        SafetyTelemetryAction::RestrictContact => proto::SafetyTelemetryAction::RestrictContact,
-        SafetyTelemetryAction::CrisisSupport => proto::SafetyTelemetryAction::CrisisSupport,
-    }
-}
-
-fn relay_risk_horizon_from_proto(value: i32) -> RelayRiskHorizon {
-    match proto::RiskHorizon::try_from(value).unwrap_or(proto::RiskHorizon::Unknown) {
-        proto::RiskHorizon::Immediate => RelayRiskHorizon::Immediate,
-        proto::RiskHorizon::ShortTerm => RelayRiskHorizon::NearTerm,
-        proto::RiskHorizon::Sustained => RelayRiskHorizon::Sustained,
-        proto::RiskHorizon::Unspecified | proto::RiskHorizon::Unknown => RelayRiskHorizon::Unknown,
     }
 }
 
@@ -3702,6 +4081,22 @@ fn proto_product_rollout_mode(
         }
         aura_agent_core::ProductRolloutMode::GuardianEnabled => {
             proto::ProductRolloutMode::GuardianEnabled
+        }
+    }
+}
+
+fn product_rollout_mode_from_proto(value: i32) -> aura_agent_core::ProductRolloutMode {
+    match proto::ProductRolloutMode::try_from(value)
+        .unwrap_or(proto::ProductRolloutMode::Unspecified)
+    {
+        proto::ProductRolloutMode::StagingPilot => {
+            aura_agent_core::ProductRolloutMode::StagingPilot
+        }
+        proto::ProductRolloutMode::GuardianEnabled => {
+            aura_agent_core::ProductRolloutMode::GuardianEnabled
+        }
+        proto::ProductRolloutMode::Unspecified | proto::ProductRolloutMode::Shadow => {
+            aura_agent_core::ProductRolloutMode::Shadow
         }
     }
 }
@@ -4027,6 +4422,7 @@ mod tests {
             timezone_offset_minutes: 0,
             domain_mode: proto::DomainMode::None as i32,
             relay_policy: None,
+            product_rollout_mode: proto::ProductRolloutMode::Unspecified as i32,
         }
     }
 
@@ -4057,6 +4453,7 @@ mod tests {
                     protected_account_id: Some("QTNGNUVDRA==".to_string()),
                     ..Default::default()
                 }),
+                product_rollout_mode: proto::ProductRolloutMode::Unspecified as i32,
             };
             let bytes = encode_proto(&config);
             let handle = aura_init(bytes.as_ptr(), bytes.len());
@@ -4462,503 +4859,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn analyze_for_relay_returns_metadata_only_relay_request() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            config.relay_policy = Some(metadata_only_relay_policy());
-            let handle = init_handle(config);
-
-            let response = analyze_for_relay_response(
-                handle,
-                proto_message("i will kill you", "sender_1", "conv_1"),
-                1_700_000_123_456,
-            );
-
-            assert!(response.local_result.is_some());
-            let relay_request = response.relay_request.expect("missing relay request");
-            assert!(relay_request.text.is_empty());
-            assert!(relay_request.request_id.starts_with("req_"));
-            assert!(relay_request.message_id.starts_with("msg_"));
-            assert!(relay_request
-                .sender_token
-                .as_deref()
-                .unwrap_or_default()
-                .starts_with("snd_"));
-            assert!(relay_request
-                .protected_account_token
-                .as_deref()
-                .unwrap_or_default()
-                .starts_with("acct_"));
-            assert!(relay_request
-                .conversation_token
-                .as_deref()
-                .unwrap_or_default()
-                .starts_with("conv_"));
-            assert!(!relay_request.request_id.contains("sender_1"));
-            assert!(!relay_request.message_id.contains("conv_1"));
-            assert_ne!(relay_request.sender_token.as_deref(), Some("sender_1"));
-            assert_ne!(
-                relay_request.protected_account_token.as_deref(),
-                Some("child_local_1")
-            );
-            assert_ne!(relay_request.conversation_token.as_deref(), Some("conv_1"));
-            assert_eq!(
-                relay_request.privacy_mode,
-                proto::RelayPrivacyMode::MetadataOnly as i32
-            );
-            assert!(!relay_request.local_observations.is_empty());
-            assert!(relay_request
-                .local_observations
-                .iter()
-                .all(|observation| observation.explanation.is_empty()));
-            assert_eq!(relay_request.local_safety_telemetry.len(), 1);
-            let telemetry = &relay_request.local_safety_telemetry[0];
-            assert!(telemetry.event_id.starts_with("evt_"));
-            assert!(telemetry.sender_token.starts_with("snd_"));
-            assert!(telemetry.protected_account_token.starts_with("acct_"));
-            assert!(telemetry
-                .conversation_token
-                .as_deref()
-                .unwrap_or_default()
-                .starts_with("conv_"));
-            assert!(telemetry.timestamp_bucket_ms > 0);
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn analyze_for_relay_preserves_relationship_metadata() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            let mut policy = metadata_only_relay_policy();
-            policy.request_auth_key = Some(relay_request_auth_key_proto());
-            config.relay_policy = Some(policy);
-            let handle = init_handle(config);
-            let mut message = proto_message("i will kill you", "sender_1", "conv_1");
-            message.sender_relationship = proto::SenderRelationship::UnknownAdult as i32;
-            message.relationship_trust_source =
-                proto::RelationshipTrustSource::ServerReputation as i32;
-
-            let response = analyze_for_relay_response(handle, message, 1_700_000_123_456);
-            let relay_request = response.relay_request.expect("missing relay request");
-
-            assert_eq!(
-                relay_request.sender_relationship,
-                proto::SenderRelationship::UnknownAdult as i32
-            );
-            assert_eq!(
-                relay_request.relationship_trust_source,
-                proto::RelationshipTrustSource::ServerReputation as i32
-            );
-            let contract = relay_request_contract_from_proto(relay_request);
-            assert!(aura_agent_core::aura_contracts::verify_relay_request_auth(
-                &contract,
-                "relay-req-key-1",
-                &relay_request_auth_secret()
-            ));
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn analyze_for_relay_signs_request_when_auth_key_configured() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            let mut policy = metadata_only_relay_policy();
-            policy.request_auth_key = Some(relay_request_auth_key_proto());
-            config.relay_policy = Some(policy);
-            let handle = init_handle(config);
-
-            let response = analyze_for_relay_response(
-                handle,
-                proto_message("i will kill you", "sender_1", "conv_1"),
-                1_700_000_123_456,
-            );
-
-            let relay_request = response.relay_request.expect("missing relay request");
-            let auth = relay_request.auth.expect("missing relay request auth");
-            assert_eq!(auth.key_id, "relay-req-key-1");
-            assert_eq!(auth.alg, "hmac-sha256-v1");
-            assert_eq!(auth.tag.len(), 64);
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn analyze_for_relay_includes_configured_protected_account_attestation() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            let mut policy = metadata_only_relay_policy();
-            let token = protected_account_token_for("child_local_1");
-            policy.protected_account_attestation = Some(protected_account_attestation_proto(
-                &token,
-                1_900_000_000_000,
-            ));
-            policy.request_auth_key = Some(relay_request_auth_key_proto());
-            config.relay_policy = Some(policy);
-            let handle = init_handle(config);
-
-            let response = analyze_for_relay_response(
-                handle,
-                proto_message("i will kill you", "sender_1", "conv_1"),
-                1_700_000_123_456,
-            );
-
-            let relay_request = response.relay_request.expect("missing relay request");
-            let attestation = relay_request
-                .protected_account_attestation
-                .expect("missing protected account attestation");
-            assert_eq!(attestation.key_id, "acct-attest-key-1");
-            assert_eq!(attestation.protected_account_token, token);
-            assert_eq!(attestation.expires_at_ms, 1_900_000_000_000);
-            assert!(relay_request.auth.is_some());
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn analyze_for_relay_omits_request_when_required_account_attestation_expired() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            let mut policy = metadata_only_relay_policy();
-            let token = protected_account_token_for("child_local_1");
-            let expires_at_ms = future_attestation_expires_at_ms();
-            policy.require_protected_account_attestation = Some(true);
-            policy.protected_account_attestation =
-                Some(protected_account_attestation_proto(&token, expires_at_ms));
-            config.relay_policy = Some(policy);
-            let handle = init_handle(config);
-
-            let response = analyze_for_relay_response(
-                handle,
-                proto_message("i will kill you", "sender_1", "conv_1"),
-                expires_at_ms + 1,
-            );
-
-            assert!(response.local_result.is_some());
-            assert!(response.relay_request.is_none());
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn analyze_for_relay_omits_relay_request_when_policy_disabled() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-
-            let response = analyze_for_relay_response(
-                handle,
-                proto_message("i will kill you", "sender_1", "conv_1"),
-                1_700_000_123_456,
-            );
-
-            assert!(response.local_result.is_some());
-            assert!(response.relay_request.is_none());
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn record_relay_response_applies_hint_to_future_context_analysis() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            config.domain_mode = proto::DomainMode::Kids as i32;
-            config.relay_policy = Some(metadata_only_relay_policy());
-            let handle = init_handle(config);
-            let now_ms = 1_778_652_000_000;
-            let relay_envelope = analyze_for_relay_response(
-                handle,
-                proto_message("i will kill you", "server_hint_sender", "conv_pending_hint"),
-                now_ms,
-            );
-            let relay_request = relay_envelope
-                .relay_request
-                .expect("pending relay request should be emitted");
-            let request = proto::RecordRelayResponseRequest {
-                sender_id: "server_hint_sender".to_string(),
-                response: Some(proto::RelayAnalyzeResponse {
-                    schema_version: "aura.relay.v1alpha1".to_string(),
-                    request_id: relay_request.request_id,
-                    confidence: proto::Confidence::High as i32,
-                    expires_at_ms: Some(now_ms + 60_000),
-                    sender_reputation_hint: Some(0.9),
-                    correlation_findings: vec![
-                        "relay.context.cross_conversation_safety_telemetry".to_string()
-                    ],
-                    ..proto::RelayAnalyzeResponse::default()
-                }),
-                received_at_ms: now_ms,
-            };
-            let bytes = encode_proto(&request);
-
-            assert!(aura_record_relay_response(
-                handle,
-                bytes.as_ptr(),
-                bytes.len()
-            ));
-
-            let result = analyze_context_result(
-                handle,
-                proto_message(
-                    "our little secret",
-                    "server_hint_sender",
-                    "conv_server_hint",
-                ),
-                now_ms + 1,
-            );
-
-            assert!(
-                result
-                    .reason_codes
-                    .iter()
-                    .any(|code| code == "domain.kids.memory.sender_risk_accumulation"),
-                "relay response hint should affect future local analysis, got {:?}",
-                result.reason_codes
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn record_relay_response_requires_configured_auth_over_ffi() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            config.domain_mode = proto::DomainMode::Kids as i32;
-            let mut policy = metadata_only_relay_policy();
-            policy.response_auth_key = Some(relay_response_auth_key_proto());
-            config.relay_policy = Some(policy);
-            let handle = init_handle(config);
-            let now_ms = 1_778_652_000_000;
-            let relay_envelope = analyze_for_relay_response(
-                handle,
-                proto_message("i will kill you", "server_hint_sender", "conv_pending_auth"),
-                now_ms,
-            );
-            let relay_request = relay_envelope
-                .relay_request
-                .expect("pending relay request should be emitted");
-
-            let mut response = proto::RelayAnalyzeResponse {
-                schema_version: "aura.relay.v1alpha1".to_string(),
-                request_id: relay_request.request_id,
-                confidence: proto::Confidence::High as i32,
-                expires_at_ms: Some(now_ms + 60_000),
-                sender_reputation_hint: Some(0.9),
-                correlation_findings: vec![
-                    "relay.context.cross_conversation_safety_telemetry".to_string()
-                ],
-                ..proto::RelayAnalyzeResponse::default()
-            };
-            let unsigned_request = proto::RecordRelayResponseRequest {
-                sender_id: "server_hint_sender".to_string(),
-                response: Some(response.clone()),
-                received_at_ms: now_ms,
-            };
-            let unsigned_bytes = encode_proto(&unsigned_request);
-
-            assert!(!aura_record_relay_response(
-                handle,
-                unsigned_bytes.as_ptr(),
-                unsigned_bytes.len()
-            ));
-
-            let mut contract_response = relay_response_from_proto(response.clone());
-            contract_response.auth = aura_agent_core::aura_contracts::sign_relay_response_auth(
-                &contract_response,
-                relay_request
-                    .sender_token
-                    .as_deref()
-                    .expect("relay request should carry sender token"),
-                "relay-key-1",
-                &relay_response_auth_secret(),
-            );
-            let auth = contract_response.auth.expect("response should sign");
-            response.auth = Some(proto::RelayResponseAuth {
-                key_id: auth.key_id,
-                alg: auth.alg,
-                tag: auth.tag,
-            });
-
-            let signed_request = proto::RecordRelayResponseRequest {
-                sender_id: "server_hint_sender".to_string(),
-                response: Some(response),
-                received_at_ms: now_ms,
-            };
-            let signed_bytes = encode_proto(&signed_request);
-
-            assert!(aura_record_relay_response(
-                handle,
-                signed_bytes.as_ptr(),
-                signed_bytes.len()
-            ));
-
-            let result = analyze_context_result(
-                handle,
-                proto_message(
-                    "our little secret",
-                    "server_hint_sender",
-                    "conv_server_hint_auth",
-                ),
-                now_ms + 1,
-            );
-
-            assert!(
-                result
-                    .reason_codes
-                    .iter()
-                    .any(|code| code == "domain.kids.memory.sender_risk_accumulation"),
-                "signed relay response hint should affect future local analysis, got {:?}",
-                result.reason_codes
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn strict_ffi_agent_to_relay_config_to_signed_response_e2e() {
-        unsafe {
-            let request_secret = relay_request_auth_secret();
-            let response_secret = relay_response_auth_secret();
-            let attestation_secret = "protected account attestation secret";
-            let mut config = proto_config(proto::AccountType::Child, true);
-            config.domain_mode = proto::DomainMode::Kids as i32;
-            let mut policy = metadata_only_relay_policy();
-            let protected_account_token = protected_account_token_for("child_local_1");
-            let issued_attestation =
-                aura_relay_api::ProtectedAccountAttestationIssuer::from_config(
-                    aura_relay_api::ProtectedAccountAttestationIssuerConfig {
-                        signing_keys: vec![
-                            aura_relay_api::RelayProtectedAccountAttestationKeyConfig {
-                                key_id: "acct-attest-key-1".to_string(),
-                                secret: attestation_secret.to_string(),
-                                not_before_ms: Some(1),
-                                not_after_ms: Some(current_unix_ms().saturating_add(600_000)),
-                                revoked: false,
-                            },
-                        ],
-                        ttl_ms: 60_000,
-                        allowed_protected_account_tokens: vec![protected_account_token.clone()],
-                    },
-                )
-                .expect("issuer config should validate")
-                .issue(&protected_account_token, None, current_unix_ms())
-                .expect("issuer should mint protected account attestation");
-            policy.request_auth_key = Some(relay_request_auth_key_proto());
-            policy.response_auth_key = Some(relay_response_auth_key_proto());
-            policy.require_relay_auth = Some(true);
-            policy.require_protected_account_attestation = Some(true);
-            policy.protected_account_attestation = Some(
-                protected_account_attestation_contract_to_proto(issued_attestation),
-            );
-            config.relay_policy = Some(policy);
-            let handle = init_handle(config);
-            let relay =
-                aura_relay_api::RelayService::from_auth_config(aura_relay_api::RelayAuthConfig {
-                    request_auth_keys: vec![aura_relay_api::RelaySharedSecretKeyConfig {
-                        key_id: "relay-req-key-1".to_string(),
-                        secret: String::from_utf8(request_secret.clone())
-                            .expect("test request secret is utf8"),
-                    }],
-                    response_auth_key: Some(aura_relay_api::RelaySharedSecretKeyConfig {
-                        key_id: "relay-key-1".to_string(),
-                        secret: String::from_utf8(response_secret.clone())
-                            .expect("test response secret is utf8"),
-                    }),
-                    protected_account_attestation_keys: vec![
-                        aura_relay_api::RelayProtectedAccountAttestationKeyConfig {
-                            key_id: "acct-attest-key-1".to_string(),
-                            secret: attestation_secret.to_string(),
-                            not_before_ms: Some(1),
-                            not_after_ms: Some(current_unix_ms().saturating_add(600_000)),
-                            revoked: false,
-                        },
-                    ],
-                    protected_account_attestation_max_future_ttl_ms: Some(600_000),
-                })
-                .expect("strict relay auth config should validate");
-            let sender_id = "strict_e2e_sender";
-            let base_ms = current_unix_ms();
-
-            for index in 0..3 {
-                let timestamp_ms = base_ms.saturating_add(index);
-                let relay_envelope = analyze_for_relay_response(
-                    handle,
-                    proto_message(
-                        "dont tell your parents and keep this secret",
-                        sender_id,
-                        &format!("conv_strict_e2e_{index}"),
-                    ),
-                    timestamp_ms,
-                );
-                let relay_request = relay_envelope
-                    .relay_request
-                    .expect("strict policy should emit relay request");
-                assert!(relay_request.auth.is_some());
-                assert!(relay_request.protected_account_attestation.is_some());
-                assert_eq!(
-                    relay_request
-                        .protected_account_token
-                        .as_deref()
-                        .expect("relay request has account token"),
-                    protected_account_token
-                );
-
-                let relay_response =
-                    relay.handle_analyze(relay_request_contract_from_proto(relay_request.clone()));
-                assert!(
-                    !relay_response
-                        .reason_codes
-                        .iter()
-                        .any(|code| code.starts_with("relay.auth.")),
-                    "strict relay rejected FFI request: {:?}",
-                    relay_response.reason_codes
-                );
-                assert!(
-                    relay_response.auth.is_some(),
-                    "strict relay response should be signed"
-                );
-
-                let record_request = proto::RecordRelayResponseRequest {
-                    sender_id: sender_id.to_string(),
-                    response: Some(relay_response_to_proto(relay_response)),
-                    received_at_ms: timestamp_ms,
-                };
-                let record_bytes = encode_proto(&record_request);
-                assert!(aura_record_relay_response(
-                    handle,
-                    record_bytes.as_ptr(),
-                    record_bytes.len()
-                ));
-            }
-
-            let result = analyze_context_result(
-                handle,
-                proto_message("our little secret", sender_id, "conv_strict_e2e_final"),
-                base_ms.saturating_add(3),
-            );
-
-            assert!(
-                result
-                    .reason_codes
-                    .iter()
-                    .any(|code| code.starts_with("domain.kids.memory.")),
-                "strict relay response loop should preserve kids-memory escalation, got {:?}",
-                result.reason_codes
-            );
-
-            aura_free(handle);
-        }
-    }
-
     fn metadata_only_relay_policy() -> proto::AgentRelayPolicy {
         proto::AgentRelayPolicy {
             enabled: Some(true),
@@ -5023,18 +4923,6 @@ mod tests {
         }
     }
 
-    fn protected_account_attestation_contract_to_proto(
-        attestation: aura_agent_core::aura_contracts::ProtectedAccountTokenAttestation,
-    ) -> proto::ProtectedAccountTokenAttestation {
-        proto::ProtectedAccountTokenAttestation {
-            key_id: attestation.key_id,
-            alg: attestation.alg,
-            protected_account_token: attestation.protected_account_token,
-            expires_at_ms: attestation.expires_at_ms,
-            tag: attestation.tag,
-        }
-    }
-
     fn relay_response_auth_key_proto() -> proto::RelayResponseAuthKey {
         proto::RelayResponseAuthKey {
             key_id: "relay-key-1".to_string(),
@@ -5044,235 +4932,6 @@ mod tests {
 
     fn relay_response_auth_secret() -> Vec<u8> {
         b"relay response auth test secret".to_vec()
-    }
-
-    fn relay_request_contract_from_proto(
-        request: proto::RelayAnalyzeRequest,
-    ) -> RelayAnalyzeRequestContract {
-        RelayAnalyzeRequestContract {
-            schema_version: request.schema_version,
-            request_id: request.request_id,
-            message_id: request.message_id,
-            sender_token: request.sender_token,
-            protected_account_token: request.protected_account_token,
-            conversation_token: request.conversation_token,
-            account_type: account_type_from_proto(request.account_type),
-            protection_level: protection_level_from_proto(request.protection_level),
-            conversation_type: conversation_type_from_proto(request.conversation_type),
-            language: request.language,
-            text: request.text,
-            local_observations: request
-                .local_observations
-                .into_iter()
-                .map(relay_observation_from_proto_for_test)
-                .collect(),
-            local_context: None,
-            local_context_summary: request
-                .local_context_summary
-                .map(
-                    |summary| aura_agent_core::aura_contracts::LocalContextSummary {
-                        context_markers: summary.context_markers,
-                        recent_observations: summary
-                            .recent_observations
-                            .into_iter()
-                            .map(relay_observation_from_proto_for_test)
-                            .collect(),
-                        recent_confirmed_events: Vec::new(),
-                    },
-                )
-                .unwrap_or_default(),
-            local_safety_telemetry: request
-                .local_safety_telemetry
-                .into_iter()
-                .map(relay_safety_telemetry_from_proto_for_test)
-                .collect(),
-            recent_message_window: request
-                .recent_message_window
-                .into_iter()
-                .map(
-                    |entry| aura_agent_core::aura_contracts::MessageWindowEntry {
-                        sender_id: entry.sender_id,
-                        text: entry.text,
-                        timestamp_ms: entry.timestamp_ms,
-                    },
-                )
-                .collect(),
-            server_sender_risk_hint: request.server_sender_risk_hint,
-            sender_relationship: sender_relationship_from_proto(request.sender_relationship),
-            relationship_trust_source: relationship_trust_source_from_proto(
-                request.relationship_trust_source,
-            ),
-            privacy_mode: relay_privacy_mode_from_proto(request.privacy_mode),
-            capabilities: request
-                .capabilities
-                .map(
-                    |capabilities| aura_agent_core::aura_contracts::AgentCapabilities {
-                        local_context_interpreter: capabilities.local_context_interpreter,
-                        local_tracker: capabilities.local_tracker,
-                        supports_remote_correlation: capabilities.supports_remote_correlation,
-                        relay_timeout_ms: capabilities.relay_timeout_ms,
-                    },
-                )
-                .unwrap_or_default(),
-            deadline_ms: request.deadline_ms,
-            protected_account_attestation: request.protected_account_attestation.map(
-                |attestation| ProtectedAccountTokenAttestationContract {
-                    key_id: attestation.key_id,
-                    alg: attestation.alg,
-                    protected_account_token: attestation.protected_account_token,
-                    expires_at_ms: attestation.expires_at_ms,
-                    tag: attestation.tag,
-                },
-            ),
-            auth: request.auth.map(|auth| RelayRequestAuthContract {
-                key_id: auth.key_id,
-                alg: auth.alg,
-                tag: auth.tag,
-            }),
-        }
-    }
-
-    fn relay_observation_from_proto_for_test(
-        observation: proto::RelayObservation,
-    ) -> aura_agent_core::aura_contracts::RawObservation {
-        aura_agent_core::aura_contracts::RawObservation {
-            threat_type: threat_type_from_proto(observation.threat_type),
-            threat_subtype: observation.threat_subtype,
-            layer: relay_detection_layer_from_proto_for_test(observation.layer),
-            score: observation.score,
-            confidence: confidence_from_proto(observation.confidence),
-            reason_code: observation.reason_code,
-            explanation: observation.explanation,
-        }
-    }
-
-    fn relay_detection_layer_from_proto_for_test(value: i32) -> RelayDetectionLayer {
-        match proto::DetectionLayer::try_from(value).unwrap_or(proto::DetectionLayer::Unspecified) {
-            proto::DetectionLayer::MlClassification => RelayDetectionLayer::MlClassification,
-            proto::DetectionLayer::ContextAnalysis => RelayDetectionLayer::ContextAnalysis,
-            proto::DetectionLayer::DomainHeuristic => RelayDetectionLayer::DomainHeuristic,
-            proto::DetectionLayer::RelayInference => RelayDetectionLayer::RelayInference,
-            proto::DetectionLayer::Unspecified | proto::DetectionLayer::PatternMatching => {
-                RelayDetectionLayer::PatternMatching
-            }
-        }
-    }
-
-    fn relay_safety_telemetry_from_proto_for_test(
-        event: proto::RelaySafetyTelemetryEvent,
-    ) -> ClientSafetyTelemetryEvent {
-        ClientSafetyTelemetryEvent {
-            event_id: event.event_id,
-            sender_token: event.sender_token,
-            protected_account_token: event.protected_account_token,
-            conversation_token: event.conversation_token,
-            surface: safety_telemetry_surface_from_proto_for_test(event.surface),
-            threat_type: threat_type_from_proto(event.threat_type),
-            severity: safety_telemetry_severity_from_proto_for_test(event.severity),
-            confidence: confidence_from_proto(event.confidence),
-            action: safety_telemetry_action_from_proto_for_test(event.action),
-            timestamp_bucket_ms: event.timestamp_bucket_ms,
-            reason_family: event.reason_family,
-        }
-    }
-
-    fn safety_telemetry_surface_from_proto_for_test(value: i32) -> SafetyTelemetrySurface {
-        match proto::SafetyTelemetrySurface::try_from(value)
-            .unwrap_or(proto::SafetyTelemetrySurface::Unspecified)
-        {
-            proto::SafetyTelemetrySurface::GroupChat => SafetyTelemetrySurface::GroupChat,
-            proto::SafetyTelemetrySurface::PublicComment => SafetyTelemetrySurface::PublicComment,
-            proto::SafetyTelemetrySurface::LivestreamComment => {
-                SafetyTelemetrySurface::LivestreamComment
-            }
-            proto::SafetyTelemetrySurface::Unspecified
-            | proto::SafetyTelemetrySurface::DirectMessage => SafetyTelemetrySurface::DirectMessage,
-        }
-    }
-
-    fn safety_telemetry_severity_from_proto_for_test(value: i32) -> SafetyTelemetrySeverity {
-        match proto::SafetyTelemetrySeverity::try_from(value)
-            .unwrap_or(proto::SafetyTelemetrySeverity::Unspecified)
-        {
-            proto::SafetyTelemetrySeverity::Medium => SafetyTelemetrySeverity::Medium,
-            proto::SafetyTelemetrySeverity::High => SafetyTelemetrySeverity::High,
-            proto::SafetyTelemetrySeverity::Critical => SafetyTelemetrySeverity::Critical,
-            proto::SafetyTelemetrySeverity::Unspecified | proto::SafetyTelemetrySeverity::Low => {
-                SafetyTelemetrySeverity::Low
-            }
-        }
-    }
-
-    fn safety_telemetry_action_from_proto_for_test(value: i32) -> SafetyTelemetryAction {
-        match proto::SafetyTelemetryAction::try_from(value)
-            .unwrap_or(proto::SafetyTelemetryAction::Unspecified)
-        {
-            proto::SafetyTelemetryAction::Mark => SafetyTelemetryAction::Mark,
-            proto::SafetyTelemetryAction::Blur => SafetyTelemetryAction::Blur,
-            proto::SafetyTelemetryAction::Warn => SafetyTelemetryAction::Warn,
-            proto::SafetyTelemetryAction::Block => SafetyTelemetryAction::Block,
-            proto::SafetyTelemetryAction::GuardianAlert => SafetyTelemetryAction::GuardianAlert,
-            proto::SafetyTelemetryAction::ReportQueued => SafetyTelemetryAction::ReportQueued,
-            proto::SafetyTelemetryAction::RestrictContact => SafetyTelemetryAction::RestrictContact,
-            proto::SafetyTelemetryAction::CrisisSupport => SafetyTelemetryAction::CrisisSupport,
-            proto::SafetyTelemetryAction::Unspecified | proto::SafetyTelemetryAction::None => {
-                SafetyTelemetryAction::None
-            }
-        }
-    }
-
-    fn relay_response_to_proto(
-        response: RelayAnalyzeResponseContract,
-    ) -> proto::RelayAnalyzeResponse {
-        proto::RelayAnalyzeResponse {
-            schema_version: response.schema_version,
-            request_id: response.request_id,
-            remote_observations: response
-                .remote_observations
-                .iter()
-                .map(relay_observation_to_proto)
-                .collect(),
-            findings: response
-                .findings
-                .into_iter()
-                .map(|finding| proto::RelayRemoteFinding {
-                    threat_type: proto_threat_type(finding.threat_type) as i32,
-                    score: finding.score,
-                    confidence: proto_confidence(finding.confidence) as i32,
-                    reason_code: finding.reason_code,
-                    explanation: finding.explanation,
-                })
-                .collect(),
-            inference: response
-                .inference
-                .map(|inference| proto::RelayRemoteInferenceSummary {
-                    primary_threat: proto_threat_type(inference.primary_threat) as i32,
-                    score: inference.score,
-                    confidence: proto_confidence(inference.confidence) as i32,
-                    risk_horizon: proto_relay_risk_horizon_for_test(inference.risk_horizon) as i32,
-                }),
-            reason_codes: response.reason_codes,
-            context_markers: response.context_markers,
-            confidence: proto_confidence(response.confidence) as i32,
-            expires_at_ms: response.expires_at_ms,
-            sender_reputation_hint: response.sender_reputation_hint,
-            correlation_findings: response.correlation_findings,
-            auth: response.auth.map(|auth| proto::RelayResponseAuth {
-                key_id: auth.key_id,
-                alg: auth.alg,
-                tag: auth.tag,
-            }),
-            ..proto::RelayAnalyzeResponse::default()
-        }
-    }
-
-    fn proto_relay_risk_horizon_for_test(value: RelayRiskHorizon) -> proto::RiskHorizon {
-        match value {
-            RelayRiskHorizon::Immediate => proto::RiskHorizon::Immediate,
-            RelayRiskHorizon::NearTerm => proto::RiskHorizon::ShortTerm,
-            RelayRiskHorizon::Sustained => proto::RiskHorizon::Sustained,
-            RelayRiskHorizon::Unknown => proto::RiskHorizon::Unknown,
-        }
     }
 
     fn relay_previous_response_auth_key_proto() -> proto::RelayResponseAuthKey {
@@ -5544,26 +5203,6 @@ mod tests {
         decode_buffer(out)
     }
 
-    unsafe fn analyze_for_relay_response(
-        handle: *mut c_void,
-        message: proto::MessageInput,
-        timestamp_ms: u64,
-    ) -> proto::AnalyzeForRelayResponse {
-        let request = proto::AnalyzeContextRequest {
-            message: Some(message),
-            timestamp_ms,
-        };
-        let bytes = encode_proto(&request);
-        let mut out = AuraBuffer::empty();
-        assert!(aura_analyze_for_relay(
-            handle,
-            bytes.as_ptr(),
-            bytes.len(),
-            &mut out
-        ));
-        decode_buffer(out)
-    }
-
     unsafe fn batch_results(
         handle: *mut c_void,
         items: Vec<proto::BatchAnalyzeItem>,
@@ -5598,6 +5237,12 @@ mod tests {
     unsafe fn export_context(handle: *mut c_void) -> proto::ExportContextResponse {
         let mut out = AuraBuffer::empty();
         assert!(aura_export_context(handle, &mut out));
+        decode_buffer(out)
+    }
+
+    unsafe fn runtime_capabilities(handle: *mut c_void) -> proto::RuntimeCapabilities {
+        let mut out = AuraBuffer::empty();
+        assert!(aura_get_runtime_capabilities(handle, &mut out));
         decode_buffer(out)
     }
 
@@ -6307,7 +5952,9 @@ mod tests {
     #[test]
     fn analysis_result_includes_inference_summary_over_ffi() {
         unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let mut config = proto_config(proto::AccountType::Child, true);
+            config.product_rollout_mode = proto::ProductRolloutMode::GuardianEnabled as i32;
+            let handle = init_handle(config);
             assert!(!handle.is_null());
 
             let _ = analyze_context_result(
@@ -6375,6 +6022,53 @@ mod tests {
                 .unwrap()
             );
 
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn unspecified_rollout_fails_safe_to_shadow_over_ffi() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+            let result = analyze_result(
+                handle,
+                proto_message("ordinary message", "user_1", "conv_1"),
+            );
+            let rollout_mode = result
+                .product_surface
+                .map(|surface| surface.rollout_mode)
+                .and_then(|value| proto::ProductRolloutMode::try_from(value).ok());
+
+            assert_eq!(rollout_mode, Some(proto::ProductRolloutMode::Shadow));
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn runtime_capabilities_report_actual_fallback_and_text_url_only() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+            let capabilities = runtime_capabilities(handle);
+            let modalities = capabilities
+                .supported_modalities
+                .iter()
+                .filter_map(|value| proto::RuntimeModality::try_from(*value).ok())
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                (
+                    proto::RuntimeBackend::try_from(capabilities.backend).ok(),
+                    capabilities.models,
+                    modalities,
+                    proto::ProductRolloutMode::try_from(capabilities.product_rollout_mode).ok(),
+                ),
+                (
+                    Some(proto::RuntimeBackend::RulesFallback),
+                    Vec::new(),
+                    vec![proto::RuntimeModality::Text, proto::RuntimeModality::Url],
+                    Some(proto::ProductRolloutMode::Shadow),
+                )
+            );
             aura_free(handle);
         }
     }
@@ -6472,6 +6166,95 @@ mod tests {
 
             aura_free(handle);
         }
+    }
+
+    #[test]
+    fn kids_memory_proto_conversion_preserves_exact_persistence_fields() {
+        use aura_agent_core::aura_kids::pipeline::{
+            ExportedConversationMemory, ExportedEmissionCheckpoint, ExportedKidsMemoryState,
+            ExportedSenderMemory, KIDS_MEMORY_STATE_VERSION,
+        };
+
+        let state = ExportedKidsMemoryState {
+            schema_version: KIDS_MEMORY_STATE_VERSION,
+            conversations: vec![ExportedConversationMemory {
+                conversation_id: "conv_exact".to_string(),
+                entries: Vec::new(),
+                message_index: 11,
+                last_activity_index: 101,
+                last_emitted: vec![ExportedEmissionCheckpoint {
+                    reason_code: "grooming_progression".to_string(),
+                    emitted_at_index: 10,
+                }],
+            }],
+            senders: vec![ExportedSenderMemory {
+                sender_id: "sender_exact".to_string(),
+                event_index: 13,
+                recent_high_risk_conversations: vec!["conv_exact".to_string()],
+                last_activity_index: 102,
+                last_emitted: vec![ExportedEmissionCheckpoint {
+                    reason_code: "cross_conversation_repeat_offender".to_string(),
+                    emitted_at_index: 12,
+                }],
+            }],
+        };
+
+        let proto = kids_memory_state_to_proto(&state);
+        let restored = kids_memory_state_from_proto(&proto).expect("kids state conversion");
+
+        assert_eq!(
+            (
+                restored.schema_version,
+                restored.conversations[0].last_activity_index,
+                restored.conversations[0].last_emitted.clone(),
+                restored.senders[0].last_activity_index,
+                restored.senders[0].last_emitted.clone(),
+            ),
+            (
+                KIDS_MEMORY_STATE_VERSION,
+                101,
+                vec![ExportedEmissionCheckpoint {
+                    reason_code: "grooming_progression".to_string(),
+                    emitted_at_index: 10,
+                }],
+                102,
+                vec![ExportedEmissionCheckpoint {
+                    reason_code: "cross_conversation_repeat_offender".to_string(),
+                    emitted_at_index: 12,
+                }],
+            )
+        );
+    }
+
+    #[test]
+    fn legacy_kids_memory_without_activity_indices_uses_monotonic_fallbacks() {
+        let legacy = proto::KidsMemoryState {
+            conversations: vec![proto::KidsConversationMemoryState {
+                conversation_id: "legacy_conv".to_string(),
+                entries: Vec::new(),
+                message_index: 41,
+                last_activity_index: None,
+                last_emitted: Vec::new(),
+            }],
+            senders: vec![proto::KidsSenderMemoryState {
+                sender_id: "legacy_sender".to_string(),
+                event_index: 42,
+                recent_high_risk_conversations: Vec::new(),
+                last_activity_index: None,
+                last_emitted: Vec::new(),
+            }],
+            schema_version: 0,
+        };
+
+        let restored = kids_memory_state_from_proto(&legacy).expect("legacy kids state");
+
+        assert_eq!(
+            (
+                restored.conversations[0].last_activity_index,
+                restored.senders[0].last_activity_index,
+            ),
+            (41, 42)
+        );
     }
 
     #[test]
@@ -7580,6 +7363,48 @@ mod tests {
 
             let profile = get_contact_profile(handle, "stranger");
             assert!(profile.found, "existing state should remain intact");
+
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn future_kids_schema_import_via_ffi_preserves_existing_state() {
+        unsafe {
+            let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let _ = analyze_context_result(
+                handle,
+                proto_message("don't tell your parents", "stranger", "conv_1"),
+                1000,
+            );
+
+            let mut state = export_context(handle).state.expect("missing state");
+            state
+                .kids_memory
+                .as_mut()
+                .expect("missing kids memory")
+                .schema_version =
+                aura_agent_core::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION + 1;
+            let request = proto::ImportContextRequest { state: Some(state) };
+            let bytes = encode_proto(&request);
+
+            assert!(!aura_import_context(handle, bytes.as_ptr(), bytes.len()));
+            let err_str = last_error_string();
+            let reexported = export_context(handle).state.expect("missing state");
+            let kids_conversation_preserved = reexported.kids_memory.as_ref().is_some_and(|kids| {
+                kids.conversations
+                    .iter()
+                    .any(|conversation| conversation.conversation_id == "conv_1")
+            });
+
+            assert_eq!(
+                (
+                    err_str.contains("incompatible kids memory state version"),
+                    get_contact_profile(handle, "stranger").found,
+                    kids_conversation_preserved,
+                ),
+                (true, true, true)
+            );
 
             aura_free(handle);
         }

@@ -7,6 +7,9 @@
 //! Modules re-exported here will gradually migrate from `aura-core` as
 //! the split progresses.
 
+/// Product-neutral case lifecycle, deduplication, and guardian-report policy.
+pub mod safety_case;
+
 // ── Re-exports from aura-core (transitional) ────────────────────────
 
 pub use aura_core::action;

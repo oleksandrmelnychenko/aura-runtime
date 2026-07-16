@@ -634,6 +634,10 @@ impl ConversationTracker {
             }
         }
 
+        while self.timelines.len() > self.config.max_conversations {
+            self.evict_oldest_conversation();
+        }
+
         if max_imported_id >= self.next_event_id {
             self.next_event_id = max_imported_id + 1;
         }
@@ -659,7 +663,7 @@ impl ConversationTracker {
         let mut oldest_ts: u64 = u64::MAX;
         for (id, t) in &self.timelines {
             let ts = t.all_events().last().map(|e| e.timestamp_ms).unwrap_or(0);
-            if ts < oldest_ts {
+            if oldest_id.is_none() || ts < oldest_ts {
                 oldest_ts = ts;
                 oldest_id = Some(id.clone());
             }
@@ -1410,6 +1414,40 @@ mod tests {
 
         assert_eq!(tracker2.timeline("conv_1").unwrap().len(), 2);
         assert!(tracker2.contact_profiler().profile("alice").is_some());
+    }
+
+    #[test]
+    fn state_import_reapplies_max_conversation_bound() {
+        let timelines = (0..3)
+            .map(|index| ConversationTimelineState {
+                conversation_id: ConversationId::from(format!("conv_{index}")),
+                conversation_type: ConversationType::Direct,
+                events: vec![make_event(
+                    &format!("conv_{index}"),
+                    "alice",
+                    EventKind::NormalConversation,
+                    (index + 1) * 1_000,
+                )],
+            })
+            .collect();
+        let state = TrackerWireState {
+            schema_version: TRACKER_STATE_VERSION,
+            timelines,
+            contact_profiler: ContactProfilerWireState {
+                profiles: Vec::new(),
+            },
+        };
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            max_conversations: 2,
+            ..TrackerConfig::default()
+        });
+
+        tracker.import_wire_state(state).unwrap();
+
+        assert_eq!(
+            (tracker.conversation_ids().len(), tracker.timeline("conv_0").is_none()),
+            (2, true)
+        );
     }
 
     #[test]

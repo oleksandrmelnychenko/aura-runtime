@@ -6,21 +6,20 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Ecliptix App (Kotlin/Swift)                  │
 │                                                                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────────┐  │
-│  │ analyze  │  │ analyze  │  │ guardian  │  │ export / import   │  │
-│  │ _context │  │ _batch   │  │ _feedback │  │ _context          │  │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────────┬──────────┘  │
-└───────┼──────────────┼─────────────┼─────────────────┼──────────────┘
-        │ protobuf     │ protobuf    │ protobuf        │ protobuf
-════════╪══════════════╪═════════════╪═════════════════╪══════════════
-        ▼              ▼             ▼                 ▼
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────┐                 │
+│  │ analyze  │  │ analyze  │  │ export / import   │                 │
+│  │ _context │  │ _batch   │  │ _context          │                 │
+│  └────┬─────┘  └────┬─────┘  └────────┬──────────┘                 │
+└───────┼──────────────┼─────────────────┼────────────────────────────┘
+        │ protobuf     │ protobuf        │ protobuf
+════════╪══════════════╪═════════════════╪════════════════════════════
+        ▼              ▼                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                          aura-ffi (C FFI)                           │
 │                                                                     │
 │  Proto decode ──► Core types ──► Analyzer ──► Proto encode          │
 │                                                                     │
 │  MessageInput ──────────────────► AnalysisResult                    │
-│  GuardianFeedbackRequest ───────► GuardianFeedbackResponse          │
 │  (empty) ───────────────────────► ExportContextResponse             │
 │  ImportContextRequest ──────────► StatusResponse                    │
 └──────────────────────────┬──────────────────────────────────────────┘
@@ -284,22 +283,6 @@ AnalysisResult
     ├── conversation_risk_score: f32
     ├── sender_risk_score: f32
     └── escalation_message_count: u32
-```
-
-## Guardian Feedback Flow
-
-```
-App ──► aura_guardian_feedback(GuardianFeedbackRequest)
-          │
-          ├── TRUSTED ──► remove sender from sender_memory
-          │                remove sender entries from conversation_memory
-          │
-          ├── BLOCK ────► inject 5 synthetic high-risk conversation markers
-          │                → repeat-offender fires immediately on next message
-          │
-          ├── MONITOR ──► no memory change (app-layer behavior)
-          │
-          └── FALSE_POSITIVE ► remove conversation from conversation_memory
 ```
 
 ## Export / Import Flow

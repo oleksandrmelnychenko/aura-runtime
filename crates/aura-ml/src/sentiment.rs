@@ -568,6 +568,17 @@ impl crate::backend::SentimentBackend for SentimentAnalyzer {
         }
         "fallback"
     }
+
+    fn is_onnx(&self) -> bool {
+        #[cfg(feature = "onnx")]
+        {
+            self.session.is_some()
+        }
+        #[cfg(not(feature = "onnx"))]
+        {
+            false
+        }
+    }
 }
 
 #[cfg(test)]

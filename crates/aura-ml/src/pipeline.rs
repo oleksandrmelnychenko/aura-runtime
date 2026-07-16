@@ -24,6 +24,20 @@ use crate::toxicity::ToxicityClassifier;
 use crate::types::{CascadeTier, MlConfig, MlResult, MlUncertaintyLevel, OnDeviceProfile};
 use crate::unified::UnifiedModel;
 
+/// Inference implementation actually loaded by [`MlPipeline`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MlRuntimeBackend {
+    RulesFallback,
+    Onnx,
+}
+
+/// Non-sensitive identity of an ONNX artifact actually loaded by the pipeline.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MlRuntimeModelIdentity {
+    pub component: String,
+    pub identifier: String,
+}
+
 pub struct MlPipeline {
     toxicity: Box<dyn ToxicityBackend>,
     sentiment: Box<dyn SentimentBackend>,
@@ -35,6 +49,8 @@ pub struct MlPipeline {
     config: MlConfig,
     cache: InferenceCache,
     telemetry: InferenceTelemetry,
+    runtime_backend: MlRuntimeBackend,
+    loaded_models: Vec<MlRuntimeModelIdentity>,
 }
 
 impl MlPipeline {
@@ -87,6 +103,24 @@ impl MlPipeline {
         };
         let cache = InferenceCache::new(config.cache_size, config.cache_ttl_secs);
         let telemetry = InferenceTelemetry::new();
+        let runtime_backend = if unified.as_ref().is_some_and(UnifiedModel::has_onnx)
+            || toxicity.is_onnx()
+            || sentiment.is_onnx()
+            || safety.is_onnx()
+            || intent.is_onnx()
+        {
+            MlRuntimeBackend::Onnx
+        } else {
+            MlRuntimeBackend::RulesFallback
+        };
+        let loaded_models = Self::collect_loaded_models(
+            &config,
+            unified.as_ref(),
+            toxicity.as_ref(),
+            sentiment.as_ref(),
+            safety.as_ref(),
+            intent.as_ref(),
+        );
 
         let mut pipeline = Self {
             toxicity,
@@ -99,6 +133,8 @@ impl MlPipeline {
             config,
             cache,
             telemetry,
+            runtime_backend,
+            loaded_models,
         };
 
         if Self::has_any_onnx_model_configured(&pipeline.config) && pipeline.config.warmup_on_init {
@@ -386,6 +422,70 @@ impl MlPipeline {
             || self.config.sentiment_model_path.is_some()
             || self.config.safety_model_path.is_some()
             || self.config.intent_model_path.is_some()
+    }
+
+    /// Returns the backend that was successfully loaded, independent of requested paths.
+    pub fn runtime_backend(&self) -> MlRuntimeBackend {
+        self.runtime_backend
+    }
+
+    /// Returns identifiers for ONNX artifacts that were successfully loaded.
+    pub fn loaded_models(&self) -> &[MlRuntimeModelIdentity] {
+        &self.loaded_models
+    }
+
+    fn collect_loaded_models(
+        config: &MlConfig,
+        unified: Option<&UnifiedModel>,
+        toxicity: &dyn ToxicityBackend,
+        sentiment: &dyn SentimentBackend,
+        safety: &dyn SafetyBackend,
+        intent: &dyn IntentBackend,
+    ) -> Vec<MlRuntimeModelIdentity> {
+        let mut models = Vec::with_capacity(5);
+        if unified.is_some_and(UnifiedModel::has_onnx) {
+            Self::push_loaded_model(&mut models, "unified", config.unified_model_path.as_deref());
+        }
+        if toxicity.is_onnx() {
+            Self::push_loaded_model(
+                &mut models,
+                "toxicity",
+                config.toxicity_model_path.as_deref(),
+            );
+        }
+        if sentiment.is_onnx() {
+            Self::push_loaded_model(
+                &mut models,
+                "sentiment",
+                config.sentiment_model_path.as_deref(),
+            );
+        }
+        if safety.is_onnx() {
+            Self::push_loaded_model(&mut models, "safety", config.safety_model_path.as_deref());
+        }
+        if intent.is_onnx() {
+            Self::push_loaded_model(&mut models, "intent", config.intent_model_path.as_deref());
+        }
+        models
+    }
+
+    fn push_loaded_model(
+        models: &mut Vec<MlRuntimeModelIdentity>,
+        component: &str,
+        path: Option<&str>,
+    ) {
+        let Some(path) = path else {
+            return;
+        };
+        let identifier = std::path::Path::new(path)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| component.to_string());
+        models.push(MlRuntimeModelIdentity {
+            component: component.to_string(),
+            identifier,
+        });
     }
 
     fn has_any_onnx_model_configured(config: &MlConfig) -> bool {

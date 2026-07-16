@@ -37,7 +37,7 @@ pub use dataset_adapters::{
     parse_sensitive_content_adapter_records, Wave1AdapterComparison, Wave1DatasetSource,
     Wave1TrainingExample,
 };
-pub use pipeline::MlPipeline;
+pub use pipeline::{MlPipeline, MlRuntimeBackend, MlRuntimeModelIdentity};
 pub use tokenizer::WordPieceTokenizer;
 pub use tokenizer_sp::{AnyTokenizer, SentencePieceTokenizer, Tokenizer};
 pub use types::{

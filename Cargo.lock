@@ -51,12 +51,14 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 name = "aura-agent-core"
 version = "0.2.0"
 dependencies = [
+ "aura-agent-policy",
  "aura-contracts",
  "aura-core",
  "aura-kids",
  "aura-patterns",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
  "tracing",
  "zeroize",
@@ -69,7 +71,6 @@ dependencies = [
  "aura-agent-core",
  "aura-patterns",
  "aura-proto",
- "aura-relay-api",
  "chrono",
  "prost",
  "serde",
@@ -83,6 +84,8 @@ version = "0.2.0"
 dependencies = [
  "aura-contracts",
  "aura-core",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]

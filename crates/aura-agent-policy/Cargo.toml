@@ -7,3 +7,5 @@ description = "Agent-side policy layer: action decisions, product surfacing, sha
 [dependencies]
 aura-contracts = { path = "../aura-contracts" }
 aura-core = { path = "../aura-core" }
+serde.workspace = true
+thiserror.workspace = true

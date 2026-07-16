@@ -4,24 +4,36 @@ use crate::types::{IntentPrediction, SafetyPrediction, SentimentPrediction, Toxi
 pub trait ToxicityBackend: Send {
     fn predict(&mut self, text: &str) -> Option<ToxicityPrediction>;
     fn name(&self) -> &str;
+    fn is_onnx(&self) -> bool {
+        false
+    }
 }
 
 /// Backend trait for sentiment analysis.
 pub trait SentimentBackend: Send {
     fn predict(&mut self, text: &str) -> Option<SentimentPrediction>;
     fn name(&self) -> &str;
+    fn is_onnx(&self) -> bool {
+        false
+    }
 }
 
 /// Backend trait for child-safety classification.
 pub trait SafetyBackend: Send {
     fn predict(&mut self, text: &str) -> Option<SafetyPrediction>;
     fn name(&self) -> &str;
+    fn is_onnx(&self) -> bool {
+        false
+    }
 }
 
 /// Backend trait for intent classification.
 pub trait IntentBackend: Send {
     fn predict(&mut self, text: &str) -> Option<IntentPrediction>;
     fn name(&self) -> &str;
+    fn is_onnx(&self) -> bool {
+        false
+    }
 }
 
 /// Gate model trait for cascade Tier 1 decisions.

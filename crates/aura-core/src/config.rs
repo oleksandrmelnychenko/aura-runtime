@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::product::ProductRolloutMode;
 use crate::types::{AccountType, AuraDomainModule, DomainMode, ProtectionLevel};
 
 /// Holds the runtime configuration for the AURA protection system.
@@ -41,6 +42,12 @@ pub struct AuraConfig {
     /// Selects the account-level domain mode on top of base Aura.
     #[serde(default)]
     pub domain_mode: DomainMode,
+
+    /// Controls whether product decisions are mirrored or applied.
+    ///
+    /// Missing persisted values fail safe to [`ProductRolloutMode::Shadow`].
+    #[serde(default)]
+    pub product_rollout_mode: ProductRolloutMode,
 }
 
 fn default_ttl_days() -> u32 {
@@ -215,6 +222,7 @@ impl Default for AuraConfig {
             ttl_days: 30,
             timezone_offset_minutes: 0,
             domain_mode: DomainMode::default(),
+            product_rollout_mode: ProductRolloutMode::Shadow,
         }
     }
 }
@@ -222,7 +230,16 @@ impl Default for AuraConfig {
 #[cfg(test)]
 mod tests {
     use super::AuraConfig;
+    use crate::product::ProductRolloutMode;
     use crate::types::{AccountType, AuraDomainModule, DomainMode};
+
+    #[test]
+    fn default_product_rollout_is_shadow() {
+        assert_eq!(
+            AuraConfig::default().product_rollout_mode,
+            ProductRolloutMode::Shadow
+        );
+    }
 
     #[test]
     fn child_account_defaults_to_kids_domain_module() {

@@ -2,7 +2,10 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use aura_domain::MlSafetyHint;
-use aura_ml::{IntentLabel, MlConfig, MlPipeline, MlUncertaintyLevel, SafetyLabel, ToxicityLabel};
+use aura_ml::{
+    IntentLabel, MlConfig, MlPipeline, MlRuntimeBackend, MlUncertaintyLevel, SafetyLabel,
+    ToxicityLabel,
+};
 use aura_patterns::{PatternDatabase, PatternMatcher, TextNormalizer, UrlChecker};
 use sha2::{Digest, Sha256};
 use tracing::debug;
@@ -16,7 +19,9 @@ use crate::context::events::{ContextEvent, EventKind};
 use crate::context::interpretation::ContextInterpreter;
 use crate::context::observation::RawObservation;
 use crate::context::timing::TimingAnalyzer;
-use crate::context::tracker::{ConversationTracker, TrackerConfig, TrackerWireState};
+use crate::context::tracker::{
+    ConversationTracker, TrackerConfig, TrackerWireState, TRACKER_STATE_VERSION,
+};
 use crate::domain_runtime::{
     build_blocked_url_signal, build_domain_detection_signals, build_domain_observations,
     confidence_from_score as score_to_confidence, decide_action_with_domain_overrides,
@@ -26,6 +31,13 @@ use crate::domain_runtime::{
     AuraDomainRuntime,
 };
 use crate::ids::{ConversationId, SenderId};
+use crate::product::{
+    ProductRolloutMode, PRODUCT_DECISION_SURFACE_SCHEMA_VERSION, PRODUCT_POLICY_SCHEMA_VERSION,
+};
+use crate::runtime_capabilities::{
+    RuntimeBackend, RuntimeCapabilities, RuntimeModality, RuntimeModelIdentity,
+    RUNTIME_CAPABILITIES_SCHEMA_VERSION,
+};
 use crate::types::*;
 
 mod stages;
@@ -226,7 +238,7 @@ impl Analyzer {
             protection = ?config.effective_protection_level(),
             rules = pattern_matcher.rule_count(),
             blocked_urls = url_checker.blocked_count(),
-            ml_active = ml_pipeline.is_active(),
+            inference_backend = ?ml_pipeline.runtime_backend(),
             "AURA analyzer initialized"
         );
 
@@ -672,6 +684,43 @@ impl Analyzer {
         self.config.effective_protection_level()
     }
 
+    /// Returns the configured product rollout, defaulting to shadow for legacy config.
+    pub fn product_rollout_mode(&self) -> ProductRolloutMode {
+        self.config.product_rollout_mode
+    }
+
+    /// Returns a read-only snapshot of capabilities actually active in this analyzer.
+    pub fn runtime_capabilities(&self) -> RuntimeCapabilities {
+        let backend = match self.ml_pipeline.runtime_backend() {
+            MlRuntimeBackend::RulesFallback => RuntimeBackend::RulesFallback,
+            MlRuntimeBackend::Onnx => RuntimeBackend::Onnx,
+        };
+        let models = self
+            .ml_pipeline
+            .loaded_models()
+            .iter()
+            .map(|model| RuntimeModelIdentity {
+                component: model.component.clone(),
+                identifier: model.identifier.clone(),
+                // The current core does not retain an attested hash for the exact
+                // loaded session, so capability output must not claim one.
+                sha256: None,
+            })
+            .collect();
+
+        RuntimeCapabilities {
+            schema_version: RUNTIME_CAPABILITIES_SCHEMA_VERSION.to_string(),
+            runtime_version: env!("CARGO_PKG_VERSION").to_string(),
+            backend,
+            supported_modalities: vec![RuntimeModality::Text, RuntimeModality::Url],
+            models,
+            policy_schema_version: PRODUCT_POLICY_SCHEMA_VERSION.to_string(),
+            product_schema_version: PRODUCT_DECISION_SURFACE_SCHEMA_VERSION.to_string(),
+            state_schema_version: TRACKER_STATE_VERSION,
+            product_rollout_mode: self.config.product_rollout_mode,
+        }
+    }
+
     /// Exports the conversation tracker state for persistence or transfer.
     pub fn export_context_state(&self) -> TrackerWireState {
         self.context_tracker.export_wire_state()
@@ -694,13 +743,42 @@ impl Analyzer {
     pub fn import_kids_memory_state(
         &mut self,
         state: &aura_kids::pipeline::ExportedKidsMemoryState,
-    ) {
-        self.domain_runtime.import_kids_memory(state);
+    ) -> bool {
+        self.domain_runtime.import_kids_memory(state)
     }
 
     /// Clears kids-domain runtime memory owned by this analyzer instance.
     pub fn clear_kids_memory_state(&mut self) {
         self.domain_runtime.clear_kids_memory();
+    }
+
+    /// Returns the conversation risk score from this analyzer's kids-domain memory.
+    pub fn kids_conversation_risk_score(&self, conversation_id: &str) -> f32 {
+        self.domain_runtime
+            .kids_conversation_risk_score(conversation_id)
+    }
+
+    /// Returns the tracked message count from this analyzer's kids-domain memory.
+    pub fn kids_conversation_escalation_message_count(&self, conversation_id: &str) -> u32 {
+        self.domain_runtime
+            .kids_conversation_escalation_message_count(conversation_id)
+    }
+
+    /// Returns the sender risk score from this analyzer's kids-domain memory.
+    pub fn kids_sender_cross_risk_score(&self, sender_id: &str) -> f32 {
+        self.domain_runtime
+            .kids_sender_cross_risk_score(sender_id)
+    }
+
+    /// Applies guardian feedback to this analyzer's live kids-domain memory.
+    pub fn apply_kids_guardian_feedback(
+        &mut self,
+        sender_id: &str,
+        conversation_id: &str,
+        verdict: aura_kids::pipeline::GuardianVerdict,
+    ) {
+        self.domain_runtime
+            .apply_kids_guardian_feedback(sender_id, conversation_id, verdict);
     }
 
     /// Removes expired events and escalation entries older than the analysis window.

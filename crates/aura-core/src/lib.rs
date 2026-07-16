@@ -43,6 +43,7 @@ pub mod ids;
 pub mod pilot;
 pub mod pilot_gate;
 pub mod product;
+pub mod runtime_capabilities;
 pub mod scenario_packs;
 pub mod types;
 
@@ -67,4 +68,5 @@ pub use ids::*;
 pub use pilot::*;
 pub use pilot_gate::*;
 pub use product::*;
+pub use runtime_capabilities::*;
 pub use types::*;
