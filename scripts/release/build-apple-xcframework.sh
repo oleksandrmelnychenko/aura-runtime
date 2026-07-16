@@ -6,7 +6,7 @@ DIST_DIR="$ROOT/dist/apple"
 INCLUDE_DIR="$ROOT/target/include/aura-agent-ffi"
 PROFILE="${PROFILE:-release}"
 CARGO_PROFILE_FLAG=("--release")
-CARGO_FEATURE_ARGS=()
+CARGO_FEATURE_NAME=""
 SOURCE_REVISION="$(git -C "$ROOT" rev-parse HEAD)"
 SOURCE_TREE_DIRTY=false
 
@@ -22,7 +22,7 @@ fi
 
 case "${AURA_AGENT_ONNX:-0}" in
   0) ;;
-  1) CARGO_FEATURE_ARGS=("--features" "onnx") ;;
+  1) CARGO_FEATURE_NAME="onnx" ;;
   *)
     echo "AURA_AGENT_ONNX must be 0 or 1" >&2
     exit 2
@@ -47,13 +47,17 @@ targets=(
 
 for target in "${targets[@]}"; do
   rustup target add "$target" >/dev/null
-  cargo build \
-    "${CARGO_PROFILE_FLAG[@]}" \
-    "${CARGO_FEATURE_ARGS[@]}" \
-    --locked \
-    -p aura-agent-ffi \
-    --target "$target" \
+  cargo_args=(
+    "${CARGO_PROFILE_FLAG[@]}"
+    --locked
+    -p aura-agent-ffi
+    --target "$target"
     --manifest-path "$ROOT/Cargo.toml"
+  )
+  if [[ -n "$CARGO_FEATURE_NAME" ]]; then
+    cargo_args+=(--features "$CARGO_FEATURE_NAME")
+  fi
+  cargo build "${cargo_args[@]}"
 done
 
 profile_dir="$PROFILE"
