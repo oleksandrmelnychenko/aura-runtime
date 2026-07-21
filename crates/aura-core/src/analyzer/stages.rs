@@ -47,7 +47,6 @@ impl Analyzer {
             protection,
             input,
             ml_safety_hint,
-            input.server_sender_risk_hint,
         );
         let domain_signals = build_domain_detection_signals(domain_output.as_ref());
         raw_observations.extend(build_domain_observations(domain_signals, None));
@@ -169,7 +168,6 @@ impl Analyzer {
             protection,
             input,
             ml_safety_hint,
-            input.server_sender_risk_hint,
         );
         let domain_signals = build_domain_detection_signals(domain_output.as_ref());
         raw_observations.extend(build_domain_observations(domain_signals, content_hash));

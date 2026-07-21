@@ -22,36 +22,24 @@ pub struct AuraConfig {
 
     pub models_path: Option<String>,
 
-    #[serde(default)]
     pub account_holder_age: Option<u16>,
 
     /// Stable sender/account ID for the protected account holder.
     ///
     /// When set, conversation tracking keeps this sender in timelines but
     /// excludes them from external-contact risk profiling.
-    #[serde(default)]
     pub protected_account_id: Option<String>,
 
-    #[serde(default = "default_ttl_days")]
     pub ttl_days: u32,
 
     /// Timezone offset in minutes from UTC (e.g. +180 for UTC+3 Ukraine).
-    #[serde(default)]
     pub timezone_offset_minutes: i32,
 
     /// Selects the account-level domain mode on top of base Aura.
-    #[serde(default)]
     pub domain_mode: DomainMode,
 
     /// Controls whether product decisions are mirrored or applied.
-    ///
-    /// Missing persisted values fail safe to [`ProductRolloutMode::Shadow`].
-    #[serde(default)]
     pub product_rollout_mode: ProductRolloutMode,
-}
-
-fn default_ttl_days() -> u32 {
-    30
 }
 
 /// Represents the cultural and linguistic context for content analysis.

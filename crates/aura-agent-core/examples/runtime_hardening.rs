@@ -433,7 +433,6 @@ fn message_input(event: &SyntheticEvent) -> MessageInput {
         language: Some("en".to_string()),
         conversation_type: event.conversation_type,
         member_count: matches!(event.conversation_type, ConversationType::Group).then_some(8),
-        server_sender_risk_hint: None,
         sender_relationship: Default::default(),
         relationship_trust_source: Default::default(),
     }

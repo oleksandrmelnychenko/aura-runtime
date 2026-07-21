@@ -109,7 +109,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         }
     }
 
@@ -241,7 +240,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let output = run_military_pipeline(&inp);
         assert!(output.signals.is_empty());

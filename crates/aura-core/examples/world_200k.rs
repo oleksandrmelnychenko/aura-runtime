@@ -974,7 +974,6 @@ fn main() {
                 language: Some(child.lang.to_string()),
                 conversation_type: conv_type,
                 member_count: members,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };

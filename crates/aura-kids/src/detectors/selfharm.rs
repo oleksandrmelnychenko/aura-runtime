@@ -28,7 +28,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         }
     }
 

@@ -818,7 +818,6 @@ fn dm(text: &str, sender: &str, _receiver: &str, conv: &str) -> MessageInput {
         language: Some("uk".to_string()),
         conversation_type: ConversationType::Direct,
         member_count: None,
-        server_sender_risk_hint: None,
         sender_relationship: Default::default(),
         relationship_trust_source: Default::default(),
     }
@@ -838,7 +837,6 @@ fn group(text: &str, sender: &str, conv: &str, members: u32) -> MessageInput {
         language: Some("uk".to_string()),
         conversation_type: ConversationType::Group,
         member_count: Some(members),
-        server_sender_risk_hint: None,
         sender_relationship: Default::default(),
         relationship_trust_source: Default::default(),
     }

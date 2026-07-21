@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use sha2::{Digest, Sha256};
 use tracing::{debug, info, warn};
 
 use crate::backend::{GateModel, IntentBackend, SafetyBackend, SentimentBackend, ToxicityBackend};
@@ -10,7 +11,6 @@ use crate::gate::LexiconGate;
 use crate::integrity;
 use crate::intent::intent_calibration_for;
 use crate::intent::IntentClassifier;
-#[cfg(feature = "onnx")]
 use crate::manifest;
 use crate::normalize::normalize_for_ml;
 use crate::safety::safety_calibration_for;
@@ -36,6 +36,7 @@ pub enum MlRuntimeBackend {
 pub struct MlRuntimeModelIdentity {
     pub component: String,
     pub identifier: String,
+    pub sha256: [u8; 32],
 }
 
 pub struct MlPipeline {
@@ -51,12 +52,14 @@ pub struct MlPipeline {
     telemetry: InferenceTelemetry,
     runtime_backend: MlRuntimeBackend,
     loaded_models: Vec<MlRuntimeModelIdentity>,
+    model_manifest_digest: [u8; 32],
 }
 
 impl MlPipeline {
     const ANALYZE_BATCH_CHUNK_SIZE: usize = 256;
     pub fn try_new(config: MlConfig) -> Result<Self, MlError> {
         let config = Self::normalize_config_for_on_device_profile(config);
+        let mut validated_manifest = None;
         #[cfg(feature = "onnx")]
         if config.validate_hashes {
             if config.strict_manifest_validation
@@ -69,7 +72,10 @@ impl MlPipeline {
             }
             if let Some(ref manifest_path) = config.manifest_path {
                 match manifest::validate_models_from_manifest(manifest_path) {
-                    Ok(()) => info!("Model manifest validation passed"),
+                    Ok(validated) => {
+                        info!("Model manifest validation passed");
+                        validated_manifest = Some(validated);
+                    }
                     Err(e) => {
                         if config.strict_manifest_validation {
                             return Err(MlError::ModelLoadFailed(format!(
@@ -120,7 +126,15 @@ impl MlPipeline {
             sentiment.as_ref(),
             safety.as_ref(),
             intent.as_ref(),
+            validated_manifest.as_ref(),
         );
+        let model_manifest_digest = match (runtime_backend, validated_manifest.as_ref()) {
+            (_, Some(validated)) => validated.manifest_sha256,
+            (MlRuntimeBackend::RulesFallback, None) => {
+                Sha256::digest(b"aura.model-manifest.rules-fallback.v1").into()
+            }
+            (MlRuntimeBackend::Onnx, None) => [0; 32],
+        };
 
         let mut pipeline = Self {
             toxicity,
@@ -135,6 +149,7 @@ impl MlPipeline {
             telemetry,
             runtime_backend,
             loaded_models,
+            model_manifest_digest,
         };
 
         if Self::has_any_onnx_model_configured(&pipeline.config) && pipeline.config.warmup_on_init {
@@ -434,6 +449,12 @@ impl MlPipeline {
         &self.loaded_models
     }
 
+    /// Returns the digest of the exact validated manifest, or the canonical
+    /// rules-fallback descriptor when no ONNX artifact is active.
+    pub fn model_manifest_digest(&self) -> [u8; 32] {
+        self.model_manifest_digest
+    }
+
     fn collect_loaded_models(
         config: &MlConfig,
         unified: Option<&UnifiedModel>,
@@ -441,16 +462,23 @@ impl MlPipeline {
         sentiment: &dyn SentimentBackend,
         safety: &dyn SafetyBackend,
         intent: &dyn IntentBackend,
+        validated_manifest: Option<&manifest::ValidatedModelManifest>,
     ) -> Vec<MlRuntimeModelIdentity> {
         let mut models = Vec::with_capacity(5);
         if unified.is_some_and(UnifiedModel::has_onnx) {
-            Self::push_loaded_model(&mut models, "unified", config.unified_model_path.as_deref());
+            Self::push_loaded_model(
+                &mut models,
+                "unified",
+                config.unified_model_path.as_deref(),
+                validated_manifest,
+            );
         }
         if toxicity.is_onnx() {
             Self::push_loaded_model(
                 &mut models,
                 "toxicity",
                 config.toxicity_model_path.as_deref(),
+                validated_manifest,
             );
         }
         if sentiment.is_onnx() {
@@ -458,13 +486,24 @@ impl MlPipeline {
                 &mut models,
                 "sentiment",
                 config.sentiment_model_path.as_deref(),
+                validated_manifest,
             );
         }
         if safety.is_onnx() {
-            Self::push_loaded_model(&mut models, "safety", config.safety_model_path.as_deref());
+            Self::push_loaded_model(
+                &mut models,
+                "safety",
+                config.safety_model_path.as_deref(),
+                validated_manifest,
+            );
         }
         if intent.is_onnx() {
-            Self::push_loaded_model(&mut models, "intent", config.intent_model_path.as_deref());
+            Self::push_loaded_model(
+                &mut models,
+                "intent",
+                config.intent_model_path.as_deref(),
+                validated_manifest,
+            );
         }
         models
     }
@@ -473,6 +512,7 @@ impl MlPipeline {
         models: &mut Vec<MlRuntimeModelIdentity>,
         component: &str,
         path: Option<&str>,
+        validated_manifest: Option<&manifest::ValidatedModelManifest>,
     ) {
         let Some(path) = path else {
             return;
@@ -482,9 +522,22 @@ impl MlPipeline {
             .map(|name| name.to_string_lossy().into_owned())
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| component.to_string());
+        // Retain every active ONNX component even when its identity cannot be
+        // proven. The zero digest makes the incomplete identity explicit so
+        // the artifact-attestation boundary rejects the whole capability set.
+        let expected_sha256 =
+            validated_manifest.and_then(|validated| validated.artifact_sha256(path));
+        let actual_sha256 = std::fs::read(path)
+            .ok()
+            .map(|bytes| <[u8; 32]>::from(Sha256::digest(bytes)));
+        let sha256 = match (expected_sha256, actual_sha256) {
+            (Some(expected), Some(actual)) if expected == actual => actual,
+            _ => [0; 32],
+        };
         models.push(MlRuntimeModelIdentity {
             component: component.to_string(),
             identifier,
+            sha256,
         });
     }
 

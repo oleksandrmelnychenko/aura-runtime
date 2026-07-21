@@ -1,27 +1,28 @@
-use std::collections::HashSet;
-
 use aura_contracts::{Confidence, ThreatType};
 use serde::{Deserialize, Serialize};
 
 use super::model::{
-    DeferredGuardianReport, GuardianDeliveryReceipt, GuardianReport, GuardianReportDirective,
-    GuardianReportKey, GuardianReportTrigger, RiskScore, SafetyCase, SafetyCaseDecision,
+    guardian_evidence_commitment, DeferredGuardianReport, GuardianDeliveryReceipt,
+    GuardianPreparationReceipt, GuardianReport, GuardianReportDirective, GuardianReportKey,
+    GuardianReportTrigger, GuardianSuppressionReceipt, RiskScore, SafetyCase, SafetyCaseDecision,
     SafetyCaseDecisionOutcome, SafetyCaseEvent, SafetyCaseReduction, SafetyCaseSeverity,
     SafetyCaseStatus, SafetyObservation, SafetyObservationError, SafetyReasonCode,
     GUARDIAN_REPORT_SCHEMA_VERSION, SAFETY_CASE_DECISION_SCHEMA_VERSION,
     SAFETY_CASE_SCHEMA_VERSION,
 };
+use super::{
+    GuardianExecutionPolicy, GuardianExecutionPolicyError, GuardianExecutionRule,
+    GuardianReportExecutionBinding,
+};
 
 const DEFAULT_MAX_OBSERVATIONS: usize = 256;
 const MAX_CONFIGURED_OBSERVATIONS: usize = 4_096;
 const DEFAULT_MAX_CASE_REASON_CODES: usize = 32;
-const MAX_CONFIGURED_CASE_REASON_CODES: usize = 128;
-const DEFAULT_GUARDIAN_EVIDENCE_LIMIT: usize = 5;
+const MAX_CONFIGURED_CASE_REASON_CODES: usize = 64;
 const MAX_GUARDIAN_EVIDENCE_LIMIT: usize = 16;
-const DEFAULT_GUARDIAN_COOLDOWN_MS: u64 = 30 * 60 * 1_000;
 
 /// Schema version for persisted [`SafetyCasePolicy`] values.
-pub const SAFETY_CASE_POLICY_SCHEMA_VERSION: &str = "aura.safety_case_policy.v1";
+pub const SAFETY_CASE_POLICY_SCHEMA_VERSION: &str = "aura.safety_case_policy.v2";
 
 fn default_policy_schema_version() -> String {
     SAFETY_CASE_POLICY_SCHEMA_VERSION.to_string()
@@ -98,125 +99,24 @@ impl Default for SafetyCaseThresholds {
     }
 }
 
-/// Guardian reporting rules for lifecycle transitions.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct GuardianReportingPolicy {
-    cooldown_ms: u64,
-    evidence_limit: usize,
-    report_on_open: bool,
-    report_on_escalation: bool,
-    report_on_urgent: bool,
-    report_on_resolution: bool,
-    urgent_bypasses_cooldown: bool,
-}
-
-impl GuardianReportingPolicy {
-    /// Sets the minimum interval between host-confirmed guardian deliveries.
-    pub fn with_cooldown_ms(mut self, cooldown_ms: u64) -> Self {
-        self.cooldown_ms = cooldown_ms;
-        self
-    }
-
-    /// Sets the maximum number of opaque event references in one report.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SafetyCasePolicyError::InvalidEvidenceLimit`] for zero or a
-    /// value above the release bound.
-    pub fn with_evidence_limit(
-        mut self,
-        evidence_limit: usize,
-    ) -> Result<Self, SafetyCasePolicyError> {
-        validate_evidence_limit(evidence_limit)?;
-        self.evidence_limit = evidence_limit;
-        Ok(self)
-    }
-
-    /// Enables or disables reports when a case opens.
-    pub fn with_report_on_open(mut self, enabled: bool) -> Self {
-        self.report_on_open = enabled;
-        self
-    }
-
-    /// Enables or disables reports when a case escalates.
-    pub fn with_report_on_escalation(mut self, enabled: bool) -> Self {
-        self.report_on_escalation = enabled;
-        self
-    }
-
-    /// Enables or disables urgent guardian reports.
-    pub fn with_report_on_urgent(mut self, enabled: bool) -> Self {
-        self.report_on_urgent = enabled;
-        self
-    }
-
-    /// Enables or disables resolution reports.
-    pub fn with_report_on_resolution(mut self, enabled: bool) -> Self {
-        self.report_on_resolution = enabled;
-        self
-    }
-
-    /// Configures whether urgent transitions bypass the normal cooldown.
-    pub fn with_urgent_cooldown_bypass(mut self, enabled: bool) -> Self {
-        self.urgent_bypasses_cooldown = enabled;
-        self
-    }
-
-    /// Returns the configured cooldown interval.
-    pub const fn cooldown_ms(&self) -> u64 {
-        self.cooldown_ms
-    }
-
-    /// Returns the evidence-reference limit.
-    pub const fn evidence_limit(&self) -> usize {
-        self.evidence_limit
-    }
-
-    fn is_enabled_for(&self, trigger: GuardianReportTrigger) -> bool {
-        match trigger {
-            GuardianReportTrigger::CaseOpened => self.report_on_open,
-            GuardianReportTrigger::CaseEscalated => self.report_on_escalation,
-            GuardianReportTrigger::UrgentReview => self.report_on_urgent,
-            GuardianReportTrigger::CaseResolved => self.report_on_resolution,
-        }
-    }
-
-    fn validate(&self) -> Result<(), SafetyCasePolicyError> {
-        validate_evidence_limit(self.evidence_limit)
-    }
-}
-
-impl Default for GuardianReportingPolicy {
-    fn default() -> Self {
-        Self {
-            cooldown_ms: DEFAULT_GUARDIAN_COOLDOWN_MS,
-            evidence_limit: DEFAULT_GUARDIAN_EVIDENCE_LIMIT,
-            report_on_open: true,
-            report_on_escalation: true,
-            report_on_urgent: true,
-            report_on_resolution: true,
-            urgent_bypasses_cooldown: true,
-        }
-    }
-}
-
-/// Version-one policy for case reduction and guardian delivery.
+/// Native policy for case reduction. Guardian delivery behavior comes only
+/// from a currently active, verified signed execution policy.
 ///
 /// The policy is passed explicitly to every reduction. It contains no ambient
 /// clock, random source, global memory, or product UI action.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SafetyCasePolicy {
     #[serde(default = "default_policy_schema_version")]
     schema_version: String,
     #[serde(default)]
     thresholds: SafetyCaseThresholds,
-    #[serde(default)]
-    guardian_reporting: GuardianReportingPolicy,
     #[serde(default = "default_max_observations")]
     max_observations: usize,
     #[serde(default = "default_max_case_reason_codes")]
     max_case_reason_codes: usize,
+    #[serde(skip)]
+    execution_policy: Option<GuardianExecutionPolicy>,
 }
 
 impl SafetyCasePolicy {
@@ -231,10 +131,18 @@ impl SafetyCasePolicy {
         self
     }
 
-    /// Replaces guardian reporting policy.
-    pub fn with_guardian_reporting(mut self, reporting: GuardianReportingPolicy) -> Self {
-        self.guardian_reporting = reporting;
-        self
+    /// Installs the account-scoped signed execution policy for one reduction.
+    /// This field is deliberately skipped by config serialization; the owning
+    /// runtime persists it under the corresponding account monotonic floor.
+    pub fn with_execution_policy(
+        mut self,
+        execution_policy: Option<GuardianExecutionPolicy>,
+    ) -> Result<Self, SafetyCasePolicyError> {
+        if let Some(policy) = &execution_policy {
+            policy.validate()?;
+        }
+        self.execution_policy = execution_policy;
+        Ok(self)
     }
 
     /// Sets the hard case observation capacity.
@@ -273,11 +181,6 @@ impl SafetyCasePolicy {
         self.thresholds
     }
 
-    /// Returns guardian reporting policy.
-    pub const fn guardian_reporting(&self) -> &GuardianReportingPolicy {
-        &self.guardian_reporting
-    }
-
     /// Validates values loaded from persisted configuration.
     pub fn validate(&self) -> Result<(), SafetyCasePolicyError> {
         if self.schema_version != SAFETY_CASE_POLICY_SCHEMA_VERSION {
@@ -286,7 +189,9 @@ impl SafetyCasePolicy {
             ));
         }
         self.thresholds.validate()?;
-        self.guardian_reporting.validate()?;
+        if let Some(policy) = &self.execution_policy {
+            policy.validate()?;
+        }
         validate_capacity(
             "max observations",
             self.max_observations,
@@ -305,9 +210,9 @@ impl Default for SafetyCasePolicy {
         Self {
             schema_version: SAFETY_CASE_POLICY_SCHEMA_VERSION.to_string(),
             thresholds: SafetyCaseThresholds::default(),
-            guardian_reporting: GuardianReportingPolicy::default(),
             max_observations: DEFAULT_MAX_OBSERVATIONS,
             max_case_reason_codes: DEFAULT_MAX_CASE_REASON_CODES,
+            execution_policy: None,
         }
     }
 }
@@ -331,14 +236,9 @@ pub enum SafetyCasePolicyError {
         /// Maximum supported value.
         maximum: usize,
     },
-    /// The guardian evidence limit is outside the privacy bound.
-    #[error("guardian evidence limit must be in 1..={maximum}; received {actual}")]
-    InvalidEvidenceLimit {
-        /// Configured value.
-        actual: usize,
-        /// Maximum supported value.
-        maximum: usize,
-    },
+    /// Signed execution policy could not be projected into reducer state.
+    #[error(transparent)]
+    InvalidExecutionPolicy(#[from] GuardianExecutionPolicyError),
 }
 
 fn validate_capacity(
@@ -351,16 +251,6 @@ fn validate_capacity(
             field,
             actual,
             maximum,
-        });
-    }
-    Ok(())
-}
-
-fn validate_evidence_limit(actual: usize) -> Result<(), SafetyCasePolicyError> {
-    if actual == 0 || actual > MAX_GUARDIAN_EVIDENCE_LIMIT {
-        return Err(SafetyCasePolicyError::InvalidEvidenceLimit {
-            actual,
-            maximum: MAX_GUARDIAN_EVIDENCE_LIMIT,
         });
     }
     Ok(())
@@ -394,6 +284,24 @@ pub enum SafetyCaseCommand {
     FlushDeferredGuardianReport {
         /// Caller-supplied evaluation timestamp.
         at_ms: u64,
+    },
+    /// Confirm that the host atomically persisted the complete encrypted
+    /// recipient fanout for one exact pending report.
+    ConfirmGuardianReportPrepared {
+        /// Idempotency key returned with the queued report.
+        report_key: GuardianReportKey,
+        /// Host-confirmed durable preparation timestamp.
+        prepared_at_ms: u64,
+    },
+    /// Suppress an exact pending report because verified host policy selected
+    /// no safe recipient before preparation.
+    SuppressGuardianReport {
+        /// Idempotency key returned with the queued report.
+        report_key: GuardianReportKey,
+        /// Host policy decision timestamp.
+        suppressed_at_ms: u64,
+        /// Machine-readable suppression reason.
+        reason_code: SafetyReasonCode,
     },
     /// Record successful delivery by the host transport.
     AcknowledgeGuardianReport {
@@ -453,9 +361,21 @@ pub enum SafetyCaseReducerError {
     /// A pending report must be handled before this delivery command.
     #[error("guardian report key does not match the pending report")]
     GuardianReportKeyMismatch,
+    /// Delivery cannot be acknowledged before durable host preparation.
+    #[error("guardian report was not durably prepared by the host")]
+    GuardianReportNotPrepared,
+    /// A prepared report must be delivered or cancelled, never suppressed.
+    #[error("prepared guardian report cannot be suppressed")]
+    GuardianReportAlreadyPrepared,
     /// A delivery acknowledgment predates the report queue time.
     #[error("guardian delivery timestamp predates report queue time")]
     InvalidDeliveryTimestamp,
+    /// A host preparation timestamp predates the queued report.
+    #[error("guardian report preparation timestamp predates report queue time")]
+    InvalidPreparationTimestamp,
+    /// A suppression retry disagrees with the retained policy receipt.
+    #[error("guardian report suppression receipt conflicts with native state")]
+    InvalidSuppressionReceipt,
     /// A persisted case violates a release invariant.
     #[error("invalid persisted safety case: {0}")]
     InvalidPersistedCase(&'static str),
@@ -494,15 +414,24 @@ impl SafetyCaseReducer {
                 reduce_resolution(case, at_ms, reason_code, policy)
             }
             SafetyCaseCommand::Dismiss { at_ms, reason_code } => {
-                reduce_dismissal(case, at_ms, reason_code)
+                reduce_dismissal(case, at_ms, reason_code, policy)
             }
             SafetyCaseCommand::FlushDeferredGuardianReport { at_ms } => {
                 reduce_report_flush(case, at_ms, policy)
             }
+            SafetyCaseCommand::ConfirmGuardianReportPrepared {
+                report_key,
+                prepared_at_ms,
+            } => reduce_report_preparation(case, report_key, prepared_at_ms),
+            SafetyCaseCommand::SuppressGuardianReport {
+                report_key,
+                suppressed_at_ms,
+                reason_code,
+            } => reduce_report_suppression(case, report_key, suppressed_at_ms, reason_code),
             SafetyCaseCommand::AcknowledgeGuardianReport {
                 report_key,
                 delivered_at_ms,
-            } => reduce_report_acknowledgment(case, report_key, delivered_at_ms, policy),
+            } => reduce_report_acknowledgment(case, report_key, delivered_at_ms),
         }
     }
 }
@@ -562,9 +491,9 @@ fn validate_case(
                 "pending report belongs to another case",
             ));
         }
-        if report.subject_key != case.subject_key || report.threat_type != case.threat_type {
+        if report.threat_type != case.threat_type {
             return Err(SafetyCaseReducerError::InvalidPersistedCase(
-                "pending report routing does not match the case",
+                "pending report risk family does not match the case",
             ));
         }
         if report.key.transition_revision() > case.revision {
@@ -577,12 +506,17 @@ fn validate_case(
                 "pending report transition is inconsistent",
             ));
         }
-        if report.evidence.len() > MAX_GUARDIAN_EVIDENCE_LIMIT {
+        if report.evidence_commitments.len() > MAX_GUARDIAN_EVIDENCE_LIMIT
+            || report
+                .evidence_commitments
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
+        {
             return Err(SafetyCaseReducerError::InvalidPersistedCase(
                 "pending report evidence limit exceeded",
             ));
         }
-        if report.reason_codes.len() > policy.max_case_reason_codes
+        if report.reason_codes.len() > MAX_GUARDIAN_EVIDENCE_LIMIT
             || report
                 .reason_codes
                 .windows(2)
@@ -601,33 +535,60 @@ fn validate_case(
                 "pending report contains an unknown reason code",
             ));
         }
-        let mut report_evidence = HashSet::with_capacity(report.evidence.len());
-        if report.evidence.iter().any(|source_event| {
-            !report_evidence.insert(source_event)
-                || !case
-                    .observations
-                    .iter()
-                    .any(|observation| observation.source_event() == source_event)
-        }) {
+        if report.execution_binding.validate().is_err()
+            || report.first_observed_at_ms == 0
+            || report.first_observed_at_ms > report.last_observed_at_ms
+            || report.last_observed_at_ms > report.queued_at_ms
+            || report.execution_binding.policy_evaluated_at_ms < report.last_observed_at_ms
+            || report.execution_binding.policy_evaluated_at_ms > report.queued_at_ms
+        {
             return Err(SafetyCaseReducerError::InvalidPersistedCase(
-                "pending report contains invalid evidence",
+                "pending report policy binding or timestamps are invalid",
             ));
         }
-        if usize::try_from(report.observation_count)
-            .map_or(true, |count| count > case.observations.len())
-            || report.severity > case.severity
-            || report.confidence > case.confidence
-            || report.peak_risk_score > case.peak_risk_score
-        {
+        if report.severity > case.severity || report.confidence > case.confidence {
             return Err(SafetyCaseReducerError::InvalidPersistedCase(
                 "pending report snapshot is ahead of the case",
             ));
         }
     }
+    match (
+        &case.pending_guardian_report,
+        &case.guardian_report_preparation,
+    ) {
+        (Some(report), Some(preparation)) => {
+            if preparation.key != report.key {
+                return Err(SafetyCaseReducerError::InvalidPersistedCase(
+                    "guardian preparation does not match the pending report",
+                ));
+            }
+            if preparation.prepared_at_ms < report.queued_at_ms
+                || preparation.prepared_at_ms > case.updated_at_ms
+            {
+                return Err(SafetyCaseReducerError::InvalidPersistedCase(
+                    "guardian preparation timestamp is inconsistent",
+                ));
+            }
+        }
+        (None, Some(_)) => {
+            return Err(SafetyCaseReducerError::InvalidPersistedCase(
+                "guardian preparation exists without a pending report",
+            ));
+        }
+        _ => {}
+    }
     if let Some(deferred) = &case.deferred_guardian_report {
         if deferred.transition_revision > case.revision
             || deferred.eligible_at_ms < deferred.transition_at_ms
             || deferred.transition_at_ms > case.updated_at_ms
+            || deferred.rule_id.is_empty()
+            || deferred.rule_id.len() > 128
+            || !deferred
+                .rule_id
+                .as_bytes()
+                .iter()
+                .all(|byte| (0x21..=0x7e).contains(byte))
+            || deferred.rule_digest.iter().all(|byte| *byte == 0)
         {
             return Err(SafetyCaseReducerError::InvalidPersistedCase(
                 "deferred report transition is inconsistent",
@@ -657,6 +618,33 @@ fn validate_case(
         {
             return Err(SafetyCaseReducerError::InvalidPersistedCase(
                 "delivered guardian report is still pending",
+            ));
+        }
+    }
+    if let Some(suppression) = &case.last_guardian_suppression {
+        if suppression.key.case_id() != &case.case_id
+            || suppression.key.transition_revision() > case.revision
+        {
+            return Err(SafetyCaseReducerError::InvalidPersistedCase(
+                "guardian suppression belongs to another case revision",
+            ));
+        }
+        if suppression.suppressed_at_ms > case.updated_at_ms {
+            return Err(SafetyCaseReducerError::InvalidPersistedCase(
+                "guardian suppression timestamp is ahead of the case",
+            ));
+        }
+        if case
+            .pending_guardian_report
+            .as_ref()
+            .is_some_and(|report| report.key == suppression.key)
+            || case
+                .last_guardian_delivery
+                .as_ref()
+                .is_some_and(|delivery| delivery.key == suppression.key)
+        {
+            return Err(SafetyCaseReducerError::InvalidPersistedCase(
+                "suppressed guardian report is still pending or delivered",
             ));
         }
     }
@@ -908,6 +896,7 @@ fn reduce_dismissal(
     case: &SafetyCase,
     at_ms: u64,
     reason_code: SafetyReasonCode,
+    policy: &SafetyCasePolicy,
 ) -> Result<SafetyCaseReduction, SafetyCaseReducerError> {
     if case.status == SafetyCaseStatus::Dismissed
         && case.closed_reason_code.as_ref() == Some(&reason_code)
@@ -931,20 +920,20 @@ fn reduce_dismissal(
     next.closed_at_ms = Some(at_ms);
     next.closed_reason_code = Some(reason_code);
     next.updated_at_ms = next.updated_at_ms.max(at_ms);
-    next.pending_guardian_report = None;
-    next.deferred_guardian_report = None;
-
-    let events = vec![SafetyCaseEvent::StatusChanged {
+    let mut events = vec![SafetyCaseEvent::StatusChanged {
         from: old_status,
         to: next.status,
         at_ms,
         case_revision: next.revision,
     }];
-    Ok(updated_reduction(
-        next,
-        events,
-        GuardianReportDirective::NotRequired,
-    ))
+    let guardian_report = plan_guardian_report(
+        &mut next,
+        GuardianReportTrigger::CaseResolved,
+        at_ms,
+        policy,
+        &mut events,
+    );
+    Ok(updated_reduction(next, events, guardian_report))
 }
 
 fn reduce_report_flush(
@@ -971,6 +960,28 @@ fn reduce_report_flush(
         ));
     }
 
+    let matching = policy.execution_policy.as_ref().and_then(|execution| {
+        execution
+            .matching_rule(case, deferred.trigger, at_ms)
+            .filter(|rule| {
+                rule.rule_id == deferred.rule_id
+                    && rule.rule_digest == deferred.rule_digest
+                    && rule.cooldown_ms == deferred.cooldown_ms
+            })
+            .map(|rule| (execution, rule))
+    });
+    let Some((execution_policy, rule)) = matching else {
+        let mut next = case.clone();
+        next.revision = next_revision(next.revision)?;
+        next.updated_at_ms = next.updated_at_ms.max(at_ms);
+        next.deferred_guardian_report = None;
+        return Ok(updated_reduction(
+            next,
+            Vec::new(),
+            GuardianReportDirective::NotRequired,
+        ));
+    };
+
     let mut next = case.clone();
     let deferred = next.deferred_guardian_report.take().ok_or(
         SafetyCaseReducerError::InvalidPersistedCase(
@@ -984,9 +995,11 @@ fn reduce_report_flush(
         deferred.trigger,
         deferred.transition_revision,
         at_ms,
-        policy.guardian_reporting.evidence_limit,
+        execution_policy,
+        rule,
     );
     next.pending_guardian_report = Some(report.clone());
+    next.guardian_report_preparation = None;
     let events = vec![SafetyCaseEvent::GuardianReportQueued {
         report_key: report.key.clone(),
     }];
@@ -997,11 +1010,113 @@ fn reduce_report_flush(
     ))
 }
 
+fn reduce_report_preparation(
+    case: &SafetyCase,
+    report_key: GuardianReportKey,
+    prepared_at_ms: u64,
+) -> Result<SafetyCaseReduction, SafetyCaseReducerError> {
+    let Some(pending) = &case.pending_guardian_report else {
+        return Err(SafetyCaseReducerError::GuardianReportKeyMismatch);
+    };
+    if pending.key != report_key {
+        return Err(SafetyCaseReducerError::GuardianReportKeyMismatch);
+    }
+    if let Some(existing) = &case.guardian_report_preparation {
+        if existing.key != report_key {
+            return Err(SafetyCaseReducerError::GuardianReportKeyMismatch);
+        }
+        if existing.prepared_at_ms != prepared_at_ms {
+            return Err(SafetyCaseReducerError::InvalidPreparationTimestamp);
+        }
+        return Ok(unchanged_reduction(
+            case,
+            SafetyCaseDecisionOutcome::NoChange,
+        ));
+    }
+    if prepared_at_ms < pending.queued_at_ms {
+        return Err(SafetyCaseReducerError::InvalidPreparationTimestamp);
+    }
+
+    let mut next = case.clone();
+    next.revision = next_revision(next.revision)?;
+    next.updated_at_ms = next.updated_at_ms.max(prepared_at_ms);
+    next.guardian_report_preparation = Some(GuardianPreparationReceipt {
+        key: report_key.clone(),
+        prepared_at_ms,
+    });
+    let events = vec![SafetyCaseEvent::GuardianReportPrepared {
+        report_key,
+        prepared_at_ms,
+    }];
+    Ok(updated_reduction(
+        next,
+        events,
+        GuardianReportDirective::Pending {
+            report: pending.clone(),
+        },
+    ))
+}
+
+fn reduce_report_suppression(
+    case: &SafetyCase,
+    report_key: GuardianReportKey,
+    suppressed_at_ms: u64,
+    reason_code: SafetyReasonCode,
+) -> Result<SafetyCaseReduction, SafetyCaseReducerError> {
+    if let Some(existing) = &case.last_guardian_suppression {
+        if existing.key == report_key {
+            if existing.suppressed_at_ms != suppressed_at_ms || existing.reason_code != reason_code
+            {
+                return Err(SafetyCaseReducerError::InvalidSuppressionReceipt);
+            }
+            return Ok(unchanged_reduction(
+                case,
+                SafetyCaseDecisionOutcome::NoChange,
+            ));
+        }
+    }
+    let Some(pending) = &case.pending_guardian_report else {
+        return Err(SafetyCaseReducerError::GuardianReportKeyMismatch);
+    };
+    if pending.key != report_key {
+        return Err(SafetyCaseReducerError::GuardianReportKeyMismatch);
+    }
+    if case.guardian_report_preparation.is_some() {
+        return Err(SafetyCaseReducerError::GuardianReportAlreadyPrepared);
+    }
+    if suppressed_at_ms < pending.queued_at_ms {
+        return Err(SafetyCaseReducerError::InvalidSuppressionReceipt);
+    }
+
+    let mut next = case.clone();
+    next.revision = next_revision(next.revision)?;
+    next.updated_at_ms = next.updated_at_ms.max(suppressed_at_ms);
+    next.pending_guardian_report = None;
+    next.guardian_report_preparation = None;
+    next.last_guardian_suppression = Some(GuardianSuppressionReceipt {
+        key: report_key.clone(),
+        suppressed_at_ms,
+        reason_code: reason_code.clone(),
+    });
+    let events = vec![SafetyCaseEvent::GuardianReportSuppressed {
+        report_key,
+        suppressed_at_ms,
+        reason_code,
+    }];
+    let directive = next.deferred_guardian_report.as_ref().map_or(
+        GuardianReportDirective::NotRequired,
+        |deferred| GuardianReportDirective::Deferred {
+            trigger: deferred.trigger,
+            eligible_at_ms: deferred.eligible_at_ms,
+        },
+    );
+    Ok(updated_reduction(next, events, directive))
+}
+
 fn reduce_report_acknowledgment(
     case: &SafetyCase,
     report_key: GuardianReportKey,
     delivered_at_ms: u64,
-    policy: &SafetyCasePolicy,
 ) -> Result<SafetyCaseReduction, SafetyCaseReducerError> {
     if case
         .last_guardian_delivery
@@ -1019,6 +1134,13 @@ fn reduce_report_acknowledgment(
     if pending.key != report_key {
         return Err(SafetyCaseReducerError::GuardianReportKeyMismatch);
     }
+    if !case
+        .guardian_report_preparation
+        .as_ref()
+        .is_some_and(|receipt| receipt.key == report_key)
+    {
+        return Err(SafetyCaseReducerError::GuardianReportNotPrepared);
+    }
     if delivered_at_ms < pending.queued_at_ms {
         return Err(SafetyCaseReducerError::InvalidDeliveryTimestamp);
     }
@@ -1034,6 +1156,7 @@ fn reduce_report_acknowledgment(
     next.revision = next_revision(next.revision)?;
     next.updated_at_ms = next.updated_at_ms.max(delivered_at_ms);
     next.pending_guardian_report = None;
+    next.guardian_report_preparation = None;
     next.last_guardian_delivery = Some(GuardianDeliveryReceipt {
         key: report_key.clone(),
         delivered_at_ms,
@@ -1041,7 +1164,7 @@ fn reduce_report_acknowledgment(
     if let Some(deferred) = &mut next.deferred_guardian_report {
         deferred.eligible_at_ms = deferred
             .eligible_at_ms
-            .max(delivered_at_ms.saturating_add(policy.guardian_reporting.cooldown_ms));
+            .max(delivered_at_ms.saturating_add(deferred.cooldown_ms));
     }
     let events = vec![SafetyCaseEvent::GuardianReportDelivered {
         report_key,
@@ -1129,20 +1252,55 @@ fn plan_guardian_report(
     policy: &SafetyCasePolicy,
     events: &mut Vec<SafetyCaseEvent>,
 ) -> GuardianReportDirective {
-    let reporting = &policy.guardian_reporting;
-    if !reporting.is_enabled_for(trigger) {
+    let Some(execution_policy) = policy.execution_policy.as_ref() else {
         return existing_report_directive(case);
-    }
+    };
+    let Some(rule) = execution_policy.matching_rule(case, trigger, transition_at_ms) else {
+        return existing_report_directive(case);
+    };
 
     if let Some(pending) = case.pending_guardian_report.clone() {
+        if case
+            .guardian_report_preparation
+            .as_ref()
+            .is_some_and(|receipt| receipt.key == pending.key)
+        {
+            let should_defer = trigger == GuardianReportTrigger::CaseResolved
+                || guardian_trigger_priority(trigger) > guardian_trigger_priority(pending.trigger);
+            if should_defer {
+                let deferred = deferred_guardian_report(
+                    trigger,
+                    case.revision,
+                    transition_at_ms,
+                    transition_at_ms,
+                    rule,
+                );
+                let should_replace =
+                    case.deferred_guardian_report
+                        .as_ref()
+                        .is_none_or(|existing| {
+                            guardian_trigger_priority(trigger)
+                                >= guardian_trigger_priority(existing.trigger)
+                        });
+                if should_replace {
+                    case.deferred_guardian_report = Some(deferred);
+                    events.push(SafetyCaseEvent::GuardianReportDeferred {
+                        trigger,
+                        eligible_at_ms: transition_at_ms,
+                    });
+                }
+            }
+            return GuardianReportDirective::Pending { report: pending };
+        }
         if guardian_trigger_priority(trigger) <= guardian_trigger_priority(pending.trigger) {
             if trigger == GuardianReportTrigger::CaseResolved {
-                let deferred = DeferredGuardianReport {
+                let deferred = deferred_guardian_report(
                     trigger,
-                    transition_revision: case.revision,
+                    case.revision,
                     transition_at_ms,
-                    eligible_at_ms: transition_at_ms,
-                };
+                    transition_at_ms,
+                    rule,
+                );
                 case.deferred_guardian_report = Some(deferred);
                 events.push(SafetyCaseEvent::GuardianReportDeferred {
                     trigger,
@@ -1154,22 +1312,22 @@ fn plan_guardian_report(
     }
 
     let bypasses_cooldown =
-        trigger == GuardianReportTrigger::UrgentReview && reporting.urgent_bypasses_cooldown;
-    let cooldown_until = case.last_guardian_delivery.as_ref().map(|receipt| {
-        receipt
-            .delivered_at_ms
-            .saturating_add(reporting.cooldown_ms)
-    });
+        trigger == GuardianReportTrigger::UrgentReview && rule.urgent_bypasses_cooldown;
+    let cooldown_until = case
+        .last_guardian_delivery
+        .as_ref()
+        .map(|receipt| receipt.delivered_at_ms.saturating_add(rule.cooldown_ms));
     if !bypasses_cooldown
         && cooldown_until.is_some_and(|eligible_at_ms| transition_at_ms < eligible_at_ms)
     {
         let eligible_at_ms = cooldown_until.unwrap_or(transition_at_ms);
-        let deferred = DeferredGuardianReport {
+        let deferred = deferred_guardian_report(
             trigger,
-            transition_revision: case.revision,
+            case.revision,
             transition_at_ms,
             eligible_at_ms,
-        };
+            rule,
+        );
         let should_replace = case
             .deferred_guardian_report
             .as_ref()
@@ -1197,9 +1355,11 @@ fn plan_guardian_report(
         trigger,
         case.revision,
         transition_at_ms,
-        reporting.evidence_limit,
+        execution_policy,
+        rule,
     );
     if let Some(previous) = case.pending_guardian_report.replace(report.clone()) {
+        case.guardian_report_preparation = None;
         events.push(SafetyCaseEvent::GuardianReportSuperseded {
             previous_report_key: previous.key,
             replacement_report_key: report.key.clone(),
@@ -1218,29 +1378,71 @@ fn build_guardian_report(
     trigger: GuardianReportTrigger,
     transition_revision: u64,
     queued_at_ms: u64,
-    evidence_limit: usize,
+    execution_policy: &GuardianExecutionPolicy,
+    rule: &GuardianExecutionRule,
 ) -> GuardianReport {
-    let evidence_start = case.observations.len().saturating_sub(evidence_limit);
-    let evidence = case.observations[evidence_start..]
+    let evidence_start = case
+        .observations
+        .len()
+        .saturating_sub(rule.maximum_evidence_commitments);
+    let mut evidence_commitments: Vec<_> = case.observations[evidence_start..]
         .iter()
-        .map(|observation| observation.source_event().clone())
+        .map(|observation| {
+            guardian_evidence_commitment(&case.subject_key, observation.source_event())
+        })
         .collect();
+    evidence_commitments.sort_unstable();
+    evidence_commitments.dedup();
+    let mut reason_codes: Vec<_> = case
+        .reason_codes
+        .iter()
+        .filter(|code| rule.allowed_report_reason_codes.binary_search(code).is_ok())
+        .take(rule.maximum_report_reason_codes)
+        .cloned()
+        .collect();
+    reason_codes.sort();
+    reason_codes.dedup();
     GuardianReport {
         schema_version: GUARDIAN_REPORT_SCHEMA_VERSION.to_string(),
         key: GuardianReportKey::new(case.case_id.clone(), transition_revision),
-        subject_key: case.subject_key.clone(),
         trigger,
         queued_at_ms,
         threat_type: case.threat_type,
         case_status: case.status,
         severity: case.severity,
         confidence: case.confidence,
-        peak_risk_score: case.peak_risk_score,
-        first_observed_at_ms: case.first_observed_at_ms,
-        last_observed_at_ms: case.last_observed_at_ms,
-        observation_count: u32::try_from(case.observations.len()).unwrap_or(u32::MAX),
-        reason_codes: case.reason_codes.clone(),
-        evidence,
+        first_observed_at_ms: case.first_observed_at_ms.unwrap_or(queued_at_ms),
+        last_observed_at_ms: case.last_observed_at_ms.unwrap_or(queued_at_ms),
+        observation_volume_band: match case.observations.len() {
+            0 | 1 => super::GuardianReportObservationVolumeBand::Isolated,
+            2..=4 => super::GuardianReportObservationVolumeBand::Repeated,
+            _ => super::GuardianReportObservationVolumeBand::Sustained,
+        },
+        reason_codes,
+        evidence_commitments,
+        execution_binding: GuardianReportExecutionBinding::from_policy_rule(
+            execution_policy,
+            rule,
+            queued_at_ms,
+        ),
+    }
+}
+
+fn deferred_guardian_report(
+    trigger: GuardianReportTrigger,
+    transition_revision: u64,
+    transition_at_ms: u64,
+    eligible_at_ms: u64,
+    rule: &GuardianExecutionRule,
+) -> DeferredGuardianReport {
+    DeferredGuardianReport {
+        trigger,
+        transition_revision,
+        transition_at_ms,
+        eligible_at_ms,
+        rule_id: rule.rule_id.clone(),
+        rule_digest: rule.rule_digest,
+        cooldown_ms: rule.cooldown_ms,
     }
 }
 
@@ -1311,7 +1513,7 @@ fn next_revision(revision: u64) -> Result<u64, SafetyCaseReducerError> {
 mod tests {
     use aura_contracts::{Confidence, ThreatType};
 
-    use super::{GuardianReportingPolicy, SafetyCaseCommand, SafetyCasePolicy, SafetyCaseReducer};
+    use super::{SafetyCaseCommand, SafetyCasePolicy, SafetyCaseReducer};
     use crate::safety_case::{
         ConversationEventKey, GuardianReportDirective, RiskScore, SafetyCase, SafetyCaseId,
         SafetyCaseSeverity, SafetyCaseStatus, SafetyCaseSubjectKey, SafetyObservation,
@@ -1417,8 +1619,7 @@ mod tests {
 
     #[test]
     fn escalation_inside_cooldown_is_deferred() {
-        let policy = SafetyCasePolicy::default()
-            .with_guardian_reporting(GuardianReportingPolicy::default().with_cooldown_ms(60_000));
+        let policy = SafetyCasePolicy::default();
         let opened = SafetyCaseReducer::reduce(
             &case(),
             SafetyCaseCommand::ApplyObservation {
@@ -1438,8 +1639,17 @@ mod tests {
             .unwrap()
             .key()
             .clone();
-        let delivered = SafetyCaseReducer::reduce(
+        let prepared = SafetyCaseReducer::reduce(
             opened.case(),
+            SafetyCaseCommand::ConfirmGuardianReportPrepared {
+                report_key: report_key.clone(),
+                prepared_at_ms: 2_050,
+            },
+            &policy,
+        )
+        .unwrap();
+        let delivered = SafetyCaseReducer::reduce(
+            prepared.case(),
             SafetyCaseCommand::AcknowledgeGuardianReport {
                 report_key,
                 delivered_at_ms: 2_100,
@@ -1470,8 +1680,7 @@ mod tests {
 
     #[test]
     fn urgent_transition_bypasses_cooldown() {
-        let policy = SafetyCasePolicy::default()
-            .with_guardian_reporting(GuardianReportingPolicy::default().with_cooldown_ms(60_000));
+        let policy = SafetyCasePolicy::default();
         let opened = SafetyCaseReducer::reduce(
             &case(),
             SafetyCaseCommand::ApplyObservation {
@@ -1491,8 +1700,17 @@ mod tests {
             .unwrap()
             .key()
             .clone();
-        let delivered = SafetyCaseReducer::reduce(
+        let prepared = SafetyCaseReducer::reduce(
             opened.case(),
+            SafetyCaseCommand::ConfirmGuardianReportPrepared {
+                report_key: report_key.clone(),
+                prepared_at_ms: 2_050,
+            },
+            &policy,
+        )
+        .unwrap();
+        let delivered = SafetyCaseReducer::reduce(
+            prepared.case(),
             SafetyCaseCommand::AcknowledgeGuardianReport {
                 report_key,
                 delivered_at_ms: 2_100,

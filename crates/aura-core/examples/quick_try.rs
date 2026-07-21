@@ -286,7 +286,6 @@ fn run_once(analyzer: &mut Analyzer, state: &mut SessionState, text: &str) {
         language: Some(state.language.clone()),
         conversation_type: state.conversation_type,
         member_count: state.member_count,
-        server_sender_risk_hint: None,
         sender_relationship: Default::default(),
         relationship_trust_source: Default::default(),
     };

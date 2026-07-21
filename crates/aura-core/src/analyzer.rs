@@ -684,9 +684,24 @@ impl Analyzer {
         self.config.effective_protection_level()
     }
 
-    /// Returns the configured product rollout, defaulting to shadow for legacy config.
+    /// Returns the explicitly configured product rollout.
     pub fn product_rollout_mode(&self) -> ProductRolloutMode {
         self.config.product_rollout_mode
+    }
+
+    /// Returns the account profile bound to this initialized analyzer.
+    pub const fn account_type(&self) -> AccountType {
+        self.config.account_type
+    }
+
+    /// Returns the effective account domain bound to this analyzer.
+    pub fn effective_domain_mode(&self) -> DomainMode {
+        self.config.effective_domain_mode()
+    }
+
+    /// Returns the configured canonical analysis language.
+    pub fn language(&self) -> &str {
+        &self.config.language
     }
 
     /// Returns a read-only snapshot of capabilities actually active in this analyzer.
@@ -702,9 +717,11 @@ impl Analyzer {
             .map(|model| RuntimeModelIdentity {
                 component: model.component.clone(),
                 identifier: model.identifier.clone(),
-                // The current core does not retain an attested hash for the exact
-                // loaded session, so capability output must not claim one.
-                sha256: None,
+                sha256: model
+                    .sha256
+                    .iter()
+                    .any(|byte| *byte != 0)
+                    .then(|| hex_digest(&model.sha256)),
             })
             .collect();
 
@@ -719,6 +736,11 @@ impl Analyzer {
             state_schema_version: TRACKER_STATE_VERSION,
             product_rollout_mode: self.config.product_rollout_mode,
         }
+    }
+
+    /// Returns the exact validated model-manifest identity active in this runtime.
+    pub fn model_manifest_digest(&self) -> [u8; 32] {
+        self.ml_pipeline.model_manifest_digest()
     }
 
     /// Exports the conversation tracker state for persistence or transfer.
@@ -766,8 +788,7 @@ impl Analyzer {
 
     /// Returns the sender risk score from this analyzer's kids-domain memory.
     pub fn kids_sender_cross_risk_score(&self, sender_id: &str) -> f32 {
-        self.domain_runtime
-            .kids_sender_cross_risk_score(sender_id)
+        self.domain_runtime.kids_sender_cross_risk_score(sender_id)
     }
 
     /// Applies guardian feedback to this analyzer's live kids-domain memory.
@@ -1609,6 +1630,15 @@ impl Analyzer {
 
         sender_has_prior && other_sender_replied
     }
+}
+
+fn hex_digest(digest: &[u8; 32]) -> String {
+    let mut output = String::with_capacity(64);
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ = write!(output, "{byte:02x}");
+    }
+    output
 }
 
 fn looks_like_unresolved_future_violence(lower: &str) -> bool {
@@ -2928,7 +2958,6 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         }
@@ -2944,7 +2973,6 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         }
@@ -3803,7 +3831,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -3838,7 +3865,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -3856,7 +3882,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -4900,7 +4925,6 @@ mod tests {
                 language: Some("en".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -5102,7 +5126,6 @@ mod tests {
             language: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         };
@@ -5201,7 +5224,6 @@ mod tests {
             language: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         };
@@ -5230,7 +5252,6 @@ mod tests {
                 language: Some("en".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -5246,7 +5267,6 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         };
@@ -5291,7 +5311,6 @@ mod tests {
                 language: Some("en".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -5307,7 +5326,6 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         };
@@ -5344,7 +5362,6 @@ mod tests {
                 language: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -5386,7 +5403,6 @@ mod tests {
                 language: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -5430,7 +5446,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -5483,7 +5498,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -5518,7 +5532,6 @@ mod tests {
                 language: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5550,7 +5563,6 @@ mod tests {
                 language: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5585,7 +5597,6 @@ mod tests {
                 language: Some("en".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5602,7 +5613,6 @@ mod tests {
                 language: Some("en".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5654,7 +5664,6 @@ mod tests {
                 language: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5686,7 +5695,6 @@ mod tests {
                 language: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5720,7 +5728,6 @@ mod tests {
                 language: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5760,7 +5767,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Group,
                 member_count: Some(25),
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5798,7 +5804,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5816,7 +5821,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5834,7 +5838,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5865,7 +5868,6 @@ mod tests {
             language: Some("uk".to_string()),
             conversation_type: ConversationType::Group,
             member_count: Some(12),
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         };
@@ -5892,7 +5894,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -5930,7 +5931,6 @@ mod tests {
             language: Some("uk".to_string()),
             conversation_type: ConversationType::Group,
             member_count: Some(16),
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         };
@@ -6096,7 +6096,6 @@ mod tests {
                 language: Some((*lang).to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -6132,7 +6131,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -6150,7 +6148,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -6182,7 +6179,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -6200,7 +6196,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -6218,7 +6213,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -6259,7 +6253,6 @@ mod tests {
                     language: Some("uk".to_string()),
                     conversation_type: ConversationType::Direct,
                     member_count: None,
-                    server_sender_risk_hint: None,
                     sender_relationship: Default::default(),
                     relationship_trust_source: Default::default(),
                 },
@@ -6311,7 +6304,6 @@ mod tests {
                     language: Some("uk".to_string()),
                     conversation_type: ConversationType::Group,
                     member_count: Some(6),
-                    server_sender_risk_hint: None,
                     sender_relationship: Default::default(),
                     relationship_trust_source: Default::default(),
                 },
@@ -6362,7 +6354,6 @@ mod tests {
                     language: Some("uk".to_string()),
                     conversation_type: ConversationType::Group,
                     member_count: Some(10),
-                    server_sender_risk_hint: None,
                     sender_relationship: Default::default(),
                     relationship_trust_source: Default::default(),
                 },
@@ -6414,7 +6405,6 @@ mod tests {
                     language: Some("uk".to_string()),
                     conversation_type: ConversationType::Group,
                     member_count: Some(6),
-                    server_sender_risk_hint: None,
                     sender_relationship: Default::default(),
                     relationship_trust_source: Default::default(),
                 },
@@ -6449,7 +6439,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -6467,7 +6456,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -6508,7 +6496,6 @@ mod tests {
                     language: Some("uk".to_string()),
                     conversation_type: ConversationType::Group,
                     member_count: Some(10),
-                    server_sender_risk_hint: None,
                     sender_relationship: Default::default(),
                     relationship_trust_source: Default::default(),
                 },
@@ -6542,7 +6529,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Group,
                 member_count: Some(20),
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -6580,7 +6566,6 @@ mod tests {
                 language: Some("uk".to_string()),
                 conversation_type: ConversationType::Direct,
                 member_count: None,
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
@@ -7215,7 +7200,6 @@ mod tests {
                     language: Some("uk".to_string()),
                     conversation_type: ConversationType::Direct,
                     member_count: None,
-                    server_sender_risk_hint: None,
                     sender_relationship: Default::default(),
                     relationship_trust_source: Default::default(),
                 },

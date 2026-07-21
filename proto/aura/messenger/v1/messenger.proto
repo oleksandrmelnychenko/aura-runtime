@@ -80,12 +80,13 @@ enum Action {
 }
 
 enum DetectionLayer {
+  reserved 5;
+  reserved "DETECTION_LAYER_RELAY_INFERENCE";
   DETECTION_LAYER_UNSPECIFIED = 0;
   DETECTION_LAYER_PATTERN_MATCHING = 1;
   DETECTION_LAYER_ML_CLASSIFICATION = 2;
   DETECTION_LAYER_CONTEXT_ANALYSIS = 3;
   DETECTION_LAYER_DOMAIN_HEURISTIC = 4;
-  DETECTION_LAYER_RELAY_INFERENCE = 5;
 }
 
 enum SignalFamily {
@@ -260,45 +261,6 @@ enum ContentType {
   CONTENT_TYPE_URL = 5;
 }
 
-enum RelayPrivacyMode {
-  RELAY_PRIVACY_MODE_UNSPECIFIED = 0;
-  // Send no plaintext message body to the relay.
-  RELAY_PRIVACY_MODE_METADATA_ONLY = 1;
-  // Send only the current message body when relay is queried.
-  RELAY_PRIVACY_MODE_MESSAGE_ONLY = 2;
-  // Send current message body plus bounded recent window when configured.
-  RELAY_PRIVACY_MODE_MESSAGE_AND_WINDOW = 3;
-}
-
-enum SafetyTelemetrySurface {
-  SAFETY_TELEMETRY_SURFACE_UNSPECIFIED = 0;
-  SAFETY_TELEMETRY_SURFACE_DIRECT_MESSAGE = 1;
-  SAFETY_TELEMETRY_SURFACE_GROUP_CHAT = 2;
-  SAFETY_TELEMETRY_SURFACE_PUBLIC_COMMENT = 3;
-  SAFETY_TELEMETRY_SURFACE_LIVESTREAM_COMMENT = 4;
-}
-
-enum SafetyTelemetrySeverity {
-  SAFETY_TELEMETRY_SEVERITY_UNSPECIFIED = 0;
-  SAFETY_TELEMETRY_SEVERITY_LOW = 1;
-  SAFETY_TELEMETRY_SEVERITY_MEDIUM = 2;
-  SAFETY_TELEMETRY_SEVERITY_HIGH = 3;
-  SAFETY_TELEMETRY_SEVERITY_CRITICAL = 4;
-}
-
-enum SafetyTelemetryAction {
-  SAFETY_TELEMETRY_ACTION_UNSPECIFIED = 0;
-  SAFETY_TELEMETRY_ACTION_NONE = 1;
-  SAFETY_TELEMETRY_ACTION_MARK = 2;
-  SAFETY_TELEMETRY_ACTION_BLUR = 3;
-  SAFETY_TELEMETRY_ACTION_WARN = 4;
-  SAFETY_TELEMETRY_ACTION_BLOCK = 5;
-  SAFETY_TELEMETRY_ACTION_GUARDIAN_ALERT = 6;
-  SAFETY_TELEMETRY_ACTION_REPORT_QUEUED = 7;
-  SAFETY_TELEMETRY_ACTION_RESTRICT_CONTACT = 8;
-  SAFETY_TELEMETRY_ACTION_CRISIS_SUPPORT = 9;
-}
-
 enum EventKind {
   EVENT_KIND_UNSPECIFIED = 0;
   EVENT_KIND_FLATTERY = 1;
@@ -372,8 +334,9 @@ message AuraConfig {
   int32 timezone_offset_minutes = 10;
   // Account-level domain mode and the only effective domain selector.
   DomainMode domain_mode = 11;
-  optional AgentRelayPolicy relay_policy = 12;
-  // Product delivery rollout. Unspecified is interpreted as shadow mode.
+  reserved 12;
+  reserved "relay_policy";
+  // Product delivery rollout. Callers must set an explicit nonzero mode.
   ProductRolloutMode product_rollout_mode = 13;
 }
 
@@ -412,50 +375,210 @@ message RuntimeCapabilities {
   ProductRolloutMode product_rollout_mode = 9;
 }
 
-message AgentRelayPolicy {
-  optional bool enabled = 1;
-  optional float score_threshold = 2;
-  optional bool send_on_high_uncertainty = 3;
-  optional bool send_on_new_contact = 4;
-  optional bool send_on_repeated_sender = 5;
-  RelayPrivacyMode privacy_mode = 6;
-  optional uint32 max_recent_window_messages = 7;
-  // 0 means no deadline.
-  optional uint32 deadline_ms = 8;
-  optional bool emit_local_safety_telemetry = 9;
-  // Raw local account id. AURA tokenizes it before any relay request.
-  optional string protected_account_id = 10;
-  // Host-provisioned response MAC key. When present, Agent rejects unsigned
-  // or tampered RelayAnalyzeResponse envelopes for pending relay requests.
-  optional RelayResponseAuthKey response_auth_key = 11;
-  // Host-provisioned request MAC key. When present, Agent signs
-  // RelayAnalyzeRequest envelopes and Relay can reject unsigned or replayed
-  // requests.
-  optional RelayRequestAuthKey request_auth_key = 12;
-  // Additional response MAC keys accepted during key rotation. The primary
-  // response_auth_key is also accepted.
-  repeated RelayResponseAuthKey accepted_response_auth_keys = 13;
-  // Production guardrail: fail config/init unless both request signing and
-  // response verification keys are provisioned.
-  optional bool require_relay_auth = 14;
-  // Optional short-lived server-issued proof for the tokenized protected
-  // account. The Agent includes it in RelayAnalyzeRequest only when it matches
-  // the configured protected_account_id after tokenization and is not expired.
-  optional ProtectedAccountTokenAttestation protected_account_attestation = 15;
-  // Production guardrail: fail config/init unless protected_account_id has a
-  // matching protected_account_attestation. At runtime, suppress relay requests
-  // if the proof is expired or mismatched.
-  optional bool require_protected_account_attestation = 16;
+// Challenge-bound identity of the exact initialized native runtime. The
+// capability and model-manifest digests are computed by native code from the
+// artifacts actually active in this handle; the release descriptor digest is
+// embedded before compilation and tied to the post-build Apple manifest.
+message RuntimeArtifactAttestationRequest {
+  string account_key = 1;
+  bytes nonce = 2;
 }
 
-message RelayResponseAuthKey {
-  string key_id = 1;
-  bytes secret = 2;
+message RuntimeArtifactAttestationResponse {
+  uint32 schema_version = 1;
+  string account_key = 2;
+  bytes nonce = 3;
+  bytes runtime_capabilities_wire = 4;
+  bytes runtime_capabilities_digest = 5;
+  bytes model_manifest_digest = 6;
+  bytes release_artifact_descriptor_digest = 7;
+  bool release_attested = 8;
+  string runtime_state_schema_version = 9;
+  bytes execution_policy_trust_keyring_digest = 10;
 }
 
-message RelayRequestAuthKey {
-  string key_id = 1;
-  bytes secret = 2;
+enum AuraExecutionPolicySignatureAlgorithm {
+  AURA_EXECUTION_POLICY_SIGNATURE_ALGORITHM_UNSPECIFIED = 0;
+  AURA_EXECUTION_POLICY_SIGNATURE_ALGORITHM_ED25519 = 1;
+}
+
+enum AuraExecutionPolicyState {
+  AURA_EXECUTION_POLICY_STATE_UNSPECIFIED = 0;
+  AURA_EXECUTION_POLICY_STATE_ENABLED = 1;
+  AURA_EXECUTION_POLICY_STATE_DISABLED = 2;
+}
+
+enum AuraExecutionMode {
+  AURA_EXECUTION_MODE_UNSPECIFIED = 0;
+  AURA_EXECUTION_MODE_OFF = 1;
+  AURA_EXECUTION_MODE_SHADOW_CASES = 2;
+  AURA_EXECUTION_MODE_CASE_TRANSITIONS = 3;
+}
+
+enum AuraExecutionAccountProfile {
+  AURA_EXECUTION_ACCOUNT_PROFILE_UNSPECIFIED = 0;
+  AURA_EXECUTION_ACCOUNT_PROFILE_ADULT = 1;
+  AURA_EXECUTION_ACCOUNT_PROFILE_TEEN = 2;
+  AURA_EXECUTION_ACCOUNT_PROFILE_CHILD = 3;
+}
+
+enum AuraExecutionDomainMode {
+  AURA_EXECUTION_DOMAIN_MODE_UNSPECIFIED = 0;
+  AURA_EXECUTION_DOMAIN_MODE_NONE = 1;
+  AURA_EXECUTION_DOMAIN_MODE_KIDS = 2;
+}
+
+enum AuraExecutionRiskFamily {
+  AURA_EXECUTION_RISK_FAMILY_UNSPECIFIED = 0;
+  AURA_EXECUTION_RISK_FAMILY_BULLYING = 1;
+  AURA_EXECUTION_RISK_FAMILY_GROOMING = 2;
+  AURA_EXECUTION_RISK_FAMILY_EXPLICIT = 3;
+  AURA_EXECUTION_RISK_FAMILY_THREAT = 4;
+  AURA_EXECUTION_RISK_FAMILY_SELF_HARM = 5;
+  AURA_EXECUTION_RISK_FAMILY_SPAM = 6;
+  AURA_EXECUTION_RISK_FAMILY_SCAM = 7;
+  AURA_EXECUTION_RISK_FAMILY_PHISHING = 8;
+  AURA_EXECUTION_RISK_FAMILY_MANIPULATION = 9;
+  AURA_EXECUTION_RISK_FAMILY_NSFW = 10;
+  AURA_EXECUTION_RISK_FAMILY_HATE_SPEECH = 11;
+  AURA_EXECUTION_RISK_FAMILY_DOXXING = 12;
+  AURA_EXECUTION_RISK_FAMILY_PII_LEAKAGE = 13;
+  AURA_EXECUTION_RISK_FAMILY_PROPAGANDA = 14;
+  AURA_EXECUTION_RISK_FAMILY_OPSEC_VIOLATION = 15;
+  AURA_EXECUTION_RISK_FAMILY_PSYOPS = 16;
+  AURA_EXECUTION_RISK_FAMILY_MILITARY_SOCIAL_ENG = 17;
+  AURA_EXECUTION_RISK_FAMILY_COORDINATE_LEAK = 18;
+}
+
+enum AuraExecutionCaseTrigger {
+  AURA_EXECUTION_CASE_TRIGGER_UNSPECIFIED = 0;
+  AURA_EXECUTION_CASE_TRIGGER_CASE_OPENED = 1;
+  AURA_EXECUTION_CASE_TRIGGER_CASE_ESCALATED = 2;
+  AURA_EXECUTION_CASE_TRIGGER_URGENT_REVIEW = 3;
+  AURA_EXECUTION_CASE_TRIGGER_CASE_RESOLVED = 4;
+}
+
+enum AuraExecutionCaseStatus {
+  AURA_EXECUTION_CASE_STATUS_UNSPECIFIED = 0;
+  AURA_EXECUTION_CASE_STATUS_OBSERVING = 1;
+  AURA_EXECUTION_CASE_STATUS_OPEN = 2;
+  AURA_EXECUTION_CASE_STATUS_ESCALATED = 3;
+  AURA_EXECUTION_CASE_STATUS_URGENT = 4;
+  AURA_EXECUTION_CASE_STATUS_RESOLVED = 5;
+  AURA_EXECUTION_CASE_STATUS_DISMISSED = 6;
+}
+
+enum AuraExecutionSeverity {
+  AURA_EXECUTION_SEVERITY_UNSPECIFIED = 0;
+  AURA_EXECUTION_SEVERITY_INFORMATIONAL = 1;
+  AURA_EXECUTION_SEVERITY_ELEVATED = 2;
+  AURA_EXECUTION_SEVERITY_HIGH = 3;
+  AURA_EXECUTION_SEVERITY_CRITICAL = 4;
+}
+
+enum AuraExecutionConfidence {
+  AURA_EXECUTION_CONFIDENCE_UNSPECIFIED = 0;
+  AURA_EXECUTION_CONFIDENCE_LOW = 1;
+  AURA_EXECUTION_CONFIDENCE_MEDIUM = 2;
+  AURA_EXECUTION_CONFIDENCE_HIGH = 3;
+}
+
+enum AuraExecutionDeliveryClass {
+  AURA_EXECUTION_DELIVERY_CLASS_UNSPECIFIED = 0;
+  AURA_EXECUTION_DELIVERY_CLASS_NONE = 1;
+  AURA_EXECUTION_DELIVERY_CLASS_NEEDS_ATTENTION = 2;
+  AURA_EXECUTION_DELIVERY_CLASS_URGENT = 3;
+}
+
+message AuraExecutionRule {
+  string rule_id = 1;
+  AuraExecutionRiskFamily risk_family = 2;
+  AuraExecutionCaseTrigger trigger = 3;
+  AuraExecutionCaseStatus required_case_status = 4;
+  AuraExecutionSeverity minimum_severity = 5;
+  AuraExecutionConfidence minimum_confidence = 6;
+  uint32 minimum_observation_count = 7;
+  uint32 minimum_peak_risk_bps = 8;
+  uint64 cooldown_ms = 9;
+  bool urgent_bypasses_cooldown = 10;
+  uint32 max_report_reason_codes = 11;
+  uint32 max_evidence_commitments = 12;
+  repeated string allowed_report_reason_codes = 13;
+  AuraExecutionDeliveryClass delivery_class = 14;
+  bytes rule_digest = 15;
+}
+
+// Wire-compatible copy of the server-signed execution-policy document. The
+// FFI rejects non-canonical protobuf bytes and verifies the Ed25519 signature
+// against the exact compile-time execution-policy trust keyring.
+message AuraExecutionPolicyDocument {
+  uint32 schema_version = 1;
+  AuraExecutionPolicySignatureAlgorithm signature_algorithm = 2;
+  string authority_lineage_id = 3;
+  string issuer_key_id = 4;
+  bytes protected_account_id = 5;
+  uint64 policy_epoch = 6;
+  uint64 revoked_through_policy_epoch = 7;
+  AuraExecutionPolicyState state = 8;
+  string policy_version = 9;
+  bytes policy_body_digest = 10;
+  uint64 safety_profile_authority_epoch = 11;
+  bytes safety_profile_assertion_digest = 12;
+  AuraExecutionAccountProfile account_profile = 13;
+  AuraExecutionMode execution_mode = 14;
+  repeated string language_tags = 15;
+  AuraExecutionDomainMode domain_mode = 16;
+  bytes runtime_capabilities_digest = 17;
+  bytes model_manifest_digest = 18;
+  uint32 safety_case_policy_schema_version = 19;
+  uint32 required_guardian_report_schema_version = 20;
+  uint32 required_delivery_operation_schema_version = 21;
+  uint64 case_state_ttl_ms = 22;
+  uint32 max_case_observations = 23;
+  uint32 max_case_reason_codes = 24;
+  repeated AuraExecutionRule rules = 25;
+  string rollout_id = 26;
+  string cohort_id = 27;
+  uint64 issued_at_ms = 28;
+  uint64 valid_from_ms = 29;
+  uint64 valid_until_ms = 30;
+  uint64 policy_updated_at_ms = 31;
+  bytes signature = 32;
+}
+
+message AuraExecutionPolicyApplyRequest {
+  string account_key = 1;
+  bytes policy_wire = 2;
+  bytes expected_policy_wire_digest = 3;
+  bytes expected_runtime_capabilities_digest = 4;
+  bytes expected_model_manifest_digest = 5;
+  int64 authenticated_server_time_unix_ms = 6;
+  bytes expected_execution_policy_trust_keyring_digest = 7;
+}
+
+enum AuraExecutionPolicyApplyDisposition {
+  AURA_EXECUTION_POLICY_APPLY_DISPOSITION_UNSPECIFIED = 0;
+  AURA_EXECUTION_POLICY_APPLY_DISPOSITION_APPLIED = 1;
+  AURA_EXECUTION_POLICY_APPLY_DISPOSITION_UNCHANGED = 2;
+}
+
+message AuraExecutionPolicyApplicationReceipt {
+  uint32 schema_version = 1;
+  AuraExecutionPolicyApplyDisposition disposition = 2;
+  string account_key = 3;
+  bytes protected_account_id = 4;
+  uint64 policy_epoch = 5;
+  bytes policy_wire_digest = 6;
+  AuraExecutionPolicyState state = 7;
+  AuraExecutionMode execution_mode = 8;
+  bytes runtime_capabilities_digest = 9;
+  bytes model_manifest_digest = 10;
+  uint64 native_floor_epoch = 11;
+  bytes native_floor_policy_wire_digest = 12;
+  bytes signed_policy_digest = 13;
+  bytes receipt_digest = 14;
+  string runtime_state_schema_version = 15;
+  bytes execution_policy_trust_keyring_digest = 16;
 }
 
 message MessageInput {
@@ -467,9 +590,8 @@ message MessageInput {
   optional string language = 6;
   ConversationType conversation_type = 7;
   optional uint32 member_count = 8;
-  // Server-injected sender reputation hint (0.0 = unknown, 1.0 = max risk).
-  // Allows the server to feed cross-user reputation signals back to the client.
-  optional float server_sender_risk_hint = 9;
+  reserved 9;
+  reserved "server_sender_risk_hint";
   // Coarse, privacy-preserving sender relationship category.
   SenderRelationship sender_relationship = 10;
   // Source used to derive sender_relationship. Self-declared data is not trust.
@@ -479,128 +601,6 @@ message MessageInput {
 message AnalyzeContextRequest {
   MessageInput message = 1;
   uint64 timestamp_ms = 2;
-}
-
-message RelayObservation {
-  ThreatType threat_type = 1;
-  string threat_subtype = 2;
-  DetectionLayer layer = 3;
-  float score = 4;
-  Confidence confidence = 5;
-  string reason_code = 6;
-  string explanation = 7;
-}
-
-message RelayMessageWindowEntry {
-  string sender_id = 1;
-  string text = 2;
-  uint64 timestamp_ms = 3;
-}
-
-message RelayLocalContextSummary {
-  repeated string context_markers = 1;
-  repeated RelayObservation recent_observations = 2;
-}
-
-message RelayAgentCapabilities {
-  bool local_context_interpreter = 1;
-  bool local_tracker = 2;
-  bool supports_remote_correlation = 3;
-  optional uint32 relay_timeout_ms = 4;
-}
-
-message RelaySafetyTelemetryEvent {
-  string event_id = 1;
-  string sender_token = 2;
-  string protected_account_token = 3;
-  optional string conversation_token = 4;
-  SafetyTelemetrySurface surface = 5;
-  ThreatType threat_type = 6;
-  SafetyTelemetrySeverity severity = 7;
-  Confidence confidence = 8;
-  SafetyTelemetryAction action = 9;
-  uint64 timestamp_bucket_ms = 10;
-  optional string reason_family = 11;
-}
-
-message RelayRequestAuth {
-  string key_id = 1;
-  string alg = 2;
-  string tag = 3;
-}
-
-message ProtectedAccountTokenAttestation {
-  string key_id = 1;
-  string alg = 2;
-  string protected_account_token = 3;
-  uint64 expires_at_ms = 4;
-  string tag = 5;
-}
-
-message RelayAnalyzeRequest {
-  string schema_version = 1;
-  string request_id = 2;
-  string message_id = 3;
-  AccountType account_type = 4;
-  ProtectionLevel protection_level = 5;
-  ConversationType conversation_type = 6;
-  optional string language = 7;
-  string text = 8;
-  repeated RelayObservation local_observations = 9;
-  RelayLocalContextSummary local_context_summary = 10;
-  repeated RelaySafetyTelemetryEvent local_safety_telemetry = 11;
-  repeated RelayMessageWindowEntry recent_message_window = 12;
-  optional float server_sender_risk_hint = 13;
-  RelayPrivacyMode privacy_mode = 14;
-  RelayAgentCapabilities capabilities = 15;
-  optional uint32 deadline_ms = 16;
-  optional string sender_token = 17;
-  optional string protected_account_token = 18;
-  optional string conversation_token = 19;
-  RelayRequestAuth auth = 20;
-  ProtectedAccountTokenAttestation protected_account_attestation = 21;
-  // Coarse, privacy-preserving sender relationship category.
-  SenderRelationship sender_relationship = 22;
-  // Source used to derive sender_relationship. Self-declared data is not trust.
-  RelationshipTrustSource relationship_trust_source = 23;
-}
-
-message RelayRemoteFinding {
-  ThreatType threat_type = 1;
-  float score = 2;
-  Confidence confidence = 3;
-  string reason_code = 4;
-  string explanation = 5;
-}
-
-message RelayRemoteInferenceSummary {
-  ThreatType primary_threat = 1;
-  float score = 2;
-  Confidence confidence = 3;
-  RiskHorizon risk_horizon = 4;
-}
-
-message RelayResponseAuth {
-  string key_id = 1;
-  string alg = 2;
-  string tag = 3;
-}
-
-message RelayAnalyzeResponse {
-  string schema_version = 1;
-  string request_id = 2;
-  repeated RelayObservation remote_observations = 3;
-  // Field 4 is reserved for a future typed remote context frame.
-  repeated ContextEvent remote_events = 5;
-  repeated RelayRemoteFinding findings = 6;
-  RelayRemoteInferenceSummary inference = 7;
-  repeated string reason_codes = 8;
-  repeated string context_markers = 9;
-  Confidence confidence = 10;
-  optional uint64 expires_at_ms = 11;
-  optional float sender_reputation_hint = 12;
-  repeated string correlation_findings = 13;
-  RelayResponseAuth auth = 14;
 }
 
 message ThreatScore {
@@ -774,19 +774,17 @@ enum CanonicalSafetyDisposition {
 
 message CanonicalSafetyAnalyzeResponse {
   CanonicalSafetyDisposition disposition = 1;
-  // Present only on the first processed attempt. Duplicate/stale responses are
-  // deliberately content-free and never cache an AnalysisResult.
-  AnalysisResult local_result = 2;
+  reserved 2;
+  reserved "local_result";
+  reserved 8;
+  reserved "decision_json";
   optional string ignored_reason = 3;
   optional string case_id = 4;
   optional uint64 case_revision = 5;
   SafetyCaseLifecycleStatus case_status = 6;
   optional uint32 latest_revision = 7;
-  // UTF-8 JSON SafetyCaseDecision. It is content-free, versioned by the Rust
-  // decision schema, and bounded by the response size contract.
-  optional bytes decision_json = 8;
   string runtime_state_schema_version = 9;
-  // Present for reduced/applied outcomes. Zero is the legacy initial episode.
+  // Present for reduced/applied outcomes. Zero is the initial generation.
   optional uint64 case_generation = 10;
 }
 
@@ -810,8 +808,8 @@ message SafetyCaseLifecycleCommandResponse {
   string case_id = 1;
   uint64 case_revision = 2;
   SafetyCaseLifecycleStatus case_status = 3;
-  // UTF-8 JSON SafetyCaseDecision, using its embedded decision schema.
-  bytes decision_json = 4;
+  reserved 4;
+  reserved "decision_json";
   string runtime_state_schema_version = 5;
   optional uint64 case_generation = 6;
 }
@@ -850,6 +848,223 @@ message SafetyCaseAccountRemovalResponse {
   uint64 removed_cases = 1;
   uint64 removed_source_receipts = 2;
   string runtime_state_schema_version = 3;
+}
+
+// Read-only, content-free projection of the report retained by the native
+// Safety Case reducer. The host must not synthesize these fields from a
+// message-level detector response.
+enum GuardianReportDisposition {
+  GUARDIAN_REPORT_DISPOSITION_UNSPECIFIED = 0;
+  GUARDIAN_REPORT_DISPOSITION_NOT_REQUIRED = 1;
+  GUARDIAN_REPORT_DISPOSITION_PENDING = 2;
+  GUARDIAN_REPORT_DISPOSITION_DEFERRED = 3;
+}
+
+enum GuardianReportTrigger {
+  GUARDIAN_REPORT_TRIGGER_UNSPECIFIED = 0;
+  GUARDIAN_REPORT_TRIGGER_CASE_OPENED = 1;
+  GUARDIAN_REPORT_TRIGGER_CASE_ESCALATED = 2;
+  GUARDIAN_REPORT_TRIGGER_URGENT_REVIEW = 3;
+  GUARDIAN_REPORT_TRIGGER_CASE_RESOLVED = 4;
+}
+
+enum SafetyCaseSeverity {
+  SAFETY_CASE_SEVERITY_UNSPECIFIED = 0;
+  SAFETY_CASE_SEVERITY_INFORMATIONAL = 1;
+  SAFETY_CASE_SEVERITY_ELEVATED = 2;
+  SAFETY_CASE_SEVERITY_HIGH = 3;
+  SAFETY_CASE_SEVERITY_CRITICAL = 4;
+}
+
+enum GuardianReportRiskFamily {
+  GUARDIAN_REPORT_RISK_FAMILY_UNSPECIFIED = 0;
+  GUARDIAN_REPORT_RISK_FAMILY_BULLYING = 1;
+  GUARDIAN_REPORT_RISK_FAMILY_GROOMING = 2;
+  GUARDIAN_REPORT_RISK_FAMILY_EXPLICIT = 3;
+  GUARDIAN_REPORT_RISK_FAMILY_THREAT = 4;
+  GUARDIAN_REPORT_RISK_FAMILY_SELF_HARM = 5;
+  GUARDIAN_REPORT_RISK_FAMILY_SPAM = 6;
+  GUARDIAN_REPORT_RISK_FAMILY_SCAM = 7;
+  GUARDIAN_REPORT_RISK_FAMILY_PHISHING = 8;
+  GUARDIAN_REPORT_RISK_FAMILY_MANIPULATION = 9;
+  GUARDIAN_REPORT_RISK_FAMILY_NSFW = 10;
+  GUARDIAN_REPORT_RISK_FAMILY_HATE_SPEECH = 11;
+  GUARDIAN_REPORT_RISK_FAMILY_DOXXING = 12;
+  GUARDIAN_REPORT_RISK_FAMILY_PII_LEAKAGE = 13;
+  GUARDIAN_REPORT_RISK_FAMILY_PROPAGANDA = 14;
+  GUARDIAN_REPORT_RISK_FAMILY_OPSEC_VIOLATION = 15;
+  GUARDIAN_REPORT_RISK_FAMILY_PSYOPS = 16;
+  GUARDIAN_REPORT_RISK_FAMILY_MILITARY_SOCIAL_ENG = 17;
+  GUARDIAN_REPORT_RISK_FAMILY_COORDINATE_LEAK = 18;
+}
+
+enum GuardianReportObservationVolumeBand {
+  GUARDIAN_REPORT_OBSERVATION_VOLUME_BAND_UNSPECIFIED = 0;
+  GUARDIAN_REPORT_OBSERVATION_VOLUME_BAND_ISOLATED = 1;
+  GUARDIAN_REPORT_OBSERVATION_VOLUME_BAND_REPEATED = 2;
+  GUARDIAN_REPORT_OBSERVATION_VOLUME_BAND_SUSTAINED = 3;
+}
+
+enum GuardianReportDeliveryClass {
+  GUARDIAN_REPORT_DELIVERY_CLASS_UNSPECIFIED = 0;
+  GUARDIAN_REPORT_DELIVERY_CLASS_NONE = 1;
+  GUARDIAN_REPORT_DELIVERY_CLASS_NEEDS_ATTENTION = 2;
+  GUARDIAN_REPORT_DELIVERY_CLASS_URGENT = 3;
+}
+
+message GuardianReport {
+  uint32 schema_version = 1;
+  string case_id = 2;
+  uint64 case_generation = 3;
+  uint64 transition_revision = 4;
+  GuardianReportTrigger trigger = 5;
+  uint64 queued_at_ms = 6;
+  GuardianReportRiskFamily risk_family = 7;
+  SafetyCaseLifecycleStatus case_status = 8;
+  SafetyCaseSeverity severity = 9;
+  Confidence confidence_band = 10;
+  uint64 first_observed_at_ms = 11;
+  uint64 last_observed_at_ms = 12;
+  GuardianReportObservationVolumeBand observation_volume_band = 13;
+  repeated string report_reason_codes = 14;
+  repeated bytes evidence_commitments = 15;
+  string execution_policy_authority_lineage_id = 16;
+  uint64 execution_policy_epoch = 17;
+  string execution_policy_version = 18;
+  bytes execution_policy_assertion_digest = 19;
+  string execution_rule_id = 20;
+  bytes execution_rule_digest = 21;
+  GuardianReportDeliveryClass delivery_class = 22;
+  bytes runtime_capabilities_digest = 23;
+  bytes model_manifest_digest = 24;
+  uint64 policy_evaluated_at_ms = 25;
+}
+
+message GuardianReportSnapshotRequest {
+  string account_key = 1;
+  string case_id = 2;
+  // Presence is required because generation zero is valid.
+  optional uint64 expected_case_generation = 3;
+  // Guards the exact native state observed by the host.
+  uint64 expected_case_revision = 4;
+}
+
+message GuardianReportSnapshotResponse {
+  GuardianReportDisposition disposition = 1;
+  string case_id = 2;
+  uint64 case_generation = 3;
+  uint64 current_case_revision = 4;
+  SafetyCaseLifecycleStatus current_case_status = 5;
+  optional GuardianReport report = 6;
+  optional GuardianReportTrigger deferred_trigger = 7;
+  optional uint64 deferred_eligible_at_ms = 8;
+  string runtime_state_schema_version = 9;
+  // Present only when the host has atomically persisted the exact encrypted
+  // fanout and native supersession is locked until delivery ACK.
+  optional uint64 prepared_at_ms = 10;
+  bytes canonical_report_bytes = 11;
+  bytes semantic_digest = 12;
+  string report_id = 13;
+}
+
+message GuardianReportAccountSnapshotRequest {
+  string account_key = 1;
+}
+
+message GuardianReportAccountSnapshotResponse {
+  repeated GuardianReportSnapshotResponse snapshots = 1;
+  string runtime_state_schema_version = 2;
+}
+
+message GuardianReportFlushRequest {
+  string account_key = 1;
+  string case_id = 2;
+  // Presence is required because generation zero is valid.
+  optional uint64 expected_case_generation = 3;
+  uint64 expected_case_revision = 4;
+  uint64 evaluated_at_ms = 5;
+}
+
+enum GuardianReportPreparationDisposition {
+  GUARDIAN_REPORT_PREPARATION_DISPOSITION_UNSPECIFIED = 0;
+  GUARDIAN_REPORT_PREPARATION_DISPOSITION_PREPARED = 1;
+  GUARDIAN_REPORT_PREPARATION_DISPOSITION_ALREADY_PREPARED = 2;
+}
+
+message GuardianReportPreparationRequest {
+  string account_key = 1;
+  string case_id = 2;
+  // Presence is required because generation zero is valid.
+  optional uint64 expected_case_generation = 3;
+  uint64 report_transition_revision = 4;
+  uint64 prepared_at_ms = 5;
+}
+
+message GuardianReportPreparationResponse {
+  GuardianReportPreparationDisposition disposition = 1;
+  string case_id = 2;
+  uint64 case_generation = 3;
+  uint64 case_revision = 4;
+  SafetyCaseLifecycleStatus case_status = 5;
+  uint64 report_transition_revision = 6;
+  uint64 prepared_at_ms = 7;
+  string runtime_state_schema_version = 8;
+}
+
+enum GuardianReportSuppressionDisposition {
+  GUARDIAN_REPORT_SUPPRESSION_DISPOSITION_UNSPECIFIED = 0;
+  GUARDIAN_REPORT_SUPPRESSION_DISPOSITION_SUPPRESSED = 1;
+  GUARDIAN_REPORT_SUPPRESSION_DISPOSITION_ALREADY_SUPPRESSED = 2;
+}
+
+message GuardianReportSuppressionRequest {
+  string account_key = 1;
+  string case_id = 2;
+  // Presence is required because generation zero is valid.
+  optional uint64 expected_case_generation = 3;
+  uint64 report_transition_revision = 4;
+  uint64 suppressed_at_ms = 5;
+  string reason_code = 6;
+}
+
+message GuardianReportSuppressionResponse {
+  GuardianReportSuppressionDisposition disposition = 1;
+  string case_id = 2;
+  uint64 case_generation = 3;
+  uint64 case_revision = 4;
+  SafetyCaseLifecycleStatus case_status = 5;
+  uint64 report_transition_revision = 6;
+  uint64 suppressed_at_ms = 7;
+  string reason_code = 8;
+  string runtime_state_schema_version = 9;
+}
+
+enum GuardianReportAcknowledgementDisposition {
+  GUARDIAN_REPORT_ACKNOWLEDGEMENT_DISPOSITION_UNSPECIFIED = 0;
+  GUARDIAN_REPORT_ACKNOWLEDGEMENT_DISPOSITION_ACKNOWLEDGED = 1;
+  GUARDIAN_REPORT_ACKNOWLEDGEMENT_DISPOSITION_ALREADY_ACKNOWLEDGED = 2;
+}
+
+// Exact native report-key acknowledgement. `delivered_at_ms` is the maximum
+// authenticated durable-enqueue timestamp across the complete device fanout.
+message GuardianReportAcknowledgementRequest {
+  string account_key = 1;
+  string case_id = 2;
+  // Presence is required because generation zero is valid.
+  optional uint64 expected_case_generation = 3;
+  uint64 report_transition_revision = 4;
+  uint64 delivered_at_ms = 5;
+}
+
+message GuardianReportAcknowledgementResponse {
+  GuardianReportAcknowledgementDisposition disposition = 1;
+  string case_id = 2;
+  uint64 case_generation = 3;
+  uint64 case_revision = 4;
+  SafetyCaseLifecycleStatus case_status = 5;
+  uint64 report_transition_revision = 6;
+  uint64 delivered_at_ms = 7;
+  string runtime_state_schema_version = 8;
 }
 
 message ContactProfileRequest {
@@ -1054,7 +1269,7 @@ message KidsConversationMemoryState {
   string conversation_id = 1;
   repeated KidsMessageRiskSnapshot entries = 2;
   uint64 message_index = 3;
-  // Exact process-wide LRU position. Absent in legacy kids state.
+  // Required by the current nested schema; optional preserves wire presence.
   optional uint64 last_activity_index = 4;
   // Per-reason emission checkpoints used to preserve alert cooldowns.
   repeated KidsEmissionCheckpoint last_emitted = 5;
@@ -1065,7 +1280,7 @@ message KidsSenderMemoryState {
   string sender_id = 1;
   uint64 event_index = 2;
   repeated string recent_high_risk_conversations = 3;
-  // Exact process-wide LRU position. Absent in legacy kids state.
+  // Required by the current nested schema; optional preserves wire presence.
   optional uint64 last_activity_index = 4;
   // Per-reason emission checkpoints used to preserve alert cooldowns.
   repeated KidsEmissionCheckpoint last_emitted = 5;
@@ -1081,6 +1296,6 @@ message KidsEmissionCheckpoint {
 message KidsMemoryState {
   repeated KidsConversationMemoryState conversations = 1;
   repeated KidsSenderMemoryState senders = 2;
-  // 0 identifies legacy state emitted before this nested schema was versioned.
+  // Must equal the current nested Kids memory schema version.
   uint32 schema_version = 3;
 }

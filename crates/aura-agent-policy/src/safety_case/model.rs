@@ -2,15 +2,18 @@ use std::fmt;
 
 use aura_contracts::{Confidence, ThreatType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sha2::{Digest, Sha256};
+
+use super::GuardianReportExecutionBinding;
 
 /// Schema version for persisted [`SafetyObservation`] values.
 pub const SAFETY_OBSERVATION_SCHEMA_VERSION: &str = "aura.safety_observation.v1";
 /// Schema version for persisted [`SafetyCase`] values.
-pub const SAFETY_CASE_SCHEMA_VERSION: &str = "aura.safety_case.v1";
+pub const SAFETY_CASE_SCHEMA_VERSION: &str = "aura.safety_case.v2";
 /// Schema version for [`SafetyCaseDecision`] values.
 pub const SAFETY_CASE_DECISION_SCHEMA_VERSION: &str = "aura.safety_case_decision.v1";
 /// Schema version for [`GuardianReport`] values.
-pub const GUARDIAN_REPORT_SCHEMA_VERSION: &str = "aura.guardian_report.v1";
+pub const GUARDIAN_REPORT_SCHEMA_VERSION: &str = "aura.guardian.report.v2";
 
 const MAX_OPAQUE_ID_BYTES: usize = 256;
 const MAX_REASON_CODE_BYTES: usize = 128;
@@ -51,9 +54,10 @@ fn validate_opaque_id(kind: &'static str, value: String) -> Result<String, Ident
             max_bytes: MAX_OPAQUE_ID_BYTES,
         });
     }
-    if value.chars().any(|character| {
-        character.is_control() || character.is_whitespace()
-    }) {
+    if value
+        .chars()
+        .any(|character| character.is_control() || character.is_whitespace())
+    {
         return Err(IdentifierError::InvalidCharacter { kind });
     }
     Ok(value)
@@ -394,7 +398,10 @@ pub enum SafetyObservationError {
 
 impl SafetyObservation {
     /// Creates a structured observation with no reason codes.
-    #[expect(clippy::too_many_arguments, reason = "all fields form the stable observation identity")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "all fields form the stable observation identity"
+    )]
     pub fn new(
         observation_id: SafetyObservationId,
         source_event: SourceEventKey,
@@ -464,11 +471,7 @@ impl SafetyObservation {
                 maximum: MAX_OBSERVATION_REASON_CODES,
             });
         }
-        if self
-            .reason_codes
-            .windows(2)
-            .any(|pair| pair[0] >= pair[1])
-        {
+        if self.reason_codes.windows(2).any(|pair| pair[0] >= pair[1]) {
             return Err(SafetyObservationError::NonCanonicalReasonCodes);
         }
         Ok(())
@@ -551,6 +554,15 @@ pub enum GuardianReportTrigger {
     CaseResolved,
 }
 
+/// Privacy-bounded observation volume disclosed by a Guardian report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuardianReportObservationVolumeBand {
+    Isolated,
+    Repeated,
+    Sustained,
+}
+
 /// Stable idempotency key for guardian report delivery.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GuardianReportKey {
@@ -559,7 +571,9 @@ pub struct GuardianReportKey {
 }
 
 impl GuardianReportKey {
-    pub(crate) const fn new(case_id: SafetyCaseId, transition_revision: u64) -> Self {
+    /// Creates an exact host-delivery idempotency key from an already
+    /// validated case identifier and reducer transition revision.
+    pub const fn new(case_id: SafetyCaseId, transition_revision: u64) -> Self {
         Self {
             case_id,
             transition_revision,
@@ -579,26 +593,26 @@ impl GuardianReportKey {
 
 /// Privacy-bounded report for a guardian transport.
 ///
-/// The report contains only case state, machine-readable codes, and opaque
-/// evidence references. The host may resolve evidence only under its separate
-/// consent, access-control, and retention policy.
+/// The report contains only case state, machine-readable codes, and
+/// domain-separated evidence commitments. The host may resolve evidence only
+/// under its separate consent, access-control, and retention policy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GuardianReport {
     pub(crate) schema_version: String,
     pub(crate) key: GuardianReportKey,
-    pub(crate) subject_key: SafetyCaseSubjectKey,
     pub(crate) trigger: GuardianReportTrigger,
     pub(crate) queued_at_ms: u64,
     pub(crate) threat_type: ThreatType,
     pub(crate) case_status: SafetyCaseStatus,
     pub(crate) severity: SafetyCaseSeverity,
     pub(crate) confidence: Confidence,
-    pub(crate) peak_risk_score: RiskScore,
-    pub(crate) first_observed_at_ms: Option<u64>,
-    pub(crate) last_observed_at_ms: Option<u64>,
-    pub(crate) observation_count: u32,
+    pub(crate) first_observed_at_ms: u64,
+    pub(crate) last_observed_at_ms: u64,
+    pub(crate) observation_volume_band: GuardianReportObservationVolumeBand,
     pub(crate) reason_codes: Vec<SafetyReasonCode>,
-    pub(crate) evidence: Vec<SourceEventKey>,
+    pub(crate) evidence_commitments: Vec<[u8; 32]>,
+    pub(crate) execution_binding: GuardianReportExecutionBinding,
 }
 
 impl GuardianReport {
@@ -610,11 +624,6 @@ impl GuardianReport {
     /// Returns the stable delivery idempotency key.
     pub const fn key(&self) -> &GuardianReportKey {
         &self.key
-    }
-
-    /// Returns the account-scoped routing key.
-    pub const fn subject_key(&self) -> &SafetyCaseSubjectKey {
-        &self.subject_key
     }
 
     /// Returns why the report was generated.
@@ -647,23 +656,13 @@ impl GuardianReport {
         self.confidence
     }
 
-    /// Returns the peak bounded risk index.
-    pub const fn peak_risk_score(&self) -> RiskScore {
-        self.peak_risk_score
-    }
-
-    /// Returns the number of accepted observations.
-    pub const fn observation_count(&self) -> u32 {
-        self.observation_count
-    }
-
     /// Returns when the first retained observation occurred.
-    pub const fn first_observed_at_ms(&self) -> Option<u64> {
+    pub const fn first_observed_at_ms(&self) -> u64 {
         self.first_observed_at_ms
     }
 
     /// Returns when the latest retained observation occurred.
-    pub const fn last_observed_at_ms(&self) -> Option<u64> {
+    pub const fn last_observed_at_ms(&self) -> u64 {
         self.last_observed_at_ms
     }
 
@@ -672,10 +671,43 @@ impl GuardianReport {
         &self.reason_codes
     }
 
-    /// Returns bounded opaque evidence references.
-    pub fn evidence(&self) -> &[SourceEventKey] {
-        &self.evidence
+    /// Returns the coarse observation-volume disclosure band.
+    pub const fn observation_volume_band(&self) -> GuardianReportObservationVolumeBand {
+        self.observation_volume_band
     }
+
+    /// Returns bounded opaque evidence commitments.
+    pub fn evidence_commitments(&self) -> &[[u8; 32]] {
+        &self.evidence_commitments
+    }
+
+    /// Returns the exact signed policy and rule that authorized the report.
+    pub const fn execution_binding(&self) -> &GuardianReportExecutionBinding {
+        &self.execution_binding
+    }
+}
+
+pub(crate) fn guardian_evidence_commitment(
+    subject_key: &SafetyCaseSubjectKey,
+    source: &SourceEventKey,
+) -> [u8; 32] {
+    let mut canonical = Vec::with_capacity(192);
+    append_length_prefixed(b"aura.guardian.evidence.commitment.v1", &mut canonical);
+    canonical.extend_from_slice(&1u16.to_be_bytes());
+    append_length_prefixed(subject_key.as_str().as_bytes(), &mut canonical);
+    append_length_prefixed(
+        source.conversation_key().as_str().as_bytes(),
+        &mut canonical,
+    );
+    append_length_prefixed(source.event_id().as_str().as_bytes(), &mut canonical);
+    canonical.extend_from_slice(&source.revision().to_be_bytes());
+    Sha256::digest(canonical).into()
+}
+
+fn append_length_prefixed(value: &[u8], output: &mut Vec<u8>) {
+    let length = u32::try_from(value.len()).expect("bounded safety identifiers fit in u32");
+    output.extend_from_slice(&length.to_be_bytes());
+    output.extend_from_slice(value);
 }
 
 /// Receipt for the last guardian report confirmed by the host transport.
@@ -697,13 +729,63 @@ impl GuardianDeliveryReceipt {
     }
 }
 
+/// Receipt proving that the host atomically persisted the exact encrypted
+/// recipient fanout for a pending report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GuardianPreparationReceipt {
+    pub(crate) key: GuardianReportKey,
+    pub(crate) prepared_at_ms: u64,
+}
+
+/// Receipt for a report intentionally suppressed by verified host policy
+/// before any encrypted fanout was persisted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GuardianSuppressionReceipt {
+    pub(crate) key: GuardianReportKey,
+    pub(crate) suppressed_at_ms: u64,
+    pub(crate) reason_code: SafetyReasonCode,
+}
+
+impl GuardianSuppressionReceipt {
+    /// Returns the suppressed report key.
+    pub const fn key(&self) -> &GuardianReportKey {
+        &self.key
+    }
+
+    /// Returns the policy decision timestamp.
+    pub const fn suppressed_at_ms(&self) -> u64 {
+        self.suppressed_at_ms
+    }
+
+    /// Returns the machine-readable suppression reason.
+    pub const fn reason_code(&self) -> &SafetyReasonCode {
+        &self.reason_code
+    }
+}
+
+impl GuardianPreparationReceipt {
+    /// Returns the prepared report key.
+    pub const fn key(&self) -> &GuardianReportKey {
+        &self.key
+    }
+
+    /// Returns the host-confirmed durable preparation timestamp.
+    pub const fn prepared_at_ms(&self) -> u64 {
+        self.prepared_at_ms
+    }
+}
+
 /// A report transition retained until its cooldown expires.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeferredGuardianReport {
     pub(crate) trigger: GuardianReportTrigger,
     pub(crate) transition_revision: u64,
     pub(crate) transition_at_ms: u64,
     pub(crate) eligible_at_ms: u64,
+    pub(crate) rule_id: String,
+    pub(crate) rule_digest: [u8; 32],
+    pub(crate) cooldown_ms: u64,
 }
 
 impl DeferredGuardianReport {
@@ -725,6 +807,21 @@ impl DeferredGuardianReport {
     /// Returns when the retained transition occurred.
     pub const fn transition_at_ms(&self) -> u64 {
         self.transition_at_ms
+    }
+
+    /// Returns the exact signed rule identity retained with the transition.
+    pub fn rule_id(&self) -> &str {
+        &self.rule_id
+    }
+
+    /// Returns the canonical digest of the exact signed rule.
+    pub const fn rule_digest(&self) -> &[u8; 32] {
+        &self.rule_digest
+    }
+
+    /// Returns the exact per-rule cooldown that authorized deferral.
+    pub const fn cooldown_ms(&self) -> u64 {
+        self.cooldown_ms
     }
 }
 
@@ -749,8 +846,10 @@ pub struct SafetyCase {
     pub(crate) reason_codes: Vec<SafetyReasonCode>,
     pub(crate) closed_reason_code: Option<SafetyReasonCode>,
     pub(crate) pending_guardian_report: Option<GuardianReport>,
+    pub(crate) guardian_report_preparation: Option<GuardianPreparationReceipt>,
     pub(crate) deferred_guardian_report: Option<DeferredGuardianReport>,
     pub(crate) last_guardian_delivery: Option<GuardianDeliveryReceipt>,
+    pub(crate) last_guardian_suppression: Option<GuardianSuppressionReceipt>,
 }
 
 /// Error returned while creating a safety case.
@@ -791,8 +890,10 @@ impl SafetyCase {
             reason_codes: Vec::new(),
             closed_reason_code: None,
             pending_guardian_report: None,
+            guardian_report_preparation: None,
             deferred_guardian_report: None,
             last_guardian_delivery: None,
+            last_guardian_suppression: None,
         })
     }
 
@@ -886,6 +987,11 @@ impl SafetyCase {
         self.pending_guardian_report.as_ref()
     }
 
+    /// Returns the durable host-preparation receipt for the pending report.
+    pub const fn guardian_report_preparation(&self) -> Option<&GuardianPreparationReceipt> {
+        self.guardian_report_preparation.as_ref()
+    }
+
     /// Returns the report transition waiting for cooldown expiry, if any.
     pub const fn deferred_guardian_report(&self) -> Option<&DeferredGuardianReport> {
         self.deferred_guardian_report.as_ref()
@@ -894,6 +1000,11 @@ impl SafetyCase {
     /// Returns the last host-confirmed guardian delivery.
     pub const fn last_guardian_delivery(&self) -> Option<&GuardianDeliveryReceipt> {
         self.last_guardian_delivery.as_ref()
+    }
+
+    /// Returns the last verified host-policy suppression.
+    pub const fn last_guardian_suppression(&self) -> Option<&GuardianSuppressionReceipt> {
+        self.last_guardian_suppression.as_ref()
     }
 }
 
@@ -938,6 +1049,22 @@ pub enum SafetyCaseEvent {
         previous_report_key: GuardianReportKey,
         /// Replacement report key.
         replacement_report_key: GuardianReportKey,
+    },
+    /// The host durably persisted the report's complete encrypted fanout.
+    GuardianReportPrepared {
+        /// Exact report key protected against later supersession.
+        report_key: GuardianReportKey,
+        /// Host-confirmed preparation timestamp.
+        prepared_at_ms: u64,
+    },
+    /// Verified host policy selected no safe recipient before preparation.
+    GuardianReportSuppressed {
+        /// Exact report key that was not delivered.
+        report_key: GuardianReportKey,
+        /// Policy decision timestamp.
+        suppressed_at_ms: u64,
+        /// Machine-readable policy reason.
+        reason_code: SafetyReasonCode,
     },
     /// The host confirmed delivery of a queued report.
     GuardianReportDelivered {

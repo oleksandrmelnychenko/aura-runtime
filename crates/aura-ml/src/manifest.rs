@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -33,6 +33,22 @@ pub struct ModelEntry {
     pub num_outputs: Option<usize>,
     #[serde(default)]
     pub max_seq_length: Option<usize>,
+}
+
+/// Hashes retained from the exact manifest and artifacts validated at startup.
+#[derive(Debug, Clone)]
+pub struct ValidatedModelManifest {
+    pub manifest_sha256: [u8; 32],
+    artifact_sha256_by_canonical_path: HashMap<PathBuf, [u8; 32]>,
+}
+
+impl ValidatedModelManifest {
+    pub fn artifact_sha256(&self, path: &str) -> Option<[u8; 32]> {
+        let canonical_path = fs::canonicalize(path).ok()?;
+        self.artifact_sha256_by_canonical_path
+            .get(&canonical_path)
+            .copied()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -103,9 +119,15 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 /// Validates all models listed in a manifest file against their expected hashes.
-pub fn validate_models_from_manifest(manifest_path: &str) -> Result<(), ManifestError> {
-    let manifest = ModelManifest::from_file(manifest_path)?;
+pub fn validate_models_from_manifest(
+    manifest_path: &str,
+) -> Result<ValidatedModelManifest, ManifestError> {
+    let manifest_bytes = fs::read(manifest_path)
+        .map_err(|e| ManifestError::ReadFailed(manifest_path.to_string(), e.to_string()))?;
+    let manifest: ModelManifest = serde_json::from_slice(&manifest_bytes)
+        .map_err(|e| ManifestError::ParseFailed(manifest_path.to_string(), e.to_string()))?;
     let manifest_dir = Path::new(manifest_path).parent().unwrap_or(Path::new("."));
+    let mut artifact_sha256_by_canonical_path = HashMap::new();
 
     for (name, entry) in &manifest.models {
         let model_path = manifest_dir.join(&entry.filename);
@@ -113,31 +135,98 @@ pub fn validate_models_from_manifest(manifest_path: &str) -> Result<(), Manifest
             tracing::warn!("Model validation failed for '{name}': {e}");
             e
         })?;
+        register_validated_artifact(
+            &mut artifact_sha256_by_canonical_path,
+            &model_path,
+            decode_sha256_hex(name, &entry.sha256)?,
+        )?;
 
-        validate_optional_artifact(
-            name,
-            manifest_dir,
-            entry.data_filename.as_deref(),
-            entry.data_sha256.as_deref(),
-            "data",
-        )?;
-        validate_optional_artifact(
-            name,
-            manifest_dir,
-            entry.quantized_filename.as_deref(),
-            entry.quantized_sha256.as_deref(),
-            "quantized",
-        )?;
-        validate_optional_artifact(
-            name,
-            manifest_dir,
-            entry.quantized_data_filename.as_deref(),
-            entry.quantized_data_sha256.as_deref(),
-            "quantized_data",
-        )?;
+        for artifact in [
+            validate_optional_artifact(
+                name,
+                manifest_dir,
+                entry.data_filename.as_deref(),
+                entry.data_sha256.as_deref(),
+                "data",
+            )?,
+            validate_optional_artifact(
+                name,
+                manifest_dir,
+                entry.quantized_filename.as_deref(),
+                entry.quantized_sha256.as_deref(),
+                "quantized",
+            )?,
+            validate_optional_artifact(
+                name,
+                manifest_dir,
+                entry.quantized_data_filename.as_deref(),
+                entry.quantized_data_sha256.as_deref(),
+                "quantized_data",
+            )?,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            register_validated_artifact(
+                &mut artifact_sha256_by_canonical_path,
+                &manifest_dir.join(artifact.0),
+                artifact.1,
+            )?;
+        }
     }
 
+    Ok(ValidatedModelManifest {
+        manifest_sha256: Sha256::digest(&manifest_bytes).into(),
+        artifact_sha256_by_canonical_path,
+    })
+}
+
+fn register_validated_artifact(
+    artifacts: &mut HashMap<PathBuf, [u8; 32]>,
+    path: &Path,
+    digest: [u8; 32],
+) -> Result<(), ManifestError> {
+    let canonical_path = fs::canonicalize(path).map_err(|error| {
+        ManifestError::FileReadFailed(path.display().to_string(), error.to_string())
+    })?;
+    if artifacts
+        .insert(canonical_path, digest)
+        .is_some_and(|previous| previous != digest)
+    {
+        return Err(ManifestError::InvalidEntry(
+            path.display().to_string(),
+            "the same artifact path has conflicting digests".to_string(),
+        ));
+    }
     Ok(())
+}
+
+fn decode_sha256_hex(name: &str, value: &str) -> Result<[u8; 32], ManifestError> {
+    if value.len() != 64 {
+        return Err(ManifestError::InvalidEntry(
+            name.to_string(),
+            "sha256 must contain exactly 64 lowercase hexadecimal characters".to_string(),
+        ));
+    }
+    let mut digest = [0u8; 32];
+    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        let high = hex_nibble(pair[0]).ok_or_else(|| {
+            ManifestError::InvalidEntry(name.to_string(), "sha256 is not lowercase hex".to_string())
+        })?;
+        let low = hex_nibble(pair[1]).ok_or_else(|| {
+            ManifestError::InvalidEntry(name.to_string(), "sha256 is not lowercase hex".to_string())
+        })?;
+        digest[index] = (high << 4) | low;
+    }
+    Ok(digest)
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        _ => None,
+    }
 }
 
 fn validate_optional_artifact(
@@ -146,13 +235,15 @@ fn validate_optional_artifact(
     filename: Option<&str>,
     sha256: Option<&str>,
     artifact_label: &str,
-) -> Result<(), ManifestError> {
+) -> Result<Option<(String, [u8; 32])>, ManifestError> {
     match (filename, sha256) {
         (Some(file), Some(hash)) => {
             let path = manifest_dir.join(file);
-            validate_file_hash(&path, hash)
+            validate_file_hash(&path, hash)?;
+            let digest = decode_sha256_hex(&format!("{model_name}.{artifact_label}"), hash)?;
+            Ok(Some((file.to_string(), digest)))
         }
-        (None, None) => Ok(()),
+        (None, None) => Ok(None),
         (Some(_), None) => Err(ManifestError::InvalidEntry(
             model_name.to_string(),
             format!("{artifact_label} filename is present but sha256 is missing"),

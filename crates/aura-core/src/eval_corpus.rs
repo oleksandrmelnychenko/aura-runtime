@@ -641,7 +641,6 @@ fn build_curated_scenario_case(case: &CuratedCorpusCase) -> ScenarioCase {
                 }
                 .then_some(2)
                 .or(Some(6)),
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },

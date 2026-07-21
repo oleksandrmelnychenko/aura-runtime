@@ -286,41 +286,41 @@ Public header: `include/aura_ffi.h`
 - `AuraBuffer` is the output transport type
 - `aura_last_error()` is the only string-based error channel
 
-Main functions:
+The Apple/C boundary exposes only the canonical Safety Case lifecycle:
 
-- `aura_init`
-- `aura_analyze`
-- `aura_analyze_context`
-- `aura_analyze_batch`
-- `aura_update_config`
-- `aura_reload_patterns`
+- `aura_agent_init`
+- `aura_analyze_canonical_safety`
+- `aura_apply_safety_case_lifecycle`
+- `aura_activate_safety_case_successor`
+- `aura_remove_safety_case_account`
 - `aura_export_context`
 - `aura_import_context`
-- `aura_cleanup_context`
-- `aura_get_contacts_by_risk`
-- `aura_get_contact_profile`
-- `aura_mark_contact_trusted`
-- `aura_get_conversation_summary`
-- `aura_version`
+- `aura_export_safety_case_state`
+- `aura_import_safety_case_state`
+- `aura_agent_version`
 - `aura_last_error`
 - `aura_free`
 - `aura_free_buffer`
 - `aura_free_string`
 
-Context export/import now uses native protobuf tracker/contact state end-to-end.
+Per-message analysis, batch/shadow utilities, live config/pattern mutation, and
+contact/profile convenience APIs remain Rust-side concerns and are not part of
+the Apple ABI. Context export/import uses native protobuf tracker/contact state
+end-to-end; Safety Case state is separately exported as bounded, content-free
+JSON for host encryption.
 
 ### Domain Mode Migration (Config Compatibility)
 
 Account-level domain selection now uses `AuraConfig.domain_mode`:
 
-- `DOMAIN_MODE_NONE`: base Aura only (default)
+- `DOMAIN_MODE_NONE`: base Aura only
 - `DOMAIN_MODE_KIDS`: base Aura + Kids extension
 - `DOMAIN_MODE_MILITARY`: base Aura + Military extension
 
 Runtime rules at the FFI boundary:
 
 - `domain_mode` is the only effective selector.
-- `DOMAIN_MODE_UNSPECIFIED` resolves to `DOMAIN_MODE_NONE`.
+- `DOMAIN_MODE_UNSPECIFIED` is rejected; the host must choose an explicit mode.
 - `active_module` has been removed from the protobuf config contract.
 
 ## Data Artifacts

@@ -325,10 +325,6 @@ fn apply_kids_conversation_memory_amplifiers(
             conversation_has_grooming = true;
         }
     }
-    // Server reputation hint boosts sender risk score.
-    if let Some(server_hint) = input.server_sender_risk_hint {
-        sender_risk_score += server_hint * 2.0;
-    }
     let sender_is_new = sender_present && sender_message_count <= settings.new_sender_message_max;
     let sender_risk_min = if sender_is_new {
         settings.sender_risk_min - settings.sender_risk_new_sender_delta
@@ -884,7 +880,7 @@ pub fn import_kids_memory_into(
     memory_store: &KidsPipelineMemory,
     state: &ExportedKidsMemoryState,
 ) -> bool {
-    if state.schema_version > KIDS_MEMORY_STATE_VERSION {
+    if state.schema_version != KIDS_MEMORY_STATE_VERSION {
         return false;
     }
 
@@ -1233,7 +1229,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         }
     }
 
@@ -1279,7 +1274,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let second = DomainInput {
             text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
@@ -1289,7 +1283,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&first);
         let output = run_kids_pipeline(&second);
@@ -1318,7 +1311,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let second = DomainInput {
             text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
@@ -1328,7 +1320,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&first);
         let output = run_kids_pipeline(&second);
@@ -1370,7 +1361,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let followup = DomainInput {
             text: Some("you can only trust me. do it now or i post everything.".to_string()),
@@ -1380,7 +1370,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&seed);
         let output = run_kids_pipeline(&followup);
@@ -1406,7 +1395,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let second = DomainInput {
             text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
@@ -1416,7 +1404,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&first);
         let output = run_kids_pipeline(&second);
@@ -1442,7 +1429,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let followup = DomainInput {
             text: Some("you can only trust me. do it now or i post everything.".to_string()),
@@ -1452,7 +1438,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&seed);
         let output = run_kids_pipeline(&followup);
@@ -1477,7 +1462,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let message_b = DomainInput {
             text: Some("everyone hates you. all of us hate you.".to_string()),
@@ -1487,7 +1471,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let message_c = DomainInput {
             text: Some("we will beat you after school.".to_string()),
@@ -1497,7 +1480,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let message_d = DomainInput {
             text: Some("there is no reason to live anymore.".to_string()),
@@ -1507,7 +1489,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&message_a);
         let _ = run_kids_pipeline(&message_b);
@@ -1535,7 +1516,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let msg2 = DomainInput {
             text: Some("i have your photo. do what i say or i post it.".to_string()),
@@ -1545,7 +1525,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let msg3 = DomainInput {
             text: Some("you can only trust me.".to_string()),
@@ -1555,7 +1534,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let msg4 = DomainInput {
             text: Some("move to private chat.".to_string()),
@@ -1565,7 +1543,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&msg1);
         let second = run_kids_pipeline(&msg2);
@@ -1607,7 +1584,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Group,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let bullying_b = DomainInput {
             text: Some("everyone hates you. all of us hate you.".to_string()),
@@ -1617,7 +1593,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Group,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let selfharm = DomainInput {
             text: Some("there is no reason to live anymore.".to_string()),
@@ -1627,7 +1602,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Group,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&bullying_a);
         let _ = run_kids_pipeline(&bullying_b);
@@ -1653,7 +1627,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let output = run_kids_pipeline(&input);
         let mut has_fast_signal = false;
@@ -1695,7 +1668,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let second = DomainInput {
             text: Some("don't tell your parents. i have your photo.".to_string()),
@@ -1705,7 +1677,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&first);
         let output = run_kids_pipeline(&second);
@@ -1731,7 +1702,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let attacker = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
@@ -1741,7 +1711,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&vulnerable);
         let output = run_kids_pipeline(&attacker);
@@ -1810,7 +1779,6 @@ mod tests {
                 self_harm: 0.0,
                 manipulation: 0.0,
             }),
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&msg1);
 
@@ -1839,7 +1807,6 @@ mod tests {
                 self_harm: 0.0,
                 manipulation: 0.0,
             }),
-            server_sender_risk_hint: None,
         };
         let output = run_kids_pipeline(&msg);
         // No lexicon hit and ML below 0.3 threshold → no grooming in memory
@@ -1874,7 +1841,6 @@ mod tests {
                     self_harm: 0.0,
                     manipulation: 0.3,
                 }),
-                server_sender_risk_hint: None,
             };
             let _ = run_kids_pipeline(&msg);
         }
@@ -1882,35 +1848,6 @@ mod tests {
         assert!(
             score > 2.0,
             "Accumulated ML hints across 5 messages should build significant risk, got {score}"
-        );
-    }
-
-    #[test]
-    fn server_sender_risk_hint_boosts_sender_score() {
-        let _guard = test_lock();
-        clear_conversation_memory_for_tests();
-        let msg = DomainInput {
-            text: Some("our little secret".to_string()),
-            language: None,
-            sender_id: Some("server_hint_sender".to_string()),
-            conversation_id: Some("conv_server_hint".to_string()),
-            risk_profile: DomainRiskProfile::Strict,
-            conversation_type: DomainConversationType::Direct,
-            ml_safety_hint: None,
-            server_sender_risk_hint: Some(0.9),
-        };
-        let output = run_kids_pipeline(&msg);
-        // With server hint at 0.9 (adds 1.8 to sender risk) plus grooming lexicon hit,
-        // sender_risk_accumulation should fire even on first message
-        let mut has_sender_risk = false;
-        for signal in &output.signals {
-            if signal.reason_code == "kids.memory.sender_risk_accumulation" {
-                has_sender_risk = true;
-            }
-        }
-        assert!(
-            has_sender_risk,
-            "Server reputation hint should boost sender risk enough to trigger accumulation signal"
         );
     }
 
@@ -1930,7 +1867,6 @@ mod tests {
                 risk_profile: DomainRiskProfile::Normal,
                 conversation_type: DomainConversationType::Direct,
                 ml_safety_hint: None,
-                server_sender_risk_hint: None,
             };
             let _ = run_kids_pipeline(&msg);
         }
@@ -1943,7 +1879,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Normal,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&overflow);
 
@@ -1985,7 +1920,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&msg);
         let before = super::sender_cross_risk_score("guardian_trusted");
@@ -2031,7 +1965,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&msg);
         let before = super::conversation_risk_score("conv_fp");
@@ -2062,7 +1995,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&msg);
         let before = super::conversation_risk_score("conv_monitor");
@@ -2091,7 +2023,6 @@ mod tests {
             risk_profile: DomainRiskProfile::Strict,
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
-            server_sender_risk_hint: None,
         };
         let _ = run_kids_pipeline(&msg);
         let score_before = super::conversation_risk_score("conv_export");

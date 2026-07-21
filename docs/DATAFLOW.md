@@ -140,7 +140,7 @@
 │                  aura-kids (run_kids_pipeline)                     │
 │                                                                   │
 │  DomainInput { text, sender_id, conversation_id,                  │
-│                ml_safety_hint, server_sender_risk_hint }          │
+│                ml_safety_hint }                                   │
 │      │                                                            │
 │      ▼                                                            │
 │  ┌─────────────────────────────────────────────┐                  │

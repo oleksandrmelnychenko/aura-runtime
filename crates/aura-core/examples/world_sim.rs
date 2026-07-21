@@ -784,7 +784,6 @@ fn run_world_simulation(
             language: Some(event.language.clone()),
             conversation_type: event.conversation_type,
             member_count: event.member_count,
-            server_sender_risk_hint: None,
             sender_relationship: event.sender_relationship,
             relationship_trust_source: event.relationship_trust_source,
         };

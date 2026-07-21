@@ -5,18 +5,13 @@
 
 #![allow(clippy::missing_safety_doc)]
 
+mod execution_policy;
+
 use std::cell::RefCell;
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
 
-use aura_agent_core::aura_contracts::{
-    AgentAnalyzeRequest as RelayAnalyzeRequestContract,
-    ProtectedAccountTokenAttestation as ProtectedAccountTokenAttestationContract,
-    RelationshipTrustSource, RelayPrivacyMode, SenderRelationship,
-    PROTECTED_ACCOUNT_TOKEN_ATTESTATION_ALG,
-};
 use aura_agent_core::context::contact::{
     AgeSource as CoreAgeSource, BehavioralSnapshotState as CoreBehavioralSnapshotState,
     ChildSafetyTrajectory as CoreChildSafetyTrajectory,
@@ -31,57 +26,34 @@ use aura_agent_core::context::tracker::{
     ConversationTimelineState as CoreConversationTimelineState,
     TrackerWireState as CoreTrackerWireState,
 };
+use aura_agent_core::AgentRuntime;
 use aura_agent_core::{
-    build_product_decision_surface, build_shadow_mode_event, config::CulturalContext, Action,
-    AlertPriority, AuraConfig, CanonicalSafetyAnalysisOutcome, ConversationEventKey,
-    ExportedSafetyCaseRuntimeState, MessageInput, RuntimeBackend, RuntimeCapabilities,
-    RuntimeModality, SafetyAccountKey, SafetyCaseCommand, SafetyCaseDecision, SafetyCaseGeneration,
-    SafetyCaseId, SafetyCaseIgnoredReason, SafetyCaseIngestIdentity, SafetyCaseIngestOutcome,
-    SafetyCaseRuntimeError, SafetyCaseSourcePreflight, SafetyCaseSourceReceipt, SafetyCaseStatus,
-    SafetyCaseSubjectKey, SafetyCaseSuccessorActivationDisposition,
-    SafetyCaseSuccessorActivationOutcome, SafetyReasonCode, ShadowModeBundle, ShadowModeEventInput,
-    ShadowModeExpectation, ShadowModeFinding, SourceEventId, SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES,
-    SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
+    config::CulturalContext, AuraConfig, CanonicalSafetyAnalysisOutcome, Confidence,
+    ConversationEventKey, ExportedSafetyCaseRuntimeState, GuardianDeliveryClass, GuardianReport,
+    GuardianReportKey, GuardianReportObservationVolumeBand, GuardianReportTrigger, MessageInput,
+    RelationshipTrustSource, SafetyAccountKey, SafetyCase, SafetyCaseCommand, SafetyCaseDecision,
+    SafetyCaseGeneration, SafetyCaseId, SafetyCaseIgnoredReason, SafetyCaseIngestIdentity,
+    SafetyCaseIngestOutcome, SafetyCaseRuntimeError, SafetyCaseSeverity, SafetyCaseSourcePreflight,
+    SafetyCaseSourceReceipt, SafetyCaseStatus, SafetyCaseSubjectKey,
+    SafetyCaseSuccessorActivationDisposition, SafetyCaseSuccessorActivationOutcome,
+    SafetyReasonCode, SenderRelationship, SourceEventId, ThreatType,
+    SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES, SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
 };
-use aura_agent_core::{AgentRelayPolicy, AgentRuntime, RelayRequestAuthKey, RelayResponseAuthKey};
 use aura_patterns::PatternDatabase;
 use aura_proto::messenger::v1 as proto;
 use prost::Message as ProstMessage;
+use sha2::{Digest, Sha256};
 use tracing::warn;
 
-const MAX_BATCH_SIZE: usize = 1000;
-const MAX_RELAY_RECENT_WINDOW_MESSAGES: usize = 50;
-const MIN_RELAY_AUTH_SECRET_BYTES: usize = 16;
-const MAX_RELAY_AUTH_SECRET_BYTES: usize = 128;
-const MAX_RELAY_AUTH_KEYS: usize = 4;
 const MAX_CONFIG_REQUEST_BYTES: usize = 64 * 1024;
-const MAX_MESSAGE_REQUEST_BYTES: usize = 1024 * 1024;
-const MAX_ANALYZE_CONTEXT_REQUEST_BYTES: usize = 1024 * 1024;
-const MAX_BATCH_REQUEST_BYTES: usize = 4 * 1024 * 1024;
-const MAX_SHADOW_BUNDLE_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_IMPORT_CONTEXT_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_CANONICAL_SAFETY_REQUEST_BYTES: usize = 1024 * 1024;
-const MAX_SAFETY_CASE_DECISION_BYTES: usize = 64 * 1024;
 // Matches the host store's release limits for the two native-owned payloads.
 // Guardian outbox and envelope overhead have separate host-owned budgets.
 const MAX_CANONICAL_CONTEXT_STATE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_CANONICAL_COMBINED_STATE_BYTES: usize =
     SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES + MAX_CANONICAL_CONTEXT_STATE_BYTES;
 const MAX_SMALL_CONTROL_REQUEST_BYTES: usize = 16 * 1024;
-const MAX_QUICK_CHECK_TEXT_BYTES: usize = 64 * 1024;
-const MAX_URL_INPUT_BYTES: usize = 4096;
-const PATTERN_RELOAD_MIN_INTERVAL_MS: u64 = 1_500;
-const PATTERN_RELOAD_MAX_BACKOFF_MS: u64 = 30_000;
-const PATTERN_RELOAD_PATH_MAX_BYTES: usize = 1024;
-const MANDATORY_KIDS_MEMORY_REASON_CODES: &[&str] = &[
-    "kids.memory.grooming_progression",
-    "kids.memory.sustained_sextortion",
-    "kids.memory.bullying_cascade_selfharm",
-    "kids.memory.sender_risk_accumulation",
-    "kids.memory.new_sender_fast_escalation",
-    "kids.memory.cross_conversation_repeat_offender",
-    "kids.memory.victim_vulnerability_targeting",
-];
 
 thread_local! {
     static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
@@ -143,17 +115,11 @@ fn clear_last_error() {
 
 struct AuraInstance {
     analyzer: AgentRuntime,
-    pattern_db: PatternDatabase,
-    last_pattern_reload_attempt: Option<Instant>,
-    pattern_reload_failures: u32,
 }
 
 #[derive(Debug)]
 struct DecodedConfig {
     aura_config: AuraConfig,
-    relay_policy: AgentRelayPolicy,
-    relay_request_auth_key: Option<RelayRequestAuthKey>,
-    relay_response_auth_keys: Vec<RelayResponseAuthKey>,
 }
 
 #[repr(C)]
@@ -181,17 +147,20 @@ fn build_instance(config: DecodedConfig) -> Result<*mut c_void, String> {
         .map_err(|e| format!("config validation failed: {e}"))?;
 
     let pattern_db = load_pattern_db(&config.aura_config);
-    let mut analyzer =
-        AgentRuntime::new(config.aura_config, &pattern_db).with_relay_policy(config.relay_policy);
-    apply_relay_request_auth_key(&mut analyzer, config.relay_request_auth_key);
-    apply_relay_response_auth_keys(&mut analyzer, config.relay_response_auth_keys);
-    let instance = Box::new(Mutex::new(AuraInstance {
-        analyzer,
-        pattern_db,
-        last_pattern_reload_attempt: None,
-        pattern_reload_failures: 0,
-    }));
+    let analyzer = AgentRuntime::new(config.aura_config, &pattern_db);
+    let instance = Box::new(Mutex::new(AuraInstance { analyzer }));
     Ok(Box::into_raw(instance) as *mut c_void)
+}
+
+/// Derives the exact capability and model identities emitted by native
+/// attestation for a fully initialized runtime. This is public only so the
+/// release identity emitter can share the production protobuf projection.
+#[doc(hidden)]
+pub fn release_runtime_artifact_digests(runtime: &AgentRuntime) -> ([u8; 32], [u8; 32]) {
+    let capabilities =
+        execution_policy::runtime_capabilities_to_proto(runtime.runtime_capabilities());
+    let runtime_capabilities_digest: [u8; 32] = Sha256::digest(capabilities.encode_to_vec()).into();
+    (runtime_capabilities_digest, runtime.model_manifest_digest())
 }
 
 fn with_instance<R>(
@@ -215,15 +184,6 @@ fn prepare_output(out: *mut AuraBuffer) -> Result<(), String> {
         *out = AuraBuffer::empty();
     }
     Ok(())
-}
-
-fn pattern_reload_backoff(failure_count: u32) -> Duration {
-    let shift = failure_count.min(4);
-    let multiplier = 1u64 << shift;
-    let millis = PATTERN_RELOAD_MIN_INTERVAL_MS
-        .saturating_mul(multiplier)
-        .min(PATTERN_RELOAD_MAX_BACKOFF_MS);
-    Duration::from_millis(millis)
 }
 
 unsafe fn decode_proto_bounded<M>(
@@ -279,21 +239,6 @@ fn decode_config_request(
     decoded_config_from_proto(config_proto)
 }
 
-fn decode_message_request(
-    request_ptr: *const u8,
-    request_len: usize,
-) -> Result<MessageInput, String> {
-    let message: proto::MessageInput = unsafe {
-        decode_proto_bounded(
-            request_ptr,
-            request_len,
-            "message",
-            MAX_MESSAGE_REQUEST_BYTES,
-        )?
-    };
-    Ok(message_input_from_proto(message))
-}
-
 fn canonical_safety_identity_from_proto(
     identity: proto::CanonicalSafetyEventIdentity,
     input: &MessageInput,
@@ -342,79 +287,58 @@ unsafe fn decode_safety_account_key(
 
 fn canonical_safety_response_to_proto(
     outcome: CanonicalSafetyAnalysisOutcome,
-    conversation_id: &str,
-    sender_id: &str,
     runtime: &AgentRuntime,
 ) -> Result<proto::CanonicalSafetyAnalyzeResponse, String> {
     let mut response = proto::CanonicalSafetyAnalyzeResponse {
         disposition: proto::CanonicalSafetyDisposition::Unspecified as i32,
-        local_result: None,
         ignored_reason: None,
         case_id: None,
         case_revision: None,
         case_status: proto::SafetyCaseLifecycleStatus::Unspecified as i32,
         latest_revision: None,
-        decision_json: None,
         runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION.to_string(),
         case_generation: None,
     };
 
     match outcome {
-        CanonicalSafetyAnalysisOutcome::Processed {
-            local_result,
-            safety_case,
-        } => {
-            response.local_result = Some(analysis_result_to_proto(
-                &local_result,
-                Some(conversation_id),
-                Some(sender_id),
-                runtime,
-            ));
-            match safety_case {
-                Ok(SafetyCaseIngestOutcome::Ignored(reason)) => {
-                    response.disposition =
-                        proto::CanonicalSafetyDisposition::ProcessedIgnored as i32;
-                    response.ignored_reason = Some(safety_case_ignored_reason(reason).to_string());
-                }
-                Ok(SafetyCaseIngestOutcome::Reduced(decision)) => {
-                    response.disposition =
-                        proto::CanonicalSafetyDisposition::ProcessedReduced as i32;
-                    response.case_id = Some(decision.case_id().to_string());
-                    response.case_revision = Some(decision.case_revision());
-                    response.case_status = proto_safety_case_status(decision.status()) as i32;
-                    response.case_generation = Some(
-                        runtime
-                            .safety_cases()
-                            .case_generation_by_id(decision.case_id())
-                            .ok_or_else(|| {
-                                "canonical safety decision is missing its case generation"
-                                    .to_string()
-                            })?
-                            .value(),
-                    );
-                    response.decision_json = Some(encode_safety_case_decision(&decision)?);
-                }
-                Ok(_) => {
-                    return Err(
-                        "canonical safety runtime returned an inconsistent processed outcome"
-                            .to_string(),
-                    );
-                }
-                Err(
-                    SafetyCaseRuntimeError::AccountStateByteBudgetExceeded { .. }
-                    | SafetyCaseRuntimeError::CombinedPersistenceByteBudgetExceeded { .. },
-                ) => {
-                    response.disposition =
-                        proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
-                    response.ignored_reason = Some("persistence_byte_budget_exceeded".to_string());
-                }
-                Err(_) => {
-                    response.disposition =
-                        proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
-                    response.ignored_reason = Some("projection_rejected".to_string());
-                }
+        CanonicalSafetyAnalysisOutcome::Processed { safety_case } => match safety_case {
+            Ok(SafetyCaseIngestOutcome::Ignored(reason)) => {
+                response.disposition = proto::CanonicalSafetyDisposition::ProcessedIgnored as i32;
+                response.ignored_reason = Some(safety_case_ignored_reason(reason).to_string());
             }
-        }
+            Ok(SafetyCaseIngestOutcome::Reduced(decision)) => {
+                response.disposition = proto::CanonicalSafetyDisposition::ProcessedReduced as i32;
+                response.case_id = Some(decision.case_id().to_string());
+                response.case_revision = Some(decision.case_revision());
+                response.case_status = proto_safety_case_status(decision.status()) as i32;
+                response.case_generation = Some(
+                    runtime
+                        .safety_cases()
+                        .case_generation_by_id(decision.case_id())
+                        .ok_or_else(|| {
+                            "canonical safety decision is missing its case generation".to_string()
+                        })?
+                        .value(),
+                );
+            }
+            Ok(_) => {
+                return Err(
+                    "canonical safety runtime returned an inconsistent processed outcome"
+                        .to_string(),
+                );
+            }
+            Err(
+                SafetyCaseRuntimeError::AccountStateByteBudgetExceeded { .. }
+                | SafetyCaseRuntimeError::CombinedPersistenceByteBudgetExceeded { .. },
+            ) => {
+                response.disposition = proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
+                response.ignored_reason = Some("persistence_byte_budget_exceeded".to_string());
+            }
+            Err(_) => {
+                response.disposition = proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
+                response.ignored_reason = Some("projection_rejected".to_string());
+            }
+        },
         CanonicalSafetyAnalysisOutcome::DuplicateIgnored { receipt } => match receipt {
             SafetyCaseSourceReceipt::Ignored(reason) => {
                 response.disposition = proto::CanonicalSafetyDisposition::DuplicateIgnored as i32;
@@ -534,6 +458,291 @@ fn proto_safety_case_status(status: SafetyCaseStatus) -> proto::SafetyCaseLifecy
     }
 }
 
+fn proto_guardian_report_trigger(trigger: GuardianReportTrigger) -> proto::GuardianReportTrigger {
+    match trigger {
+        GuardianReportTrigger::CaseOpened => proto::GuardianReportTrigger::CaseOpened,
+        GuardianReportTrigger::CaseEscalated => proto::GuardianReportTrigger::CaseEscalated,
+        GuardianReportTrigger::UrgentReview => proto::GuardianReportTrigger::UrgentReview,
+        GuardianReportTrigger::CaseResolved => proto::GuardianReportTrigger::CaseResolved,
+        _ => proto::GuardianReportTrigger::Unspecified,
+    }
+}
+
+fn proto_safety_case_severity(severity: SafetyCaseSeverity) -> proto::SafetyCaseSeverity {
+    match severity {
+        SafetyCaseSeverity::Informational => proto::SafetyCaseSeverity::Informational,
+        SafetyCaseSeverity::Elevated => proto::SafetyCaseSeverity::Elevated,
+        SafetyCaseSeverity::High => proto::SafetyCaseSeverity::High,
+        SafetyCaseSeverity::Critical => proto::SafetyCaseSeverity::Critical,
+        _ => proto::SafetyCaseSeverity::Unspecified,
+    }
+}
+
+fn proto_threat_type(threat_type: ThreatType) -> proto::ThreatType {
+    match threat_type {
+        ThreatType::None => proto::ThreatType::None,
+        ThreatType::Bullying => proto::ThreatType::Bullying,
+        ThreatType::Grooming => proto::ThreatType::Grooming,
+        ThreatType::Explicit => proto::ThreatType::Explicit,
+        ThreatType::Threat => proto::ThreatType::Threat,
+        ThreatType::SelfHarm => proto::ThreatType::SelfHarm,
+        ThreatType::Spam => proto::ThreatType::Spam,
+        ThreatType::Scam => proto::ThreatType::Scam,
+        ThreatType::Phishing => proto::ThreatType::Phishing,
+        ThreatType::Manipulation => proto::ThreatType::Manipulation,
+        ThreatType::Nsfw => proto::ThreatType::Nsfw,
+        ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
+        ThreatType::Doxxing => proto::ThreatType::Doxxing,
+        ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
+        ThreatType::Propaganda => proto::ThreatType::Propaganda,
+        ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
+        ThreatType::Psyops => proto::ThreatType::Psyops,
+        ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
+        ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
+    }
+}
+
+fn proto_confidence(confidence: Confidence) -> proto::Confidence {
+    match confidence {
+        Confidence::Low => proto::Confidence::Low,
+        Confidence::Medium => proto::Confidence::Medium,
+        Confidence::High => proto::Confidence::High,
+    }
+}
+
+fn guardian_report_risk_family(threat_type: ThreatType) -> proto::GuardianReportRiskFamily {
+    match threat_type {
+        ThreatType::Bullying => proto::GuardianReportRiskFamily::Bullying,
+        ThreatType::Grooming => proto::GuardianReportRiskFamily::Grooming,
+        ThreatType::Explicit => proto::GuardianReportRiskFamily::Explicit,
+        ThreatType::Threat => proto::GuardianReportRiskFamily::Threat,
+        ThreatType::SelfHarm => proto::GuardianReportRiskFamily::SelfHarm,
+        ThreatType::Spam => proto::GuardianReportRiskFamily::Spam,
+        ThreatType::Scam => proto::GuardianReportRiskFamily::Scam,
+        ThreatType::Phishing => proto::GuardianReportRiskFamily::Phishing,
+        ThreatType::Manipulation => proto::GuardianReportRiskFamily::Manipulation,
+        ThreatType::Nsfw => proto::GuardianReportRiskFamily::Nsfw,
+        ThreatType::HateSpeech => proto::GuardianReportRiskFamily::HateSpeech,
+        ThreatType::Doxxing => proto::GuardianReportRiskFamily::Doxxing,
+        ThreatType::PiiLeakage => proto::GuardianReportRiskFamily::PiiLeakage,
+        ThreatType::Propaganda => proto::GuardianReportRiskFamily::Propaganda,
+        ThreatType::OpsecViolation => proto::GuardianReportRiskFamily::OpsecViolation,
+        ThreatType::Psyops => proto::GuardianReportRiskFamily::Psyops,
+        ThreatType::MilitarySocialEng => proto::GuardianReportRiskFamily::MilitarySocialEng,
+        ThreatType::CoordinateLeak => proto::GuardianReportRiskFamily::CoordinateLeak,
+        ThreatType::None => proto::GuardianReportRiskFamily::Unspecified,
+    }
+}
+
+fn guardian_report_delivery_class(
+    delivery_class: GuardianDeliveryClass,
+) -> proto::GuardianReportDeliveryClass {
+    match delivery_class {
+        GuardianDeliveryClass::NeedsAttention => proto::GuardianReportDeliveryClass::NeedsAttention,
+        GuardianDeliveryClass::Urgent => proto::GuardianReportDeliveryClass::Urgent,
+    }
+}
+
+fn guardian_report_to_proto(
+    report: &GuardianReport,
+    generation: SafetyCaseGeneration,
+) -> proto::GuardianReport {
+    let binding = report.execution_binding();
+    proto::GuardianReport {
+        schema_version: 2,
+        case_id: report.key().case_id().to_string(),
+        case_generation: generation.value(),
+        transition_revision: report.key().transition_revision(),
+        trigger: proto_guardian_report_trigger(report.trigger()) as i32,
+        queued_at_ms: report.queued_at_ms(),
+        risk_family: guardian_report_risk_family(report.threat_type()) as i32,
+        case_status: proto_safety_case_status(report.case_status()) as i32,
+        severity: proto_safety_case_severity(report.severity()) as i32,
+        confidence_band: proto_confidence(report.confidence()) as i32,
+        first_observed_at_ms: report.first_observed_at_ms(),
+        last_observed_at_ms: report.last_observed_at_ms(),
+        observation_volume_band: match report.observation_volume_band() {
+            GuardianReportObservationVolumeBand::Isolated => {
+                proto::GuardianReportObservationVolumeBand::Isolated as i32
+            }
+            GuardianReportObservationVolumeBand::Repeated => {
+                proto::GuardianReportObservationVolumeBand::Repeated as i32
+            }
+            GuardianReportObservationVolumeBand::Sustained => {
+                proto::GuardianReportObservationVolumeBand::Sustained as i32
+            }
+        },
+        report_reason_codes: report
+            .reason_codes()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        evidence_commitments: report
+            .evidence_commitments()
+            .iter()
+            .map(|commitment| commitment.to_vec())
+            .collect(),
+        execution_policy_authority_lineage_id: binding.authority_lineage_id.clone(),
+        execution_policy_epoch: binding.policy_epoch,
+        execution_policy_version: binding.policy_version.clone(),
+        execution_policy_assertion_digest: binding.policy_assertion_digest.to_vec(),
+        execution_rule_id: binding.rule_id.clone(),
+        execution_rule_digest: binding.rule_digest.to_vec(),
+        delivery_class: guardian_report_delivery_class(binding.delivery_class) as i32,
+        runtime_capabilities_digest: binding.runtime_capabilities_digest.to_vec(),
+        model_manifest_digest: binding.model_manifest_digest.to_vec(),
+        policy_evaluated_at_ms: binding.policy_evaluated_at_ms,
+    }
+}
+
+fn guardian_report_snapshot_to_proto(
+    case: &SafetyCase,
+    generation: SafetyCaseGeneration,
+) -> proto::GuardianReportSnapshotResponse {
+    let mut response = proto::GuardianReportSnapshotResponse {
+        disposition: proto::GuardianReportDisposition::NotRequired as i32,
+        case_id: case.case_id().to_string(),
+        case_generation: generation.value(),
+        current_case_revision: case.revision(),
+        current_case_status: proto_safety_case_status(case.status()) as i32,
+        report: None,
+        deferred_trigger: None,
+        deferred_eligible_at_ms: None,
+        runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION.to_string(),
+        prepared_at_ms: None,
+        canonical_report_bytes: Vec::new(),
+        semantic_digest: Vec::new(),
+        report_id: String::new(),
+    };
+    if let Some(report) = case.pending_guardian_report() {
+        response.disposition = proto::GuardianReportDisposition::Pending as i32;
+        let wire = guardian_report_to_proto(report, generation);
+        let canonical_report_bytes = guardian_report_canonical_bytes(&wire);
+        let semantic_digest: [u8; 32] = Sha256::digest(&canonical_report_bytes).into();
+        response.report_id = format!(
+            "aura.guardian.report.v2:{}",
+            lowercase_hex(&semantic_digest)
+        );
+        response.canonical_report_bytes = canonical_report_bytes;
+        response.semantic_digest = semantic_digest.to_vec();
+        response.report = Some(wire);
+        response.prepared_at_ms = case
+            .guardian_report_preparation()
+            .map(|receipt| receipt.prepared_at_ms());
+    } else if let Some(deferred) = case.deferred_guardian_report() {
+        response.disposition = proto::GuardianReportDisposition::Deferred as i32;
+        response.deferred_trigger = Some(proto_guardian_report_trigger(deferred.trigger()) as i32);
+        response.deferred_eligible_at_ms = Some(deferred.eligible_at_ms());
+    }
+    response
+}
+
+fn guardian_report_canonical_bytes(report: &proto::GuardianReport) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(1024);
+    append_length_prefixed(b"aura.guardian.report.semantic.v2", &mut bytes);
+    bytes.extend_from_slice(&2u16.to_be_bytes());
+    append_length_prefixed(report.case_id.as_bytes(), &mut bytes);
+    bytes.extend_from_slice(&report.case_generation.to_be_bytes());
+    bytes.extend_from_slice(&report.transition_revision.to_be_bytes());
+    bytes.push(u8::try_from(report.trigger).expect("native trigger fits u8"));
+    bytes.extend_from_slice(&report.queued_at_ms.to_be_bytes());
+    let risk_family = guardian_report_risk_family_name(report.risk_family);
+    append_length_prefixed(risk_family.as_bytes(), &mut bytes);
+    bytes.push(u8::try_from(report.case_status).expect("native case status fits u8"));
+    let severity = guardian_report_severity_name(report.severity);
+    append_length_prefixed(severity.as_bytes(), &mut bytes);
+    bytes.push(u8::try_from(report.confidence_band).expect("native confidence fits u8"));
+    bytes.extend_from_slice(&report.first_observed_at_ms.to_be_bytes());
+    bytes.extend_from_slice(&report.last_observed_at_ms.to_be_bytes());
+    bytes.push(
+        u8::try_from(report.observation_volume_band)
+            .expect("native observation volume band fits u8"),
+    );
+    bytes.extend_from_slice(
+        &u16::try_from(report.report_reason_codes.len())
+            .expect("native reason-code count fits u16")
+            .to_be_bytes(),
+    );
+    for reason in &report.report_reason_codes {
+        append_length_prefixed(reason.as_bytes(), &mut bytes);
+    }
+    bytes.extend_from_slice(
+        &u16::try_from(report.evidence_commitments.len())
+            .expect("native evidence count fits u16")
+            .to_be_bytes(),
+    );
+    for commitment in &report.evidence_commitments {
+        append_length_prefixed(commitment, &mut bytes);
+    }
+    append_length_prefixed(
+        report.execution_policy_authority_lineage_id.as_bytes(),
+        &mut bytes,
+    );
+    bytes.extend_from_slice(&report.execution_policy_epoch.to_be_bytes());
+    append_length_prefixed(report.execution_policy_version.as_bytes(), &mut bytes);
+    append_length_prefixed(&report.execution_policy_assertion_digest, &mut bytes);
+    append_length_prefixed(report.execution_rule_id.as_bytes(), &mut bytes);
+    append_length_prefixed(&report.execution_rule_digest, &mut bytes);
+    bytes.push(u8::try_from(report.delivery_class).expect("native delivery class fits u8"));
+    append_length_prefixed(&report.runtime_capabilities_digest, &mut bytes);
+    append_length_prefixed(&report.model_manifest_digest, &mut bytes);
+    bytes.extend_from_slice(&report.policy_evaluated_at_ms.to_be_bytes());
+    bytes
+}
+
+fn guardian_report_risk_family_name(value: i32) -> &'static str {
+    match proto::GuardianReportRiskFamily::try_from(value)
+        .unwrap_or(proto::GuardianReportRiskFamily::Unspecified)
+    {
+        proto::GuardianReportRiskFamily::Bullying => "bullying",
+        proto::GuardianReportRiskFamily::Grooming => "grooming",
+        proto::GuardianReportRiskFamily::Explicit => "explicit",
+        proto::GuardianReportRiskFamily::Threat => "threat",
+        proto::GuardianReportRiskFamily::SelfHarm => "self_harm",
+        proto::GuardianReportRiskFamily::Spam => "spam",
+        proto::GuardianReportRiskFamily::Scam => "scam",
+        proto::GuardianReportRiskFamily::Phishing => "phishing",
+        proto::GuardianReportRiskFamily::Manipulation => "manipulation",
+        proto::GuardianReportRiskFamily::Nsfw => "nsfw",
+        proto::GuardianReportRiskFamily::HateSpeech => "hate_speech",
+        proto::GuardianReportRiskFamily::Doxxing => "doxxing",
+        proto::GuardianReportRiskFamily::PiiLeakage => "pii_leakage",
+        proto::GuardianReportRiskFamily::Propaganda => "propaganda",
+        proto::GuardianReportRiskFamily::OpsecViolation => "opsec_violation",
+        proto::GuardianReportRiskFamily::Psyops => "psyops",
+        proto::GuardianReportRiskFamily::MilitarySocialEng => "military_social_eng",
+        proto::GuardianReportRiskFamily::CoordinateLeak => "coordinate_leak",
+        proto::GuardianReportRiskFamily::Unspecified => "",
+    }
+}
+
+fn guardian_report_severity_name(value: i32) -> &'static str {
+    match proto::SafetyCaseSeverity::try_from(value)
+        .unwrap_or(proto::SafetyCaseSeverity::Unspecified)
+    {
+        proto::SafetyCaseSeverity::Informational => "informational",
+        proto::SafetyCaseSeverity::Elevated => "elevated",
+        proto::SafetyCaseSeverity::High => "high",
+        proto::SafetyCaseSeverity::Critical => "critical",
+        proto::SafetyCaseSeverity::Unspecified => "",
+    }
+}
+
+fn append_length_prefixed(value: &[u8], output: &mut Vec<u8>) {
+    let length = u32::try_from(value.len()).expect("bounded native value fits u32");
+    output.extend_from_slice(&length.to_be_bytes());
+    output.extend_from_slice(value);
+}
+
+fn lowercase_hex(bytes: &[u8]) -> String {
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(output, "{byte:02x}");
+    }
+    output
+}
+
 fn safety_case_lifecycle_command_from_proto(
     request: proto::SafetyCaseLifecycleCommandRequest,
 ) -> Result<(SafetyAccountKey, SafetyCaseId, SafetyCaseCommand), String> {
@@ -566,16 +775,14 @@ fn safety_case_lifecycle_command_from_proto(
 fn safety_case_lifecycle_response_to_proto(
     decision: &SafetyCaseDecision,
     case_generation: SafetyCaseGeneration,
-) -> Result<proto::SafetyCaseLifecycleCommandResponse, String> {
-    let decision_json = encode_safety_case_decision(decision)?;
-    Ok(proto::SafetyCaseLifecycleCommandResponse {
+) -> proto::SafetyCaseLifecycleCommandResponse {
+    proto::SafetyCaseLifecycleCommandResponse {
         case_id: decision.case_id().to_string(),
         case_revision: decision.case_revision(),
         case_status: proto_safety_case_status(decision.status()) as i32,
-        decision_json,
         runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION.to_string(),
         case_generation: Some(case_generation.value()),
-    })
+    }
 }
 
 fn safety_case_successor_activation_from_proto(
@@ -634,160 +841,163 @@ fn safety_case_successor_activation_to_proto(
     }
 }
 
-fn encode_safety_case_decision(decision: &SafetyCaseDecision) -> Result<Vec<u8>, String> {
-    let bytes = serde_json::to_vec(decision)
-        .map_err(|error| format!("failed to encode safety case decision: {error}"))?;
-    if bytes.len() > MAX_SAFETY_CASE_DECISION_BYTES {
-        return Err(format!(
-            "safety case decision exceeds limit of {MAX_SAFETY_CASE_DECISION_BYTES} bytes"
-        ));
+fn guardian_report_snapshot_request_from_proto(
+    request: proto::GuardianReportSnapshotRequest,
+) -> Result<(SafetyAccountKey, SafetyCaseId, SafetyCaseGeneration, u64), String> {
+    let account_key =
+        SafetyAccountKey::new(request.account_key).map_err(|error| error.to_string())?;
+    let case_id = SafetyCaseId::new(request.case_id).map_err(|error| error.to_string())?;
+    let generation = request
+        .expected_case_generation
+        .ok_or_else(|| "expected guardian report case generation is missing".to_string())?;
+    if request.expected_case_revision == 0 {
+        return Err("expected guardian report case revision must be non-zero".to_string());
     }
-    Ok(bytes)
+    Ok((
+        account_key,
+        case_id,
+        SafetyCaseGeneration::new(generation),
+        request.expected_case_revision,
+    ))
 }
 
-fn validate_batch_items(
-    items: Vec<proto::BatchAnalyzeItem>,
-) -> Result<Vec<(MessageInput, Option<u64>)>, String> {
-    let mut validated = Vec::with_capacity(items.len());
-    for item in items {
-        let Some(message) = item.message else {
-            return Err("missing message in batch item".to_string());
-        };
-        validated.push((message_input_from_proto(message), item.timestamp_ms));
+fn guardian_report_preparation_request_from_proto(
+    request: proto::GuardianReportPreparationRequest,
+) -> Result<
+    (
+        SafetyAccountKey,
+        SafetyCaseId,
+        SafetyCaseGeneration,
+        GuardianReportKey,
+        u64,
+    ),
+    String,
+> {
+    let account_key =
+        SafetyAccountKey::new(request.account_key).map_err(|error| error.to_string())?;
+    let case_id = SafetyCaseId::new(request.case_id).map_err(|error| error.to_string())?;
+    let generation = request
+        .expected_case_generation
+        .ok_or_else(|| "expected guardian report preparation generation is missing".to_string())?;
+    if request.report_transition_revision == 0 {
+        return Err("guardian report preparation revision must be non-zero".to_string());
     }
-    Ok(validated)
+    if request.prepared_at_ms == 0 {
+        return Err("guardian report preparation timestamp must be non-zero".to_string());
+    }
+    let report_key = GuardianReportKey::new(case_id.clone(), request.report_transition_revision);
+    Ok((
+        account_key,
+        case_id,
+        SafetyCaseGeneration::new(generation),
+        report_key,
+        request.prepared_at_ms,
+    ))
 }
 
-struct ValidatedShadowModeItem {
-    request_id: String,
-    input: MessageInput,
-    timestamp_ms: u64,
-    expectation: Option<ShadowModeExpectation>,
+fn guardian_report_flush_request_from_proto(
+    request: proto::GuardianReportFlushRequest,
+) -> Result<
+    (
+        SafetyAccountKey,
+        SafetyCaseId,
+        SafetyCaseGeneration,
+        u64,
+        u64,
+    ),
+    String,
+> {
+    let account_key =
+        SafetyAccountKey::new(request.account_key).map_err(|error| error.to_string())?;
+    let case_id = SafetyCaseId::new(request.case_id).map_err(|error| error.to_string())?;
+    let generation = request
+        .expected_case_generation
+        .ok_or_else(|| "expected guardian report flush generation is missing".to_string())?;
+    if request.expected_case_revision == 0 {
+        return Err("expected guardian report flush revision must be non-zero".to_string());
+    }
+    if request.evaluated_at_ms == 0 {
+        return Err("guardian report flush timestamp must be non-zero".to_string());
+    }
+    Ok((
+        account_key,
+        case_id,
+        SafetyCaseGeneration::new(generation),
+        request.expected_case_revision,
+        request.evaluated_at_ms,
+    ))
 }
 
-fn validate_shadow_mode_items(
-    items: Vec<proto::ShadowModeAnalyzeItem>,
-) -> Result<Vec<ValidatedShadowModeItem>, String> {
-    let mut validated = Vec::with_capacity(items.len());
-    for (index, item) in items.into_iter().enumerate() {
-        let request = item.request.ok_or_else(|| {
-            format!(
-                "missing analyze_context request in shadow item {}",
-                index + 1
-            )
-        })?;
-        let message = request
-            .message
-            .ok_or_else(|| format!("missing message in shadow item {}", index + 1))?;
-        validated.push(ValidatedShadowModeItem {
-            request_id: if item.request_id.is_empty() {
-                format!("shadow_req_{}", index + 1)
-            } else {
-                item.request_id
-            },
-            input: message_input_from_proto(message),
-            timestamp_ms: request.timestamp_ms,
-            expectation: shadow_mode_expectation_from_proto(item.expectation),
-        });
+fn guardian_report_acknowledgement_request_from_proto(
+    request: proto::GuardianReportAcknowledgementRequest,
+) -> Result<
+    (
+        SafetyAccountKey,
+        SafetyCaseId,
+        SafetyCaseGeneration,
+        GuardianReportKey,
+        u64,
+    ),
+    String,
+> {
+    let account_key =
+        SafetyAccountKey::new(request.account_key).map_err(|error| error.to_string())?;
+    let case_id = SafetyCaseId::new(request.case_id).map_err(|error| error.to_string())?;
+    let generation = request.expected_case_generation.ok_or_else(|| {
+        "expected guardian report acknowledgement generation is missing".to_string()
+    })?;
+    if request.report_transition_revision == 0 {
+        return Err("guardian report transition revision must be non-zero".to_string());
     }
-    Ok(validated)
+    if request.delivered_at_ms == 0 {
+        return Err("guardian report delivery timestamp must be non-zero".to_string());
+    }
+    let report_key = GuardianReportKey::new(case_id.clone(), request.report_transition_revision);
+    Ok((
+        account_key,
+        case_id,
+        SafetyCaseGeneration::new(generation),
+        report_key,
+        request.delivered_at_ms,
+    ))
 }
 
-fn apply_config_update(instance: &mut AuraInstance, config: DecodedConfig) {
-    let next_pattern_db = resolve_pattern_db_for_update(&instance.pattern_db, &config.aura_config);
-    instance
-        .analyzer
-        .update_config(config.aura_config, &next_pattern_db);
-    *instance.analyzer.relay_policy_mut() = config.relay_policy;
-    apply_relay_request_auth_key(&mut instance.analyzer, config.relay_request_auth_key);
-    apply_relay_response_auth_keys(&mut instance.analyzer, config.relay_response_auth_keys);
-    instance.pattern_db = next_pattern_db;
-}
-
-fn apply_relay_request_auth_key(
-    runtime: &mut AgentRuntime,
-    relay_request_auth_key: Option<RelayRequestAuthKey>,
-) {
-    match relay_request_auth_key {
-        // Clone out (not partial-move): RelayRequestAuthKey now zeroizes its secret on
-        // drop, which disallows moving fields out. The original `key` is zeroized when
-        // it drops here; the runtime keeps its own (also zeroize-on-drop) copy.
-        Some(key) => runtime.set_relay_request_auth_key(key.key_id.clone(), key.secret.clone()),
-        None => runtime.clear_relay_request_auth_key(),
+fn guardian_report_suppression_request_from_proto(
+    request: proto::GuardianReportSuppressionRequest,
+) -> Result<
+    (
+        SafetyAccountKey,
+        SafetyCaseId,
+        SafetyCaseGeneration,
+        GuardianReportKey,
+        u64,
+        SafetyReasonCode,
+    ),
+    String,
+> {
+    let account_key =
+        SafetyAccountKey::new(request.account_key).map_err(|error| error.to_string())?;
+    let case_id = SafetyCaseId::new(request.case_id).map_err(|error| error.to_string())?;
+    let generation = request
+        .expected_case_generation
+        .ok_or_else(|| "expected guardian report suppression generation is missing".to_string())?;
+    if request.report_transition_revision == 0 {
+        return Err("guardian report suppression revision must be non-zero".to_string());
     }
-}
-
-fn apply_relay_response_auth_keys(
-    runtime: &mut AgentRuntime,
-    relay_response_auth_keys: Vec<RelayResponseAuthKey>,
-) {
-    if relay_response_auth_keys.is_empty() {
-        runtime.clear_relay_response_auth_key();
-    } else {
-        runtime.set_relay_response_auth_keys(relay_response_auth_keys);
+    if request.suppressed_at_ms == 0 {
+        return Err("guardian report suppression timestamp must be non-zero".to_string());
     }
-}
-
-fn contact_profile_to_proto(
-    profile: &aura_agent_core::context::contact::ContactProfile,
-    is_new_contact: bool,
-) -> proto::ContactProfile {
-    proto::ContactProfile {
-        sender_id: profile.sender_id.to_string(),
-        risk_score: profile.risk_score(),
-        rating: profile.rating,
-        trust_level: profile.trust_level,
-        circle_tier: proto_circle_tier(profile.circle_tier) as i32,
-        trend: proto_behavioral_trend(profile.trend) as i32,
-        first_seen_ms: profile.first_seen_ms,
-        last_seen_ms: profile.last_seen_ms,
-        total_messages: profile.total_messages,
-        grooming_events: profile.grooming_event_count,
-        bullying_events: profile.bullying_event_count,
-        manipulation_events: profile.manipulation_event_count,
-        is_trusted: profile.is_trusted,
-        is_new_contact,
-        conversation_count: profile.conversation_count as u64,
-        average_severity: profile.average_severity(),
-    }
-}
-
-fn conversation_summary_to_proto(
-    tracker: &aura_agent_core::ConversationTracker,
-) -> proto::ConversationSummaryResponse {
-    let mut conversations = Vec::new();
-
-    for conv_id in tracker.conversation_ids() {
-        if let Some(timeline) = tracker.timeline(conv_id) {
-            let events = timeline.all_events();
-            let mut unique_senders: Vec<String> = events
-                .iter()
-                .map(|e| e.sender_id.to_string())
-                .collect::<std::collections::HashSet<_>>()
-                .into_iter()
-                .collect();
-            unique_senders.sort();
-
-            let threat_event_count =
-                events.iter().filter(|e| e.kind.severity() >= 0.4).count() as u64;
-            let latest_event_ms = events.iter().map(|e| e.timestamp_ms).max().unwrap_or(0);
-
-            conversations.push(proto::ConversationSummaryItem {
-                conversation_id: conv_id.to_string(),
-                total_events: events.len() as u64,
-                unique_senders,
-                threat_event_count,
-                latest_event_ms,
-            });
-        }
-    }
-
-    conversations.sort_by_key(|conversation| std::cmp::Reverse(conversation.latest_event_ms));
-
-    proto::ConversationSummaryResponse {
-        total_conversations: conversations.len() as u64,
-        conversations,
-    }
+    let report_key = GuardianReportKey::new(case_id.clone(), request.report_transition_revision);
+    let reason_code =
+        SafetyReasonCode::new(request.reason_code).map_err(|error| error.to_string())?;
+    Ok((
+        account_key,
+        case_id,
+        SafetyCaseGeneration::new(generation),
+        report_key,
+        request.suppressed_at_ms,
+        reason_code,
+    ))
 }
 
 /// Initializes a new AURA instance from a protobuf-encoded configuration.
@@ -819,9 +1029,9 @@ pub unsafe extern "C" fn aura_init(config_ptr: *const u8, config_len: usize) -> 
     })
 }
 
-/// Analyzes a single message and writes the protobuf-encoded result to the output buffer.
+/// Returns a nonce-bound identity for artifacts active in this exact handle.
 #[no_mangle]
-pub unsafe extern "C" fn aura_analyze(
+pub unsafe extern "C" fn aura_attest_runtime_artifacts(
     handle: *mut c_void,
     request_ptr: *const u8,
     request_len: usize,
@@ -829,44 +1039,39 @@ pub unsafe extern "C" fn aura_analyze(
 ) -> bool {
     ffi_guard(false, move || {
         clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
             return false;
         }
-
-        let input = match decode_message_request(request_ptr, request_len) {
-            Ok(input) => input,
-            Err(e) => {
-                set_last_error(e);
+        let request: proto::RuntimeArtifactAttestationRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "runtime artifact attestation request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
                 return false;
             }
         };
-
         match with_instance(handle, |instance| {
-            let result = instance.analyzer.analyze_local(&input);
-            write_proto_message(
-                out,
-                &analysis_result_to_proto(
-                    &result,
-                    Some(input.conversation_id.0.as_str()),
-                    Some(input.sender_id.0.as_str()),
-                    &instance.analyzer,
-                ),
-            )
+            let response = execution_policy::artifact_attestation(&instance.analyzer, request)?;
+            write_proto_message(out, &response)
         }) {
             Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
                 false
             }
         }
     })
 }
 
-/// Analyzes a message with full conversation context and writes the result to the output buffer.
+/// Verifies and atomically applies one signed execution-policy head against
+/// the compile-time trust keyring and account-scoped native monotonic floor.
 #[no_mangle]
-pub unsafe extern "C" fn aura_analyze_context(
+pub unsafe extern "C" fn aura_apply_execution_policy(
     handle: *mut c_void,
     request_ptr: *const u8,
     request_len: usize,
@@ -874,48 +1079,45 @@ pub unsafe extern "C" fn aura_analyze_context(
 ) -> bool {
     ffi_guard(false, move || {
         clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
             return false;
         }
-
-        let request: proto::AnalyzeContextRequest = match decode_proto_bounded(
+        let request: proto::AuraExecutionPolicyApplyRequest = match decode_proto_bounded(
             request_ptr,
             request_len,
-            "analyze_context request",
-            MAX_ANALYZE_CONTEXT_REQUEST_BYTES,
+            "execution policy apply request",
+            96 * 1024,
         ) {
             Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
                 return false;
             }
         };
-
-        let Some(message) = request.message else {
-            set_last_error("missing message in analyze_context request");
-            return false;
-        };
-        let input = message_input_from_proto(message);
-
         match with_instance(handle, |instance| {
-            let result = instance
+            let account_key = SafetyAccountKey::new(request.account_key.clone())
+                .map_err(|error| error.to_string())?;
+            let policy = execution_policy::policy_from_apply_request(&instance.analyzer, &request)?;
+            let snapshot = instance.analyzer.safety_cases().clone();
+            let receipt = instance
                 .analyzer
-                .analyze_local_with_context(&input, request.timestamp_ms);
-            write_proto_message(
-                out,
-                &analysis_result_to_proto(
-                    &result,
-                    Some(input.conversation_id.0.as_str()),
-                    Some(input.sender_id.0.as_str()),
-                    &instance.analyzer,
-                ),
-            )
+                .safety_cases_mut()
+                .apply_execution_policy(&account_key, policy)
+                .map_err(|error| error.to_string())?;
+            if let Err(error) =
+                ensure_canonical_persistence_within_budget(&instance.analyzer, &account_key)
+            {
+                *instance.analyzer.safety_cases_mut() = snapshot;
+                return Err(error.to_string());
+            }
+            let response =
+                execution_policy::application_receipt_to_proto(account_key.as_str(), &receipt);
+            write_proto_message(out, &response)
         }) {
             Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
                 false
             }
         }
@@ -973,6 +1175,11 @@ pub unsafe extern "C" fn aura_analyze_canonical_safety(
         };
 
         match with_instance(handle, |instance| {
+            instance
+                .analyzer
+                .safety_cases()
+                .require_active_execution_policy(identity.account_key(), identity.observed_at_ms())
+                .map_err(|error| error.to_string())?;
             if matches!(
                 instance
                     .analyzer
@@ -994,12 +1201,7 @@ pub unsafe extern "C" fn aura_analyze_canonical_safety(
                     ensure_canonical_persistence_within_budget(runtime, &account_key)
                 })
                 .map_err(|error| error.to_string())?;
-            let response = canonical_safety_response_to_proto(
-                outcome,
-                input.conversation_id.0.as_str(),
-                input.sender_id.0.as_str(),
-                &instance.analyzer,
-            )?;
+            let response = canonical_safety_response_to_proto(outcome, &instance.analyzer)?;
             write_proto_message(out, &response)
         }) {
             Ok(()) => true,
@@ -1059,7 +1261,7 @@ pub unsafe extern "C" fn aura_apply_safety_case_lifecycle(
                 .safety_cases()
                 .case_generation_by_id(&case_id)
                 .ok_or_else(|| "safety case lifecycle generation is missing".to_string())?;
-            let response = safety_case_lifecycle_response_to_proto(&decision, generation)?;
+            let response = safety_case_lifecycle_response_to_proto(&decision, generation);
             write_proto_message(out, &response)
         }) {
             Ok(()) => true,
@@ -1199,9 +1401,13 @@ pub unsafe extern "C" fn aura_remove_safety_case_account(
     })
 }
 
-/// Analyzes a batch of messages and writes the protobuf-encoded results to the output buffer.
+/// Exports the native reducer's current content-free guardian report state.
+///
+/// The request is account scoped and guarded by the exact case generation and
+/// revision observed by the host. This operation never returns message content,
+/// analyzer explanations, or a display verdict.
 #[no_mangle]
-pub unsafe extern "C" fn aura_analyze_batch(
+pub unsafe extern "C" fn aura_export_guardian_report_snapshot(
     handle: *mut c_void,
     request_ptr: *const u8,
     request_len: usize,
@@ -1209,280 +1415,581 @@ pub unsafe extern "C" fn aura_analyze_batch(
 ) -> bool {
     ffi_guard(false, move || {
         clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
             return false;
         }
 
-        let request: proto::BatchAnalyzeRequest = match decode_proto_bounded(
+        let request: proto::GuardianReportSnapshotRequest = match decode_proto_bounded(
             request_ptr,
             request_len,
-            "batch analyze request",
-            MAX_BATCH_REQUEST_BYTES,
-        ) {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
-
-        if request.items.len() > MAX_BATCH_SIZE {
-            set_last_error(format!(
-                "batch size {} exceeds limit of {MAX_BATCH_SIZE}",
-                request.items.len()
-            ));
-            return false;
-        }
-
-        let items = match validate_batch_items(request.items) {
-            Ok(items) => items,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
-
-        match with_instance(handle, |instance| {
-            let mut results = Vec::with_capacity(items.len());
-            for (input, timestamp_ms) in items {
-                let result = match timestamp_ms {
-                    Some(ts) => instance.analyzer.analyze_local_with_context(&input, ts),
-                    None => instance.analyzer.analyze_local(&input),
-                };
-                results.push(analysis_result_to_proto(
-                    &result,
-                    Some(input.conversation_id.0.as_str()),
-                    Some(input.sender_id.0.as_str()),
-                    &instance.analyzer,
-                ));
-            }
-
-            write_proto_message(out, &proto::BatchAnalyzeResponse { results })
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Builds a protobuf ShadowModeBundle from a sequence of AnalyzeContextRequest items.
-#[no_mangle]
-pub unsafe extern "C" fn aura_build_shadow_bundle(
-    handle: *mut c_void,
-    request_ptr: *const u8,
-    request_len: usize,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        let request: proto::BuildShadowModeBundleRequest = match decode_proto_bounded(
-            request_ptr,
-            request_len,
-            "build_shadow_bundle request",
-            MAX_SHADOW_BUNDLE_REQUEST_BYTES,
-        ) {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
-
-        if request.owner_id.is_empty() {
-            set_last_error("missing owner_id in build_shadow_bundle request");
-            return false;
-        }
-        if request.items.is_empty() {
-            set_last_error("build_shadow_bundle request must include at least one item");
-            return false;
-        }
-
-        let items = match validate_shadow_mode_items(request.items) {
-            Ok(items) => items,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
-
-        match with_instance(handle, |instance| {
-            let protection_level = instance.analyzer.protection_level();
-            let mut events = Vec::with_capacity(items.len());
-            let mut findings = Vec::new();
-
-            for (index, item) in items.into_iter().enumerate() {
-                let result = instance
-                    .analyzer
-                    .analyze_local_with_context(&item.input, item.timestamp_ms);
-                let event = build_shadow_mode_event(ShadowModeEventInput {
-                    request_id: &item.request_id,
-                    sequence: index + 1,
-                    timestamp_ms: item.timestamp_ms,
-                    sender_id: item.input.sender_id.as_ref(),
-                    conversation_id: item.input.conversation_id.as_ref(),
-                    language: item.input.language.as_deref().unwrap_or("und"),
-                    conversation_type: item.input.conversation_type,
-                    member_count: item.input.member_count,
-                    expectation: item.expectation.clone(),
-                    protection_level,
-                    result: &result,
-                });
-                findings.extend(shadow_mode_findings_for_event(
-                    index + 1,
-                    &item.request_id,
-                    item.timestamp_ms,
-                    item.expectation.as_ref(),
-                    &result,
-                ));
-                events.push(event);
-            }
-
-            let bundle = ShadowModeBundle::from_events(
-                non_empty_or(request.source_kind, "ffi_shadow"),
-                non_empty_or(request.source_label, "ffi_shadow_bundle"),
-                non_empty_or(request.source_input, "ffi"),
-                &request.owner_id,
-                protection_level,
-                findings,
-                events,
-            );
-            write_proto_message(out, &shadow_mode_bundle_to_proto(&bundle))
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Updates the analyzer configuration on a live instance.
-#[no_mangle]
-pub unsafe extern "C" fn aura_update_config(
-    handle: *mut c_void,
-    config_ptr: *const u8,
-    config_len: usize,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        let config = match decode_config_request(config_ptr, config_len) {
-            Ok(config) => config,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
-
-        match with_instance(handle, |instance| {
-            config
-                .aura_config
-                .validate()
-                .map_err(|e| format!("config validation failed: {e}"))?;
-            apply_config_update(instance, config);
-            Ok(())
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Reloads the pattern database from a protobuf-encoded request.
-#[no_mangle]
-pub unsafe extern "C" fn aura_reload_patterns(
-    handle: *mut c_void,
-    request_ptr: *const u8,
-    request_len: usize,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        let request: proto::ReloadPatternsRequest = match decode_proto_bounded(
-            request_ptr,
-            request_len,
-            "reload_patterns request",
+            "guardian report snapshot request",
             MAX_SMALL_CONTROL_REQUEST_BYTES,
         ) {
             Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let (account_key, case_id, expected_generation, expected_case_revision) =
+            match guardian_report_snapshot_request_from_proto(request) {
+                Ok(values) => values,
+                Err(error) => {
+                    set_last_error(error);
+                    return false;
+                }
+            };
+
+        match with_instance(handle, |instance| {
+            let (case, generation) = instance
+                .analyzer
+                .safety_cases()
+                .account_case_by_id(&account_key, &case_id)
+                .ok_or_else(|| "guardian report safety case was not found".to_string())?;
+            if generation != expected_generation {
+                return Err(format!(
+                    "guardian report case generation mismatch: expected {}, actual {}",
+                    expected_generation.value(),
+                    generation.value()
+                ));
+            }
+            if case.revision() != expected_case_revision {
+                return Err(format!(
+                    "guardian report case revision mismatch: expected {}, actual {}",
+                    expected_case_revision,
+                    case.revision()
+                ));
+            }
+
+            let response = guardian_report_snapshot_to_proto(case, generation);
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Exports every pending or deferred guardian report in one account partition.
+#[no_mangle]
+pub unsafe extern "C" fn aura_export_guardian_report_account_snapshot(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
+
+        let request: proto::GuardianReportAccountSnapshotRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "guardian report account snapshot request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let account_key = match SafetyAccountKey::new(request.account_key) {
+            Ok(account_key) => account_key,
+            Err(error) => {
+                set_last_error(error.to_string());
                 return false;
             }
         };
 
         match with_instance(handle, |instance| {
-            let patterns_path = request.patterns_path.trim();
-            if patterns_path.is_empty() {
-                return Err("patterns_path must not be empty".to_string());
-            }
-            if patterns_path.len() > PATTERN_RELOAD_PATH_MAX_BYTES {
-                return Err(format!(
-                    "patterns_path exceeds {} bytes",
-                    PATTERN_RELOAD_PATH_MAX_BYTES
-                ));
-            }
-            if !patterns_path.ends_with(".json") {
-                return Err("patterns_path must reference a .json file".to_string());
-            }
-
-            let now = Instant::now();
-            let cooldown = pattern_reload_backoff(instance.pattern_reload_failures);
-            if let Some(last_attempt) = instance.last_pattern_reload_attempt {
-                let elapsed = now.saturating_duration_since(last_attempt);
-                if elapsed < cooldown {
-                    let retry_after_ms = (cooldown - elapsed).as_millis();
-                    return Err(format!(
-                        "pattern reload is rate-limited; retry after {retry_after_ms}ms"
-                    ));
-                }
-            }
-            instance.last_pattern_reload_attempt = Some(now);
-
-            let db = match PatternDatabase::from_file(patterns_path) {
-                Ok(db) => db,
-                Err(e) => {
-                    instance.pattern_reload_failures =
-                        instance.pattern_reload_failures.saturating_add(1);
-                    return Err(format!("pattern load failed: {e}"));
-                }
-            };
-
-            instance.analyzer.reload_patterns(&db);
-            instance.pattern_db = db;
-            instance.pattern_reload_failures = 0;
+            let mut snapshots = instance
+                .analyzer
+                .safety_cases()
+                .account_cases(&account_key)
+                .filter(|(case, _)| {
+                    case.pending_guardian_report().is_some()
+                        || case.deferred_guardian_report().is_some()
+                })
+                .map(|(case, generation)| guardian_report_snapshot_to_proto(case, generation))
+                .collect::<Vec<_>>();
+            snapshots.sort_by(|left, right| left.case_id.cmp(&right.case_id));
             write_proto_message(
                 out,
-                &proto::StatusResponse {
-                    ok: true,
-                    message: None,
+                &proto::GuardianReportAccountSnapshotResponse {
+                    snapshots,
+                    runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION
+                        .to_string(),
                 },
             )
         }) {
             Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Flushes one exact deferred guardian report after its native eligibility
+/// timestamp and returns the resulting guarded snapshot.
+#[no_mangle]
+pub unsafe extern "C" fn aura_flush_deferred_guardian_report(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
+
+        let request: proto::GuardianReportFlushRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "guardian report flush request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let (account_key, case_id, expected_generation, expected_case_revision, evaluated_at_ms) =
+            match guardian_report_flush_request_from_proto(request) {
+                Ok(values) => values,
+                Err(error) => {
+                    set_last_error(error);
+                    return false;
+                }
+            };
+
+        match with_instance(handle, |instance| {
+            {
+                let (case, generation) = instance
+                    .analyzer
+                    .safety_cases()
+                    .account_case_by_id(&account_key, &case_id)
+                    .ok_or_else(|| {
+                        "deferred guardian report safety case was not found".to_string()
+                    })?;
+                if generation != expected_generation {
+                    return Err(format!(
+                        "guardian report flush generation mismatch: expected {}, actual {}",
+                        expected_generation.value(),
+                        generation.value()
+                    ));
+                }
+                if case.revision() != expected_case_revision {
+                    return Err(format!(
+                        "guardian report flush revision mismatch: expected {}, actual {}",
+                        expected_case_revision,
+                        case.revision()
+                    ));
+                }
+            }
+
+            instance
+                .analyzer
+                .apply_safety_case_lifecycle_guarded(
+                    &account_key,
+                    &case_id,
+                    SafetyCaseCommand::FlushDeferredGuardianReport {
+                        at_ms: evaluated_at_ms,
+                    },
+                    |runtime| ensure_canonical_persistence_within_budget(runtime, &account_key),
+                )
+                .map_err(|error| error.to_string())?;
+            let (case, generation) = instance
+                .analyzer
+                .safety_cases()
+                .account_case_by_id(&account_key, &case_id)
+                .ok_or_else(|| "flushed guardian report safety case was not found".to_string())?;
+            let response = guardian_report_snapshot_to_proto(case, generation);
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Locks one exact native report against supersession after the host has
+/// atomically persisted its complete encrypted recipient fanout.
+#[no_mangle]
+pub unsafe extern "C" fn aura_confirm_guardian_report_prepared(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
+
+        let request: proto::GuardianReportPreparationRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "guardian report preparation request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let (account_key, case_id, expected_generation, report_key, prepared_at_ms) =
+            match guardian_report_preparation_request_from_proto(request) {
+                Ok(values) => values,
+                Err(error) => {
+                    set_last_error(error);
+                    return false;
+                }
+            };
+
+        match with_instance(handle, |instance| {
+            let already_prepared = {
+                let (case, generation) = instance
+                    .analyzer
+                    .safety_cases()
+                    .account_case_by_id(&account_key, &case_id)
+                    .ok_or_else(|| {
+                        "guardian report preparation safety case was not found".to_string()
+                    })?;
+                if generation != expected_generation {
+                    return Err(format!(
+                        "guardian report preparation generation mismatch: expected {}, actual {}",
+                        expected_generation.value(),
+                        generation.value()
+                    ));
+                }
+                match case.guardian_report_preparation() {
+                    Some(receipt) if receipt.key() == &report_key => {
+                        if receipt.prepared_at_ms() != prepared_at_ms {
+                            return Err(
+                                "guardian report preparation timestamp equivocation".to_string()
+                            );
+                        }
+                        true
+                    }
+                    Some(_) => {
+                        return Err(
+                            "guardian report preparation key does not match native state"
+                                .to_string(),
+                        );
+                    }
+                    None => false,
+                }
+            };
+
+            let disposition = if already_prepared {
+                proto::GuardianReportPreparationDisposition::AlreadyPrepared
+            } else {
+                instance
+                    .analyzer
+                    .apply_safety_case_lifecycle_guarded(
+                        &account_key,
+                        &case_id,
+                        SafetyCaseCommand::ConfirmGuardianReportPrepared {
+                            report_key: report_key.clone(),
+                            prepared_at_ms,
+                        },
+                        |runtime| ensure_canonical_persistence_within_budget(runtime, &account_key),
+                    )
+                    .map_err(|error| error.to_string())?;
+                proto::GuardianReportPreparationDisposition::Prepared
+            };
+
+            let (case, generation) = instance
+                .analyzer
+                .safety_cases()
+                .account_case_by_id(&account_key, &case_id)
+                .ok_or_else(|| "prepared guardian report safety case was not found".to_string())?;
+            let preparation = case
+                .guardian_report_preparation()
+                .ok_or_else(|| "prepared guardian report receipt was not retained".to_string())?;
+            if preparation.key() != &report_key || preparation.prepared_at_ms() != prepared_at_ms {
+                return Err("prepared guardian report receipt mismatch".to_string());
+            }
+            write_proto_message(
+                out,
+                &proto::GuardianReportPreparationResponse {
+                    disposition: disposition as i32,
+                    case_id: case_id.to_string(),
+                    case_generation: generation.value(),
+                    case_revision: case.revision(),
+                    case_status: proto_safety_case_status(case.status()) as i32,
+                    report_transition_revision: report_key.transition_revision(),
+                    prepared_at_ms,
+                    runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION
+                        .to_string(),
+                },
+            )
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Suppresses one exact unprepared native report after verified host policy
+/// selected no safe recipient.
+#[no_mangle]
+pub unsafe extern "C" fn aura_suppress_guardian_report(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
+
+        let request: proto::GuardianReportSuppressionRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "guardian report suppression request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let (account_key, case_id, expected_generation, report_key, suppressed_at_ms, reason_code) =
+            match guardian_report_suppression_request_from_proto(request) {
+                Ok(values) => values,
+                Err(error) => {
+                    set_last_error(error);
+                    return false;
+                }
+            };
+
+        match with_instance(handle, |instance| {
+            let already_suppressed = {
+                let (case, generation) = instance
+                    .analyzer
+                    .safety_cases()
+                    .account_case_by_id(&account_key, &case_id)
+                    .ok_or_else(|| {
+                        "guardian report suppression safety case was not found".to_string()
+                    })?;
+                if generation != expected_generation {
+                    return Err(format!(
+                        "guardian report suppression generation mismatch: expected {}, actual {}",
+                        expected_generation.value(),
+                        generation.value()
+                    ));
+                }
+                match case.last_guardian_suppression() {
+                    Some(receipt) if receipt.key() == &report_key => {
+                        if receipt.suppressed_at_ms() != suppressed_at_ms
+                            || receipt.reason_code() != &reason_code
+                        {
+                            return Err(
+                                "guardian report suppression receipt equivocation".to_string()
+                            );
+                        }
+                        true
+                    }
+                    _ => false,
+                }
+            };
+
+            let disposition = if already_suppressed {
+                proto::GuardianReportSuppressionDisposition::AlreadySuppressed
+            } else {
+                instance
+                    .analyzer
+                    .apply_safety_case_lifecycle_guarded(
+                        &account_key,
+                        &case_id,
+                        SafetyCaseCommand::SuppressGuardianReport {
+                            report_key: report_key.clone(),
+                            suppressed_at_ms,
+                            reason_code: reason_code.clone(),
+                        },
+                        |runtime| ensure_canonical_persistence_within_budget(runtime, &account_key),
+                    )
+                    .map_err(|error| error.to_string())?;
+                proto::GuardianReportSuppressionDisposition::Suppressed
+            };
+
+            let (case, generation) = instance
+                .analyzer
+                .safety_cases()
+                .account_case_by_id(&account_key, &case_id)
+                .ok_or_else(|| {
+                    "suppressed guardian report safety case was not found".to_string()
+                })?;
+            let suppression = case
+                .last_guardian_suppression()
+                .ok_or_else(|| "suppressed guardian report receipt was not retained".to_string())?;
+            if suppression.key() != &report_key
+                || suppression.suppressed_at_ms() != suppressed_at_ms
+                || suppression.reason_code() != &reason_code
+            {
+                return Err("suppressed guardian report receipt mismatch".to_string());
+            }
+            write_proto_message(
+                out,
+                &proto::GuardianReportSuppressionResponse {
+                    disposition: disposition as i32,
+                    case_id: case_id.to_string(),
+                    case_generation: generation.value(),
+                    case_revision: case.revision(),
+                    case_status: proto_safety_case_status(case.status()) as i32,
+                    report_transition_revision: report_key.transition_revision(),
+                    suppressed_at_ms,
+                    reason_code: reason_code.to_string(),
+                    runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION
+                        .to_string(),
+                },
+            )
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Acknowledges one exact native guardian report after the complete recipient
+/// fanout has authenticated durable-enqueue receipts.
+#[no_mangle]
+pub unsafe extern "C" fn aura_acknowledge_guardian_report(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
+
+        let request: proto::GuardianReportAcknowledgementRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "guardian report acknowledgement request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let (account_key, case_id, expected_generation, report_key, delivered_at_ms) =
+            match guardian_report_acknowledgement_request_from_proto(request) {
+                Ok(values) => values,
+                Err(error) => {
+                    set_last_error(error);
+                    return false;
+                }
+            };
+
+        match with_instance(handle, |instance| {
+            let already_acknowledged = {
+                let (case, generation) = instance
+                    .analyzer
+                    .safety_cases()
+                    .account_case_by_id(&account_key, &case_id)
+                    .ok_or_else(|| {
+                        "guardian report acknowledgement safety case was not found".to_string()
+                    })?;
+                if generation != expected_generation {
+                    return Err(format!(
+                        "guardian report acknowledgement generation mismatch: expected {}, actual {}",
+                        expected_generation.value(),
+                        generation.value()
+                    ));
+                }
+                match case.last_guardian_delivery() {
+                    Some(receipt) if receipt.key() == &report_key => {
+                        if receipt.delivered_at_ms() != delivered_at_ms {
+                            return Err("guardian report acknowledgement timestamp equivocation"
+                                .to_string());
+                        }
+                        true
+                    }
+                    _ => false,
+                }
+            };
+
+            let disposition = if already_acknowledged {
+                proto::GuardianReportAcknowledgementDisposition::AlreadyAcknowledged
+            } else {
+                instance
+                    .analyzer
+                    .apply_safety_case_lifecycle_guarded(
+                        &account_key,
+                        &case_id,
+                        SafetyCaseCommand::AcknowledgeGuardianReport {
+                            report_key: report_key.clone(),
+                            delivered_at_ms,
+                        },
+                        |runtime| ensure_canonical_persistence_within_budget(runtime, &account_key),
+                    )
+                    .map_err(|error| error.to_string())?;
+                proto::GuardianReportAcknowledgementDisposition::Acknowledged
+            };
+
+            let (case, generation) = instance
+                .analyzer
+                .safety_cases()
+                .account_case_by_id(&account_key, &case_id)
+                .ok_or_else(|| {
+                    "acknowledged guardian report safety case was not found".to_string()
+                })?;
+            write_proto_message(
+                out,
+                &proto::GuardianReportAcknowledgementResponse {
+                    disposition: disposition as i32,
+                    case_id: case_id.to_string(),
+                    case_generation: generation.value(),
+                    case_revision: case.revision(),
+                    case_status: proto_safety_case_status(case.status()) as i32,
+                    report_transition_revision: report_key.transition_revision(),
+                    delivered_at_ms,
+                    runtime_state_schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION
+                        .to_string(),
+                },
+            )
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
                 false
             }
         }
@@ -1689,397 +2196,6 @@ pub unsafe extern "C" fn aura_import_context(
     })
 }
 
-/// Removes expired conversation timelines and contact profiles.
-///
-/// **Must be called periodically by the host application.** AURA does not
-/// run background timers — the host is responsible for invoking this
-/// function to prevent unbounded memory growth from accumulated
-/// conversation state.
-///
-/// Recommended calling patterns:
-///
-/// - **App lifecycle:** call on every `applicationDidBecomeActive` /
-///   `onResume` transition.
-/// - **Periodic timer:** every 5–15 minutes while the app is active.
-/// - **After heavy sessions:** immediately after processing a large
-///   batch of messages (e.g. chat sync on reconnect).
-///
-/// `now_ms` is the current wall-clock time in milliseconds since the
-/// Unix epoch. Events older than `ttl_days` (from config, default 30)
-/// are removed.
-///
-/// # C example
-/// ```c
-/// #include <time.h>
-/// uint64_t now_ms = (uint64_t)time(NULL) * 1000;
-/// aura_cleanup_context(handle, now_ms);
-/// ```
-///
-/// # Swift example
-/// ```swift
-/// let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
-/// aura_cleanup_context(handle, nowMs)
-/// ```
-#[no_mangle]
-pub unsafe extern "C" fn aura_cleanup_context(handle: *mut c_void, now_ms: u64) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        match with_instance(handle, |instance| {
-            instance.analyzer.cleanup_context(now_ms);
-            Ok(())
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Returns all tracked contacts sorted by risk score as a protobuf-encoded buffer.
-#[no_mangle]
-pub unsafe extern "C" fn aura_get_contacts_by_risk(
-    handle: *mut c_void,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        match with_instance(handle, |instance| {
-            let profiler = instance.analyzer.context_tracker().contact_profiler();
-            let contacts = profiler
-                .contacts_by_risk()
-                .iter()
-                .map(|contact| {
-                    contact_profile_to_proto(contact, profiler.is_new_contact(&contact.sender_id))
-                })
-                .collect();
-
-            write_proto_message(out, &proto::ContactsByRiskResponse { contacts })
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Returns the behavioral profile of a specific contact as a protobuf-encoded buffer.
-#[no_mangle]
-pub unsafe extern "C" fn aura_get_contact_profile(
-    handle: *mut c_void,
-    request_ptr: *const u8,
-    request_len: usize,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        let request: proto::ContactProfileRequest = match decode_proto_bounded(
-            request_ptr,
-            request_len,
-            "contact profile request",
-            MAX_SMALL_CONTROL_REQUEST_BYTES,
-        ) {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
-
-        match with_instance(handle, |instance| {
-            let profiler = instance.analyzer.context_tracker().contact_profiler();
-            let response = match profiler.profile(&request.sender_id) {
-                Some(profile) => proto::ContactProfileResponse {
-                    found: true,
-                    profile: Some(contact_profile_to_proto(
-                        profile,
-                        profiler.is_new_contact(&profile.sender_id),
-                    )),
-                },
-                None => proto::ContactProfileResponse {
-                    found: false,
-                    profile: None,
-                },
-            };
-
-            write_proto_message(out, &response)
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Marks a contact as trusted, suppressing future risk signals for that contact.
-#[no_mangle]
-pub unsafe extern "C" fn aura_mark_contact_trusted(
-    handle: *mut c_void,
-    request_ptr: *const u8,
-    request_len: usize,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        let request: proto::MarkContactTrustedRequest = match decode_proto_bounded(
-            request_ptr,
-            request_len,
-            "mark_contact_trusted request",
-            MAX_SMALL_CONTROL_REQUEST_BYTES,
-        ) {
-            Ok(request) => request,
-            Err(e) => {
-                set_last_error(e);
-                return false;
-            }
-        };
-
-        match with_instance(handle, |instance| {
-            instance.analyzer.mark_contact_trusted(&request.sender_id);
-            Ok(())
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Performs a lightweight safety check on raw UTF-8 text for notification filtering.
-///
-/// Accepts raw text bytes (not protobuf) and returns a protobuf-encoded
-/// `StatusResponse`. The `ok` field is `true` when the text is safe to
-/// display (action is `Allow` or `Mark`). When the text is unsafe, `ok`
-/// is `false` and `message` contains the threat type name (e.g.
-/// `"Grooming"`, `"SelfHarm"`).
-///
-/// This is faster than `aura_analyze` because it skips protobuf
-/// decode on the input side and runs a stateless analysis (no context
-/// tracking).
-#[no_mangle]
-pub unsafe extern "C" fn aura_quick_check(
-    handle: *mut c_void,
-    text_ptr: *const u8,
-    text_len: usize,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        if text_ptr.is_null() {
-            set_last_error("null text pointer");
-            return false;
-        }
-
-        if text_len == 0 || text_len > MAX_QUICK_CHECK_TEXT_BYTES {
-            set_last_error(format!(
-                "text length {text_len} out of range (1..{MAX_QUICK_CHECK_TEXT_BYTES})"
-            ));
-            return false;
-        }
-
-        let text_bytes = std::slice::from_raw_parts(text_ptr, text_len);
-        let text = match std::str::from_utf8(text_bytes) {
-            Ok(s) => s.to_string(),
-            Err(e) => {
-                set_last_error(format!("invalid UTF-8 in text input: {e}"));
-                return false;
-            }
-        };
-
-        match with_instance(handle, |instance| {
-            let input = MessageInput {
-                content_type: aura_agent_core::ContentType::Text,
-                text: Some(text),
-                image_data: None,
-                sender_id: aura_agent_core::SenderId::from("notification"),
-                conversation_id: aura_agent_core::ConversationId::from("notification"),
-                language: None,
-                conversation_type: aura_agent_core::ConversationType::Direct,
-                member_count: None,
-                server_sender_risk_hint: None,
-                sender_relationship: Default::default(),
-                relationship_trust_source: Default::default(),
-            };
-            let result = instance.analyzer.analyze_local(&input);
-            let safe = match result.action {
-                Action::Allow | Action::Mark => true,
-                Action::Blur | Action::Warn | Action::Block => false,
-            };
-            let message = match safe {
-                true => None,
-                false => Some(format!("{:?}", result.threat_type)),
-            };
-            let response = proto::StatusResponse { ok: safe, message };
-            write_proto_message(out, &response)
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Checks a single URL for phishing or malicious patterns.
-///
-/// Accepts raw UTF-8 URL bytes (not protobuf) and returns a
-/// protobuf-encoded `StatusResponse`. The `ok` field is `true` when the
-/// URL appears safe. When the URL is suspicious or blocked, `ok` is
-/// `false` and `message` contains the threat description.
-#[no_mangle]
-pub unsafe extern "C" fn aura_detect_suspicious_url(
-    handle: *mut c_void,
-    url_ptr: *const u8,
-    url_len: usize,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        if url_ptr.is_null() {
-            set_last_error("null url pointer");
-            return false;
-        }
-
-        if url_len == 0 || url_len > MAX_URL_INPUT_BYTES {
-            set_last_error(format!(
-                "url length {url_len} out of range (1..{MAX_URL_INPUT_BYTES})"
-            ));
-            return false;
-        }
-
-        let url_bytes = std::slice::from_raw_parts(url_ptr, url_len);
-        let url = match std::str::from_utf8(url_bytes) {
-            Ok(s) => s.to_string(),
-            Err(e) => {
-                set_last_error(format!("invalid UTF-8 in url input: {e}"));
-                return false;
-            }
-        };
-
-        match with_instance(handle, |instance| {
-            let checker = aura_patterns::UrlChecker::from_database(&instance.pattern_db);
-
-            let blocked_matches = checker.find_blocked_matches(&url);
-            if let Some(hit) = blocked_matches.first() {
-                let response = proto::StatusResponse {
-                    ok: false,
-                    message: Some(format!("{}: {}", hit.threat_type, hit.explanation)),
-                };
-                return write_proto_message(out, &response);
-            }
-
-            let suspicious = checker.find_suspicious_urls(&url);
-            if let Some(hit) = suspicious.first() {
-                let response = proto::StatusResponse {
-                    ok: false,
-                    message: Some(hit.explanation.clone()),
-                };
-                return write_proto_message(out, &response);
-            }
-
-            let response = proto::StatusResponse {
-                ok: true,
-                message: None,
-            };
-            write_proto_message(out, &response)
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Returns a summary of all tracked conversations as a protobuf-encoded buffer.
-#[no_mangle]
-pub unsafe extern "C" fn aura_get_conversation_summary(
-    handle: *mut c_void,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        match with_instance(handle, |instance| {
-            let summary = conversation_summary_to_proto(instance.analyzer.context_tracker());
-            write_proto_message(out, &summary)
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
-/// Returns the initialized runtime's actual capabilities as protobuf bytes.
-#[no_mangle]
-pub unsafe extern "C" fn aura_get_runtime_capabilities(
-    handle: *mut c_void,
-    out: *mut AuraBuffer,
-) -> bool {
-    ffi_guard(false, move || {
-        clear_last_error();
-
-        if let Err(e) = prepare_output(out) {
-            set_last_error(e);
-            return false;
-        }
-
-        match with_instance(handle, |instance| {
-            let capabilities =
-                runtime_capabilities_to_proto(&instance.analyzer.runtime_capabilities());
-            write_proto_message(out, &capabilities)
-        }) {
-            Ok(()) => true,
-            Err(e) => {
-                set_last_error(e);
-                false
-            }
-        }
-    })
-}
-
 /// Frees an AURA instance and all associated resources.
 #[no_mangle]
 pub unsafe extern "C" fn aura_free(handle: *mut c_void) {
@@ -2110,7 +2226,7 @@ pub unsafe extern "C" fn aura_free_string(ptr: *mut c_char) {
 /// # C example
 /// ```c
 /// AuraBuffer out = {0};
-/// if (aura_analyze(handle, req, req_len, &out)) {
+/// if (aura_analyze_canonical_safety(handle, req, req_len, &out)) {
 ///     process(out.ptr, out.len);
 ///     aura_free_buffer(out);   // mandatory
 /// }
@@ -2119,7 +2235,7 @@ pub unsafe extern "C" fn aura_free_string(ptr: *mut c_char) {
 /// # Swift example
 /// ```swift
 /// var out = AuraBuffer()
-/// if aura_analyze(handle, req, reqLen, &out) {
+/// if aura_analyze_canonical_safety(handle, req, reqLen, &out) {
 ///     let data = Data(bytes: out.ptr, count: out.len)
 ///     aura_free_buffer(out)   // mandatory
 /// }
@@ -2205,26 +2321,6 @@ fn try_load_pattern_db(path: &str) -> Result<PatternDatabase, String> {
     PatternDatabase::from_file(path).map_err(|error| error.to_string())
 }
 
-fn resolve_pattern_db_for_update(
-    current_db: &PatternDatabase,
-    config: &AuraConfig,
-) -> PatternDatabase {
-    match config.patterns_path.as_deref() {
-        Some(path) => match try_load_pattern_db(path) {
-            Ok(db) => db,
-            Err(error) => {
-                warn!(
-                    patterns_path = %path,
-                    error = %error,
-                    "keeping existing pattern database during config update"
-                );
-                current_db.clone()
-            }
-        },
-        None => PatternDatabase::default_mvp(),
-    }
-}
-
 fn aura_config_from_proto(config: proto::AuraConfig) -> Result<AuraConfig, String> {
     let account_holder_age = match config.account_holder_age {
         Some(age) if age > u16::MAX as u32 => {
@@ -2234,310 +2330,34 @@ fn aura_config_from_proto(config: proto::AuraConfig) -> Result<AuraConfig, Strin
         None => None,
     };
 
-    Ok(AuraConfig {
-        protection_level: protection_level_from_proto(config.protection_level),
-        account_type: account_type_from_proto(config.account_type),
-        language: if config.language.is_empty() {
-            "uk".to_string()
-        } else {
-            config.language
-        },
-        cultural_context: cultural_context_from_proto(config.cultural_context),
+    if config.language.trim().is_empty() {
+        return Err("language must not be empty".to_string());
+    }
+
+    let aura_config = AuraConfig {
+        protection_level: protection_level_from_proto(config.protection_level)?,
+        account_type: account_type_from_proto(config.account_type)?,
+        language: config.language,
+        cultural_context: cultural_context_from_proto(config.cultural_context)?,
         enabled: config.enabled,
         patterns_path: config.patterns_path,
         models_path: config.models_path,
         account_holder_age,
-        ttl_days: if config.ttl_days == 0 {
-            30
-        } else {
-            config.ttl_days
-        },
+        ttl_days: config.ttl_days,
         timezone_offset_minutes: config.timezone_offset_minutes,
         protected_account_id: None,
         // Domain mode is the only account-level selector.
-        domain_mode: domain_mode_from_proto(config.domain_mode),
-        product_rollout_mode: product_rollout_mode_from_proto(config.product_rollout_mode),
-    })
+        domain_mode: domain_mode_from_proto(config.domain_mode)?,
+        product_rollout_mode: product_rollout_mode_from_proto(config.product_rollout_mode)?,
+    };
+    aura_config.validate().map_err(|error| error.to_string())?;
+    Ok(aura_config)
 }
 
 fn decoded_config_from_proto(config: proto::AuraConfig) -> Result<DecodedConfig, String> {
-    let relay_policy = relay_policy_from_proto(config.relay_policy.as_ref())?;
-    let relay_request_auth_key = relay_request_auth_key_from_proto(
-        config
-            .relay_policy
-            .as_ref()
-            .and_then(|policy| policy.request_auth_key.as_ref()),
-    )?;
-    let relay_response_auth_keys =
-        relay_response_auth_keys_from_proto(config.relay_policy.as_ref())?;
-    if relay_policy.require_relay_auth
-        && (relay_request_auth_key.is_none() || relay_response_auth_keys.is_empty())
-    {
-        return Err(
-            "relay auth is required but request or response auth keys are missing".to_string(),
-        );
-    }
-    validate_required_protected_account_attestation(&relay_policy)?;
-    let mut aura_config = aura_config_from_proto(config)?;
-    aura_config.protected_account_id = relay_policy.protected_account_id.clone();
-
     Ok(DecodedConfig {
-        aura_config,
-        relay_policy,
-        relay_request_auth_key,
-        relay_response_auth_keys,
+        aura_config: aura_config_from_proto(config)?,
     })
-}
-
-fn validate_required_protected_account_attestation(
-    relay_policy: &AgentRelayPolicy,
-) -> Result<(), String> {
-    if !relay_policy.require_protected_account_attestation {
-        return Ok(());
-    }
-    let protected_account_id = relay_policy
-        .protected_account_id
-        .as_deref()
-        .ok_or_else(|| {
-            "protected account attestation is required but protected_account_id is missing"
-                .to_string()
-        })?;
-    let attestation = relay_policy
-        .protected_account_attestation
-        .as_ref()
-        .ok_or_else(|| {
-            "protected account attestation is required but attestation is missing".to_string()
-        })?;
-    let expected_token = format!(
-        "acct_{}",
-        aura_agent_core::tokenize_identifier(protected_account_id).token
-    );
-    if attestation.protected_account_token != expected_token {
-        return Err(
-            "protected account attestation token does not match protected_account_id".to_string(),
-        );
-    }
-    if attestation.expires_at_ms <= current_unix_ms() {
-        return Err(
-            "protected account attestation is required but attestation is expired".to_string(),
-        );
-    }
-    Ok(())
-}
-
-fn current_unix_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
-
-fn relay_request_auth_key_from_proto(
-    key: Option<&proto::RelayRequestAuthKey>,
-) -> Result<Option<RelayRequestAuthKey>, String> {
-    let Some(key) = key else {
-        return Ok(None);
-    };
-    validate_relay_auth_key(&key.key_id, &key.secret, "request").map(|key_id| {
-        Some(RelayRequestAuthKey {
-            key_id,
-            secret: key.secret.clone(),
-        })
-    })
-}
-
-fn relay_response_auth_keys_from_proto(
-    policy: Option<&proto::AgentRelayPolicy>,
-) -> Result<Vec<RelayResponseAuthKey>, String> {
-    let Some(policy) = policy else {
-        return Ok(Vec::new());
-    };
-
-    let mut keys = Vec::new();
-    if let Some(key) = policy.response_auth_key.as_ref() {
-        keys.push(relay_response_auth_key_from_proto(key)?);
-    }
-    for key in &policy.accepted_response_auth_keys {
-        keys.push(relay_response_auth_key_from_proto(key)?);
-    }
-    validate_unique_relay_auth_key_ids(&keys, "response")?;
-    Ok(keys)
-}
-
-fn relay_response_auth_key_from_proto(
-    key: &proto::RelayResponseAuthKey,
-) -> Result<RelayResponseAuthKey, String> {
-    validate_relay_auth_key(&key.key_id, &key.secret, "response").map(|key_id| {
-        RelayResponseAuthKey {
-            key_id,
-            secret: key.secret.clone(),
-        }
-    })
-}
-
-fn validate_unique_relay_auth_key_ids(
-    keys: &[RelayResponseAuthKey],
-    direction: &str,
-) -> Result<(), String> {
-    if keys.len() > MAX_RELAY_AUTH_KEYS {
-        return Err(format!(
-            "relay {direction} auth key set exceeds limit of {MAX_RELAY_AUTH_KEYS}"
-        ));
-    }
-    for (index, key) in keys.iter().enumerate() {
-        if keys
-            .iter()
-            .skip(index + 1)
-            .any(|candidate| candidate.key_id == key.key_id)
-        {
-            return Err(format!(
-                "relay {direction} auth key_id {} is duplicated",
-                key.key_id
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn validate_relay_auth_key(key_id: &str, secret: &[u8], direction: &str) -> Result<String, String> {
-    let key_id = key_id.trim();
-    if !relay_auth_key_id_is_valid(key_id) {
-        return Err(format!(
-            "relay {direction} auth key_id must be 1..64 ASCII [A-Za-z0-9_.-] characters"
-        ));
-    }
-    if secret.len() < MIN_RELAY_AUTH_SECRET_BYTES || secret.len() > MAX_RELAY_AUTH_SECRET_BYTES {
-        return Err(format!(
-            "relay {direction} auth secret must be {MIN_RELAY_AUTH_SECRET_BYTES}..={MAX_RELAY_AUTH_SECRET_BYTES} bytes"
-        ));
-    }
-
-    Ok(key_id.to_string())
-}
-
-fn relay_auth_key_id_is_valid(key_id: &str) -> bool {
-    !key_id.is_empty()
-        && key_id.len() <= 64
-        && key_id
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
-}
-
-fn relay_policy_from_proto(
-    policy: Option<&proto::AgentRelayPolicy>,
-) -> Result<AgentRelayPolicy, String> {
-    let Some(policy) = policy else {
-        return Ok(AgentRelayPolicy::default());
-    };
-
-    let mut relay_policy = AgentRelayPolicy::default();
-    if let Some(enabled) = policy.enabled {
-        relay_policy.enabled = enabled;
-    }
-    if let Some(score_threshold) = policy.score_threshold {
-        if !(0.0..=1.0).contains(&score_threshold) {
-            return Err(format!(
-                "relay score_threshold {score_threshold} outside 0.0..=1.0"
-            ));
-        }
-        relay_policy.score_threshold = score_threshold;
-    }
-    if let Some(send_on_high_uncertainty) = policy.send_on_high_uncertainty {
-        relay_policy.send_on_high_uncertainty = send_on_high_uncertainty;
-    }
-    if let Some(send_on_new_contact) = policy.send_on_new_contact {
-        relay_policy.send_on_new_contact = send_on_new_contact;
-    }
-    if let Some(send_on_repeated_sender) = policy.send_on_repeated_sender {
-        relay_policy.send_on_repeated_sender = send_on_repeated_sender;
-    }
-    relay_policy.privacy_mode = relay_privacy_mode_from_proto(policy.privacy_mode);
-    if let Some(max_recent_window_messages) = policy.max_recent_window_messages {
-        relay_policy.max_recent_window_messages =
-            max_recent_window_messages.min(MAX_RELAY_RECENT_WINDOW_MESSAGES as u32) as usize;
-    }
-    if let Some(deadline_ms) = policy.deadline_ms {
-        relay_policy.deadline_ms = (deadline_ms != 0).then_some(deadline_ms);
-    }
-    if let Some(emit_local_safety_telemetry) = policy.emit_local_safety_telemetry {
-        relay_policy.emit_local_safety_telemetry = emit_local_safety_telemetry;
-    }
-    if let Some(require_relay_auth) = policy.require_relay_auth {
-        relay_policy.require_relay_auth = require_relay_auth;
-    }
-    if let Some(require_protected_account_attestation) =
-        policy.require_protected_account_attestation
-    {
-        relay_policy.require_protected_account_attestation = require_protected_account_attestation;
-    }
-    relay_policy.protected_account_id = policy
-        .protected_account_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
-    relay_policy.protected_account_attestation =
-        protected_account_attestation_from_proto(policy.protected_account_attestation.as_ref())?;
-
-    Ok(relay_policy)
-}
-
-fn protected_account_attestation_from_proto(
-    attestation: Option<&proto::ProtectedAccountTokenAttestation>,
-) -> Result<Option<ProtectedAccountTokenAttestationContract>, String> {
-    let Some(attestation) = attestation else {
-        return Ok(None);
-    };
-    let key_id = attestation.key_id.trim();
-    if !relay_auth_key_id_is_valid(key_id) {
-        return Err(
-            "protected account attestation key_id must be 1..64 ASCII [A-Za-z0-9_.-] characters"
-                .to_string(),
-        );
-    }
-    if attestation.alg != PROTECTED_ACCOUNT_TOKEN_ATTESTATION_ALG {
-        return Err(format!(
-            "protected account attestation alg must be {PROTECTED_ACCOUNT_TOKEN_ATTESTATION_ALG}"
-        ));
-    }
-    if attestation.expires_at_ms == 0 {
-        return Err("protected account attestation expires_at_ms must be non-zero".to_string());
-    }
-    let token_check = RelayAnalyzeRequestContract {
-        protected_account_token: Some(attestation.protected_account_token.clone()),
-        ..RelayAnalyzeRequestContract::default()
-    };
-    if token_check.privacy_safe_protected_account_token().is_none() {
-        return Err(
-            "protected account attestation protected_account_token must be privacy-safe acct_ token"
-                .to_string(),
-        );
-    }
-    if !hmac_tag_is_hex_32(&attestation.tag) {
-        return Err("protected account attestation tag must be 64 hex characters".to_string());
-    }
-
-    Ok(Some(ProtectedAccountTokenAttestationContract {
-        key_id: key_id.to_string(),
-        alg: attestation.alg.clone(),
-        protected_account_token: attestation.protected_account_token.clone(),
-        expires_at_ms: attestation.expires_at_ms,
-        tag: attestation.tag.clone(),
-    }))
-}
-
-fn hmac_tag_is_hex_32(tag: &str) -> bool {
-    tag.len() == 64 && tag.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-fn relay_privacy_mode_from_proto(mode: i32) -> RelayPrivacyMode {
-    match proto::RelayPrivacyMode::try_from(mode).unwrap_or(proto::RelayPrivacyMode::Unspecified) {
-        proto::RelayPrivacyMode::MetadataOnly => RelayPrivacyMode::MetadataOnly,
-        proto::RelayPrivacyMode::MessageAndWindow => RelayPrivacyMode::MessageAndWindow,
-        proto::RelayPrivacyMode::Unspecified | proto::RelayPrivacyMode::MessageOnly => {
-            RelayPrivacyMode::MessageOnly
-        }
-    }
 }
 
 fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
@@ -2553,7 +2373,6 @@ fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
         language: message.language,
         conversation_type: conversation_type_from_proto(message.conversation_type),
         member_count: message.member_count,
-        server_sender_risk_hint: message.server_sender_risk_hint,
         sender_relationship: sender_relationship_from_proto(message.sender_relationship),
         relationship_trust_source: relationship_trust_source_from_proto(
             message.relationship_trust_source,
@@ -2561,755 +2380,11 @@ fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
     }
 }
 
-fn shadow_mode_expectation_from_proto(
-    expectation: Option<proto::ShadowModeExpectation>,
-) -> Option<ShadowModeExpectation> {
-    expectation.and_then(|expectation| {
-        let expect_threat = match proto::ThreatType::try_from(expectation.expect_threat)
-            .unwrap_or(proto::ThreatType::Unspecified)
-        {
-            proto::ThreatType::Unspecified => None,
-            proto::ThreatType::None => Some(aura_agent_core::ThreatType::None),
-            proto::ThreatType::Bullying => Some(aura_agent_core::ThreatType::Bullying),
-            proto::ThreatType::Grooming => Some(aura_agent_core::ThreatType::Grooming),
-            proto::ThreatType::Explicit => Some(aura_agent_core::ThreatType::Explicit),
-            proto::ThreatType::Threat => Some(aura_agent_core::ThreatType::Threat),
-            proto::ThreatType::SelfHarm => Some(aura_agent_core::ThreatType::SelfHarm),
-            proto::ThreatType::Spam => Some(aura_agent_core::ThreatType::Spam),
-            proto::ThreatType::Scam => Some(aura_agent_core::ThreatType::Scam),
-            proto::ThreatType::Phishing => Some(aura_agent_core::ThreatType::Phishing),
-            proto::ThreatType::Manipulation => Some(aura_agent_core::ThreatType::Manipulation),
-            proto::ThreatType::Nsfw => Some(aura_agent_core::ThreatType::Nsfw),
-            proto::ThreatType::HateSpeech => Some(aura_agent_core::ThreatType::HateSpeech),
-            proto::ThreatType::Doxxing => Some(aura_agent_core::ThreatType::Doxxing),
-            proto::ThreatType::PiiLeakage => Some(aura_agent_core::ThreatType::PiiLeakage),
-            proto::ThreatType::Propaganda => Some(aura_agent_core::ThreatType::Propaganda),
-            proto::ThreatType::OpsecViolation => Some(aura_agent_core::ThreatType::OpsecViolation),
-            proto::ThreatType::Psyops => Some(aura_agent_core::ThreatType::Psyops),
-            proto::ThreatType::MilitarySocialEng => {
-                Some(aura_agent_core::ThreatType::MilitarySocialEng)
-            }
-            proto::ThreatType::CoordinateLeak => Some(aura_agent_core::ThreatType::CoordinateLeak),
-        };
-        let expect_min_action = match proto::Action::try_from(expectation.expect_min_action)
-            .unwrap_or(proto::Action::Unspecified)
-        {
-            proto::Action::Unspecified => None,
-            proto::Action::Allow => Some(Action::Allow),
-            proto::Action::Mark => Some(Action::Mark),
-            proto::Action::Blur => Some(Action::Blur),
-            proto::Action::Warn => Some(Action::Warn),
-            proto::Action::Block => Some(Action::Block),
-        };
-        let expect_min_alert = match proto::AlertPriority::try_from(expectation.expect_min_alert)
-            .unwrap_or(proto::AlertPriority::Unspecified)
-        {
-            proto::AlertPriority::Unspecified => None,
-            proto::AlertPriority::None => Some(AlertPriority::None),
-            proto::AlertPriority::Low => Some(AlertPriority::Low),
-            proto::AlertPriority::Medium => Some(AlertPriority::Medium),
-            proto::AlertPriority::High => Some(AlertPriority::High),
-            proto::AlertPriority::Urgent => Some(AlertPriority::Urgent),
-        };
-
-        if expect_threat.is_none() && expect_min_action.is_none() && expect_min_alert.is_none() {
-            None
-        } else {
-            Some(ShadowModeExpectation {
-                expect_threat,
-                expect_min_action,
-                expect_min_alert,
-            })
-        }
-    })
-}
-
 fn non_empty_or(value: String, default: &str) -> String {
     if value.is_empty() {
         default.to_string()
     } else {
         value
-    }
-}
-
-fn shadow_mode_findings_for_event(
-    sequence: usize,
-    request_id: &str,
-    timestamp_ms: u64,
-    expectation: Option<&ShadowModeExpectation>,
-    result: &aura_agent_core::AnalysisResult,
-) -> Vec<ShadowModeFinding> {
-    let mut findings = Vec::new();
-    let Some(expectation) = expectation else {
-        return findings;
-    };
-
-    if let Some(expected_threat) = expectation.expect_threat {
-        let threat_present = result.threat_type == expected_threat
-            || result
-                .detected_threats
-                .iter()
-                .any(|(threat, _)| *threat == expected_threat);
-        if !threat_present {
-            findings.push(ShadowModeFinding {
-                severity: "warning".to_string(),
-                event_sequence: sequence,
-                request_id: request_id.to_string(),
-                timestamp_ms,
-                message: format!(
-                    "expected threat '{}' but runtime returned '{}'",
-                    threat_label(expected_threat),
-                    threat_label(result.threat_type)
-                ),
-            });
-        }
-    }
-
-    if let Some(expected_action) = expectation.expect_min_action {
-        if result.action < expected_action {
-            findings.push(ShadowModeFinding {
-                severity: "warning".to_string(),
-                event_sequence: sequence,
-                request_id: request_id.to_string(),
-                timestamp_ms,
-                message: format!(
-                    "expected action >= '{}' but runtime returned '{}'",
-                    action_label(expected_action),
-                    action_label(result.action)
-                ),
-            });
-        }
-    }
-
-    if let Some(expected_alert) = expectation.expect_min_alert {
-        let actual_alert = result
-            .recommended_action
-            .as_ref()
-            .map(|recommendation| recommendation.parent_alert)
-            .unwrap_or(AlertPriority::None);
-        if actual_alert < expected_alert {
-            findings.push(ShadowModeFinding {
-                severity: "warning".to_string(),
-                event_sequence: sequence,
-                request_id: request_id.to_string(),
-                timestamp_ms,
-                message: format!(
-                    "expected alert >= '{}' but runtime returned '{}'",
-                    alert_label(expected_alert),
-                    alert_label(actual_alert)
-                ),
-            });
-        }
-    }
-
-    findings
-}
-
-fn threat_label(value: aura_agent_core::ThreatType) -> &'static str {
-    match value {
-        aura_agent_core::ThreatType::None => "none",
-        aura_agent_core::ThreatType::Bullying => "bullying",
-        aura_agent_core::ThreatType::Grooming => "grooming",
-        aura_agent_core::ThreatType::Explicit => "explicit",
-        aura_agent_core::ThreatType::Threat => "threat",
-        aura_agent_core::ThreatType::SelfHarm => "self_harm",
-        aura_agent_core::ThreatType::Spam => "spam",
-        aura_agent_core::ThreatType::Scam => "scam",
-        aura_agent_core::ThreatType::Phishing => "phishing",
-        aura_agent_core::ThreatType::Manipulation => "manipulation",
-        aura_agent_core::ThreatType::Nsfw => "nsfw",
-        aura_agent_core::ThreatType::HateSpeech => "hate_speech",
-        aura_agent_core::ThreatType::Doxxing => "doxxing",
-        aura_agent_core::ThreatType::PiiLeakage => "pii_leakage",
-        aura_agent_core::ThreatType::Propaganda => "propaganda",
-        aura_agent_core::ThreatType::OpsecViolation => "opsec_violation",
-        aura_agent_core::ThreatType::Psyops => "psyops",
-        aura_agent_core::ThreatType::MilitarySocialEng => "military_social_eng",
-        aura_agent_core::ThreatType::CoordinateLeak => "coordinate_leak",
-    }
-}
-
-fn action_label(value: aura_agent_core::Action) -> &'static str {
-    match value {
-        aura_agent_core::Action::Allow => "allow",
-        aura_agent_core::Action::Mark => "mark",
-        aura_agent_core::Action::Blur => "blur",
-        aura_agent_core::Action::Warn => "warn",
-        aura_agent_core::Action::Block => "block",
-    }
-}
-
-fn alert_label(value: aura_agent_core::AlertPriority) -> &'static str {
-    match value {
-        aura_agent_core::AlertPriority::None => "none",
-        aura_agent_core::AlertPriority::Low => "low",
-        aura_agent_core::AlertPriority::Medium => "medium",
-        aura_agent_core::AlertPriority::High => "high",
-        aura_agent_core::AlertPriority::Urgent => "urgent",
-    }
-}
-
-fn normalized_reason_code(reason_code: &str) -> &str {
-    reason_code.strip_prefix("domain.").unwrap_or(reason_code)
-}
-
-fn kids_memory_reason_codes(reason_codes: &[String]) -> Vec<String> {
-    let mut filtered = Vec::new();
-    for reason_code in reason_codes {
-        let reason_code = normalized_reason_code(reason_code);
-        if !reason_code.starts_with("kids.memory.") {
-            continue;
-        }
-        if filtered.iter().any(|existing| existing == reason_code) {
-            continue;
-        }
-        filtered.push(reason_code.to_string());
-    }
-    filtered
-}
-
-fn has_mandatory_kids_memory_reason(reason_codes: &[String]) -> bool {
-    for reason_code in reason_codes {
-        for mandatory in MANDATORY_KIDS_MEMORY_REASON_CODES {
-            if reason_code == mandatory {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn kids_memory_explainability_to_proto(
-    reason_codes: &[String],
-    conversation_id: Option<&str>,
-    sender_id: Option<&str>,
-    runtime: Option<&AgentRuntime>,
-) -> Option<proto::KidsMemoryExplainability> {
-    let reason_codes = kids_memory_reason_codes(reason_codes);
-    if reason_codes.is_empty() {
-        return None;
-    }
-    let conversation_risk_score = match (runtime, conversation_id) {
-        (Some(runtime), Some(conversation_id)) => {
-            runtime.kids_conversation_risk_score(conversation_id)
-        }
-        _ => 0.0,
-    };
-    let sender_risk_score = match (runtime, sender_id) {
-        (Some(runtime), Some(sender_id)) => runtime.kids_sender_cross_risk_score(sender_id),
-        _ => 0.0,
-    };
-    let escalation_message_count = match (runtime, conversation_id) {
-        (Some(runtime), Some(conversation_id)) => {
-            runtime.kids_conversation_escalation_message_count(conversation_id)
-        }
-        _ => 0,
-    };
-    Some(proto::KidsMemoryExplainability {
-        reason_codes: reason_codes.clone(),
-        mandatory_guardian_escalation: has_mandatory_kids_memory_reason(&reason_codes),
-        conversation_risk_score,
-        sender_risk_score,
-        escalation_message_count,
-    })
-}
-
-fn analysis_result_to_proto(
-    result: &aura_agent_core::AnalysisResult,
-    conversation_id: Option<&str>,
-    sender_id: Option<&str>,
-    runtime: &AgentRuntime,
-) -> proto::AnalysisResult {
-    proto::AnalysisResult {
-        threat_type: proto_threat_type(result.threat_type) as i32,
-        confidence: proto_confidence(result.confidence) as i32,
-        action: proto_action(result.action) as i32,
-        score: result.score,
-        explanation: result.explanation.clone(),
-        detected_threats: result
-            .detected_threats
-            .iter()
-            .map(|(threat_type, score)| proto::ThreatScore {
-                threat_type: proto_threat_type(*threat_type) as i32,
-                score: *score,
-            })
-            .collect(),
-        signals: result
-            .signals
-            .iter()
-            .map(detection_signal_to_proto)
-            .collect(),
-        recommended_action: result
-            .recommended_action
-            .as_ref()
-            .map(action_recommendation_to_proto),
-        risk_breakdown: Some(risk_breakdown_to_proto(&result.risk_breakdown)),
-        contact_snapshot: result
-            .contact_snapshot
-            .as_ref()
-            .map(contact_snapshot_to_proto),
-        reason_codes: result.reason_codes.clone(),
-        analysis_time_us: result.analysis_time_us,
-        inference: Some(inference_summary_to_proto(&result.inference)),
-        product_surface: Some(product_decision_surface_to_proto(
-            &build_product_decision_surface(result, runtime.product_rollout_mode()),
-        )),
-        kids_memory: kids_memory_explainability_to_proto(
-            &result.reason_codes,
-            conversation_id,
-            sender_id,
-            Some(runtime),
-        ),
-    }
-}
-
-fn product_decision_surface_to_proto(
-    surface: &aura_agent_core::ProductDecisionSurface,
-) -> proto::ProductDecisionSurface {
-    proto::ProductDecisionSurface {
-        schema_version: surface.schema_version.clone(),
-        rollout_mode: proto_product_rollout_mode(surface.rollout_mode) as i32,
-        threat_type: proto_threat_type(surface.threat_type) as i32,
-        action: proto_action(surface.action) as i32,
-        score: surface.score,
-        child: Some(product_child_surface_to_proto(&surface.child)),
-        guardian: Some(product_guardian_surface_to_proto(&surface.guardian)),
-        review: Some(product_review_surface_to_proto(&surface.review)),
-        uncertainty_disposition: proto_product_uncertainty_disposition(
-            surface.uncertainty_disposition,
-        ) as i32,
-    }
-}
-
-fn runtime_capabilities_to_proto(capabilities: &RuntimeCapabilities) -> proto::RuntimeCapabilities {
-    proto::RuntimeCapabilities {
-        schema_version: capabilities.schema_version.clone(),
-        runtime_version: capabilities.runtime_version.clone(),
-        backend: match capabilities.backend {
-            RuntimeBackend::RulesFallback => proto::RuntimeBackend::RulesFallback as i32,
-            RuntimeBackend::Onnx => proto::RuntimeBackend::Onnx as i32,
-        },
-        supported_modalities: capabilities
-            .supported_modalities
-            .iter()
-            .map(|modality| match modality {
-                RuntimeModality::Text => proto::RuntimeModality::Text as i32,
-                RuntimeModality::Url => proto::RuntimeModality::Url as i32,
-            })
-            .collect(),
-        models: capabilities
-            .models
-            .iter()
-            .take(8)
-            .map(|model| proto::RuntimeModelIdentity {
-                component: model.component.clone(),
-                identifier: model.identifier.clone(),
-                sha256: model.sha256.clone(),
-            })
-            .collect(),
-        policy_schema_version: capabilities.policy_schema_version.clone(),
-        product_schema_version: capabilities.product_schema_version.clone(),
-        state_schema_version: capabilities.state_schema_version,
-        product_rollout_mode: proto_product_rollout_mode(capabilities.product_rollout_mode) as i32,
-    }
-}
-
-fn product_child_surface_to_proto(
-    surface: &aura_agent_core::ProductChildSurface,
-) -> proto::ProductChildSurface {
-    proto::ProductChildSurface {
-        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
-        visible: surface.visible,
-        intervention: proto_product_child_intervention(surface.intervention) as i32,
-        ui_actions: surface
-            .ui_actions
-            .iter()
-            .map(|action| proto_ui_action(*action) as i32)
-            .collect(),
-        reason_codes: surface.reason_codes.clone(),
-    }
-}
-
-fn product_guardian_surface_to_proto(
-    surface: &aura_agent_core::ProductGuardianSurface,
-) -> proto::ProductGuardianSurface {
-    proto::ProductGuardianSurface {
-        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
-        notify: surface.notify,
-        priority: proto_alert_priority(surface.priority) as i32,
-        follow_ups: surface
-            .follow_ups
-            .iter()
-            .map(|action| proto_follow_up_action(*action) as i32)
-            .collect(),
-        reason_codes: surface.reason_codes.clone(),
-    }
-}
-
-fn product_review_surface_to_proto(
-    surface: &aura_agent_core::ProductReviewSurface,
-) -> proto::ProductReviewSurface {
-    proto::ProductReviewSurface {
-        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
-        open_review: surface.open_review,
-        urgency: proto_product_review_urgency(surface.urgency) as i32,
-        reason_codes: surface.reason_codes.clone(),
-        latent_states: surface
-            .latent_states
-            .iter()
-            .map(|kind| proto_latent_state_kind(*kind) as i32)
-            .collect(),
-    }
-}
-
-fn detection_signal_to_proto(signal: &aura_agent_core::DetectionSignal) -> proto::DetectionSignal {
-    proto::DetectionSignal {
-        threat_type: proto_threat_type(signal.threat_type) as i32,
-        score: signal.score,
-        confidence: proto_confidence(signal.confidence) as i32,
-        layer: proto_detection_layer(signal.layer) as i32,
-        family: proto_signal_family(signal.family) as i32,
-        reason_code: signal.reason_code.clone(),
-        explanation: signal.explanation.clone(),
-        threat_subtype: signal.threat_subtype.clone(),
-    }
-}
-
-fn action_recommendation_to_proto(
-    recommendation: &aura_agent_core::ActionRecommendation,
-) -> proto::ActionRecommendation {
-    proto::ActionRecommendation {
-        parent_alert: proto_alert_priority(recommendation.parent_alert) as i32,
-        follow_ups: recommendation
-            .follow_ups
-            .iter()
-            .map(|action| proto_follow_up_action(*action) as i32)
-            .collect(),
-        crisis_resources: recommendation.crisis_resources,
-        ui_actions: recommendation
-            .ui_actions
-            .iter()
-            .map(|action| proto_ui_action(*action) as i32)
-            .collect(),
-        reason_codes: recommendation.reason_codes.clone(),
-    }
-}
-
-fn contact_snapshot_to_proto(
-    snapshot: &aura_agent_core::ContactSnapshot,
-) -> proto::ContactSnapshot {
-    proto::ContactSnapshot {
-        sender_id: snapshot.sender_id.to_string(),
-        rating: snapshot.rating,
-        trust_level: snapshot.trust_level,
-        circle_tier: proto_circle_tier(snapshot.circle_tier) as i32,
-        trend: proto_behavioral_trend(snapshot.trend) as i32,
-        is_trusted: snapshot.is_trusted,
-        is_new_contact: snapshot.is_new_contact,
-        first_seen_ms: snapshot.first_seen_ms,
-        last_seen_ms: snapshot.last_seen_ms,
-        conversation_count: snapshot.conversation_count as u64,
-    }
-}
-
-fn risk_breakdown_to_proto(breakdown: &aura_agent_core::RiskBreakdown) -> proto::RiskBreakdown {
-    proto::RiskBreakdown {
-        content: breakdown.content,
-        conversation: breakdown.conversation,
-        link: breakdown.link,
-        abuse: breakdown.abuse,
-    }
-}
-
-fn inference_summary_to_proto(
-    summary: &aura_agent_core::InferenceSummary,
-) -> proto::InferenceSummary {
-    proto::InferenceSummary {
-        uncertainty: proto_uncertainty_level(summary.uncertainty) as i32,
-        risk_horizon: proto_risk_horizon(summary.risk_horizon) as i32,
-        escalation_likelihood_24h: summary.escalation_likelihood_24h,
-        protective_factor_strength: summary.protective_factor_strength,
-        latent_states: summary
-            .latent_states
-            .iter()
-            .map(latent_state_evidence_to_proto)
-            .collect(),
-    }
-}
-
-fn latent_state_evidence_to_proto(
-    evidence: &aura_agent_core::LatentStateEvidence,
-) -> proto::LatentStateEvidence {
-    proto::LatentStateEvidence {
-        kind: proto_latent_state_kind(evidence.kind) as i32,
-        score: evidence.score,
-        reason_codes: evidence.reason_codes.clone(),
-    }
-}
-
-fn protected_identifier_to_proto(
-    identifier: &aura_agent_core::ProtectedIdentifier,
-) -> proto::ProtectedIdentifier {
-    proto::ProtectedIdentifier {
-        token: identifier.token.clone(),
-        scheme: identifier.scheme.clone(),
-    }
-}
-
-fn audit_threat_score_to_proto(
-    score: &aura_agent_core::AuditThreatScore,
-) -> proto::AuditThreatScore {
-    proto::AuditThreatScore {
-        threat_type: proto_threat_type(score.threat_type) as i32,
-        score: score.score,
-    }
-}
-
-fn audit_record_to_proto(record: &aura_agent_core::AuditRecord) -> proto::AuditRecord {
-    proto::AuditRecord {
-        schema_version: record.schema_version.clone(),
-        event_timestamp_ms: record.event_timestamp_ms,
-        runtime_version: record.runtime_version.clone(),
-        wire_package: record.wire_package.clone(),
-        state_schema_version: record.state_schema_version,
-        protection_level: proto_protection_level(record.protection_level) as i32,
-        threat_type: proto_threat_type(record.threat_type) as i32,
-        primary_score: record.primary_score,
-        top_threat_scores: record
-            .top_threat_scores
-            .iter()
-            .map(audit_threat_score_to_proto)
-            .collect(),
-        reason_codes: record.reason_codes.clone(),
-        ui_actions: record
-            .ui_actions
-            .iter()
-            .map(|action| proto_ui_action(*action) as i32)
-            .collect(),
-        parent_alert: proto_alert_priority(record.parent_alert) as i32,
-        follow_ups: record
-            .follow_ups
-            .iter()
-            .map(|action| proto_follow_up_action(*action) as i32)
-            .collect(),
-        crisis_resources: record.crisis_resources,
-        contact_trend: record
-            .contact_trend
-            .map(|trend| proto_behavioral_trend(trend) as i32)
-            .unwrap_or(proto::BehavioralTrend::Unspecified as i32),
-        contact_circle_tier: record
-            .contact_circle_tier
-            .map(|tier| proto_circle_tier(tier) as i32)
-            .unwrap_or(proto::CircleTier::Unspecified as i32),
-        request_id: record.request_id.clone(),
-        sender_token: record
-            .sender_token
-            .as_ref()
-            .map(protected_identifier_to_proto),
-        conversation_token: record
-            .conversation_token
-            .as_ref()
-            .map(protected_identifier_to_proto),
-        kids_memory: kids_memory_explainability_to_proto(&record.reason_codes, None, None, None),
-    }
-}
-
-fn kids_memory_reason_counts_from_events(
-    events: &[aura_agent_core::ShadowModeEvent],
-) -> std::collections::HashMap<String, u64> {
-    let mut counts = std::collections::HashMap::new();
-    for event in events {
-        let reason_codes = kids_memory_reason_codes(&event.decision.reason_codes);
-        for reason_code in reason_codes {
-            let entry = counts.entry(reason_code).or_insert(0u64);
-            *entry = (*entry).saturating_add(1);
-        }
-    }
-    counts
-}
-
-fn shadow_mode_privacy_to_proto(
-    privacy: &aura_agent_core::ShadowModePrivacy,
-) -> proto::ShadowModePrivacy {
-    proto::ShadowModePrivacy {
-        identifier_scheme: privacy.identifier_scheme.clone(),
-        raw_text_present: privacy.raw_text_present,
-        raw_identifier_fields_present: privacy.raw_identifier_fields_present,
-    }
-}
-
-fn shadow_mode_summary_to_proto(
-    summary: &aura_agent_core::ShadowModeSummary,
-    kids_memory_reason_counts: std::collections::HashMap<String, u64>,
-) -> proto::ShadowModeSummary {
-    proto::ShadowModeSummary {
-        total_events: summary.total_events as u64,
-        threat_events: summary.threat_events as u64,
-        blocked_events: summary.blocked_events as u64,
-        action_counts: summary
-            .action_counts
-            .iter()
-            .map(|(key, value)| (key.clone(), *value as u64))
-            .collect(),
-        threat_counts: summary
-            .threat_counts
-            .iter()
-            .map(|(key, value)| (key.clone(), *value as u64))
-            .collect(),
-        alert_counts: summary
-            .alert_counts
-            .iter()
-            .map(|(key, value)| (key.clone(), *value as u64))
-            .collect(),
-        finding_count: summary.finding_count as u64,
-        kids_memory_reason_counts,
-    }
-}
-
-fn shadow_mode_expectation_to_proto(
-    expectation: &aura_agent_core::ShadowModeExpectation,
-) -> proto::ShadowModeExpectation {
-    proto::ShadowModeExpectation {
-        expect_threat: expectation
-            .expect_threat
-            .map(|threat| proto_threat_type(threat) as i32)
-            .unwrap_or(proto::ThreatType::Unspecified as i32),
-        expect_min_action: expectation
-            .expect_min_action
-            .map(|action| proto_action(action) as i32)
-            .unwrap_or(proto::Action::Unspecified as i32),
-        expect_min_alert: expectation
-            .expect_min_alert
-            .map(|alert| proto_alert_priority(alert) as i32)
-            .unwrap_or(proto::AlertPriority::Unspecified as i32),
-    }
-}
-
-fn shadow_mode_mirror_to_proto(
-    mirror: &aura_agent_core::ShadowModeMirror,
-) -> proto::ShadowModeMirror {
-    proto::ShadowModeMirror {
-        would_surface_to_child: mirror.would_surface_to_child,
-        would_alert_guardian: mirror.would_alert_guardian,
-        would_open_review: mirror.would_open_review,
-        would_block_message: mirror.would_block_message,
-    }
-}
-
-fn shadow_mode_contact_summary_to_proto(
-    contact: &aura_agent_core::ShadowModeContactSummary,
-) -> proto::ShadowModeContactSummary {
-    proto::ShadowModeContactSummary {
-        sender_token: Some(protected_identifier_to_proto(&contact.sender_token)),
-        rating: contact.rating,
-        trust_level: contact.trust_level,
-        circle_tier: proto_circle_tier(contact.circle_tier) as i32,
-        trend: proto_behavioral_trend(contact.trend) as i32,
-        is_trusted: contact.is_trusted,
-        is_new_contact: contact.is_new_contact,
-        conversation_count: contact.conversation_count as u64,
-    }
-}
-
-fn shadow_mode_decision_to_proto(
-    decision: &aura_agent_core::ShadowModeDecision,
-) -> proto::ShadowModeDecision {
-    proto::ShadowModeDecision {
-        threat_type: proto_threat_type(decision.threat_type) as i32,
-        confidence: proto_confidence(decision.confidence) as i32,
-        action: proto_action(decision.action) as i32,
-        score: decision.score,
-        reason_codes: decision.reason_codes.clone(),
-        top_threat_scores: decision
-            .top_threat_scores
-            .iter()
-            .map(audit_threat_score_to_proto)
-            .collect(),
-        risk_breakdown: Some(risk_breakdown_to_proto(&decision.risk_breakdown)),
-        inference: Some(inference_summary_to_proto(&decision.inference)),
-        parent_alert: proto_alert_priority(decision.parent_alert) as i32,
-        follow_ups: decision
-            .follow_ups
-            .iter()
-            .map(|action| proto_follow_up_action(*action) as i32)
-            .collect(),
-        crisis_resources: decision.crisis_resources,
-        ui_actions: decision
-            .ui_actions
-            .iter()
-            .map(|action| proto_ui_action(*action) as i32)
-            .collect(),
-        contact: decision
-            .contact
-            .as_ref()
-            .map(shadow_mode_contact_summary_to_proto),
-        mirror: Some(shadow_mode_mirror_to_proto(&decision.mirror)),
-        product_surface: Some(product_decision_surface_to_proto(&decision.product_surface)),
-        kids_memory: kids_memory_explainability_to_proto(&decision.reason_codes, None, None, None),
-    }
-}
-
-fn shadow_mode_finding_to_proto(
-    finding: &aura_agent_core::ShadowModeFinding,
-) -> proto::ShadowModeFinding {
-    proto::ShadowModeFinding {
-        severity: finding.severity.clone(),
-        event_sequence: finding.event_sequence as u64,
-        request_id: finding.request_id.clone(),
-        timestamp_ms: finding.timestamp_ms,
-        message: finding.message.clone(),
-    }
-}
-
-fn shadow_mode_event_to_proto(event: &aura_agent_core::ShadowModeEvent) -> proto::ShadowModeEvent {
-    proto::ShadowModeEvent {
-        request_id: event.request_id.clone(),
-        sequence: event.sequence as u64,
-        timestamp_ms: event.timestamp_ms,
-        sender_token: Some(protected_identifier_to_proto(&event.sender_token)),
-        conversation_token: Some(protected_identifier_to_proto(&event.conversation_token)),
-        language: event.language.clone(),
-        conversation_type: proto_conversation_type(event.conversation_type) as i32,
-        member_count: event.member_count,
-        expectation: event
-            .expectation
-            .as_ref()
-            .map(shadow_mode_expectation_to_proto),
-        audit_record: Some(audit_record_to_proto(&event.audit_record)),
-        decision: Some(shadow_mode_decision_to_proto(&event.decision)),
-    }
-}
-
-fn shadow_mode_bundle_to_proto(
-    bundle: &aura_agent_core::ShadowModeBundle,
-) -> proto::ShadowModeBundle {
-    let kids_memory_reason_counts = kids_memory_reason_counts_from_events(&bundle.events);
-    proto::ShadowModeBundle {
-        schema_version: bundle.schema_version.clone(),
-        generated_at_utc: bundle.generated_at_utc.clone(),
-        source_kind: bundle.source_kind.clone(),
-        source_label: bundle.source_label.clone(),
-        source_input: bundle.source_input.clone(),
-        owner_token: Some(protected_identifier_to_proto(&bundle.owner_token)),
-        runtime_version: bundle.runtime_version.clone(),
-        wire_package: bundle.wire_package.clone(),
-        state_schema_version: bundle.state_schema_version,
-        protection_level: proto_protection_level(bundle.protection_level) as i32,
-        privacy: Some(shadow_mode_privacy_to_proto(&bundle.privacy)),
-        summary: Some(shadow_mode_summary_to_proto(
-            &bundle.summary,
-            kids_memory_reason_counts,
-        )),
-        findings: bundle
-            .findings
-            .iter()
-            .map(shadow_mode_finding_to_proto)
-            .collect(),
-        events: bundle
-            .events
-            .iter()
-            .map(shadow_mode_event_to_proto)
-            .collect(),
     }
 }
 
@@ -3430,7 +2505,7 @@ fn kids_memory_state_from_proto(
         ExportedMessageSnapshot, ExportedSenderMemory, KIDS_MEMORY_STATE_VERSION,
     };
 
-    if state.schema_version > KIDS_MEMORY_STATE_VERSION {
+    if state.schema_version != KIDS_MEMORY_STATE_VERSION {
         return Err(format!(
             "incompatible kids memory state version: found {}, supported {}",
             state.schema_version, KIDS_MEMORY_STATE_VERSION
@@ -3442,54 +2517,64 @@ fn kids_memory_state_from_proto(
         conversations: state
             .conversations
             .iter()
-            .map(|conv| ExportedConversationMemory {
-                conversation_id: conv.conversation_id.clone(),
-                message_index: conv.message_index,
-                last_activity_index: conv.last_activity_index.unwrap_or(conv.message_index),
-                last_emitted: conv
-                    .last_emitted
-                    .iter()
-                    .map(|checkpoint| ExportedEmissionCheckpoint {
-                        reason_code: checkpoint.reason_code.clone(),
-                        emitted_at_index: checkpoint.emitted_at_index,
-                    })
-                    .collect(),
-                entries: conv
-                    .entries
-                    .iter()
-                    .map(|snap| ExportedMessageSnapshot {
-                        sender_id: snap.sender_id.clone(),
-                        has_grooming: snap.has_grooming,
-                        has_manipulation: snap.has_manipulation,
-                        has_bullying: snap.has_bullying,
-                        has_self_harm: snap.has_self_harm,
-                        has_blackmail_or_sextortion: snap.has_blackmail_or_sextortion,
-                        ml_grooming: snap.ml_grooming,
-                        ml_bullying: snap.ml_bullying,
-                        ml_self_harm: snap.ml_self_harm,
-                        ml_manipulation: snap.ml_manipulation,
-                    })
-                    .collect(),
+            .map(|conv| {
+                let last_activity_index = conv
+                    .last_activity_index
+                    .ok_or_else(|| "kids conversation activity index is required".to_string())?;
+                Ok(ExportedConversationMemory {
+                    conversation_id: conv.conversation_id.clone(),
+                    message_index: conv.message_index,
+                    last_activity_index,
+                    last_emitted: conv
+                        .last_emitted
+                        .iter()
+                        .map(|checkpoint| ExportedEmissionCheckpoint {
+                            reason_code: checkpoint.reason_code.clone(),
+                            emitted_at_index: checkpoint.emitted_at_index,
+                        })
+                        .collect(),
+                    entries: conv
+                        .entries
+                        .iter()
+                        .map(|snap| ExportedMessageSnapshot {
+                            sender_id: snap.sender_id.clone(),
+                            has_grooming: snap.has_grooming,
+                            has_manipulation: snap.has_manipulation,
+                            has_bullying: snap.has_bullying,
+                            has_self_harm: snap.has_self_harm,
+                            has_blackmail_or_sextortion: snap.has_blackmail_or_sextortion,
+                            ml_grooming: snap.ml_grooming,
+                            ml_bullying: snap.ml_bullying,
+                            ml_self_harm: snap.ml_self_harm,
+                            ml_manipulation: snap.ml_manipulation,
+                        })
+                        .collect(),
+                })
             })
-            .collect(),
+            .collect::<Result<Vec<_>, String>>()?,
         senders: state
             .senders
             .iter()
-            .map(|sender| ExportedSenderMemory {
-                sender_id: sender.sender_id.clone(),
-                event_index: sender.event_index,
-                last_activity_index: sender.last_activity_index.unwrap_or(sender.event_index),
-                last_emitted: sender
-                    .last_emitted
-                    .iter()
-                    .map(|checkpoint| ExportedEmissionCheckpoint {
-                        reason_code: checkpoint.reason_code.clone(),
-                        emitted_at_index: checkpoint.emitted_at_index,
-                    })
-                    .collect(),
-                recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
+            .map(|sender| {
+                let last_activity_index = sender
+                    .last_activity_index
+                    .ok_or_else(|| "kids sender activity index is required".to_string())?;
+                Ok(ExportedSenderMemory {
+                    sender_id: sender.sender_id.clone(),
+                    event_index: sender.event_index,
+                    last_activity_index,
+                    last_emitted: sender
+                        .last_emitted
+                        .iter()
+                        .map(|checkpoint| ExportedEmissionCheckpoint {
+                            reason_code: checkpoint.reason_code.clone(),
+                            emitted_at_index: checkpoint.emitted_at_index,
+                        })
+                        .collect(),
+                    recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
+                })
             })
-            .collect(),
+            .collect::<Result<Vec<_>, String>>()?,
     })
 }
 
@@ -3857,62 +2942,64 @@ fn behavioral_snapshot_state_from_proto(
     }
 }
 
-fn protection_level_from_proto(value: i32) -> aura_agent_core::ProtectionLevel {
-    match proto::ProtectionLevel::try_from(value).unwrap_or(proto::ProtectionLevel::Medium) {
-        proto::ProtectionLevel::Off => aura_agent_core::ProtectionLevel::Off,
-        proto::ProtectionLevel::Low => aura_agent_core::ProtectionLevel::Low,
-        proto::ProtectionLevel::Medium | proto::ProtectionLevel::Unspecified => {
-            aura_agent_core::ProtectionLevel::Medium
+fn protection_level_from_proto(value: i32) -> Result<aura_agent_core::ProtectionLevel, String> {
+    match proto::ProtectionLevel::try_from(value) {
+        Ok(proto::ProtectionLevel::Off) => Ok(aura_agent_core::ProtectionLevel::Off),
+        Ok(proto::ProtectionLevel::Low) => Ok(aura_agent_core::ProtectionLevel::Low),
+        Ok(proto::ProtectionLevel::Medium) => Ok(aura_agent_core::ProtectionLevel::Medium),
+        Ok(proto::ProtectionLevel::High) => Ok(aura_agent_core::ProtectionLevel::High),
+        Ok(proto::ProtectionLevel::Unspecified) => {
+            Err("protection_level must be explicit".to_string())
         }
-        proto::ProtectionLevel::High => aura_agent_core::ProtectionLevel::High,
+        Err(_) => Err(format!("unsupported protection_level value {value}")),
     }
 }
 
-fn account_type_from_proto(value: i32) -> aura_agent_core::AccountType {
-    match proto::AccountType::try_from(value).unwrap_or(proto::AccountType::Adult) {
-        proto::AccountType::Adult | proto::AccountType::Unspecified => {
-            aura_agent_core::AccountType::Adult
-        }
-        proto::AccountType::Teen => aura_agent_core::AccountType::Teen,
-        proto::AccountType::Child => aura_agent_core::AccountType::Child,
+fn account_type_from_proto(value: i32) -> Result<aura_agent_core::AccountType, String> {
+    match proto::AccountType::try_from(value) {
+        Ok(proto::AccountType::Adult) => Ok(aura_agent_core::AccountType::Adult),
+        Ok(proto::AccountType::Teen) => Ok(aura_agent_core::AccountType::Teen),
+        Ok(proto::AccountType::Child) => Ok(aura_agent_core::AccountType::Child),
+        Ok(proto::AccountType::Unspecified) => Err("account_type must be explicit".to_string()),
+        Err(_) => Err(format!("unsupported account_type value {value}")),
     }
 }
 
-fn proto_protection_level(value: aura_agent_core::ProtectionLevel) -> proto::ProtectionLevel {
-    match value {
-        aura_agent_core::ProtectionLevel::Off => proto::ProtectionLevel::Off,
-        aura_agent_core::ProtectionLevel::Low => proto::ProtectionLevel::Low,
-        aura_agent_core::ProtectionLevel::Medium => proto::ProtectionLevel::Medium,
-        aura_agent_core::ProtectionLevel::High => proto::ProtectionLevel::High,
+fn domain_mode_from_proto(value: i32) -> Result<aura_agent_core::DomainMode, String> {
+    match proto::DomainMode::try_from(value) {
+        Ok(proto::DomainMode::None) => Ok(aura_agent_core::DomainMode::None),
+        Ok(proto::DomainMode::Kids) => Ok(aura_agent_core::DomainMode::Kids),
+        Ok(proto::DomainMode::Military) => Ok(aura_agent_core::DomainMode::Military),
+        Ok(proto::DomainMode::Unspecified) => Err("domain_mode must be explicit".to_string()),
+        Err(_) => Err(format!("unsupported domain_mode value {value}")),
     }
 }
 
-fn domain_mode_from_proto(value: i32) -> aura_agent_core::DomainMode {
-    match proto::DomainMode::try_from(value).unwrap_or(proto::DomainMode::Unspecified) {
-        proto::DomainMode::Unspecified | proto::DomainMode::None => {
-            aura_agent_core::DomainMode::None
-        }
-        proto::DomainMode::Kids => aura_agent_core::DomainMode::Kids,
-        proto::DomainMode::Military => aura_agent_core::DomainMode::Military,
-    }
-}
+fn cultural_context_from_proto(
+    context: Option<proto::CulturalContext>,
+) -> Result<CulturalContext, String> {
+    let context = context.ok_or_else(|| "cultural_context must be present".to_string())?;
 
-fn cultural_context_from_proto(context: Option<proto::CulturalContext>) -> CulturalContext {
-    let Some(context) = context else {
-        return CulturalContext::default();
-    };
-
-    match proto::CulturalContextKind::try_from(context.kind)
-        .unwrap_or(proto::CulturalContextKind::Ukrainian)
-    {
-        proto::CulturalContextKind::Unspecified | proto::CulturalContextKind::Ukrainian => {
-            CulturalContext::Ukrainian
+    match proto::CulturalContextKind::try_from(context.kind) {
+        Ok(proto::CulturalContextKind::Ukrainian) => Ok(CulturalContext::Ukrainian),
+        Ok(proto::CulturalContextKind::Russian) => Ok(CulturalContext::Russian),
+        Ok(proto::CulturalContextKind::English) => Ok(CulturalContext::English),
+        Ok(proto::CulturalContextKind::Custom) => {
+            let value = context
+                .custom_value
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| {
+                    "custom cultural_context requires a non-empty custom_value".to_string()
+                })?;
+            Ok(CulturalContext::Custom(value))
         }
-        proto::CulturalContextKind::Russian => CulturalContext::Russian,
-        proto::CulturalContextKind::English => CulturalContext::English,
-        proto::CulturalContextKind::Custom => {
-            CulturalContext::Custom(context.custom_value.unwrap_or_default())
+        Ok(proto::CulturalContextKind::Unspecified) => {
+            Err("cultural_context kind must be explicit".to_string())
         }
+        Err(_) => Err(format!(
+            "unsupported cultural_context kind value {}",
+            context.kind
+        )),
     }
 }
 
@@ -3985,188 +3072,21 @@ fn relationship_trust_source_from_proto(value: i32) -> RelationshipTrustSource {
     }
 }
 
-fn proto_threat_type(value: aura_agent_core::ThreatType) -> proto::ThreatType {
-    match value {
-        aura_agent_core::ThreatType::None => proto::ThreatType::None,
-        aura_agent_core::ThreatType::Bullying => proto::ThreatType::Bullying,
-        aura_agent_core::ThreatType::Grooming => proto::ThreatType::Grooming,
-        aura_agent_core::ThreatType::Explicit => proto::ThreatType::Explicit,
-        aura_agent_core::ThreatType::Threat => proto::ThreatType::Threat,
-        aura_agent_core::ThreatType::SelfHarm => proto::ThreatType::SelfHarm,
-        aura_agent_core::ThreatType::Spam => proto::ThreatType::Spam,
-        aura_agent_core::ThreatType::Scam => proto::ThreatType::Scam,
-        aura_agent_core::ThreatType::Phishing => proto::ThreatType::Phishing,
-        aura_agent_core::ThreatType::Manipulation => proto::ThreatType::Manipulation,
-        aura_agent_core::ThreatType::Nsfw => proto::ThreatType::Nsfw,
-        aura_agent_core::ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
-        aura_agent_core::ThreatType::Doxxing => proto::ThreatType::Doxxing,
-        aura_agent_core::ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
-        aura_agent_core::ThreatType::Propaganda => proto::ThreatType::Propaganda,
-        aura_agent_core::ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
-        aura_agent_core::ThreatType::Psyops => proto::ThreatType::Psyops,
-        aura_agent_core::ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
-        aura_agent_core::ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
-    }
-}
-
-fn proto_confidence(value: aura_agent_core::Confidence) -> proto::Confidence {
-    match value {
-        aura_agent_core::Confidence::Low => proto::Confidence::Low,
-        aura_agent_core::Confidence::Medium => proto::Confidence::Medium,
-        aura_agent_core::Confidence::High => proto::Confidence::High,
-    }
-}
-
-fn proto_action(value: aura_agent_core::Action) -> proto::Action {
-    match value {
-        aura_agent_core::Action::Allow => proto::Action::Allow,
-        aura_agent_core::Action::Mark => proto::Action::Mark,
-        aura_agent_core::Action::Blur => proto::Action::Blur,
-        aura_agent_core::Action::Warn => proto::Action::Warn,
-        aura_agent_core::Action::Block => proto::Action::Block,
-    }
-}
-
-fn proto_detection_layer(value: aura_agent_core::DetectionLayer) -> proto::DetectionLayer {
-    match value {
-        aura_agent_core::DetectionLayer::PatternMatching => proto::DetectionLayer::PatternMatching,
-        aura_agent_core::DetectionLayer::MlClassification => {
-            proto::DetectionLayer::MlClassification
+fn product_rollout_mode_from_proto(
+    value: i32,
+) -> Result<aura_agent_core::ProductRolloutMode, String> {
+    match proto::ProductRolloutMode::try_from(value) {
+        Ok(proto::ProductRolloutMode::Shadow) => Ok(aura_agent_core::ProductRolloutMode::Shadow),
+        Ok(proto::ProductRolloutMode::StagingPilot) => {
+            Ok(aura_agent_core::ProductRolloutMode::StagingPilot)
         }
-        aura_agent_core::DetectionLayer::ContextAnalysis => proto::DetectionLayer::ContextAnalysis,
-    }
-}
-
-fn proto_signal_family(value: aura_agent_core::SignalFamily) -> proto::SignalFamily {
-    match value {
-        aura_agent_core::SignalFamily::Content => proto::SignalFamily::Content,
-        aura_agent_core::SignalFamily::Conversation => proto::SignalFamily::Conversation,
-        aura_agent_core::SignalFamily::Link => proto::SignalFamily::Link,
-        aura_agent_core::SignalFamily::Abuse => proto::SignalFamily::Abuse,
-    }
-}
-
-fn proto_alert_priority(value: aura_agent_core::AlertPriority) -> proto::AlertPriority {
-    match value {
-        aura_agent_core::AlertPriority::None => proto::AlertPriority::None,
-        aura_agent_core::AlertPriority::Low => proto::AlertPriority::Low,
-        aura_agent_core::AlertPriority::Medium => proto::AlertPriority::Medium,
-        aura_agent_core::AlertPriority::High => proto::AlertPriority::High,
-        aura_agent_core::AlertPriority::Urgent => proto::AlertPriority::Urgent,
-    }
-}
-
-fn proto_follow_up_action(value: aura_agent_core::FollowUpAction) -> proto::FollowUpAction {
-    match value {
-        aura_agent_core::FollowUpAction::MonitorConversation => {
-            proto::FollowUpAction::MonitorConversation
+        Ok(proto::ProductRolloutMode::GuardianEnabled) => {
+            Ok(aura_agent_core::ProductRolloutMode::GuardianEnabled)
         }
-        aura_agent_core::FollowUpAction::BlockSuggested => proto::FollowUpAction::BlockSuggested,
-        aura_agent_core::FollowUpAction::ReviewContactProfile => {
-            proto::FollowUpAction::ReviewContactProfile
+        Ok(proto::ProductRolloutMode::Unspecified) => {
+            Err("product_rollout_mode must be explicit".to_string())
         }
-        aura_agent_core::FollowUpAction::ReportToAuthorities => {
-            proto::FollowUpAction::ReportToAuthorities
-        }
-    }
-}
-
-fn proto_product_rollout_mode(
-    value: aura_agent_core::ProductRolloutMode,
-) -> proto::ProductRolloutMode {
-    match value {
-        aura_agent_core::ProductRolloutMode::Shadow => proto::ProductRolloutMode::Shadow,
-        aura_agent_core::ProductRolloutMode::StagingPilot => {
-            proto::ProductRolloutMode::StagingPilot
-        }
-        aura_agent_core::ProductRolloutMode::GuardianEnabled => {
-            proto::ProductRolloutMode::GuardianEnabled
-        }
-    }
-}
-
-fn product_rollout_mode_from_proto(value: i32) -> aura_agent_core::ProductRolloutMode {
-    match proto::ProductRolloutMode::try_from(value)
-        .unwrap_or(proto::ProductRolloutMode::Unspecified)
-    {
-        proto::ProductRolloutMode::StagingPilot => {
-            aura_agent_core::ProductRolloutMode::StagingPilot
-        }
-        proto::ProductRolloutMode::GuardianEnabled => {
-            aura_agent_core::ProductRolloutMode::GuardianEnabled
-        }
-        proto::ProductRolloutMode::Unspecified | proto::ProductRolloutMode::Shadow => {
-            aura_agent_core::ProductRolloutMode::Shadow
-        }
-    }
-}
-
-fn proto_product_delivery_mode(
-    value: aura_agent_core::ProductDeliveryMode,
-) -> proto::ProductDeliveryMode {
-    match value {
-        aura_agent_core::ProductDeliveryMode::Suppress => proto::ProductDeliveryMode::Suppress,
-        aura_agent_core::ProductDeliveryMode::MirrorOnly => proto::ProductDeliveryMode::MirrorOnly,
-        aura_agent_core::ProductDeliveryMode::Apply => proto::ProductDeliveryMode::Apply,
-    }
-}
-
-fn proto_product_child_intervention(
-    value: aura_agent_core::ProductChildIntervention,
-) -> proto::ProductChildIntervention {
-    match value {
-        aura_agent_core::ProductChildIntervention::None => proto::ProductChildIntervention::None,
-        aura_agent_core::ProductChildIntervention::Mark => proto::ProductChildIntervention::Mark,
-        aura_agent_core::ProductChildIntervention::Blur => proto::ProductChildIntervention::Blur,
-        aura_agent_core::ProductChildIntervention::Warn => proto::ProductChildIntervention::Warn,
-        aura_agent_core::ProductChildIntervention::Block => proto::ProductChildIntervention::Block,
-    }
-}
-
-fn proto_product_review_urgency(
-    value: aura_agent_core::ProductReviewUrgency,
-) -> proto::ProductReviewUrgency {
-    match value {
-        aura_agent_core::ProductReviewUrgency::None => proto::ProductReviewUrgency::None,
-        aura_agent_core::ProductReviewUrgency::Standard => proto::ProductReviewUrgency::Standard,
-        aura_agent_core::ProductReviewUrgency::High => proto::ProductReviewUrgency::High,
-        aura_agent_core::ProductReviewUrgency::Urgent => proto::ProductReviewUrgency::Urgent,
-    }
-}
-
-fn proto_product_uncertainty_disposition(
-    value: aura_agent_core::ProductUncertaintyDisposition,
-) -> proto::ProductUncertaintyDisposition {
-    match value {
-        aura_agent_core::ProductUncertaintyDisposition::Normal => {
-            proto::ProductUncertaintyDisposition::Normal
-        }
-        aura_agent_core::ProductUncertaintyDisposition::MirrorOnly => {
-            proto::ProductUncertaintyDisposition::MirrorOnly
-        }
-        aura_agent_core::ProductUncertaintyDisposition::RequireReview => {
-            proto::ProductUncertaintyDisposition::RequireReview
-        }
-        aura_agent_core::ProductUncertaintyDisposition::GuardianPriority => {
-            proto::ProductUncertaintyDisposition::GuardianPriority
-        }
-    }
-}
-
-fn proto_ui_action(value: aura_agent_core::UiAction) -> proto::UiAction {
-    match value {
-        aura_agent_core::UiAction::WarnBeforeSend => proto::UiAction::WarnBeforeSend,
-        aura_agent_core::UiAction::WarnBeforeDisplay => proto::UiAction::WarnBeforeDisplay,
-        aura_agent_core::UiAction::BlurUntilTap => proto::UiAction::BlurUntilTap,
-        aura_agent_core::UiAction::ConfirmBeforeOpenLink => proto::UiAction::ConfirmBeforeOpenLink,
-        aura_agent_core::UiAction::SuggestBlockContact => proto::UiAction::SuggestBlockContact,
-        aura_agent_core::UiAction::SuggestReport => proto::UiAction::SuggestReport,
-        aura_agent_core::UiAction::RestrictUnknownContact => {
-            proto::UiAction::RestrictUnknownContact
-        }
-        aura_agent_core::UiAction::SlowDownConversation => proto::UiAction::SlowDownConversation,
-        aura_agent_core::UiAction::ShowCrisisSupport => proto::UiAction::ShowCrisisSupport,
-        aura_agent_core::UiAction::EscalateToGuardian => proto::UiAction::EscalateToGuardian,
+        Err(_) => Err(format!("unsupported product_rollout_mode value {value}")),
     }
 }
 
@@ -4225,47 +3145,6 @@ fn proto_age_source(value: CoreAgeSource) -> proto::AgeSource {
         CoreAgeSource::ParentVerified => proto::AgeSource::ParentVerified,
         CoreAgeSource::UserReported => proto::AgeSource::UserReported,
         CoreAgeSource::MlInferred => proto::AgeSource::MlInferred,
-    }
-}
-
-fn proto_uncertainty_level(value: aura_agent_core::UncertaintyLevel) -> proto::UncertaintyLevel {
-    match value {
-        aura_agent_core::UncertaintyLevel::Low => proto::UncertaintyLevel::Low,
-        aura_agent_core::UncertaintyLevel::Medium => proto::UncertaintyLevel::Medium,
-        aura_agent_core::UncertaintyLevel::High => proto::UncertaintyLevel::High,
-    }
-}
-
-fn proto_risk_horizon(value: aura_agent_core::RiskHorizon) -> proto::RiskHorizon {
-    match value {
-        aura_agent_core::RiskHorizon::Unknown => proto::RiskHorizon::Unknown,
-        aura_agent_core::RiskHorizon::Immediate => proto::RiskHorizon::Immediate,
-        aura_agent_core::RiskHorizon::ShortTerm => proto::RiskHorizon::ShortTerm,
-        aura_agent_core::RiskHorizon::Sustained => proto::RiskHorizon::Sustained,
-    }
-}
-
-fn proto_latent_state_kind(value: aura_agent_core::LatentStateKind) -> proto::LatentStateKind {
-    match value {
-        aura_agent_core::LatentStateKind::DependencyBuilding => {
-            proto::LatentStateKind::DependencyBuilding
-        }
-        aura_agent_core::LatentStateKind::IsolationPressure => {
-            proto::LatentStateKind::IsolationPressure
-        }
-        aura_agent_core::LatentStateKind::CoerciveControl => {
-            proto::LatentStateKind::CoerciveControl
-        }
-        aura_agent_core::LatentStateKind::Humiliation => proto::LatentStateKind::Humiliation,
-        aura_agent_core::LatentStateKind::CrisisVulnerability => {
-            proto::LatentStateKind::CrisisVulnerability
-        }
-        aura_agent_core::LatentStateKind::ProtectiveSupport => {
-            proto::LatentStateKind::ProtectiveSupport
-        }
-        aura_agent_core::LatentStateKind::GroupEscalation => {
-            proto::LatentStateKind::GroupEscalation
-        }
     }
 }
 
@@ -4396,14 +3275,8 @@ fn proto_event_kind(value: CoreEventKind) -> proto::EventKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{DateTime, Duration, Utc};
     use prost::Message as ProstMessage;
-    use serde::Deserialize;
-    use std::collections::HashMap;
     use std::ffi::CStr;
-    use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn proto_config(account_type: proto::AccountType, enabled: bool) -> proto::AuraConfig {
         proto::AuraConfig {
@@ -4421,17 +3294,13 @@ mod tests {
             ttl_days: 30,
             timezone_offset_minutes: 0,
             domain_mode: proto::DomainMode::None as i32,
-            relay_policy: None,
-            product_rollout_mode: proto::ProductRolloutMode::Unspecified as i32,
+            product_rollout_mode: proto::ProductRolloutMode::Shadow as i32,
         }
     }
 
     // Reproduces the EXACT config the iOS app's AuraRuntimeService.makeConfig builds
     // for the local-analysis path: ProtectionLevel::Medium, AccountType::Adult,
-    // language "en", NO cultural_context, ttl 30, DomainMode::None, and a relay
-    // policy with enabled=false, MetadataOnly, a base64 protected_account_id, and
-    // NO auth keys. On device this aura_init returns null and the Swift side only
-    // sees "unknown error"; this test surfaces the real failure on the host.
+    // English language/cultural context, ttl 30, and DomainMode::None.
     #[test]
     fn ios_local_analysis_config_initializes() {
         unsafe {
@@ -4439,7 +3308,10 @@ mod tests {
                 protection_level: proto::ProtectionLevel::Medium as i32,
                 account_type: proto::AccountType::Adult as i32,
                 language: "en".to_string(),
-                cultural_context: None,
+                cultural_context: Some(proto::CulturalContext {
+                    kind: proto::CulturalContextKind::English as i32,
+                    custom_value: None,
+                }),
                 enabled: true,
                 patterns_path: None,
                 models_path: None,
@@ -4447,13 +3319,7 @@ mod tests {
                 ttl_days: 30,
                 timezone_offset_minutes: 120,
                 domain_mode: proto::DomainMode::None as i32,
-                relay_policy: Some(proto::AgentRelayPolicy {
-                    enabled: Some(false),
-                    privacy_mode: proto::RelayPrivacyMode::MetadataOnly as i32,
-                    protected_account_id: Some("QTNGNUVDRA==".to_string()),
-                    ..Default::default()
-                }),
-                product_rollout_mode: proto::ProductRolloutMode::Unspecified as i32,
+                product_rollout_mode: proto::ProductRolloutMode::Shadow as i32,
             };
             let bytes = encode_proto(&config);
             let handle = aura_init(bytes.as_ptr(), bytes.len());
@@ -4508,441 +3374,19 @@ mod tests {
     }
 
     #[test]
-    fn unspecified_domain_mode_maps_to_none() {
+    fn unspecified_domain_mode_is_rejected() {
         let mut proto = proto_config(proto::AccountType::Adult, true);
         proto.domain_mode = proto::DomainMode::Unspecified as i32;
-        let config = aura_config_from_proto(proto).expect("config must decode");
-        assert_eq!(config.domain_mode, aura_agent_core::DomainMode::None);
+        let error = aura_config_from_proto(proto).expect_err("domain mode must be explicit");
+        assert!(error.contains("domain_mode must be explicit"));
     }
 
     #[test]
-    fn relay_policy_defaults_when_missing_from_config() {
-        let config = decoded_config_from_proto(proto_config(proto::AccountType::Child, true))
-            .expect("config must decode");
-
-        assert!(!config.relay_policy.enabled);
-        assert_eq!(
-            config.relay_policy.privacy_mode,
-            RelayPrivacyMode::MessageOnly
-        );
-        assert!(config.relay_policy.emit_local_safety_telemetry);
-        assert!(config.relay_policy.protected_account_id.is_none());
-        assert!(config.aura_config.protected_account_id.is_none());
-        assert!(!config.relay_policy.require_relay_auth);
-        assert!(!config.relay_policy.require_protected_account_attestation);
-        assert!(config.relay_request_auth_key.is_none());
-        assert!(config.relay_response_auth_keys.is_empty());
-    }
-
-    #[test]
-    fn relay_policy_maps_metadata_only_safety_telemetry_config() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        config_proto.relay_policy = Some(metadata_only_relay_policy());
-
-        let config = decoded_config_from_proto(config_proto).expect("config must decode");
-
-        assert!(config.relay_policy.enabled);
-        assert_eq!(config.relay_policy.score_threshold, 0.42);
-        assert!(!config.relay_policy.send_on_high_uncertainty);
-        assert!(config.relay_policy.send_on_new_contact);
-        assert!(!config.relay_policy.send_on_repeated_sender);
-        assert_eq!(
-            config.relay_policy.privacy_mode,
-            RelayPrivacyMode::MetadataOnly
-        );
-        assert_eq!(
-            config.relay_policy.max_recent_window_messages,
-            MAX_RELAY_RECENT_WINDOW_MESSAGES
-        );
-        assert_eq!(config.relay_policy.deadline_ms, None);
-        assert_eq!(
-            config.relay_policy.protected_account_id.as_deref(),
-            Some("child_local_1")
-        );
-        assert_eq!(
-            config.aura_config.protected_account_id.as_deref(),
-            Some("child_local_1")
-        );
-        assert!(!config.relay_policy.require_relay_auth);
-        assert!(!config.relay_policy.require_protected_account_attestation);
-        assert!(config.relay_request_auth_key.is_none());
-        assert!(config.relay_response_auth_keys.is_empty());
-    }
-
-    #[test]
-    fn relay_request_auth_key_maps_from_config() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.request_auth_key = Some(relay_request_auth_key_proto());
-        config_proto.relay_policy = Some(policy);
-
-        let config = decoded_config_from_proto(config_proto).expect("config must decode");
-        let key = config
-            .relay_request_auth_key
-            .expect("relay request auth key should decode");
-
-        assert_eq!(key.key_id, "relay-req-key-1");
-        assert_eq!(key.secret, relay_request_auth_secret());
-    }
-
-    #[test]
-    fn relay_response_auth_key_maps_from_config() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.response_auth_key = Some(relay_response_auth_key_proto());
-        policy
-            .accepted_response_auth_keys
-            .push(relay_previous_response_auth_key_proto());
-        config_proto.relay_policy = Some(policy);
-
-        let config = decoded_config_from_proto(config_proto).expect("config must decode");
-        assert_eq!(config.relay_response_auth_keys.len(), 2);
-        let key = &config.relay_response_auth_keys[0];
-
-        assert_eq!(key.key_id, "relay-key-1");
-        assert_eq!(key.secret, relay_response_auth_secret());
-        let previous_key = &config.relay_response_auth_keys[1];
-        assert_eq!(previous_key.key_id, "relay-key-previous");
-        assert_eq!(previous_key.secret, relay_previous_response_auth_secret());
-    }
-
-    #[test]
-    fn relay_policy_maps_protected_account_attestation_from_config() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        let token = protected_account_token_for("child_local_1");
-        policy.protected_account_attestation = Some(protected_account_attestation_proto(
-            &token,
-            1_900_000_000_000,
-        ));
-        config_proto.relay_policy = Some(policy);
-
-        let config = decoded_config_from_proto(config_proto).expect("config must decode");
-        let attestation = config
-            .relay_policy
-            .protected_account_attestation
-            .expect("protected account attestation should decode");
-
-        assert_eq!(attestation.key_id, "acct-attest-key-1");
-        assert_eq!(attestation.protected_account_token, token);
-        assert_eq!(attestation.expires_at_ms, 1_900_000_000_000);
-    }
-
-    #[test]
-    fn relay_policy_require_protected_account_attestation_accepts_matching_proof() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        let token = protected_account_token_for("child_local_1");
-        policy.require_protected_account_attestation = Some(true);
-        policy.protected_account_attestation = Some(protected_account_attestation_proto(
-            &token,
-            future_attestation_expires_at_ms(),
-        ));
-        config_proto.relay_policy = Some(policy);
-
-        let config = decoded_config_from_proto(config_proto).expect("config must decode");
-
-        assert!(config.relay_policy.require_protected_account_attestation);
-    }
-
-    #[test]
-    fn relay_policy_require_protected_account_attestation_rejects_missing_or_mismatch() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.require_protected_account_attestation = Some(true);
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("attestation is missing"));
-
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        let token = protected_account_token_for("other_child");
-        policy.require_protected_account_attestation = Some(true);
-        policy.protected_account_attestation = Some(protected_account_attestation_proto(
-            &token,
-            1_900_000_000_000,
-        ));
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("does not match protected_account_id"));
-
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        let token = protected_account_token_for("child_local_1");
-        policy.require_protected_account_attestation = Some(true);
-        policy.protected_account_attestation = Some(protected_account_attestation_proto(&token, 1));
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("attestation is expired"));
-    }
-
-    #[test]
-    fn relay_policy_rejects_invalid_protected_account_attestation_config() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.protected_account_attestation = Some(proto::ProtectedAccountTokenAttestation {
-            key_id: "acct-attest-key-1".to_string(),
-            alg: "none".to_string(),
-            protected_account_token: "acct_01H0000000000000000000000".to_string(),
-            expires_at_ms: 1_900_000_000_000,
-            tag: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string(),
-        });
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("attestation alg"));
-
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.protected_account_attestation = Some(proto::ProtectedAccountTokenAttestation {
-            key_id: "acct-attest-key-1".to_string(),
-            alg: PROTECTED_ACCOUNT_TOKEN_ATTESTATION_ALG.to_string(),
-            protected_account_token: "child@example.test".to_string(),
-            expires_at_ms: 1_900_000_000_000,
-            tag: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string(),
-        });
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("privacy-safe acct_ token"));
-    }
-
-    #[test]
-    fn relay_policy_rejects_invalid_score_threshold() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        config_proto.relay_policy = Some(proto::AgentRelayPolicy {
-            score_threshold: Some(1.5),
-            ..Default::default()
-        });
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-
-        assert!(error.contains("score_threshold"));
-    }
-
-    #[test]
-    fn relay_policy_require_auth_rejects_missing_keys() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.require_relay_auth = Some(true);
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-
-        assert!(error.contains("relay auth is required"));
-    }
-
-    #[test]
-    fn relay_policy_require_auth_accepts_configured_keys() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.require_relay_auth = Some(true);
-        policy.request_auth_key = Some(relay_request_auth_key_proto());
-        policy.response_auth_key = Some(relay_response_auth_key_proto());
-        config_proto.relay_policy = Some(policy);
-
-        let config = decoded_config_from_proto(config_proto).expect("config must decode");
-
-        assert!(config.relay_policy.require_relay_auth);
-        assert!(config.relay_request_auth_key.is_some());
-        assert_eq!(config.relay_response_auth_keys.len(), 1);
-    }
-
-    #[test]
-    fn relay_response_auth_key_rejects_invalid_config() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.response_auth_key = Some(proto::RelayResponseAuthKey {
-            key_id: "relay key with spaces".to_string(),
-            secret: relay_response_auth_secret(),
-        });
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("key_id"));
-
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.response_auth_key = Some(proto::RelayResponseAuthKey {
-            key_id: "relay-key-1".to_string(),
-            secret: b"too short".to_vec(),
-        });
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("secret"));
-
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.response_auth_key = Some(relay_response_auth_key_proto());
-        policy
-            .accepted_response_auth_keys
-            .push(relay_response_auth_key_proto());
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("duplicated"));
-    }
-
-    #[test]
-    fn relay_request_auth_key_rejects_invalid_config() {
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.request_auth_key = Some(proto::RelayRequestAuthKey {
-            key_id: "relay request key with spaces".to_string(),
-            secret: relay_request_auth_secret(),
-        });
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("key_id"));
-
-        let mut config_proto = proto_config(proto::AccountType::Child, true);
-        let mut policy = metadata_only_relay_policy();
-        policy.request_auth_key = Some(proto::RelayRequestAuthKey {
-            key_id: "relay-req-key-1".to_string(),
-            secret: b"too short".to_vec(),
-        });
-        config_proto.relay_policy = Some(policy);
-
-        let error = decoded_config_from_proto(config_proto).unwrap_err();
-        assert!(error.contains("secret"));
-    }
-
-    #[test]
-    fn init_and_update_apply_relay_policy_to_runtime() {
-        unsafe {
-            let mut config_proto = proto_config(proto::AccountType::Child, true);
-            config_proto.relay_policy = Some(metadata_only_relay_policy());
-
-            let handle = init_handle(config_proto);
-            assert!(!handle.is_null());
-            with_instance(handle, |instance| {
-                let policy = instance.analyzer.relay_policy();
-                assert!(policy.enabled);
-                assert_eq!(policy.privacy_mode, RelayPrivacyMode::MetadataOnly);
-                assert_eq!(
-                    policy.protected_account_id.as_deref(),
-                    Some("child_local_1")
-                );
-                Ok(())
-            })
-            .unwrap();
-
-            let mut updated = proto_config(proto::AccountType::Child, true);
-            updated.relay_policy = Some(proto::AgentRelayPolicy {
-                enabled: Some(false),
-                score_threshold: Some(0.9),
-                privacy_mode: proto::RelayPrivacyMode::MessageOnly as i32,
-                emit_local_safety_telemetry: Some(false),
-                protected_account_id: Some(String::new()),
-                ..Default::default()
-            });
-            let bytes = encode_proto(&updated);
-            assert!(aura_update_config(handle, bytes.as_ptr(), bytes.len()));
-
-            with_instance(handle, |instance| {
-                let policy = instance.analyzer.relay_policy();
-                assert!(!policy.enabled);
-                assert_eq!(policy.score_threshold, 0.9);
-                assert_eq!(policy.privacy_mode, RelayPrivacyMode::MessageOnly);
-                assert!(!policy.emit_local_safety_telemetry);
-                assert!(policy.protected_account_id.is_none());
-                Ok(())
-            })
-            .unwrap();
-
-            aura_free(handle);
-        }
-    }
-
-    fn metadata_only_relay_policy() -> proto::AgentRelayPolicy {
-        proto::AgentRelayPolicy {
-            enabled: Some(true),
-            score_threshold: Some(0.42),
-            send_on_high_uncertainty: Some(false),
-            send_on_new_contact: Some(true),
-            send_on_repeated_sender: Some(false),
-            privacy_mode: proto::RelayPrivacyMode::MetadataOnly as i32,
-            max_recent_window_messages: Some(999),
-            deadline_ms: Some(0),
-            emit_local_safety_telemetry: Some(true),
-            protected_account_id: Some(" child_local_1 ".to_string()),
-            request_auth_key: None,
-            response_auth_key: None,
-            accepted_response_auth_keys: Vec::new(),
-            require_relay_auth: None,
-            protected_account_attestation: None,
-            require_protected_account_attestation: None,
-        }
-    }
-
-    fn relay_request_auth_key_proto() -> proto::RelayRequestAuthKey {
-        proto::RelayRequestAuthKey {
-            key_id: "relay-req-key-1".to_string(),
-            secret: relay_request_auth_secret(),
-        }
-    }
-
-    fn relay_request_auth_secret() -> Vec<u8> {
-        b"relay request auth test secret".to_vec()
-    }
-
-    fn protected_account_token_for(account_id: &str) -> String {
-        format!(
-            "acct_{}",
-            aura_agent_core::tokenize_identifier(account_id).token
-        )
-    }
-
-    fn future_attestation_expires_at_ms() -> u64 {
-        current_unix_ms().saturating_add(60_000)
-    }
-
-    fn protected_account_attestation_proto(
-        protected_account_token: &str,
-        expires_at_ms: u64,
-    ) -> proto::ProtectedAccountTokenAttestation {
-        let attestation =
-            aura_agent_core::aura_contracts::sign_protected_account_token_attestation(
-                protected_account_token,
-                expires_at_ms,
-                "acct-attest-key-1",
-                b"protected account attestation secret",
-            )
-            .expect("test protected account token should be attestable");
-        proto::ProtectedAccountTokenAttestation {
-            key_id: attestation.key_id,
-            alg: attestation.alg,
-            protected_account_token: attestation.protected_account_token,
-            expires_at_ms: attestation.expires_at_ms,
-            tag: attestation.tag,
-        }
-    }
-
-    fn relay_response_auth_key_proto() -> proto::RelayResponseAuthKey {
-        proto::RelayResponseAuthKey {
-            key_id: "relay-key-1".to_string(),
-            secret: relay_response_auth_secret(),
-        }
-    }
-
-    fn relay_response_auth_secret() -> Vec<u8> {
-        b"relay response auth test secret".to_vec()
-    }
-
-    fn relay_previous_response_auth_key_proto() -> proto::RelayResponseAuthKey {
-        proto::RelayResponseAuthKey {
-            key_id: "relay-key-previous".to_string(),
-            secret: relay_previous_response_auth_secret(),
-        }
-    }
-
-    fn relay_previous_response_auth_secret() -> Vec<u8> {
-        b"relay response previous secret".to_vec()
+    fn unspecified_product_rollout_is_rejected() {
+        let mut proto = proto_config(proto::AccountType::Adult, true);
+        proto.product_rollout_mode = proto::ProductRolloutMode::Unspecified as i32;
+        let error = aura_config_from_proto(proto).expect_err("rollout must be explicit");
+        assert!(error.contains("product_rollout_mode must be explicit"));
     }
 
     fn proto_message(text: &str, sender_id: &str, conversation_id: &str) -> proto::MessageInput {
@@ -4955,202 +3399,8 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: proto::ConversationType::Direct as i32,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: proto::SenderRelationship::Unspecified as i32,
             relationship_trust_source: proto::RelationshipTrustSource::Unspecified as i32,
-        }
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FfiWorldFixture {
-        label: String,
-        owner: FfiWorldOwner,
-        #[serde(default)]
-        config: FfiWorldConfig,
-        #[serde(default)]
-        actors: Vec<FfiWorldActor>,
-        #[serde(default)]
-        conversations: Vec<FfiWorldConversation>,
-        #[serde(default)]
-        events: Vec<FfiWorldEvent>,
-        #[serde(default)]
-        generated_batches: Vec<FfiGeneratedBatch>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FfiWorldOwner {
-        id: String,
-        #[serde(default)]
-        age: Option<u32>,
-    }
-
-    #[derive(Debug, Default, Deserialize)]
-    struct FfiWorldConfig {
-        #[serde(default)]
-        account_type: Option<String>,
-        #[serde(default)]
-        protection_level: Option<String>,
-        #[serde(default)]
-        language: Option<String>,
-        #[serde(default)]
-        enabled: Option<bool>,
-        #[serde(default)]
-        account_holder_age: Option<u32>,
-        #[serde(default)]
-        ttl_days: Option<u32>,
-        #[serde(default)]
-        timezone_offset_minutes: Option<i32>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FfiWorldActor {
-        id: String,
-        #[serde(default)]
-        trusted: bool,
-        #[serde(default)]
-        sender_relationship: Option<String>,
-        #[serde(default)]
-        relationship_trust_source: Option<String>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FfiWorldConversation {
-        id: String,
-        #[serde(default)]
-        conversation_type: Option<String>,
-        #[serde(default)]
-        member_count: Option<u32>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FfiWorldEvent {
-        at: String,
-        sender_id: String,
-        conversation_id: String,
-        text: String,
-        #[serde(default)]
-        language: Option<String>,
-        #[serde(default)]
-        conversation_type: Option<String>,
-        #[serde(default)]
-        member_count: Option<u32>,
-        #[serde(default)]
-        sender_relationship: Option<String>,
-        #[serde(default)]
-        relationship_trust_source: Option<String>,
-        #[serde(default)]
-        expect_clean: bool,
-        #[serde(default)]
-        expect_threat: Option<String>,
-        #[serde(default)]
-        expect_min_action: Option<String>,
-        #[serde(default)]
-        expect_min_alert: Option<String>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FfiGeneratedBatch {
-        label: String,
-        start_at: String,
-        count: usize,
-        interval_minutes: i64,
-        #[serde(default = "default_day_repeats_for_ffi_world")]
-        day_repeats: usize,
-        #[serde(default = "default_day_stride_days_for_ffi_world")]
-        day_stride_days: i64,
-        sender_ids: Vec<String>,
-        conversation_ids: Vec<String>,
-        texts: Vec<String>,
-        #[serde(default)]
-        language: Option<String>,
-        #[serde(default)]
-        conversation_type: Option<String>,
-        #[serde(default)]
-        member_count: Option<u32>,
-        #[serde(default)]
-        sender_relationship: Option<String>,
-        #[serde(default)]
-        relationship_trust_source: Option<String>,
-        #[serde(default)]
-        expect_clean: bool,
-        #[serde(default)]
-        expect_threat: Option<String>,
-        #[serde(default)]
-        expect_min_action: Option<String>,
-        #[serde(default)]
-        expect_min_alert: Option<String>,
-    }
-
-    fn default_day_repeats_for_ffi_world() -> usize {
-        1
-    }
-
-    fn default_day_stride_days_for_ffi_world() -> i64 {
-        1
-    }
-
-    #[derive(Debug, Clone)]
-    struct FfiResolvedWorldEvent {
-        source_index: usize,
-        timestamp_ms: u64,
-        sender_id: String,
-        conversation_id: String,
-        language: String,
-        conversation_type: proto::ConversationType,
-        member_count: Option<u32>,
-        sender_relationship: proto::SenderRelationship,
-        relationship_trust_source: proto::RelationshipTrustSource,
-        expectation: Option<FfiWorldExpectation>,
-        text: String,
-        sender_trusted: bool,
-    }
-
-    #[derive(Debug, Clone)]
-    struct FfiWorldEventSeed {
-        timestamp_ms: u64,
-        sender_id: String,
-        conversation_id: String,
-        language: Option<String>,
-        conversation_type: Option<String>,
-        member_count: Option<u32>,
-        sender_relationship: Option<String>,
-        relationship_trust_source: Option<String>,
-        expectation: Option<FfiWorldExpectation>,
-        text: String,
-    }
-
-    #[derive(Debug, Clone)]
-    struct FfiWorldExpectation {
-        expect_clean: bool,
-        expect_threat: Option<proto::ThreatType>,
-        expect_min_action: Option<proto::Action>,
-        expect_min_alert: Option<proto::AlertPriority>,
-    }
-
-    #[derive(Debug)]
-    struct FfiWorldReplayReport {
-        total_events: usize,
-        labeled_positive_events: usize,
-        labeled_clean_events: usize,
-        true_positive_events: usize,
-        false_positive_events: usize,
-        restore_count: usize,
-        findings: Vec<String>,
-    }
-
-    impl FfiWorldReplayReport {
-        fn positive_recall(&self) -> f64 {
-            if self.labeled_positive_events == 0 {
-                return 1.0;
-            }
-            self.true_positive_events as f64 / self.labeled_positive_events as f64
-        }
-
-        fn clean_false_positive_rate(&self) -> f64 {
-            if self.labeled_clean_events == 0 {
-                return 0.0;
-            }
-            self.false_positive_events as f64 / self.labeled_clean_events as f64
         }
     }
 
@@ -5170,62 +3420,37 @@ mod tests {
 
     unsafe fn init_handle(config: proto::AuraConfig) -> *mut c_void {
         let bytes = encode_proto(&config);
-        aura_init(bytes.as_ptr(), bytes.len())
+        let handle = aura_init(bytes.as_ptr(), bytes.len());
+        assert!(
+            !handle.is_null(),
+            "valid config must initialize the runtime"
+        );
+        handle
     }
 
-    unsafe fn analyze_result(
+    unsafe fn analyze_canonical(
         handle: *mut c_void,
         message: proto::MessageInput,
-    ) -> proto::AnalysisResult {
-        let bytes = encode_proto(&message);
-        let mut out = AuraBuffer::empty();
-        assert!(aura_analyze(handle, bytes.as_ptr(), bytes.len(), &mut out));
-        decode_buffer(out)
-    }
-
-    unsafe fn analyze_context_result(
-        handle: *mut c_void,
-        message: proto::MessageInput,
+        event_id: &str,
+        revision: u32,
         timestamp_ms: u64,
-    ) -> proto::AnalysisResult {
-        let request = proto::AnalyzeContextRequest {
+    ) -> proto::CanonicalSafetyAnalyzeResponse {
+        let conversation_key = message.conversation_id.clone();
+        let request = proto::CanonicalSafetyAnalyzeRequest {
             message: Some(message),
-            timestamp_ms,
+            identity: Some(proto::CanonicalSafetyEventIdentity {
+                account_key: "account".to_string(),
+                subject_key: "subject".to_string(),
+                conversation_key,
+                event_id: event_id.to_string(),
+                revision,
+                occurred_at_ms: timestamp_ms,
+                observed_at_ms: timestamp_ms,
+            }),
         };
         let bytes = encode_proto(&request);
         let mut out = AuraBuffer::empty();
-        assert!(aura_analyze_context(
-            handle,
-            bytes.as_ptr(),
-            bytes.len(),
-            &mut out
-        ));
-        decode_buffer(out)
-    }
-
-    unsafe fn batch_results(
-        handle: *mut c_void,
-        items: Vec<proto::BatchAnalyzeItem>,
-    ) -> proto::BatchAnalyzeResponse {
-        let request = proto::BatchAnalyzeRequest { items };
-        let bytes = encode_proto(&request);
-        let mut out = AuraBuffer::empty();
-        assert!(aura_analyze_batch(
-            handle,
-            bytes.as_ptr(),
-            bytes.len(),
-            &mut out
-        ));
-        decode_buffer(out)
-    }
-
-    unsafe fn build_shadow_bundle(
-        handle: *mut c_void,
-        request: proto::BuildShadowModeBundleRequest,
-    ) -> proto::ShadowModeBundle {
-        let bytes = encode_proto(&request);
-        let mut out = AuraBuffer::empty();
-        assert!(aura_build_shadow_bundle(
+        assert!(aura_analyze_canonical_safety(
             handle,
             bytes.as_ptr(),
             bytes.len(),
@@ -5240,627 +3465,10 @@ mod tests {
         decode_buffer(out)
     }
 
-    unsafe fn runtime_capabilities(handle: *mut c_void) -> proto::RuntimeCapabilities {
-        let mut out = AuraBuffer::empty();
-        assert!(aura_get_runtime_capabilities(handle, &mut out));
-        decode_buffer(out)
-    }
-
     unsafe fn import_context_state(handle: *mut c_void, state: proto::TrackerState) {
         let request = proto::ImportContextRequest { state: Some(state) };
         let bytes = encode_proto(&request);
         assert!(aura_import_context(handle, bytes.as_ptr(), bytes.len()));
-    }
-
-    unsafe fn mark_contact_trusted_for_test(handle: *mut c_void, sender_id: &str) {
-        let request = encode_proto(&proto::MarkContactTrustedRequest {
-            sender_id: sender_id.to_string(),
-        });
-        assert!(aura_mark_contact_trusted(
-            handle,
-            request.as_ptr(),
-            request.len()
-        ));
-    }
-
-    unsafe fn get_contacts_by_risk(handle: *mut c_void) -> proto::ContactsByRiskResponse {
-        let mut out = AuraBuffer::empty();
-        assert!(aura_get_contacts_by_risk(handle, &mut out));
-        decode_buffer(out)
-    }
-
-    unsafe fn get_contact_profile(
-        handle: *mut c_void,
-        sender_id: &str,
-    ) -> proto::ContactProfileResponse {
-        let request = proto::ContactProfileRequest {
-            sender_id: sender_id.to_string(),
-        };
-        let bytes = encode_proto(&request);
-        let mut out = AuraBuffer::empty();
-        assert!(aura_get_contact_profile(
-            handle,
-            bytes.as_ptr(),
-            bytes.len(),
-            &mut out,
-        ));
-        decode_buffer(out)
-    }
-
-    unsafe fn get_conversation_summary(handle: *mut c_void) -> proto::ConversationSummaryResponse {
-        let mut out = AuraBuffer::empty();
-        assert!(aura_get_conversation_summary(handle, &mut out));
-        decode_buffer(out)
-    }
-
-    fn temp_fixture_path(name: &str) -> PathBuf {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time after epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "aura_ffi_{name}_{}_{}.json",
-            std::process::id(),
-            nonce
-        ))
-    }
-
-    fn write_temp_patterns_file(name: &str, json: &str) -> PathBuf {
-        let path = temp_fixture_path(name);
-        fs::write(&path, json)
-            .unwrap_or_else(|error| panic!("write temp patterns file {}: {error}", path.display()));
-        path
-    }
-
-    fn fixture_data_path(relative: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../aura-core/data")
-            .join(relative)
-    }
-
-    fn load_ffi_world_fixture(relative: &str) -> FfiWorldFixture {
-        let path = fixture_data_path(relative);
-        let raw = fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("read world fixture {}: {error}", path.display()));
-        serde_json::from_str(&raw)
-            .unwrap_or_else(|error| panic!("parse world fixture {}: {error}", path.display()))
-    }
-
-    fn ffi_config_for_world(world: &FfiWorldFixture) -> proto::AuraConfig {
-        let account_type = match world.config.account_type.as_deref() {
-            Some("adult") => proto::AccountType::Adult,
-            Some("teen") => proto::AccountType::Teen,
-            Some("child") | None => proto::AccountType::Child,
-            Some(other) => panic!("unsupported fixture account_type: {other}"),
-        };
-        let mut config = proto_config(account_type, world.config.enabled.unwrap_or(true));
-        config.protection_level = match world.config.protection_level.as_deref() {
-            Some("off") => proto::ProtectionLevel::Off as i32,
-            Some("low") => proto::ProtectionLevel::Low as i32,
-            Some("medium") => proto::ProtectionLevel::Medium as i32,
-            Some("high") | None => proto::ProtectionLevel::High as i32,
-            Some(other) => panic!("unsupported fixture protection_level: {other}"),
-        };
-        config.language = world
-            .config
-            .language
-            .clone()
-            .unwrap_or_else(|| "uk".to_string());
-        config.cultural_context = Some(proto::CulturalContext {
-            kind: match config.language.as_str() {
-                "uk" => proto::CulturalContextKind::Ukrainian as i32,
-                "ru" => proto::CulturalContextKind::Russian as i32,
-                "en" => proto::CulturalContextKind::English as i32,
-                _ => proto::CulturalContextKind::Custom as i32,
-            },
-            custom_value: (!matches!(config.language.as_str(), "uk" | "ru" | "en"))
-                .then(|| config.language.clone()),
-        });
-        config.account_holder_age = world.config.account_holder_age.or(world.owner.age);
-        config.ttl_days = world.config.ttl_days.unwrap_or(30);
-        config.timezone_offset_minutes = world.config.timezone_offset_minutes.unwrap_or(120);
-        let mut relay_policy = metadata_only_relay_policy();
-        relay_policy.enabled = Some(false);
-        relay_policy.protected_account_id = Some(world.owner.id.clone());
-        config.relay_policy = Some(relay_policy);
-        config
-    }
-
-    fn resolve_ffi_world_events(world: &FfiWorldFixture) -> Vec<FfiResolvedWorldEvent> {
-        let actor_lookup: HashMap<_, _> = world
-            .actors
-            .iter()
-            .map(|actor| (actor.id.as_str(), actor))
-            .collect();
-        let conversation_lookup: HashMap<_, _> = world
-            .conversations
-            .iter()
-            .map(|conversation| (conversation.id.as_str(), conversation))
-            .collect();
-
-        let mut seeds = Vec::new();
-        for event in &world.events {
-            seeds.push(FfiWorldEventSeed {
-                timestamp_ms: timestamp_ms_from_rfc3339(&event.at),
-                sender_id: event.sender_id.clone(),
-                conversation_id: event.conversation_id.clone(),
-                language: event.language.clone(),
-                conversation_type: event.conversation_type.clone(),
-                member_count: event.member_count,
-                sender_relationship: event.sender_relationship.clone(),
-                relationship_trust_source: event.relationship_trust_source.clone(),
-                expectation: ffi_expectation_from_parts(
-                    event.expect_clean,
-                    event.expect_threat.as_deref(),
-                    event.expect_min_action.as_deref(),
-                    event.expect_min_alert.as_deref(),
-                ),
-                text: event.text.clone(),
-            });
-        }
-        for batch in &world.generated_batches {
-            seeds.extend(expand_ffi_generated_batch(batch));
-        }
-
-        let mut resolved = seeds
-            .into_iter()
-            .enumerate()
-            .map(|(index, seed)| {
-                resolve_ffi_world_event(index, seed, world, &actor_lookup, &conversation_lookup)
-            })
-            .collect::<Vec<_>>();
-        resolved.sort_by_key(|event| (event.timestamp_ms, event.source_index));
-        resolved
-    }
-
-    fn expand_ffi_generated_batch(batch: &FfiGeneratedBatch) -> Vec<FfiWorldEventSeed> {
-        assert!(batch.count > 0, "batch {} has zero count", batch.label);
-        assert!(
-            batch.interval_minutes > 0,
-            "batch {} has non-positive interval",
-            batch.label
-        );
-        assert!(
-            batch.day_repeats > 0,
-            "batch {} has zero day_repeats",
-            batch.label
-        );
-        assert!(
-            batch.day_stride_days > 0,
-            "batch {} has non-positive day stride",
-            batch.label
-        );
-        assert!(
-            !batch.sender_ids.is_empty()
-                && !batch.conversation_ids.is_empty()
-                && !batch.texts.is_empty(),
-            "batch {} is missing generated dimensions",
-            batch.label
-        );
-
-        let start = DateTime::parse_from_rfc3339(&batch.start_at)
-            .unwrap_or_else(|error| panic!("batch {} timestamp: {error}", batch.label));
-        let interval = Duration::minutes(batch.interval_minutes);
-        let day_stride = Duration::days(batch.day_stride_days);
-        let mut seeds = Vec::with_capacity(batch.count * batch.day_repeats);
-
-        for day_index in 0..batch.day_repeats {
-            let day_base = start + day_stride * day_index as i32;
-            for event_index in 0..batch.count {
-                let absolute_index = day_index * batch.count + event_index;
-                let at = day_base + interval * event_index as i32;
-                seeds.push(FfiWorldEventSeed {
-                    timestamp_ms: at.with_timezone(&Utc).timestamp_millis() as u64,
-                    sender_id: batch.sender_ids[absolute_index % batch.sender_ids.len()].clone(),
-                    conversation_id: batch.conversation_ids
-                        [absolute_index % batch.conversation_ids.len()]
-                    .clone(),
-                    language: batch.language.clone(),
-                    conversation_type: batch.conversation_type.clone(),
-                    member_count: batch.member_count,
-                    sender_relationship: batch.sender_relationship.clone(),
-                    relationship_trust_source: batch.relationship_trust_source.clone(),
-                    expectation: ffi_expectation_from_parts(
-                        batch.expect_clean,
-                        batch.expect_threat.as_deref(),
-                        batch.expect_min_action.as_deref(),
-                        batch.expect_min_alert.as_deref(),
-                    ),
-                    text: batch.texts[absolute_index % batch.texts.len()].clone(),
-                });
-            }
-        }
-        seeds
-    }
-
-    fn resolve_ffi_world_event(
-        index: usize,
-        seed: FfiWorldEventSeed,
-        world: &FfiWorldFixture,
-        actor_lookup: &HashMap<&str, &FfiWorldActor>,
-        conversation_lookup: &HashMap<&str, &FfiWorldConversation>,
-    ) -> FfiResolvedWorldEvent {
-        let actor = actor_lookup.get(seed.sender_id.as_str()).copied();
-        let conversation = conversation_lookup
-            .get(seed.conversation_id.as_str())
-            .copied();
-        FfiResolvedWorldEvent {
-            source_index: index,
-            timestamp_ms: seed.timestamp_ms,
-            sender_relationship: ffi_sender_relationship(
-                seed.sender_relationship
-                    .as_deref()
-                    .or_else(|| actor.and_then(|actor| actor.sender_relationship.as_deref())),
-            ),
-            relationship_trust_source: ffi_relationship_trust_source(
-                seed.relationship_trust_source
-                    .as_deref()
-                    .or_else(|| actor.and_then(|actor| actor.relationship_trust_source.as_deref())),
-            ),
-            conversation_type: ffi_conversation_type(seed.conversation_type.as_deref().or_else(
-                || conversation.and_then(|conversation| conversation.conversation_type.as_deref()),
-            )),
-            member_count: seed
-                .member_count
-                .or_else(|| conversation.and_then(|conversation| conversation.member_count)),
-            language: seed.language.unwrap_or_else(|| {
-                world
-                    .config
-                    .language
-                    .clone()
-                    .unwrap_or_else(|| "uk".to_string())
-            }),
-            sender_trusted: actor.is_some_and(|actor| actor.trusted),
-            sender_id: seed.sender_id,
-            conversation_id: seed.conversation_id,
-            expectation: seed.expectation,
-            text: seed.text,
-        }
-    }
-
-    fn timestamp_ms_from_rfc3339(value: &str) -> u64 {
-        DateTime::parse_from_rfc3339(value)
-            .unwrap_or_else(|error| panic!("invalid fixture timestamp {value}: {error}"))
-            .with_timezone(&Utc)
-            .timestamp_millis() as u64
-    }
-
-    fn ffi_expectation_from_parts(
-        expect_clean: bool,
-        expect_threat: Option<&str>,
-        expect_min_action: Option<&str>,
-        expect_min_alert: Option<&str>,
-    ) -> Option<FfiWorldExpectation> {
-        let expect_threat = expect_threat.map(ffi_threat_type);
-        let expect_min_action = expect_min_action.map(ffi_action);
-        let expect_min_alert = expect_min_alert.map(ffi_alert_priority);
-        (expect_clean
-            || expect_threat.is_some()
-            || expect_min_action.is_some()
-            || expect_min_alert.is_some())
-        .then_some(FfiWorldExpectation {
-            expect_clean,
-            expect_threat,
-            expect_min_action,
-            expect_min_alert,
-        })
-    }
-
-    fn ffi_conversation_type(value: Option<&str>) -> proto::ConversationType {
-        match value {
-            Some("group") => proto::ConversationType::Group,
-            Some("direct") | None => proto::ConversationType::Direct,
-            Some(other) => panic!("unsupported fixture conversation_type: {other}"),
-        }
-    }
-
-    fn ffi_sender_relationship(value: Option<&str>) -> proto::SenderRelationship {
-        match value {
-            Some("parent") => proto::SenderRelationship::Parent,
-            Some("guardian") => proto::SenderRelationship::Guardian,
-            Some("family") => proto::SenderRelationship::Family,
-            Some("sibling") => proto::SenderRelationship::Sibling,
-            Some("peer") => proto::SenderRelationship::Peer,
-            Some("teacher") => proto::SenderRelationship::Teacher,
-            Some("coach") => proto::SenderRelationship::Coach,
-            Some("authority") => proto::SenderRelationship::Authority,
-            Some("service") => proto::SenderRelationship::Service,
-            Some("unknown_adult") => proto::SenderRelationship::UnknownAdult,
-            Some("unknown_peer") => proto::SenderRelationship::UnknownPeer,
-            Some("unknown") | None => proto::SenderRelationship::Unknown,
-            Some(other) => panic!("unsupported fixture sender_relationship: {other}"),
-        }
-    }
-
-    fn ffi_relationship_trust_source(value: Option<&str>) -> proto::RelationshipTrustSource {
-        match value {
-            Some("user_verified") => proto::RelationshipTrustSource::UserVerified,
-            Some("guardian_verified") => proto::RelationshipTrustSource::GuardianVerified,
-            Some("platform_verified") => proto::RelationshipTrustSource::PlatformVerified,
-            Some("address_book") => proto::RelationshipTrustSource::AddressBook,
-            Some("school_directory") => proto::RelationshipTrustSource::SchoolDirectory,
-            Some("server_reputation") => proto::RelationshipTrustSource::ServerReputation,
-            Some("local_heuristic") => proto::RelationshipTrustSource::LocalHeuristic,
-            Some("self_declared") => proto::RelationshipTrustSource::SelfDeclared,
-            Some("unknown") | None => proto::RelationshipTrustSource::Unknown,
-            Some(other) => panic!("unsupported fixture relationship_trust_source: {other}"),
-        }
-    }
-
-    fn ffi_threat_type(value: &str) -> proto::ThreatType {
-        match value {
-            "bullying" => proto::ThreatType::Bullying,
-            "grooming" => proto::ThreatType::Grooming,
-            "explicit" => proto::ThreatType::Explicit,
-            "threat" => proto::ThreatType::Threat,
-            "self_harm" => proto::ThreatType::SelfHarm,
-            "spam" => proto::ThreatType::Spam,
-            "scam" => proto::ThreatType::Scam,
-            "phishing" => proto::ThreatType::Phishing,
-            "manipulation" => proto::ThreatType::Manipulation,
-            "nsfw" => proto::ThreatType::Nsfw,
-            "hate_speech" => proto::ThreatType::HateSpeech,
-            "doxxing" => proto::ThreatType::Doxxing,
-            "pii_leakage" => proto::ThreatType::PiiLeakage,
-            "propaganda" => proto::ThreatType::Propaganda,
-            "opsec_violation" => proto::ThreatType::OpsecViolation,
-            "psyops" => proto::ThreatType::Psyops,
-            "military_social_eng" => proto::ThreatType::MilitarySocialEng,
-            "coordinate_leak" => proto::ThreatType::CoordinateLeak,
-            other => panic!("unsupported fixture threat_type: {other}"),
-        }
-    }
-
-    fn ffi_action(value: &str) -> proto::Action {
-        match value {
-            "allow" => proto::Action::Allow,
-            "mark" => proto::Action::Mark,
-            "blur" => proto::Action::Blur,
-            "warn" => proto::Action::Warn,
-            "block" => proto::Action::Block,
-            other => panic!("unsupported fixture action: {other}"),
-        }
-    }
-
-    fn ffi_alert_priority(value: &str) -> proto::AlertPriority {
-        match value {
-            "none" => proto::AlertPriority::None,
-            "low" => proto::AlertPriority::Low,
-            "medium" => proto::AlertPriority::Medium,
-            "high" => proto::AlertPriority::High,
-            "urgent" => proto::AlertPriority::Urgent,
-            other => panic!("unsupported fixture alert: {other}"),
-        }
-    }
-
-    unsafe fn run_ffi_world_replay(relative_fixture_path: &str) -> FfiWorldReplayReport {
-        run_ffi_world_replay_with_restore_interval(relative_fixture_path, None)
-    }
-
-    unsafe fn run_ffi_world_replay_with_restore_interval(
-        relative_fixture_path: &str,
-        restore_interval: Option<usize>,
-    ) -> FfiWorldReplayReport {
-        if let Some(interval) = restore_interval {
-            assert!(interval > 0, "restore interval must be positive");
-        }
-
-        let world = load_ffi_world_fixture(relative_fixture_path);
-        let events = resolve_ffi_world_events(&world);
-        let config = ffi_config_for_world(&world);
-        let mut handle = init_handle(config.clone());
-        assert!(!handle.is_null(), "failed to initialize FFI world replay");
-
-        let mut report = FfiWorldReplayReport {
-            total_events: events.len(),
-            labeled_positive_events: 0,
-            labeled_clean_events: 0,
-            true_positive_events: 0,
-            false_positive_events: 0,
-            restore_count: 0,
-            findings: Vec::new(),
-        };
-
-        for (sequence, event) in events.iter().enumerate() {
-            let mut message = proto_message(&event.text, &event.sender_id, &event.conversation_id);
-            message.language = Some(event.language.clone());
-            message.conversation_type = event.conversation_type as i32;
-            message.member_count = event.member_count;
-            message.sender_relationship = event.sender_relationship as i32;
-            message.relationship_trust_source = event.relationship_trust_source as i32;
-
-            let result = analyze_context_result(handle, message, event.timestamp_ms);
-            if event.sender_trusted {
-                mark_contact_trusted_for_test(handle, &event.sender_id);
-            }
-            evaluate_ffi_world_expectation(&world, event, &result, sequence + 1, &mut report);
-
-            if restore_interval.is_some_and(|interval| {
-                (sequence + 1) % interval == 0 && sequence + 1 < events.len()
-            }) {
-                handle = restart_ffi_world_handle(&config, handle);
-                report.restore_count += 1;
-            }
-        }
-
-        aura_free(handle);
-        report
-    }
-
-    unsafe fn restart_ffi_world_handle(
-        config: &proto::AuraConfig,
-        handle: *mut c_void,
-    ) -> *mut c_void {
-        let state = export_context(handle)
-            .state
-            .expect("FFI replay restore requires exported context state");
-        aura_free(handle);
-
-        let restored = init_handle(config.clone());
-        assert!(
-            !restored.is_null(),
-            "failed to initialize restored FFI handle"
-        );
-        import_context_state(restored, state);
-        restored
-    }
-
-    fn evaluate_ffi_world_expectation(
-        world: &FfiWorldFixture,
-        event: &FfiResolvedWorldEvent,
-        result: &proto::AnalysisResult,
-        sequence: usize,
-        report: &mut FfiWorldReplayReport,
-    ) {
-        if let Some(expectation) = &event.expectation {
-            if expectation.expect_clean {
-                report.labeled_clean_events += 1;
-                if ffi_clean_expectation_violated(result) {
-                    report.false_positive_events += 1;
-                    report.findings.push(format!(
-                        "{}#{sequence}: expected clean allow, got threat={} action={}",
-                        world.label, result.threat_type, result.action
-                    ));
-                }
-            }
-
-            if let Some(expected_threat) = expectation.expect_threat {
-                report.labeled_positive_events += 1;
-                if ffi_result_contains_threat(result, expected_threat) {
-                    report.true_positive_events += 1;
-                } else {
-                    report.findings.push(format!(
-                        "{}#{sequence}: expected threat {:?}, got threat={} detected={:?}",
-                        world.label,
-                        expected_threat,
-                        result.threat_type,
-                        result
-                            .detected_threats
-                            .iter()
-                            .map(|threat| threat.threat_type)
-                            .collect::<Vec<_>>()
-                    ));
-                }
-            }
-
-            if let Some(expected_action) = expectation.expect_min_action {
-                if result.action < expected_action as i32 {
-                    report.findings.push(format!(
-                        "{}#{sequence}: expected action >= {:?}, got {}",
-                        world.label, expected_action, result.action
-                    ));
-                }
-            }
-
-            if let Some(expected_alert) = expectation.expect_min_alert {
-                let actual_alert = result
-                    .recommended_action
-                    .as_ref()
-                    .map(|recommendation| recommendation.parent_alert)
-                    .unwrap_or(proto::AlertPriority::None as i32);
-                if actual_alert < expected_alert as i32 {
-                    report.findings.push(format!(
-                        "{}#{sequence}: expected alert >= {:?}, got {}",
-                        world.label, expected_alert, actual_alert
-                    ));
-                }
-            }
-        }
-
-        if event.sender_id == world.owner.id
-            && result
-                .reason_codes
-                .iter()
-                .any(|code| code.starts_with("conversation.contact."))
-        {
-            report.findings.push(format!(
-                "{}#{sequence}: owner-authored message triggered contact-risk reason code",
-                world.label
-            ));
-        }
-        if event.sender_id == world.owner.id
-            && result
-                .reason_codes
-                .iter()
-                .any(|code| code == "conversation.timing.late_night_minor_contact")
-        {
-            report.findings.push(format!(
-                "{}#{sequence}: owner-authored message triggered late-night contact reason code",
-                world.label
-            ));
-        }
-    }
-
-    fn ffi_clean_expectation_violated(result: &proto::AnalysisResult) -> bool {
-        let threat_type =
-            proto::ThreatType::try_from(result.threat_type).unwrap_or(proto::ThreatType::None);
-        let action = proto::Action::try_from(result.action).unwrap_or(proto::Action::Allow);
-        !matches!(
-            threat_type,
-            proto::ThreatType::None | proto::ThreatType::Unspecified
-        ) || action != proto::Action::Allow
-    }
-
-    fn ffi_result_contains_threat(
-        result: &proto::AnalysisResult,
-        expected: proto::ThreatType,
-    ) -> bool {
-        result.threat_type == expected as i32
-            || result
-                .detected_threats
-                .iter()
-                .any(|threat| threat.threat_type == expected as i32)
-    }
-
-    fn empty_ruleset_patterns_json() -> &'static str {
-        r#"{"version":"test-empty","updated_at":"2026-03-13","rules":[]}"#
-    }
-
-    fn custom_keyword_patterns_json(keyword: &str) -> String {
-        format!(
-            r#"{{
-  "version":"test-custom",
-  "updated_at":"2026-03-13",
-  "rules":[
-    {{
-      "id":"custom_threat_rule",
-      "threat_type":"threat",
-      "kind":{{"type":"keyword","words":["{keyword}"]}},
-      "score":0.95,
-      "languages":["en"],
-      "explanation":"custom threat fixture"
-    }}
-  ]
-}}"#
-        )
-    }
-
-    fn invalid_regex_patterns_json() -> &'static str {
-        r#"{
-  "version":"test-invalid-regex",
-  "updated_at":"2026-03-15",
-  "rules":[
-    {
-      "id":"broken_regex_rule",
-      "threat_type":"threat",
-      "kind":{"type":"regex","pattern":"(unclosed"},
-      "score":0.95,
-      "languages":["en"],
-      "explanation":"broken regex fixture"
-    }
-  ]
-}"#
-    }
-
-    fn has_pattern_signal(result: &proto::AnalysisResult) -> bool {
-        result.signals.iter().any(|signal| {
-            signal.layer == proto::DetectionLayer::PatternMatching as i32 && signal.score > 0.0
-        })
-    }
-
-    fn truncate_proto(bytes: &[u8]) -> Vec<u8> {
-        assert!(bytes.len() > 1, "fixture bytes must be truncatable");
-        bytes[..bytes.len() - 1].to_vec()
     }
 
     fn oversized_request_bytes(limit: usize) -> Vec<u8> {
@@ -5873,299 +3481,6 @@ mod tests {
         let err_str = CStr::from_ptr(err).to_str().unwrap().to_string();
         aura_free_string(err);
         err_str
-    }
-
-    #[test]
-    fn init_and_analyze_clean_message() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            assert!(!handle.is_null());
-
-            let result = analyze_result(
-                handle,
-                proto_message("Hey, how are you doing?", "user_1", "conv_1"),
-            );
-            assert_eq!(
-                proto::Action::try_from(result.action).unwrap(),
-                proto::Action::Allow
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn init_and_analyze_threat() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            assert!(!handle.is_null());
-
-            let result =
-                analyze_result(handle, proto_message("I will kill you", "user_1", "conv_1"));
-            assert_eq!(
-                proto::ThreatType::try_from(result.threat_type).unwrap(),
-                proto::ThreatType::Threat
-            );
-            assert_ne!(
-                proto::Action::try_from(result.action).unwrap(),
-                proto::Action::Allow
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn analyze_context_builds_history() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            assert!(!handle.is_null());
-
-            let _ = analyze_context_result(
-                handle,
-                proto_message(
-                    "You're so beautiful and amazing and perfect!",
-                    "stranger",
-                    "conv_1",
-                ),
-                1000,
-            );
-
-            let result = analyze_context_result(
-                handle,
-                proto_message(
-                    "Don't tell your parents about us, ok?",
-                    "stranger",
-                    "conv_1",
-                ),
-                2000,
-            );
-
-            assert_eq!(
-                proto::ThreatType::try_from(result.threat_type).unwrap(),
-                proto::ThreatType::Grooming
-            );
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn analysis_result_includes_inference_summary_over_ffi() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            config.product_rollout_mode = proto::ProductRolloutMode::GuardianEnabled as i32;
-            let handle = init_handle(config);
-            assert!(!handle.is_null());
-
-            let _ = analyze_context_result(
-                handle,
-                proto_message(
-                    "I don't want to live anymore. I want to end it all.",
-                    "user_1",
-                    "conv_sh_1",
-                ),
-                1000,
-            );
-            let result = analyze_context_result(
-                handle,
-                proto_message("Goodbye everyone. This is the end.", "user_1", "conv_sh_1"),
-                2000,
-            );
-
-            let inference = result.inference.expect("missing inference summary");
-            assert!(
-                matches!(
-                    proto::RiskHorizon::try_from(inference.risk_horizon).unwrap(),
-                    proto::RiskHorizon::Immediate
-                        | proto::RiskHorizon::ShortTerm
-                        | proto::RiskHorizon::Unknown
-                ),
-                "unexpected risk horizon over FFI: {:?}",
-                proto::RiskHorizon::try_from(inference.risk_horizon).unwrap()
-            );
-            assert!(
-                !inference.latent_states.is_empty() || inference.escalation_likelihood_24h >= 0.0,
-                "expected inference payload to carry latent states or escalation signal"
-            );
-
-            let product_surface = result
-                .product_surface
-                .expect("missing product decision surface");
-            assert_eq!(
-                proto::ProductRolloutMode::try_from(product_surface.rollout_mode).unwrap(),
-                proto::ProductRolloutMode::GuardianEnabled
-            );
-            assert_eq!(
-                proto::ProductDeliveryMode::try_from(
-                    product_surface
-                        .child
-                        .as_ref()
-                        .expect("child surface")
-                        .delivery_mode
-                )
-                .unwrap(),
-                proto::ProductDeliveryMode::MirrorOnly
-            );
-            assert!(
-                matches!(
-                    proto::ProductUncertaintyDisposition::try_from(
-                        product_surface.uncertainty_disposition
-                    )
-                    .unwrap(),
-                    proto::ProductUncertaintyDisposition::GuardianPriority
-                        | proto::ProductUncertaintyDisposition::RequireReview
-                ),
-                "unexpected uncertainty disposition: {:?}",
-                proto::ProductUncertaintyDisposition::try_from(
-                    product_surface.uncertainty_disposition
-                )
-                .unwrap()
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn unspecified_rollout_fails_safe_to_shadow_over_ffi() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let result = analyze_result(
-                handle,
-                proto_message("ordinary message", "user_1", "conv_1"),
-            );
-            let rollout_mode = result
-                .product_surface
-                .map(|surface| surface.rollout_mode)
-                .and_then(|value| proto::ProductRolloutMode::try_from(value).ok());
-
-            assert_eq!(rollout_mode, Some(proto::ProductRolloutMode::Shadow));
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn runtime_capabilities_report_actual_fallback_and_text_url_only() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let capabilities = runtime_capabilities(handle);
-            let modalities = capabilities
-                .supported_modalities
-                .iter()
-                .filter_map(|value| proto::RuntimeModality::try_from(*value).ok())
-                .collect::<Vec<_>>();
-
-            assert_eq!(
-                (
-                    proto::RuntimeBackend::try_from(capabilities.backend).ok(),
-                    capabilities.models,
-                    modalities,
-                    proto::ProductRolloutMode::try_from(capabilities.product_rollout_mode).ok(),
-                ),
-                (
-                    Some(proto::RuntimeBackend::RulesFallback),
-                    Vec::new(),
-                    vec![proto::RuntimeModality::Text, proto::RuntimeModality::Url],
-                    Some(proto::ProductRolloutMode::Shadow),
-                )
-            );
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn build_shadow_bundle_over_ffi_returns_proto_bundle() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            assert!(!handle.is_null());
-
-            let request = proto::BuildShadowModeBundleRequest {
-                source_kind: "ios_shadow".to_string(),
-                source_label: "pilot-smoke".to_string(),
-                source_input: "swift-replay".to_string(),
-                owner_id: "owner_olena".to_string(),
-                items: vec![
-                    proto::ShadowModeAnalyzeItem {
-                        request_id: "shadow_req_1".to_string(),
-                        request: Some(proto::AnalyzeContextRequest {
-                            message: Some(proto_message(
-                                "You're so special and beautiful. I can buy you anything.",
-                                "stranger_1",
-                                "conv_shadow_1",
-                            )),
-                            timestamp_ms: 1_000,
-                        }),
-                        expectation: None,
-                    },
-                    proto::ShadowModeAnalyzeItem {
-                        request_id: "shadow_req_2".to_string(),
-                        request: Some(proto::AnalyzeContextRequest {
-                            message: Some(proto_message(
-                                "Don't tell your parents about us. Let's move to Telegram.",
-                                "stranger_1",
-                                "conv_shadow_1",
-                            )),
-                            timestamp_ms: 2_000,
-                        }),
-                        expectation: Some(proto::ShadowModeExpectation {
-                            expect_threat: proto::ThreatType::Grooming as i32,
-                            expect_min_action: proto::Action::Warn as i32,
-                            expect_min_alert: proto::AlertPriority::High as i32,
-                        }),
-                    },
-                ],
-            };
-
-            let bundle = build_shadow_bundle(handle, request);
-            assert_eq!(bundle.summary.as_ref().expect("summary").total_events, 2);
-            assert_eq!(bundle.summary.as_ref().expect("summary").finding_count, 0);
-            assert_eq!(bundle.events.len(), 2);
-            assert_ne!(
-                bundle.owner_token.as_ref().expect("owner token").token,
-                "owner_olena"
-            );
-            assert_eq!(
-                proto::ThreatType::try_from(
-                    bundle.events[1]
-                        .decision
-                        .as_ref()
-                        .expect("decision")
-                        .threat_type
-                )
-                .unwrap(),
-                proto::ThreatType::Grooming
-            );
-            assert!(
-                bundle.events[1]
-                    .audit_record
-                    .as_ref()
-                    .and_then(|record| record.sender_token.as_ref())
-                    .is_some(),
-                "expected tokenized sender in audit record"
-            );
-            let product_surface = bundle.events[1]
-                .decision
-                .as_ref()
-                .and_then(|decision| decision.product_surface.as_ref())
-                .expect("missing shadow product surface");
-            assert_eq!(
-                proto::ProductRolloutMode::try_from(product_surface.rollout_mode).unwrap(),
-                proto::ProductRolloutMode::Shadow
-            );
-            assert_eq!(
-                proto::ProductDeliveryMode::try_from(
-                    product_surface
-                        .child
-                        .as_ref()
-                        .expect("child surface")
-                        .delivery_mode
-                )
-                .unwrap(),
-                proto::ProductDeliveryMode::MirrorOnly
-            );
-
-            aura_free(handle);
-        }
     }
 
     #[test]
@@ -6227,17 +3542,17 @@ mod tests {
     }
 
     #[test]
-    fn legacy_kids_memory_without_activity_indices_uses_monotonic_fallbacks() {
-        let legacy = proto::KidsMemoryState {
+    fn kids_memory_rejects_noncurrent_schema_and_missing_activity_indices() {
+        let noncurrent = proto::KidsMemoryState {
             conversations: vec![proto::KidsConversationMemoryState {
-                conversation_id: "legacy_conv".to_string(),
+                conversation_id: "conv".to_string(),
                 entries: Vec::new(),
                 message_index: 41,
                 last_activity_index: None,
                 last_emitted: Vec::new(),
             }],
             senders: vec![proto::KidsSenderMemoryState {
-                sender_id: "legacy_sender".to_string(),
+                sender_id: "sender".to_string(),
                 event_index: 42,
                 recent_high_risk_conversations: Vec::new(),
                 last_activity_index: None,
@@ -6246,433 +3561,17 @@ mod tests {
             schema_version: 0,
         };
 
-        let restored = kids_memory_state_from_proto(&legacy).expect("legacy kids state");
+        assert!(kids_memory_state_from_proto(&noncurrent).is_err());
 
-        assert_eq!(
-            (
-                restored.conversations[0].last_activity_index,
-                restored.senders[0].last_activity_index,
-            ),
-            (41, 42)
-        );
-    }
+        let mut missing_conversation_index = noncurrent.clone();
+        missing_conversation_index.schema_version = KIDS_MEMORY_STATE_VERSION;
+        missing_conversation_index.senders[0].last_activity_index = Some(42);
+        assert!(kids_memory_state_from_proto(&missing_conversation_index).is_err());
 
-    #[test]
-    fn context_export_import_via_ffi() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                handle,
-                proto_message(
-                    "our little secret. don't tell your parents.",
-                    "stranger",
-                    "conv_1",
-                ),
-                1000,
-            );
-
-            let exported = export_context(handle);
-            let state = exported.state.expect("missing state");
-            assert!(
-                state.kids_memory.is_some(),
-                "expected exported protobuf state to include instance-owned kids memory"
-            );
-            assert!(
-                state
-                    .timelines
-                    .iter()
-                    .any(|timeline| timeline.conversation_id == "conv_1"),
-                "expected exported protobuf state to include conv_1"
-            );
-            let exported_profile = state
-                .contact_profiler
-                .as_ref()
-                .and_then(|profiler| {
-                    profiler
-                        .profiles
-                        .iter()
-                        .find(|profile| profile.sender_id == "stranger")
-                })
-                .expect("missing exported stranger profile");
-            let exported_child_safety = exported_profile
-                .child_safety
-                .as_ref()
-                .expect("missing exported child safety trajectory");
-            let exported_grooming_count = exported_child_safety.grooming_event_count;
-            assert!(
-                exported_grooming_count > 0,
-                "expected exported child safety trajectory to preserve grooming memory"
-            );
-
-            let handle2 = init_handle(proto_config(proto::AccountType::Child, true));
-            let request = proto::ImportContextRequest { state: Some(state) };
-            let request = encode_proto(&request);
-            assert!(aura_import_context(
-                handle2,
-                request.as_ptr(),
-                request.len()
-            ));
-
-            let imported = get_contact_profile(handle2, "stranger");
-            assert!(imported.found);
-            let post_import = analyze_context_result(
-                handle2,
-                proto_message(
-                    "you can only trust me. do it now or i post everything.",
-                    "stranger",
-                    "conv_1",
-                ),
-                1001,
-            );
-            assert!(
-                post_import
-                    .reason_codes
-                    .iter()
-                    .any(|code| code == "domain.kids.memory.grooming_progression"),
-                "expected imported kids memory to affect FFI analysis, got {:?}",
-                post_import.reason_codes
-            );
-            let reexported = export_context(handle2)
-                .state
-                .expect("missing reexported state");
-            let reexported_child_safety = reexported
-                .contact_profiler
-                .as_ref()
-                .and_then(|profiler| {
-                    profiler
-                        .profiles
-                        .iter()
-                        .find(|profile| profile.sender_id == "stranger")
-                })
-                .and_then(|profile| profile.child_safety.as_ref())
-                .expect("missing reexported child safety trajectory");
-            assert!(
-                reexported_child_safety.grooming_event_count >= exported_grooming_count,
-                "reexported grooming count should preserve imported state and may grow after follow-up analysis"
-            );
-
-            aura_free(handle);
-            aura_free(handle2);
-        }
-    }
-
-    #[test]
-    fn repeated_import_of_same_state_is_idempotent() {
-        unsafe {
-            let source = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                source,
-                proto_message("don't tell your parents", "stranger", "conv_1"),
-                1000,
-            );
-            let exported = export_context(source)
-                .state
-                .expect("missing exported state");
-
-            let replica = init_handle(proto_config(proto::AccountType::Child, true));
-            for _ in 0..25 {
-                import_context_state(replica, exported.clone());
-            }
-
-            let summary = get_conversation_summary(replica);
-            assert_eq!(summary.total_conversations, 1);
-            assert_eq!(summary.conversations.len(), 1);
-            assert_eq!(summary.conversations[0].conversation_id, "conv_1");
-            assert!(
-                summary.conversations[0].total_events >= 2,
-                "expected at least 2 events, got {}",
-                summary.conversations[0].total_events,
-            );
-
-            let expected_events = summary.conversations[0].total_events;
-            let profile = get_contact_profile(replica, "stranger");
-            assert!(profile.found);
-            let profile = profile.profile.expect("missing contact profile");
-            assert_eq!(profile.total_messages, expected_events);
-
-            aura_free(source);
-            aura_free(replica);
-        }
-    }
-
-    #[test]
-    fn repeated_export_import_roundtrips_preserve_growth() {
-        unsafe {
-            let handle_a = init_handle(proto_config(proto::AccountType::Child, true));
-            let handle_b = init_handle(proto_config(proto::AccountType::Child, true));
-
-            let timeline = [
-                ("Hey, you seem really cool", 1000_u64),
-                ("don't tell your parents about us", 2000),
-                ("you're beautiful and amazing", 3000),
-                ("send me a pic, just for me", 4000),
-                ("why are you ignoring me, answer now", 5000),
-                ("keep this secret between us", 6000),
-            ];
-
-            for (index, (text, timestamp_ms)) in timeline.iter().enumerate() {
-                let active = if index % 2 == 0 { handle_a } else { handle_b };
-                let standby = if index % 2 == 0 { handle_b } else { handle_a };
-
-                let _ = analyze_context_result(
-                    active,
-                    proto_message(text, "stranger", "conv_sync"),
-                    *timestamp_ms,
-                );
-                let state = export_context(active)
-                    .state
-                    .expect("missing exported state");
-                import_context_state(standby, state);
-            }
-
-            let final_state = export_context(handle_a).state.expect("missing final state");
-            import_context_state(handle_b, final_state);
-
-            let summary_a = get_conversation_summary(handle_a);
-            let summary_b = get_conversation_summary(handle_b);
-            assert_eq!(summary_a.total_conversations, 1);
-            assert_eq!(summary_b.total_conversations, 1);
-            assert_eq!(summary_a.conversations[0].conversation_id, "conv_sync");
-            assert_eq!(summary_b.conversations[0].conversation_id, "conv_sync");
-            assert!(summary_a.conversations[0].total_events >= timeline.len() as u64);
-            assert!(summary_b.conversations[0].total_events >= timeline.len() as u64);
-            let event_delta = summary_a.conversations[0]
-                .total_events
-                .abs_diff(summary_b.conversations[0].total_events);
-            assert!(
-                event_delta <= 1,
-                "replicas diverged too much: {event_delta}"
-            );
-            assert_eq!(summary_a.conversations[0].latest_event_ms, 6000);
-            assert_eq!(summary_b.conversations[0].latest_event_ms, 6000);
-
-            let profile_a = get_contact_profile(handle_a, "stranger");
-            let profile_b = get_contact_profile(handle_b, "stranger");
-            assert!(profile_a.found);
-            assert!(profile_b.found);
-            let profile_a_messages = profile_a
-                .profile
-                .as_ref()
-                .expect("profile a")
-                .total_messages;
-            let profile_b_messages = profile_b
-                .profile
-                .as_ref()
-                .expect("profile b")
-                .total_messages;
-            assert!(profile_a_messages >= timeline.len() as u64);
-            assert!(profile_b_messages >= timeline.len() as u64);
-            assert!(
-                profile_a_messages.abs_diff(profile_b_messages) <= 1,
-                "profile replicas diverged too much: {profile_a_messages} vs {profile_b_messages}"
-            );
-
-            aura_free(handle_a);
-            aura_free(handle_b);
-        }
-    }
-
-    #[test]
-    #[ignore = "long fixture replay; run via ci/ffi_world_replay_gate.sh"]
-    fn ffi_replays_six_month_world_fixture() {
-        unsafe {
-            let report = run_ffi_world_replay("world_sim_13yo_6mo.json");
-            assert!(
-                report.total_events >= 400,
-                "six-month FFI replay unexpectedly small: {:?}",
-                report
-            );
-            assert!(
-                report.positive_recall() >= 0.95,
-                "six-month FFI replay recall below gate: {:?}",
-                report
-            );
-            assert!(
-                report.clean_false_positive_rate() <= 0.01,
-                "six-month FFI replay clean FP above gate: {:?}",
-                report
-            );
-            assert!(
-                report.findings.is_empty(),
-                "six-month FFI replay findings: {:#?}",
-                report.findings
-            );
-        }
-    }
-
-    #[test]
-    #[ignore = "long fixture replay; run via ci/ffi_world_replay_gate.sh"]
-    fn ffi_replays_dense_two_year_world_fixture() {
-        unsafe {
-            let report = run_ffi_world_replay("world_lifecycle_suite/sofia_13_to_15_dense_2y.json");
-            assert!(
-                report.total_events >= 6000,
-                "dense two-year FFI replay unexpectedly small: {:?}",
-                report
-            );
-            assert!(
-                report.positive_recall() >= 0.95,
-                "dense two-year FFI replay recall below gate: {:?}",
-                report
-            );
-            assert!(
-                report.clean_false_positive_rate() <= 0.01,
-                "dense two-year FFI replay clean FP above gate: {:?}",
-                report
-            );
-            assert!(
-                report.findings.is_empty(),
-                "dense two-year FFI replay findings: {:#?}",
-                report.findings
-            );
-        }
-    }
-
-    #[test]
-    #[ignore = "long client-boundary fixture replay; run via ci/client_boundary_replay_gate.sh"]
-    fn ffi_replays_six_month_world_across_periodic_state_restore() {
-        unsafe {
-            let report =
-                run_ffi_world_replay_with_restore_interval("world_sim_13yo_6mo.json", Some(50));
-            assert!(
-                report.total_events >= 400,
-                "six-month client-boundary replay unexpectedly small: {:?}",
-                report
-            );
-            assert!(
-                report.restore_count >= 8,
-                "six-month client-boundary replay did not restore often enough: {:?}",
-                report
-            );
-            assert!(
-                report.positive_recall() >= 0.95,
-                "six-month client-boundary replay recall below gate: {:?}",
-                report
-            );
-            assert!(
-                report.clean_false_positive_rate() <= 0.01,
-                "six-month client-boundary replay clean FP above gate: {:?}",
-                report
-            );
-            assert!(
-                report.findings.is_empty(),
-                "six-month client-boundary replay findings: {:#?}",
-                report.findings
-            );
-        }
-    }
-
-    #[test]
-    #[ignore = "long client-boundary fixture replay; run via ci/client_boundary_replay_gate.sh"]
-    fn ffi_replays_dense_two_year_world_across_periodic_state_restore() {
-        unsafe {
-            let report = run_ffi_world_replay_with_restore_interval(
-                "world_lifecycle_suite/sofia_13_to_15_dense_2y.json",
-                Some(500),
-            );
-            assert!(
-                report.total_events >= 6000,
-                "dense two-year client-boundary replay unexpectedly small: {:?}",
-                report
-            );
-            assert!(
-                report.restore_count >= 13,
-                "dense two-year client-boundary replay did not restore often enough: {:?}",
-                report
-            );
-            assert!(
-                report.positive_recall() >= 0.95,
-                "dense two-year client-boundary replay recall below gate: {:?}",
-                report
-            );
-            assert!(
-                report.clean_false_positive_rate() <= 0.01,
-                "dense two-year client-boundary replay clean FP above gate: {:?}",
-                report
-            );
-            assert!(
-                report.findings.is_empty(),
-                "dense two-year client-boundary replay findings: {:#?}",
-                report.findings
-            );
-        }
-    }
-
-    #[test]
-    fn contacts_and_profile_are_available_over_proto() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-
-            let _ = analyze_context_result(
-                handle,
-                proto_message(
-                    "You're so beautiful and amazing, truly special",
-                    "stranger_1",
-                    "conv_1",
-                ),
-                1000,
-            );
-            let _ = analyze_context_result(
-                handle,
-                proto_message("Hey, want to play Minecraft?", "friend_1", "conv_2"),
-                2000,
-            );
-
-            let contacts = get_contacts_by_risk(handle);
-            assert_eq!(contacts.contacts.len(), 2);
-            assert!(contacts
-                .contacts
-                .iter()
-                .any(|c| c.sender_id == "stranger_1"));
-
-            let profile = get_contact_profile(handle, "stranger_1");
-            assert!(profile.found);
-            let profile = profile.profile.unwrap();
-            assert!(profile.rating > 0.0);
-            assert!(profile.trust_level >= 0.0);
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn update_config_disables_aura() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            assert!(!handle.is_null());
-
-            let updated = encode_proto(&proto_config(proto::AccountType::Adult, false));
-            assert!(aura_update_config(handle, updated.as_ptr(), updated.len()));
-
-            let result =
-                analyze_result(handle, proto_message("I will kill you", "user_1", "conv_1"));
-            assert_eq!(
-                proto::Action::try_from(result.action).unwrap(),
-                proto::Action::Allow
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn null_handle_sets_last_error() {
-        unsafe {
-            let message = encode_proto(&proto_message("test", "u1", "c1"));
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_analyze(
-                std::ptr::null_mut(),
-                message.as_ptr(),
-                message.len(),
-                &mut out,
-            ));
-
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let err_str = CStr::from_ptr(err).to_str().unwrap();
-            assert!(err_str.contains("null handle"), "Got: {err_str}");
-            aura_free_string(err);
-        }
+        let mut missing_sender_index = missing_conversation_index;
+        missing_sender_index.conversations[0].last_activity_index = Some(41);
+        missing_sender_index.senders[0].last_activity_index = None;
+        assert!(kids_memory_state_from_proto(&missing_sender_index).is_err());
     }
 
     #[test]
@@ -6681,355 +3580,6 @@ mod tests {
             let version = aura_version();
             let version = CStr::from_ptr(version).to_str().unwrap();
             assert_eq!(version, env!("CARGO_PKG_VERSION"));
-        }
-    }
-
-    #[test]
-    fn cleanup_context_works() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ =
-                analyze_context_result(handle, proto_message("hello", "friend", "conv_1"), 1000);
-            assert!(aura_cleanup_context(handle, u64::MAX));
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn batch_analysis_multiple_messages() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let results = batch_results(
-                handle,
-                vec![
-                    proto::BatchAnalyzeItem {
-                        message: Some(proto_message("Hello friend!", "u1", "c1")),
-                        timestamp_ms: Some(1000),
-                    },
-                    proto::BatchAnalyzeItem {
-                        message: Some(proto_message("I will kill you", "u2", "c1")),
-                        timestamp_ms: Some(2000),
-                    },
-                    proto::BatchAnalyzeItem {
-                        message: Some(proto_message("Nice weather today", "u3", "c2")),
-                        timestamp_ms: Some(3000),
-                    },
-                ],
-            );
-
-            assert_eq!(results.results.len(), 3);
-            assert_eq!(
-                proto::Action::try_from(results.results[0].action).unwrap(),
-                proto::Action::Allow
-            );
-            assert_ne!(
-                proto::Action::try_from(results.results[1].action).unwrap(),
-                proto::Action::Allow
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn batch_size_limit_enforced() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let request = proto::BatchAnalyzeRequest {
-                items: (0..1001)
-                    .map(|i| proto::BatchAnalyzeItem {
-                        message: Some(proto_message("hello", "user", &format!("conv_{i}"))),
-                        timestamp_ms: None,
-                    })
-                    .collect(),
-            };
-            let request = encode_proto(&request);
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_analyze_batch(
-                handle,
-                request.as_ptr(),
-                request.len(),
-                &mut out,
-            ));
-
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let err_str = CStr::from_ptr(err).to_str().unwrap();
-            assert!(err_str.contains("exceeds limit"), "Got: {err_str}");
-            aura_free_string(err);
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn analyze_context_missing_message_sets_last_error_and_preserves_state() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                handle,
-                proto_message("don't tell your parents", "stranger", "conv_1"),
-                1000,
-            );
-
-            let request = proto::AnalyzeContextRequest {
-                message: None,
-                timestamp_ms: 2000,
-            };
-            let bytes = encode_proto(&request);
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_analyze_context(
-                handle,
-                bytes.as_ptr(),
-                bytes.len(),
-                &mut out,
-            ));
-            assert!(out.ptr.is_null());
-
-            let err_str = last_error_string();
-            assert!(
-                err_str.contains("missing message in analyze_context request"),
-                "Got: {err_str}"
-            );
-
-            let profile = get_contact_profile(handle, "stranger");
-            assert!(profile.found, "existing context should remain intact");
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn batch_missing_message_is_atomic_and_preserves_state() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let request = proto::BatchAnalyzeRequest {
-                items: vec![
-                    proto::BatchAnalyzeItem {
-                        message: Some(proto_message(
-                            "don't tell your parents",
-                            "stranger",
-                            "conv_1",
-                        )),
-                        timestamp_ms: Some(1000),
-                    },
-                    proto::BatchAnalyzeItem {
-                        message: None,
-                        timestamp_ms: Some(2000),
-                    },
-                ],
-            };
-            let bytes = encode_proto(&request);
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_analyze_batch(
-                handle,
-                bytes.as_ptr(),
-                bytes.len(),
-                &mut out,
-            ));
-            assert!(out.ptr.is_null());
-
-            let err_str = last_error_string();
-            assert!(
-                err_str.contains("missing message in batch item"),
-                "Got: {err_str}"
-            );
-
-            let profile = get_contact_profile(handle, "stranger");
-            assert!(
-                !profile.found,
-                "failed batch should not partially mutate context"
-            );
-
-            let summary = get_conversation_summary(handle);
-            assert_eq!(summary.total_conversations, 0);
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn oversized_batch_request_is_rejected_before_decode() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let request = oversized_request_bytes(MAX_BATCH_REQUEST_BYTES);
-            let mut out = AuraBuffer::empty();
-
-            assert!(!aura_analyze_batch(
-                handle,
-                request.as_ptr(),
-                request.len(),
-                &mut out,
-            ));
-            assert!(out.ptr.is_null());
-
-            let err_str = last_error_string();
-            assert!(
-                err_str.contains("batch analyze request exceeds limit"),
-                "Got: {err_str}"
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn recommended_action_in_output() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let result = analyze_context_result(
-                handle,
-                proto_message("don't tell your parents about us", "stranger", "conv_1"),
-                1000,
-            );
-
-            let recommendation = result.recommended_action.expect("missing recommendation");
-            assert!(!recommendation.ui_actions.is_empty());
-            assert!(result.risk_breakdown.is_some());
-            assert!(result.contact_snapshot.is_some());
-            assert!(!result.reason_codes.is_empty());
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn conversation_summary_tracks_conversations() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                handle,
-                proto_message("don't tell your parents", "stranger", "conv_A"),
-                1000,
-            );
-            let _ = analyze_context_result(
-                handle,
-                proto_message("hey want to play minecraft?", "friend", "conv_B"),
-                2000,
-            );
-
-            let summary = get_conversation_summary(handle);
-            assert_eq!(summary.total_conversations, 2);
-            assert_eq!(summary.conversations.len(), 2);
-            assert!(summary
-                .conversations
-                .iter()
-                .any(|conv| conv.conversation_id == "conv_A"));
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn reload_patterns_missing_file_returns_error() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let request = encode_proto(&proto::ReloadPatternsRequest {
-                patterns_path: "/definitely/missing/patterns.json".to_string(),
-            });
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_reload_patterns(
-                handle,
-                request.as_ptr(),
-                request.len(),
-                &mut out,
-            ));
-
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let err_str = CStr::from_ptr(err).to_str().unwrap();
-            assert!(err_str.contains("pattern load failed"), "Got: {err_str}");
-            aura_free_string(err);
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn reload_patterns_invalid_regex_returns_error() {
-        unsafe {
-            let invalid_path =
-                write_temp_patterns_file("invalid_regex_reload", invalid_regex_patterns_json());
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let request = encode_proto(&proto::ReloadPatternsRequest {
-                patterns_path: invalid_path.to_string_lossy().into_owned(),
-            });
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_reload_patterns(
-                handle,
-                request.as_ptr(),
-                request.len(),
-                &mut out,
-            ));
-
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let err_str = CStr::from_ptr(err).to_str().unwrap();
-            assert!(err_str.contains("pattern load failed"), "Got: {err_str}");
-            assert!(err_str.contains("broken_regex_rule"), "Got: {err_str}");
-            aura_free_string(err);
-
-            aura_free(handle);
-            let _ = fs::remove_file(invalid_path);
-        }
-    }
-
-    #[test]
-    fn reload_patterns_is_rate_limited() {
-        unsafe {
-            let valid_path = write_temp_patterns_file(
-                "valid_reload_rate_limit",
-                &custom_keyword_patterns_json("signal_rate_limit"),
-            );
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let request = encode_proto(&proto::ReloadPatternsRequest {
-                patterns_path: valid_path.to_string_lossy().into_owned(),
-            });
-
-            let mut out = AuraBuffer::empty();
-            assert!(aura_reload_patterns(
-                handle,
-                request.as_ptr(),
-                request.len(),
-                &mut out,
-            ));
-            aura_free_buffer(out);
-
-            let mut out2 = AuraBuffer::empty();
-            assert!(!aura_reload_patterns(
-                handle,
-                request.as_ptr(),
-                request.len(),
-                &mut out2,
-            ));
-            let err = last_error_string();
-            assert!(err.contains("rate-limited"), "Got: {err}");
-
-            aura_free(handle);
-            let _ = fs::remove_file(valid_path);
-        }
-    }
-
-    #[test]
-    fn mark_contact_trusted_is_applied() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ =
-                analyze_context_result(handle, proto_message("hello", "friend", "conv_1"), 1000);
-
-            let request = encode_proto(&proto::MarkContactTrustedRequest {
-                sender_id: "friend".to_string(),
-            });
-            assert!(aura_mark_contact_trusted(
-                handle,
-                request.as_ptr(),
-                request.len(),
-            ));
-
-            let profile = get_contact_profile(handle, "friend").profile.unwrap();
-            assert!(profile.is_trusted);
-
-            aura_free(handle);
         }
     }
 
@@ -7067,408 +3617,6 @@ mod tests {
     }
 
     #[test]
-    fn init_with_missing_patterns_path_falls_back_to_builtin_patterns() {
-        unsafe {
-            let mut config = proto_config(proto::AccountType::Child, true);
-            config.patterns_path = Some("/definitely/missing/patterns.json".to_string());
-            let handle = init_handle(config);
-            assert!(!handle.is_null());
-
-            let result = analyze_result(
-                handle,
-                proto_message(
-                    "don't tell your parents about our chats",
-                    "stranger",
-                    "conv_1",
-                ),
-            );
-            assert!(has_pattern_signal(&result));
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn init_with_empty_ruleset_falls_back_to_builtin_patterns() {
-        unsafe {
-            let path =
-                write_temp_patterns_file("empty_ruleset_init", empty_ruleset_patterns_json());
-            let mut config = proto_config(proto::AccountType::Child, true);
-            config.patterns_path = Some(path.to_string_lossy().into_owned());
-            let handle = init_handle(config);
-            assert!(!handle.is_null());
-
-            let result = analyze_result(
-                handle,
-                proto_message(
-                    "don't tell your parents about our chats",
-                    "stranger",
-                    "conv_1",
-                ),
-            );
-            assert!(has_pattern_signal(&result));
-
-            aura_free(handle);
-            let _ = fs::remove_file(path);
-        }
-    }
-
-    #[test]
-    fn invalid_proto_request_sets_last_error() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let bad = [0xFF_u8, 0x01, 0x02];
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_analyze(handle, bad.as_ptr(), bad.len(), &mut out));
-            assert!(out.ptr.is_null());
-
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let err_str = CStr::from_ptr(err).to_str().unwrap();
-            assert!(err_str.contains("invalid protobuf"), "Got: {err_str}");
-            aura_free_string(err);
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn update_config_with_empty_ruleset_preserves_existing_pattern_db() {
-        unsafe {
-            let custom_keyword = "moonlit_badger_alarm_phrase";
-            let custom_path = write_temp_patterns_file(
-                "custom_rule_update",
-                &custom_keyword_patterns_json(custom_keyword),
-            );
-            let empty_path =
-                write_temp_patterns_file("empty_ruleset_update", empty_ruleset_patterns_json());
-
-            let mut config = proto_config(proto::AccountType::Adult, true);
-            config.patterns_path = Some(custom_path.to_string_lossy().into_owned());
-            let handle = init_handle(config);
-            assert!(!handle.is_null());
-
-            let baseline = analyze_result(
-                handle,
-                proto_message(custom_keyword, "user_1", "conv_custom"),
-            );
-            assert!(has_pattern_signal(&baseline));
-
-            let mut update = proto_config(proto::AccountType::Adult, true);
-            update.patterns_path = Some(empty_path.to_string_lossy().into_owned());
-            let update_bytes = encode_proto(&update);
-            assert!(aura_update_config(
-                handle,
-                update_bytes.as_ptr(),
-                update_bytes.len()
-            ));
-
-            let after_update = analyze_result(
-                handle,
-                proto_message(custom_keyword, "user_1", "conv_custom"),
-            );
-            assert!(
-                has_pattern_signal(&after_update),
-                "expected existing pattern database to remain active"
-            );
-
-            aura_free(handle);
-            let _ = fs::remove_file(custom_path);
-            let _ = fs::remove_file(empty_path);
-        }
-    }
-
-    #[test]
-    fn update_config_without_patterns_path_resets_to_builtin_patterns() {
-        unsafe {
-            let custom_keyword = "obsidian_badger_alarm_phrase";
-            let custom_path = write_temp_patterns_file(
-                "custom_rule_reset",
-                &custom_keyword_patterns_json(custom_keyword),
-            );
-
-            let mut config = proto_config(proto::AccountType::Child, true);
-            config.patterns_path = Some(custom_path.to_string_lossy().into_owned());
-            let handle = init_handle(config);
-            assert!(!handle.is_null());
-
-            let custom_result = analyze_result(
-                handle,
-                proto_message(custom_keyword, "user_1", "conv_custom"),
-            );
-            assert!(has_pattern_signal(&custom_result));
-
-            let reset_update = encode_proto(&proto_config(proto::AccountType::Child, true));
-            assert!(aura_update_config(
-                handle,
-                reset_update.as_ptr(),
-                reset_update.len()
-            ));
-
-            let after_reset = analyze_result(
-                handle,
-                proto_message(custom_keyword, "user_1", "conv_custom"),
-            );
-            assert!(
-                !has_pattern_signal(&after_reset),
-                "expected custom-only pattern database to be removed"
-            );
-
-            let builtin_result = analyze_result(
-                handle,
-                proto_message(
-                    "don't tell your parents about our chats",
-                    "stranger",
-                    "conv_builtin",
-                ),
-            );
-            assert!(
-                has_pattern_signal(&builtin_result),
-                "expected built-in pattern database to become active again"
-            );
-
-            aura_free(handle);
-            let _ = fs::remove_file(custom_path);
-        }
-    }
-
-    #[test]
-    fn null_out_pointer_sets_last_error() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let message = encode_proto(&proto_message("test", "u1", "c1"));
-
-            assert!(!aura_analyze(
-                handle,
-                message.as_ptr(),
-                message.len(),
-                std::ptr::null_mut(),
-            ));
-
-            let err_str = last_error_string();
-            assert!(err_str.contains("null out pointer"), "Got: {err_str}");
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn oversized_message_request_is_rejected_before_decode() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Adult, true));
-            let request = oversized_request_bytes(MAX_MESSAGE_REQUEST_BYTES);
-            let mut out = AuraBuffer::empty();
-
-            assert!(!aura_analyze(
-                handle,
-                request.as_ptr(),
-                request.len(),
-                &mut out,
-            ));
-            assert!(out.ptr.is_null());
-
-            let err_str = last_error_string();
-            assert!(err_str.contains("message exceeds limit"), "Got: {err_str}");
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn truncated_analyze_context_request_sets_last_error() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let request = proto::AnalyzeContextRequest {
-                message: Some(proto_message(
-                    "don't tell your parents",
-                    "stranger",
-                    "conv_1",
-                )),
-                timestamp_ms: 1000,
-            };
-            let bytes = encode_proto(&request);
-            let truncated = truncate_proto(&bytes);
-            let mut out = AuraBuffer::empty();
-
-            assert!(!aura_analyze_context(
-                handle,
-                truncated.as_ptr(),
-                truncated.len(),
-                &mut out,
-            ));
-            assert!(out.ptr.is_null());
-
-            let err_str = last_error_string();
-            assert!(err_str.contains("invalid protobuf"), "Got: {err_str}");
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn truncated_import_context_request_preserves_existing_state() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                handle,
-                proto_message("don't tell your parents", "stranger", "conv_1"),
-                1000,
-            );
-
-            let exported = export_context(handle);
-            let request = proto::ImportContextRequest {
-                state: exported.state,
-            };
-            let bytes = encode_proto(&request);
-            let truncated = truncate_proto(&bytes);
-
-            assert!(!aura_import_context(
-                handle,
-                truncated.as_ptr(),
-                truncated.len(),
-            ));
-
-            let err_str = last_error_string();
-            assert!(err_str.contains("invalid protobuf"), "Got: {err_str}");
-
-            let profile = get_contact_profile(handle, "stranger");
-            assert!(profile.found, "existing state should remain intact");
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn future_schema_import_via_ffi_preserves_existing_state() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                handle,
-                proto_message("don't tell your parents", "stranger", "conv_1"),
-                1000,
-            );
-
-            let mut state = export_context(handle).state.expect("missing state");
-            state.schema_version = aura_agent_core::context::tracker::TRACKER_STATE_VERSION + 1;
-            let request = proto::ImportContextRequest { state: Some(state) };
-            let bytes = encode_proto(&request);
-
-            assert!(!aura_import_context(handle, bytes.as_ptr(), bytes.len()));
-
-            let err_str = last_error_string();
-            assert!(
-                err_str.contains("incompatible state version"),
-                "Got: {err_str}"
-            );
-
-            let profile = get_contact_profile(handle, "stranger");
-            assert!(profile.found, "existing state should remain intact");
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn future_kids_schema_import_via_ffi_preserves_existing_state() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                handle,
-                proto_message("don't tell your parents", "stranger", "conv_1"),
-                1000,
-            );
-
-            let mut state = export_context(handle).state.expect("missing state");
-            state
-                .kids_memory
-                .as_mut()
-                .expect("missing kids memory")
-                .schema_version =
-                aura_agent_core::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION + 1;
-            let request = proto::ImportContextRequest { state: Some(state) };
-            let bytes = encode_proto(&request);
-
-            assert!(!aura_import_context(handle, bytes.as_ptr(), bytes.len()));
-            let err_str = last_error_string();
-            let reexported = export_context(handle).state.expect("missing state");
-            let kids_conversation_preserved = reexported.kids_memory.as_ref().is_some_and(|kids| {
-                kids.conversations
-                    .iter()
-                    .any(|conversation| conversation.conversation_id == "conv_1")
-            });
-
-            assert_eq!(
-                (
-                    err_str.contains("incompatible kids memory state version"),
-                    get_contact_profile(handle, "stranger").found,
-                    kids_conversation_preserved,
-                ),
-                (true, true, true)
-            );
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn missing_state_import_via_ffi_preserves_existing_state() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                handle,
-                proto_message("don't tell your parents", "stranger", "conv_1"),
-                1000,
-            );
-
-            let request = proto::ImportContextRequest { state: None };
-            let bytes = encode_proto(&request);
-
-            assert!(!aura_import_context(handle, bytes.as_ptr(), bytes.len()));
-
-            let err_str = last_error_string();
-            assert!(
-                err_str.contains("missing state in import_context request"),
-                "Got: {err_str}"
-            );
-
-            let profile = get_contact_profile(handle, "stranger");
-            assert!(profile.found, "existing state should remain intact");
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn oversized_import_context_request_preserves_existing_state() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Child, true));
-            let _ = analyze_context_result(
-                handle,
-                proto_message("don't tell your parents", "stranger", "conv_1"),
-                1000,
-            );
-
-            let request = oversized_request_bytes(MAX_IMPORT_CONTEXT_REQUEST_BYTES);
-            assert!(!aura_import_context(
-                handle,
-                request.as_ptr(),
-                request.len()
-            ));
-
-            let err_str = last_error_string();
-            assert!(
-                err_str.contains("import_context request exceeds limit"),
-                "Got: {err_str}"
-            );
-
-            let profile = get_contact_profile(handle, "stranger");
-            assert!(profile.found, "existing state should remain intact");
-
-            aura_free(handle);
-        }
-    }
-
-    #[test]
     fn last_error_cleared_on_success() {
         unsafe {
             let bad = [0xFF_u8, 0x01, 0x02];
@@ -7483,248 +3631,91 @@ mod tests {
     }
 
     #[test]
-    fn stress_rapid_init_analyze_free_cycle() {
-        for _ in 0..20 {
-            unsafe {
-                let handle = init_handle(proto_config(proto::AccountType::Child, true));
-                let mut out = AuraBuffer::empty();
-                let msg = proto_message("hello world", "user_x", "conv_x");
-                let request = encode_proto(&msg);
-                assert!(aura_analyze(
-                    handle,
-                    request.as_ptr(),
-                    request.len(),
-                    &mut out,
-                ));
-                aura_free_buffer(out);
-                aura_free(handle);
-            }
-        }
-    }
-
-    #[test]
-    fn stress_buffer_lifecycle_no_leak() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            for i in 0..100 {
-                let mut out = AuraBuffer::empty();
-                let text = format!("message number {i} with some content");
-                let msg = proto_message(&text, "sender", "conv");
-                let request = encode_proto(&msg);
-                assert!(aura_analyze(
-                    handle,
-                    request.as_ptr(),
-                    request.len(),
-                    &mut out,
-                ));
-                assert!(!out.ptr.is_null());
-                assert!(out.len > 0);
-                aura_free_buffer(out);
-            }
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn stress_export_import_roundtrip_stability() {
+    fn canonical_analysis_is_exactly_once() {
         unsafe {
             let handle = init_handle(proto_config(proto::AccountType::Child, true));
+            let message = proto_message(
+                "don't tell your parents, it's our secret",
+                "sender",
+                "conversation",
+            );
+            let first = analyze_canonical(handle, message.clone(), "event", 1, 1_000);
+            assert_ne!(
+                proto::CanonicalSafetyDisposition::try_from(first.disposition).unwrap(),
+                proto::CanonicalSafetyDisposition::Unspecified
+            );
 
-            for i in 0..10 {
-                let msg = proto_message(
+            let duplicate = analyze_canonical(handle, message, "event", 1, 1_000);
+            assert!(matches!(
+                proto::CanonicalSafetyDisposition::try_from(duplicate.disposition).unwrap(),
+                proto::CanonicalSafetyDisposition::DuplicateIgnored
+                    | proto::CanonicalSafetyDisposition::DuplicateApplied
+                    | proto::CanonicalSafetyDisposition::DuplicateRejected
+            ));
+            aura_free(handle);
+        }
+    }
+
+    #[test]
+    fn repeated_import_of_same_state_is_idempotent() {
+        unsafe {
+            let source = init_handle(proto_config(proto::AccountType::Child, true));
+            let replica = init_handle(proto_config(proto::AccountType::Child, true));
+            let _ = analyze_canonical(
+                source,
+                proto_message(
                     "don't tell your parents, it's our secret",
-                    &format!("sender_{i}"),
-                    "conv_1",
+                    "sender",
+                    "conversation",
+                ),
+                "event-1",
+                1,
+                1_000,
+            );
+            let state = export_context(source)
+                .state
+                .expect("canonical analysis must export tracker state");
+
+            for _ in 0..25 {
+                import_context_state(replica, state.clone());
+            }
+
+            assert_eq!(export_context(replica).state, Some(state));
+            aura_free(source);
+            aura_free(replica);
+        }
+    }
+
+    #[test]
+    fn repeated_export_import_roundtrips_preserve_growth() {
+        unsafe {
+            let first = init_handle(proto_config(proto::AccountType::Child, true));
+            let second = init_handle(proto_config(proto::AccountType::Child, true));
+            let mut active = first;
+            let mut standby = second;
+
+            for revision in 1..=6 {
+                let _ = analyze_canonical(
+                    active,
+                    proto_message(
+                        "don't tell your parents, it's our secret",
+                        "sender",
+                        "conversation",
+                    ),
+                    &format!("event-{revision}"),
+                    revision,
+                    u64::from(revision) * 1_000,
                 );
-                let _ = analyze_context_result(handle, msg, 1000 + i * 1000);
+                let state = export_context(active)
+                    .state
+                    .expect("canonical analysis must export tracker state");
+                import_context_state(standby, state);
+                std::mem::swap(&mut active, &mut standby);
             }
 
-            let mut export_buf = AuraBuffer::empty();
-            assert!(aura_export_context(handle, &mut export_buf));
-            let exported = std::slice::from_raw_parts(export_buf.ptr, export_buf.len).to_vec();
-
-            for _ in 0..5 {
-                assert!(aura_import_context(
-                    handle,
-                    exported.as_ptr(),
-                    exported.len(),
-                ));
-            }
-
-            let mut export_buf2 = AuraBuffer::empty();
-            assert!(aura_export_context(handle, &mut export_buf2));
-            assert!(export_buf2.len > 0);
-
-            aura_free_buffer(export_buf);
-            aura_free_buffer(export_buf2);
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn quick_check_safe_text_returns_ok_true() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            let text = b"Hey, how are you doing today?";
-            let mut out = AuraBuffer::empty();
-            assert!(aura_quick_check(
-                handle,
-                text.as_ptr(),
-                text.len(),
-                &mut out,
-            ));
-            let response: proto::StatusResponse = decode_buffer(out);
-            assert!(response.ok);
-            assert!(response.message.is_none());
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn quick_check_null_text_fails() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_quick_check(handle, std::ptr::null(), 10, &mut out,));
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let msg = CStr::from_ptr(err).to_string_lossy().to_string();
-            assert!(msg.contains("null text pointer"));
-            aura_free_string(err);
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn quick_check_empty_text_fails() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            let text = b"x";
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_quick_check(handle, text.as_ptr(), 0, &mut out,));
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let msg = CStr::from_ptr(err).to_string_lossy().to_string();
-            assert!(msg.contains("out of range"));
-            aura_free_string(err);
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn quick_check_null_handle_fails() {
-        unsafe {
-            let text = b"hello";
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_quick_check(
-                std::ptr::null_mut(),
-                text.as_ptr(),
-                text.len(),
-                &mut out,
-            ));
-        }
-    }
-
-    #[test]
-    fn quick_check_null_out_fails() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            let text = b"hello";
-            assert!(!aura_quick_check(
-                handle,
-                text.as_ptr(),
-                text.len(),
-                std::ptr::null_mut(),
-            ));
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn detect_suspicious_url_safe_url_returns_ok() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            let url = b"https://www.google.com";
-            let mut out = AuraBuffer::empty();
-            assert!(aura_detect_suspicious_url(
-                handle,
-                url.as_ptr(),
-                url.len(),
-                &mut out,
-            ));
-            let response: proto::StatusResponse = decode_buffer(out);
-            assert!(response.ok);
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn detect_suspicious_url_null_pointer_fails() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_detect_suspicious_url(
-                handle,
-                std::ptr::null(),
-                10,
-                &mut out,
-            ));
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let msg = CStr::from_ptr(err).to_string_lossy().to_string();
-            assert!(msg.contains("null url pointer"));
-            aura_free_string(err);
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn detect_suspicious_url_empty_url_fails() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            let url = b"x";
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_detect_suspicious_url(
-                handle,
-                url.as_ptr(),
-                0,
-                &mut out,
-            ));
-            let err = aura_last_error();
-            assert!(!err.is_null());
-            let msg = CStr::from_ptr(err).to_string_lossy().to_string();
-            assert!(msg.contains("out of range"));
-            aura_free_string(err);
-            aura_free(handle);
-        }
-    }
-
-    #[test]
-    fn detect_suspicious_url_null_handle_fails() {
-        unsafe {
-            let url = b"https://example.com";
-            let mut out = AuraBuffer::empty();
-            assert!(!aura_detect_suspicious_url(
-                std::ptr::null_mut(),
-                url.as_ptr(),
-                url.len(),
-                &mut out,
-            ));
-        }
-    }
-
-    #[test]
-    fn detect_suspicious_url_null_out_fails() {
-        unsafe {
-            let handle = init_handle(proto_config(proto::AccountType::Teen, true));
-            let url = b"https://example.com";
-            assert!(!aura_detect_suspicious_url(
-                handle,
-                url.as_ptr(),
-                url.len(),
-                std::ptr::null_mut(),
-            ));
-            aura_free(handle);
+            assert_eq!(export_context(first).state, export_context(second).state);
+            aura_free(first);
+            aura_free(second);
         }
     }
 }

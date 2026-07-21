@@ -1,5 +1,20 @@
 # AURA Core — Changelog
 
+## Unreleased — Canonical Apple ABI
+
+- Reduced the Apple XCFramework and Swift package boundary to initialization,
+  ownership/error primitives, canonical Safety Case ingestion and lifecycle,
+  account removal, and explicit context/Safety Case persistence.
+- Removed Apple exports and Swift wrappers for per-message/context analysis,
+  batch and shadow utilities, live config/pattern mutation, cleanup,
+  contact/profile/trust queries, quick checks, suspicious URL checks,
+  conversation summaries, and runtime capability snapshots.
+- Reserved the unused lifecycle `decision_json` protobuf field; lifecycle
+  responses now expose only typed case identity, revision, status, generation,
+  and runtime state schema.
+- Made the Apple archive release script fail on both known legacy symbols and
+  any unexpected `aura_` symbol outside the canonical allowlist.
+
 ## Unreleased — Rust Best-Practices Pass
 
 **771 tests | Type-safe IDs | Exhaustive matching | Idiomatic Rust style | Rustdoc RFC 1574**

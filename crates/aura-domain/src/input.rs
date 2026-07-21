@@ -60,7 +60,4 @@ pub struct DomainInput {
     /// into conversation memory for trend tracking.
     #[serde(default)]
     pub ml_safety_hint: Option<MlSafetyHint>,
-    /// Server-injected sender reputation hint (0.0 = unknown, 1.0 = max risk).
-    #[serde(default)]
-    pub server_sender_risk_hint: Option<f32>,
 }

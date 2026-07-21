@@ -6,21 +6,28 @@
 //! created only for configured case transitions and carry opaque evidence
 //! references instead of raw message content or free-form verdicts.
 
+mod execution_policy;
 mod model;
 mod reducer;
 
+pub use execution_policy::{
+    GuardianDeliveryClass, GuardianExecutionMode, GuardianExecutionPolicy,
+    GuardianExecutionPolicyError, GuardianExecutionRule, GuardianReportExecutionBinding,
+};
+
 pub use model::{
-    ConversationEventKey, DeferredGuardianReport, GuardianDeliveryReceipt, GuardianReport,
-    GuardianReportDirective, GuardianReportKey, GuardianReportTrigger, IdentifierError, RiskScore,
-    RiskScoreError, SafetyCase, SafetyCaseConstructionError, SafetyCaseDecision,
-    SafetyCaseDecisionOutcome, SafetyCaseEvent, SafetyCaseId, SafetyCaseReduction,
-    SafetyCaseSeverity, SafetyCaseStatus, SafetyCaseSubjectKey, SafetyObservation,
-    SafetyObservationError, SafetyObservationId, SafetyReasonCode, SourceEventId, SourceEventKey,
-    GUARDIAN_REPORT_SCHEMA_VERSION, SAFETY_CASE_DECISION_SCHEMA_VERSION,
-    SAFETY_CASE_SCHEMA_VERSION, SAFETY_OBSERVATION_SCHEMA_VERSION,
+    ConversationEventKey, DeferredGuardianReport, GuardianDeliveryReceipt,
+    GuardianPreparationReceipt, GuardianReport, GuardianReportDirective, GuardianReportKey,
+    GuardianReportObservationVolumeBand, GuardianReportTrigger, GuardianSuppressionReceipt,
+    IdentifierError, RiskScore, RiskScoreError, SafetyCase, SafetyCaseConstructionError,
+    SafetyCaseDecision, SafetyCaseDecisionOutcome, SafetyCaseEvent, SafetyCaseId,
+    SafetyCaseReduction, SafetyCaseSeverity, SafetyCaseStatus, SafetyCaseSubjectKey,
+    SafetyObservation, SafetyObservationError, SafetyObservationId, SafetyReasonCode,
+    SourceEventId, SourceEventKey, GUARDIAN_REPORT_SCHEMA_VERSION,
+    SAFETY_CASE_DECISION_SCHEMA_VERSION, SAFETY_CASE_SCHEMA_VERSION,
+    SAFETY_OBSERVATION_SCHEMA_VERSION,
 };
 pub use reducer::{
-    GuardianReportingPolicy, SafetyCaseCommand, SafetyCasePolicy, SafetyCasePolicyError,
-    SafetyCaseReducer, SafetyCaseReducerError, SafetyCaseThresholds,
-    SAFETY_CASE_POLICY_SCHEMA_VERSION,
+    SafetyCaseCommand, SafetyCasePolicy, SafetyCasePolicyError, SafetyCaseReducer,
+    SafetyCaseReducerError, SafetyCaseThresholds, SAFETY_CASE_POLICY_SCHEMA_VERSION,
 };

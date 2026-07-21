@@ -10,15 +10,20 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use aura_agent_policy::safety_case::{
-    ConversationEventKey, GuardianReportingPolicy, IdentifierError, RiskScore, SafetyCase,
-    SafetyCaseCommand, SafetyCaseConstructionError, SafetyCaseDecision, SafetyCaseId,
-    SafetyCasePolicy, SafetyCaseReducer, SafetyCaseReducerError, SafetyCaseSeverity,
-    SafetyCaseStatus, SafetyCaseSubjectKey, SafetyObservation, SafetyObservationError,
-    SafetyObservationId, SafetyReasonCode, SourceEventId, SourceEventKey,
+    ConversationEventKey, IdentifierError, RiskScore, SafetyCase, SafetyCaseCommand,
+    SafetyCaseConstructionError, SafetyCaseDecision, SafetyCaseId, SafetyCasePolicy,
+    SafetyCaseReducer, SafetyCaseReducerError, SafetyCaseSeverity, SafetyCaseStatus,
+    SafetyCaseSubjectKey, SafetyObservation, SafetyObservationError, SafetyObservationId,
+    SafetyReasonCode, SourceEventId, SourceEventKey,
 };
 use aura_core::{Action, AnalysisResult, ThreatType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
+
+use crate::execution_policy::{
+    NativeExecutionPolicy, NativeExecutionPolicyApplicationReceipt,
+    NativeExecutionPolicyApplyDisposition, NativeExecutionPolicyError, NativeExecutionPolicyState,
+};
 
 const DEFAULT_MAX_CASES: usize = 256;
 const MAX_CONFIGURED_CASES: usize = 4_096;
@@ -33,17 +38,12 @@ pub const SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES: usize = 1024 * 1024;
 // against JSON field/schema overhead without relying on observed averages.
 const SAFETY_CASE_ACCOUNT_INGEST_RESERVE_BYTES: usize = 256 * 1024;
 const MIN_CONFIGURED_ACCOUNT_STATE_BYTES: usize = SAFETY_CASE_ACCOUNT_INGEST_RESERVE_BYTES * 2;
-const LEGACY_SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION: &str = "aura.safety_case_runtime.v1";
 /// Schema version for encrypted host persistence of [`SafetyCaseRuntime`].
-pub const SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION: &str = "aura.safety_case_runtime.v2";
-
-const fn default_max_account_state_bytes() -> usize {
-    SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES
-}
+pub const SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION: &str = "aura.safety_case_runtime.v5";
 
 /// Monotonic identity of one case episode within an account/subject/threat lineage.
 ///
-/// Generation zero is the legacy initial episode. Advancing the generation is
+/// Generation zero is the initial episode. Advancing the generation is
 /// always an explicit host-authorized registry operation; ingestion never does
 /// so automatically.
 #[derive(
@@ -53,7 +53,7 @@ const fn default_max_account_state_bytes() -> usize {
 pub struct SafetyCaseGeneration(u64);
 
 impl SafetyCaseGeneration {
-    /// Legacy-compatible first case episode.
+    /// First case episode.
     pub const INITIAL: Self = Self(0);
 
     /// Creates a generation from its persisted integer representation.
@@ -352,7 +352,6 @@ pub struct SafetyCaseRuntimeConfig {
     case_policy: SafetyCasePolicy,
     max_cases: usize,
     max_source_receipts: usize,
-    #[serde(default = "default_max_account_state_bytes")]
     max_account_state_bytes: usize,
 }
 
@@ -404,14 +403,8 @@ impl SafetyCaseRuntimeConfig {
 
 impl Default for SafetyCaseRuntimeConfig {
     fn default() -> Self {
-        let guardian_reporting = GuardianReportingPolicy::default()
-            .with_report_on_open(false)
-            .with_report_on_escalation(false)
-            .with_report_on_urgent(false)
-            .with_report_on_resolution(false)
-            .with_urgent_cooldown_bypass(false);
         Self {
-            case_policy: SafetyCasePolicy::default().with_guardian_reporting(guardian_reporting),
+            case_policy: SafetyCasePolicy::default(),
             max_cases: DEFAULT_MAX_CASES,
             max_source_receipts: DEFAULT_MAX_SOURCE_RECEIPTS,
             max_account_state_bytes: SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES,
@@ -567,6 +560,10 @@ pub enum SafetyCaseRuntimeError {
     /// The requested case does not exist in this runtime.
     #[error("safety case was not found")]
     CaseNotFound,
+    /// Canonical analysis requires a freshly applied Enabled signed policy for
+    /// the exact account partition in this process.
+    #[error("canonical analysis requires an active enabled execution policy")]
+    ExecutionPolicyInactive,
     /// Observation commands must pass through canonical source ingestion.
     #[error("direct observation commands are forbidden; use ingest_analysis")]
     DirectObservationCommandForbidden,
@@ -634,9 +631,9 @@ pub struct ExportedSafetyCaseRuntimeState {
     account_partition: Option<SafetyAccountKey>,
     config: SafetyCaseRuntimeConfig,
     cases: Vec<PersistedCaseEntry>,
-    #[serde(default)]
     active_case_generations: Vec<PersistedActiveCaseGenerationEntry>,
     source_receipts: Vec<PersistedSourceReceiptEntry>,
+    execution_policies: Vec<PersistedExecutionPolicyEntry>,
 }
 
 impl ExportedSafetyCaseRuntimeState {
@@ -660,7 +657,6 @@ impl ExportedSafetyCaseRuntimeState {
 #[serde(deny_unknown_fields)]
 struct PersistedCaseEntry {
     account_key: SafetyAccountKey,
-    #[serde(default)]
     case_generation: SafetyCaseGeneration,
     case: SafetyCase,
 }
@@ -687,6 +683,13 @@ struct PersistedSourceReceiptEntry {
     observation_id: Option<SafetyObservationId>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PersistedExecutionPolicyEntry {
+    account_key: SafetyAccountKey,
+    policy: NativeExecutionPolicy,
+}
+
 /// Bounded case registry and canonical source ledger owned by one Agent runtime.
 #[derive(Clone, Default)]
 pub struct SafetyCaseRuntime {
@@ -697,6 +700,7 @@ pub struct SafetyCaseRuntime {
     source_receipts: HashMap<CanonicalSourceKey, SourceLedgerEntry>,
     latest_revisions: HashMap<CanonicalEventKey, u32>,
     observation_ids: HashMap<SafetyObservationId, CanonicalSourceKey>,
+    execution_policies: HashMap<SafetyAccountKey, NativeExecutionPolicy>,
 }
 
 impl SafetyCaseRuntime {
@@ -718,6 +722,7 @@ impl SafetyCaseRuntime {
             source_receipts: HashMap::new(),
             latest_revisions: HashMap::new(),
             observation_ids: HashMap::new(),
+            execution_policies: HashMap::new(),
         })
     }
 
@@ -730,7 +735,10 @@ impl SafetyCaseRuntime {
         &self,
         identity: &SafetyCaseIngestIdentity,
     ) -> Result<SafetyCaseSourcePreflight, SafetyCaseRuntimeError> {
-        if identity.observed_at_ms < identity.occurred_at_ms {
+        if identity.occurred_at_ms == 0
+            || identity.observed_at_ms == 0
+            || identity.observed_at_ms < identity.occurred_at_ms
+        {
             return Err(SafetyCaseRuntimeError::InvalidIngestTimestamps);
         }
         let source_key = canonical_source_key(identity);
@@ -823,6 +831,32 @@ impl SafetyCaseRuntime {
         self.case_ids
             .get(case_id)
             .and_then(|key| self.cases.get(key))
+    }
+
+    /// Returns one case and generation only when it belongs to the supplied
+    /// account partition. This is the read-only counterpart of the
+    /// account-scoped lifecycle boundary and prevents cross-account report
+    /// projection through a globally unique-looking case identifier.
+    pub fn account_case_by_id(
+        &self,
+        account_key: &SafetyAccountKey,
+        case_id: &SafetyCaseId,
+    ) -> Option<(&SafetyCase, SafetyCaseGeneration)> {
+        let key = self.case_ids.get(case_id)?;
+        if &key.account_key != account_key {
+            return None;
+        }
+        self.cases.get(key).map(|case| (case, key.generation))
+    }
+
+    /// Returns every retained case in one account partition.
+    pub fn account_cases<'a>(
+        &'a self,
+        account_key: &'a SafetyAccountKey,
+    ) -> impl Iterator<Item = (&'a SafetyCase, SafetyCaseGeneration)> + 'a {
+        self.cases.iter().filter_map(move |(key, case)| {
+            (&key.account_key == account_key).then_some((case, key.generation))
+        })
     }
 
     /// Returns the persisted episode generation for a case identifier.
@@ -959,6 +993,110 @@ impl SafetyCaseRuntime {
         &self.config.case_policy
     }
 
+    /// Applies one exact account policy head against the native monotonic floor.
+    /// The operation mutates no state on rejection and exact retries are idempotent.
+    pub fn apply_execution_policy(
+        &mut self,
+        account_key: &SafetyAccountKey,
+        mut policy: NativeExecutionPolicy,
+    ) -> Result<NativeExecutionPolicyApplicationReceipt, NativeExecutionPolicyError> {
+        policy.active_for_runtime = true;
+        policy.validate()?;
+        if policy.account_key != account_key.as_str() {
+            return Err(NativeExecutionPolicyError::Malformed(
+                "policy account key does not match the target partition",
+            ));
+        }
+        let disposition = match self.execution_policies.get(account_key) {
+            Some(current) => {
+                if current.authority_lineage_id != policy.authority_lineage_id {
+                    return Err(NativeExecutionPolicyError::AuthorityLineageChanged);
+                }
+                if policy.policy_epoch < current.policy_epoch {
+                    return Err(NativeExecutionPolicyError::Rollback);
+                }
+                if policy.revoked_through_policy_epoch < current.revoked_through_policy_epoch {
+                    return Err(NativeExecutionPolicyError::Rollback);
+                }
+                if policy.policy_epoch == current.policy_epoch {
+                    if policy.policy_wire_digest != current.policy_wire_digest {
+                        return Err(NativeExecutionPolicyError::Equivocation);
+                    }
+                    if current.active_for_runtime {
+                        return Ok(NativeExecutionPolicyApplicationReceipt {
+                            disposition: NativeExecutionPolicyApplyDisposition::Unchanged,
+                            policy: current.clone(),
+                        });
+                    }
+                }
+                NativeExecutionPolicyApplyDisposition::Applied
+            }
+            None => NativeExecutionPolicyApplyDisposition::Applied,
+        };
+        if policy.state == NativeExecutionPolicyState::Enabled
+            && self.cases.iter().any(|(key, case)| {
+                &key.account_key == account_key
+                    && (case.observations().len() > policy.maximum_case_observations
+                        || case.reason_codes().len() > policy.maximum_case_reason_codes)
+            })
+        {
+            return Err(NativeExecutionPolicyError::Malformed(
+                "policy capacity is below retained account state",
+            ));
+        }
+        let mut candidate = self.clone();
+        candidate
+            .execution_policies
+            .insert(account_key.clone(), policy.clone());
+        *self = candidate;
+        Ok(NativeExecutionPolicyApplicationReceipt {
+            disposition,
+            policy,
+        })
+    }
+
+    /// Returns the current persisted policy head for one account.
+    pub fn execution_policy(
+        &self,
+        account_key: &SafetyAccountKey,
+    ) -> Option<&NativeExecutionPolicy> {
+        self.execution_policies.get(account_key)
+    }
+
+    /// Fails closed unless this process freshly applied an Enabled, non-Off
+    /// signed policy for the exact account partition.
+    pub fn require_active_execution_policy(
+        &self,
+        account_key: &SafetyAccountKey,
+        evaluated_at_ms: u64,
+    ) -> Result<(), SafetyCaseRuntimeError> {
+        let active = self
+            .execution_policies
+            .get(account_key)
+            .is_some_and(|policy| {
+                policy.active_for_runtime
+                    && policy.state == NativeExecutionPolicyState::Enabled
+                    && evaluated_at_ms >= policy.valid_from_ms
+                    && evaluated_at_ms < policy.valid_until_ms
+                    && matches!(
+                        policy.execution_mode,
+                        crate::execution_policy::NativeExecutionMode::ShadowCases
+                            | crate::execution_policy::NativeExecutionMode::CaseTransitions
+                    )
+            });
+        active
+            .then_some(())
+            .ok_or(SafetyCaseRuntimeError::ExecutionPolicyInactive)
+    }
+
+    /// Deactivates every process-local policy authorization while preserving
+    /// the persisted monotonic floors. A fresh exact policy apply is required.
+    pub fn deactivate_execution_policies(&mut self) {
+        for policy in self.execution_policies.values_mut() {
+            policy.active_for_runtime = false;
+        }
+    }
+
     /// Applies a non-observation lifecycle command to an existing case.
     ///
     /// Observation commands are rejected because bypassing the canonical
@@ -975,6 +1113,8 @@ impl SafetyCaseRuntime {
             SafetyCaseCommand::Resolve { .. }
             | SafetyCaseCommand::Dismiss { .. }
             | SafetyCaseCommand::FlushDeferredGuardianReport { .. }
+            | SafetyCaseCommand::ConfirmGuardianReportPrepared { .. }
+            | SafetyCaseCommand::SuppressGuardianReport { .. }
             | SafetyCaseCommand::AcknowledgeGuardianReport { .. } => {}
             _ => return Err(SafetyCaseRuntimeError::UnsupportedLifecycleCommand),
         }
@@ -988,7 +1128,8 @@ impl SafetyCaseRuntime {
             .get(&case_key)
             .ok_or(SafetyCaseRuntimeError::InconsistentIndex)?;
         validate_lifecycle_timestamp(case, &command)?;
-        let reduction = SafetyCaseReducer::reduce(case, command, &self.config.case_policy)?;
+        let reduction_policy = self.effective_case_policy(&case_key.account_key)?;
+        let reduction = SafetyCaseReducer::reduce(case, command, &reduction_policy)?;
         let (case, decision) = reduction.into_parts();
         let account_key = case_key.account_key.clone();
         let mut candidate = self.clone();
@@ -1014,6 +1155,27 @@ impl SafetyCaseRuntime {
             return Err(SafetyCaseRuntimeError::CaseNotFound);
         }
         self.apply_lifecycle_command(case_id, command)
+    }
+
+    fn effective_case_policy(
+        &self,
+        account_key: &SafetyAccountKey,
+    ) -> Result<SafetyCasePolicy, SafetyCaseRuntimeError> {
+        let applied = self.execution_policies.get(account_key);
+        let mut policy = self.config.case_policy.clone();
+        if let Some(applied) = applied {
+            policy = policy
+                .with_max_observations(applied.maximum_case_observations)?
+                .with_max_case_reason_codes(applied.maximum_case_reason_codes)?;
+        }
+        let reducer_policy = applied.and_then(|applied| {
+            (applied.active_for_runtime && applied.state == NativeExecutionPolicyState::Enabled)
+                .then(|| applied.guardian_policy.clone())
+                .flatten()
+        });
+        policy
+            .with_execution_policy(reducer_policy)
+            .map_err(Into::into)
     }
 
     fn ensure_account_ingest_reserve(
@@ -1165,6 +1327,16 @@ impl SafetyCaseRuntime {
                 .then_with(|| left.source_event.cmp(&right.source_event))
         });
 
+        let mut execution_policies: Vec<_> = self
+            .execution_policies
+            .iter()
+            .map(|(account_key, policy)| PersistedExecutionPolicyEntry {
+                account_key: account_key.clone(),
+                policy: policy.clone(),
+            })
+            .collect();
+        execution_policies.sort_by(|left, right| left.account_key.cmp(&right.account_key));
+
         ExportedSafetyCaseRuntimeState {
             schema_version: SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION.to_string(),
             account_partition: None,
@@ -1172,6 +1344,7 @@ impl SafetyCaseRuntime {
             cases,
             active_case_generations,
             source_receipts,
+            execution_policies,
         }
     }
 
@@ -1190,6 +1363,9 @@ impl SafetyCaseRuntime {
         state
             .source_receipts
             .retain(|entry| &entry.account_key == account_key);
+        state
+            .execution_policies
+            .retain(|entry| &entry.account_key == account_key);
         state.account_partition = Some(account_key.clone());
         state
     }
@@ -1202,21 +1378,9 @@ impl SafetyCaseRuntime {
         &mut self,
         state: &ExportedSafetyCaseRuntimeState,
     ) -> Result<(), SafetyCaseRuntimeError> {
-        let is_legacy = state.schema_version == LEGACY_SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION;
-        if !is_legacy && state.schema_version != SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION {
+        if state.schema_version != SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION {
             return Err(SafetyCaseRuntimeError::UnsupportedStateSchema(
                 state.schema_version.clone(),
-            ));
-        }
-        if is_legacy
-            && (!state.active_case_generations.is_empty()
-                || state
-                    .cases
-                    .iter()
-                    .any(|entry| entry.case_generation != SafetyCaseGeneration::INITIAL))
-        {
-            return Err(SafetyCaseRuntimeError::InvalidPersistedState(
-                "legacy state contains successor-generation fields",
             ));
         }
         let mut candidate = Self::new(state.config.clone())?;
@@ -1248,15 +1412,30 @@ impl SafetyCaseRuntime {
             });
         }
 
+        for entry in &state.execution_policies {
+            entry.policy.validate().map_err(|_| {
+                SafetyCaseRuntimeError::InvalidPersistedState("execution policy floor is invalid")
+            })?;
+            if entry.policy.account_key != entry.account_key.as_str() {
+                return Err(SafetyCaseRuntimeError::InvalidPersistedState(
+                    "execution policy account binding is invalid",
+                ));
+            }
+            if candidate
+                .execution_policies
+                .insert(entry.account_key.clone(), entry.policy.clone())
+                .is_some()
+            {
+                return Err(SafetyCaseRuntimeError::InvalidPersistedState(
+                    "duplicate execution policy account",
+                ));
+            }
+        }
         for entry in &state.cases {
             candidate.import_case(entry)?;
         }
-        if is_legacy {
-            candidate.rebuild_legacy_active_case_generations()?;
-        } else {
-            for entry in &state.active_case_generations {
-                candidate.import_active_case_generation(entry)?;
-            }
+        for entry in &state.active_case_generations {
+            candidate.import_active_case_generation(entry)?;
         }
         for entry in &state.source_receipts {
             candidate.import_source_receipt(entry)?;
@@ -1269,6 +1448,7 @@ impl SafetyCaseRuntime {
         }
         candidate.validate_receipt_coverage()?;
         candidate.validate_all_account_state_budgets()?;
+        self.validate_execution_policy_floor_replacement(&candidate)?;
         *self = candidate;
         Ok(())
     }
@@ -1293,12 +1473,17 @@ impl SafetyCaseRuntime {
                 .source_receipts
                 .iter()
                 .any(|entry| &entry.account_key != account_key)
+            || state
+                .execution_policies
+                .iter()
+                .any(|entry| &entry.account_key != account_key)
         {
             return Err(SafetyCaseRuntimeError::AccountPartitionMismatch);
         }
 
         let mut normalized = Self::default();
         normalized.import_state(state)?;
+        self.validate_execution_policy_floor_for_account(account_key, &normalized)?;
 
         let contains_other_accounts = self.cases.keys().any(|key| &key.account_key != account_key)
             || self
@@ -1308,7 +1493,8 @@ impl SafetyCaseRuntime {
             || self
                 .source_receipts
                 .keys()
-                .any(|key| &key.account_key != account_key);
+                .any(|key| &key.account_key != account_key)
+            || self.execution_policies.keys().any(|key| key != account_key);
         if !contains_other_accounts {
             *self = normalized;
             return Ok(());
@@ -1327,6 +1513,9 @@ impl SafetyCaseRuntime {
         merged
             .source_receipts
             .retain(|entry| &entry.account_key != account_key);
+        merged
+            .execution_policies
+            .retain(|entry| &entry.account_key != account_key);
         let normalized_account = normalized.export_account_state(account_key);
         merged.cases.extend(normalized_account.cases);
         merged
@@ -1335,7 +1524,45 @@ impl SafetyCaseRuntime {
         merged
             .source_receipts
             .extend(normalized_account.source_receipts);
+        merged
+            .execution_policies
+            .extend(normalized_account.execution_policies);
         self.import_state(&merged)
+    }
+
+    fn validate_execution_policy_floor_replacement(
+        &self,
+        candidate: &Self,
+    ) -> Result<(), SafetyCaseRuntimeError> {
+        for account_key in self.execution_policies.keys() {
+            self.validate_execution_policy_floor_for_account(account_key, candidate)?;
+        }
+        Ok(())
+    }
+
+    fn validate_execution_policy_floor_for_account(
+        &self,
+        account_key: &SafetyAccountKey,
+        candidate: &Self,
+    ) -> Result<(), SafetyCaseRuntimeError> {
+        if let Some(current) = self.execution_policies.get(account_key) {
+            let Some(replacement) = candidate.execution_policies.get(account_key) else {
+                return Err(SafetyCaseRuntimeError::InvalidPersistedState(
+                    "execution policy floor is missing from replacement state",
+                ));
+            };
+            if replacement.authority_lineage_id != current.authority_lineage_id
+                || replacement.policy_epoch < current.policy_epoch
+                || replacement.revoked_through_policy_epoch < current.revoked_through_policy_epoch
+                || (replacement.policy_epoch == current.policy_epoch
+                    && replacement.policy_wire_digest != current.policy_wire_digest)
+            {
+                return Err(SafetyCaseRuntimeError::InvalidPersistedState(
+                    "execution policy replacement would roll back or equivocate the native floor",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Removes all case state and dedupe receipts for one account partition.
@@ -1372,6 +1599,7 @@ impl SafetyCaseRuntime {
         }
         self.latest_revisions
             .retain(|key, _| &key.account_key != account_key);
+        self.execution_policies.remove(account_key);
         SafetyCaseAccountRemoval {
             removed_cases,
             removed_source_receipts,
@@ -1386,6 +1614,7 @@ impl SafetyCaseRuntime {
         self.source_receipts.clear();
         self.latest_revisions.clear();
         self.observation_ids.clear();
+        self.execution_policies.clear();
     }
 
     fn ingest_new_source(
@@ -1455,11 +1684,12 @@ impl SafetyCaseRuntime {
             });
         }
 
+        let reduction_policy = self.effective_case_policy(&identity.account_key)?;
         let reduction = match existing_case {
             Some(case) => SafetyCaseReducer::reduce(
                 case,
                 SafetyCaseCommand::ApplyObservation { observation },
-                &self.config.case_policy,
+                &reduction_policy,
             )?,
             None => {
                 let case = SafetyCase::new(
@@ -1471,7 +1701,7 @@ impl SafetyCaseRuntime {
                 SafetyCaseReducer::reduce(
                     &case,
                     SafetyCaseCommand::ApplyObservation { observation },
-                    &self.config.case_policy,
+                    &reduction_policy,
                 )?
             }
         };
@@ -1529,12 +1759,13 @@ impl SafetyCaseRuntime {
         let first_observation = case.observations().first().cloned().ok_or(
             SafetyCaseRuntimeError::InvalidPersistedState("case has no observations"),
         )?;
+        let reduction_policy = self.effective_case_policy(&entry.account_key)?;
         SafetyCaseReducer::reduce(
             case,
             SafetyCaseCommand::ApplyObservation {
                 observation: first_observation,
             },
-            &self.config.case_policy,
+            &reduction_policy,
         )?;
 
         let expected_case_id = derive_case_id_for(
@@ -1561,35 +1792,6 @@ impl SafetyCaseRuntime {
         }
         self.case_ids.insert(case.case_id().clone(), key.clone());
         self.cases.insert(key, case.clone());
-        Ok(())
-    }
-
-    fn rebuild_legacy_active_case_generations(&mut self) -> Result<(), SafetyCaseRuntimeError> {
-        for case_key in self.cases.keys() {
-            if case_key.generation != SafetyCaseGeneration::INITIAL {
-                return Err(SafetyCaseRuntimeError::InvalidPersistedState(
-                    "legacy case uses a successor generation",
-                ));
-            }
-            let route_key = active_route_key_from_case_key(case_key);
-            if self
-                .active_case_generations
-                .insert(
-                    route_key,
-                    ActiveCaseGeneration {
-                        generation: SafetyCaseGeneration::INITIAL,
-                        activated_from_case_id: None,
-                        activated_from_case_revision: None,
-                        activated_at_ms: None,
-                    },
-                )
-                .is_some()
-            {
-                return Err(SafetyCaseRuntimeError::InvalidPersistedState(
-                    "legacy state contains duplicate case lineage",
-                ));
-            }
-        }
         Ok(())
     }
 
@@ -1894,6 +2096,27 @@ fn validate_lifecycle_timestamp(
                 && case.closed_reason_code() == Some(reason_code);
             !is_idempotent && *at_ms < case.updated_at_ms()
         }
+        SafetyCaseCommand::ConfirmGuardianReportPrepared {
+            report_key,
+            prepared_at_ms,
+        } => {
+            let is_idempotent = case.guardian_report_preparation().is_some_and(|receipt| {
+                receipt.key() == report_key && receipt.prepared_at_ms() == *prepared_at_ms
+            });
+            !is_idempotent && *prepared_at_ms < case.updated_at_ms()
+        }
+        SafetyCaseCommand::SuppressGuardianReport {
+            report_key,
+            suppressed_at_ms,
+            reason_code,
+        } => {
+            let is_idempotent = case.last_guardian_suppression().is_some_and(|receipt| {
+                receipt.key() == report_key
+                    && receipt.suppressed_at_ms() == *suppressed_at_ms
+                    && receipt.reason_code() == reason_code
+            });
+            !is_idempotent && *suppressed_at_ms < case.updated_at_ms()
+        }
         _ => false,
     };
     if predates_state {
@@ -2010,27 +2233,18 @@ fn derive_case_id_for(
     threat_type: ThreatType,
     generation: SafetyCaseGeneration,
 ) -> Result<SafetyCaseId, IdentifierError> {
-    let digest = if generation == SafetyCaseGeneration::INITIAL {
-        derive_content_free_digest(
-            b"aura.safety_case.case_id.v1",
-            &[
-                account_key.as_ref().as_bytes(),
-                subject_key.as_ref().as_bytes(),
-                threat_identity_tag(threat_type),
-            ],
-        )
-    } else {
-        let generation_bytes = generation.value().to_be_bytes();
-        derive_content_free_digest(
-            b"aura.safety_case.case_id.v2",
-            &[
-                account_key.as_ref().as_bytes(),
-                subject_key.as_ref().as_bytes(),
-                threat_identity_tag(threat_type),
-                &generation_bytes,
-            ],
-        )
-    };
+    // Every current-schema case identity binds its generation explicitly,
+    // including the initial generation zero episode.
+    let generation_bytes = generation.value().to_be_bytes();
+    let digest = derive_content_free_digest(
+        b"aura.safety_case.case_id.v2",
+        &[
+            account_key.as_ref().as_bytes(),
+            subject_key.as_ref().as_bytes(),
+            threat_identity_tag(threat_type),
+            &generation_bytes,
+        ],
+    );
     SafetyCaseId::new(format!("case_{digest}"))
 }
 

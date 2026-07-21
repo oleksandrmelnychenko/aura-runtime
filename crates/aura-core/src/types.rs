@@ -1,8 +1,8 @@
 //! Core domain types for the AURA analysis engine.
 //!
 //! Canonical shared enums (`ThreatType`, `Confidence`, `ProtectionLevel`,
-//! `AccountType`, `ConversationType`) live in `aura-contracts` and are
-//! re-exported here for backwards compatibility.
+//! `AccountType`, `ConversationType`) live in `aura-contracts` and are exposed
+//! here as part of the core domain API.
 
 use serde::{Deserialize, Serialize};
 
@@ -695,8 +695,6 @@ pub struct MessageInput {
     pub language: Option<String>,
     pub conversation_type: ConversationType,
     pub member_count: Option<u32>,
-    /// Server-injected sender reputation hint (0.0 = unknown, 1.0 = max risk).
-    pub server_sender_risk_hint: Option<f32>,
     /// Coarse sender relationship metadata supplied by the host application.
     pub sender_relationship: SenderRelationship,
     /// Source used to derive sender_relationship. Self-declared data is not trust.

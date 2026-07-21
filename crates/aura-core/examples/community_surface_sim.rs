@@ -13,7 +13,7 @@ use aura_core::{
 };
 use aura_patterns::PatternDatabase;
 use serde::Serialize;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -59,7 +59,6 @@ const REQUIRED_SCENARIO_LABELS: &[&str] = &[
     "phishing_blast",
     "pii_after_trust",
 ];
-const SERVER_HINTED_LABELS: &[&str] = &["low", "medium", "high"];
 const EMOJI_PADDING_TOKENS: &[&str] = &["🎮", "✨", "💬", "🔥", "🫶", "🙂"];
 
 #[derive(Debug, Clone)]
@@ -409,7 +408,6 @@ struct SimEvent {
     conversation_id: String,
     conversation_type: ConversationType,
     member_count: Option<u32>,
-    server_sender_risk_hint: Option<f32>,
     text: String,
 }
 
@@ -503,7 +501,6 @@ struct Finding {
     event_kind: EventKind,
     scenario: ScenarioKind,
     text_variant: TextVariant,
-    server_sender_risk_hint: Option<f32>,
     expected_threat: Option<ThreatType>,
     detected_threat: ThreatType,
     action: Action,
@@ -609,7 +606,6 @@ struct CommunitySimReport {
     by_kind: Vec<MetricRow>,
     by_scenario: Vec<MetricRow>,
     by_text_variant: Vec<MetricRow>,
-    by_server_hint: Vec<MetricRow>,
     by_language: Vec<MetricRow>,
     by_expected_threat: Vec<MetricRow>,
     action_counts: BTreeMap<String, usize>,
@@ -662,7 +658,6 @@ struct CommunityMatrixReport {
     by_kind: Vec<MetricRow>,
     by_scenario: Vec<MetricRow>,
     by_text_variant: Vec<MetricRow>,
-    by_server_hint: Vec<MetricRow>,
     by_language: Vec<MetricRow>,
     by_expected_threat: Vec<MetricRow>,
     seed_reports: Vec<SeedMatrixRow>,
@@ -695,125 +690,6 @@ impl Rng {
             return lo;
         }
         lo + (self.next_u64() as usize % (hi - lo))
-    }
-}
-
-#[derive(Debug, Default)]
-struct ServerReputationAggregator {
-    senders: HashMap<String, ServerSenderReputation>,
-}
-
-#[derive(Debug, Default)]
-struct ServerSenderReputation {
-    telemetry_events: usize,
-    medium_or_high_confidence_events: usize,
-    high_confidence_events: usize,
-    protected_accounts: BTreeSet<String>,
-    surfaces: BTreeSet<&'static str>,
-    threats: BTreeMap<String, usize>,
-    actions: BTreeMap<String, usize>,
-    last_timestamp_hour: u64,
-}
-
-#[derive(Debug, Clone)]
-struct ClientSafetyTelemetryEvent {
-    sender_token: String,
-    protected_account_token: String,
-    surface: &'static str,
-    threat_type: ThreatType,
-    severity: TelemetrySeverityBucket,
-    confidence: TelemetryConfidenceBucket,
-    timestamp_hour: u64,
-    action: Action,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TelemetrySeverityBucket {
-    Low,
-    Medium,
-    High,
-    Critical,
-}
-
-impl TelemetrySeverityBucket {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Low => "low",
-            Self::Medium => "medium",
-            Self::High => "high",
-            Self::Critical => "critical",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum TelemetryConfidenceBucket {
-    Low,
-    Medium,
-    High,
-}
-
-impl TelemetryConfidenceBucket {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Low => "low",
-            Self::Medium => "medium",
-            Self::High => "high",
-        }
-    }
-}
-
-impl ServerReputationAggregator {
-    fn hint(&self, sender_id: &str) -> Option<f32> {
-        let sender = self.senders.get(sender_id)?;
-        if sender.telemetry_events == 0 {
-            return None;
-        }
-
-        let cross_child = sender.protected_accounts.len() >= 2;
-        let cross_surface = sender.surfaces.len() >= 2;
-        let score = if sender.high_confidence_events >= 3 && cross_child {
-            0.90
-        } else if sender.medium_or_high_confidence_events >= 2 && (cross_child || cross_surface) {
-            0.72
-        } else if sender.high_confidence_events >= 1 && cross_surface {
-            0.55
-        } else {
-            return None;
-        };
-        Some(score)
-    }
-
-    fn record(&mut self, telemetry: ClientSafetyTelemetryEvent) {
-        let sender = self.senders.entry(telemetry.sender_token).or_default();
-        sender.telemetry_events += 1;
-        if telemetry.confidence >= TelemetryConfidenceBucket::Medium {
-            sender.medium_or_high_confidence_events += 1;
-        }
-        if telemetry.confidence == TelemetryConfidenceBucket::High {
-            sender.high_confidence_events += 1;
-        }
-        sender
-            .protected_accounts
-            .insert(telemetry.protected_account_token);
-        sender.surfaces.insert(telemetry.surface);
-        sender.last_timestamp_hour = sender.last_timestamp_hour.max(telemetry.timestamp_hour);
-        *sender
-            .threats
-            .entry(format!("{:?}", telemetry.threat_type))
-            .or_default() += 1;
-        *sender
-            .actions
-            .entry(format!("{:?}", telemetry.action))
-            .or_default() += 1;
-        *sender
-            .actions
-            .entry(format!("severity.{}", telemetry.severity.label()))
-            .or_default() += 1;
-        *sender
-            .actions
-            .entry(format!("confidence.{}", telemetry.confidence.label()))
-            .or_default() += 1;
     }
 }
 
@@ -1224,13 +1100,11 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
     let mut by_kind = BTreeMap::<String, MetricCounts>::new();
     let mut by_scenario = BTreeMap::<String, MetricCounts>::new();
     let mut by_text_variant = BTreeMap::<String, MetricCounts>::new();
-    let mut by_server_hint = BTreeMap::<String, MetricCounts>::new();
     let mut by_language = BTreeMap::<String, MetricCounts>::new();
     let mut by_expected_threat = BTreeMap::<String, MetricCounts>::new();
     let mut action_counts = BTreeMap::<String, usize>::new();
     let mut detected_threat_counts = BTreeMap::<String, usize>::new();
     let mut senders = HashMap::<String, SenderRiskRow>::new();
-    let mut server_reputation = ServerReputationAggregator::default();
     let mut findings = Vec::new();
     let mut sequence = 1usize;
 
@@ -1239,7 +1113,7 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
         let mut trajectory = ChildTrajectory::default();
 
         for event_index in 0..args.events_per_child {
-            let mut event = build_event(
+            let event = build_event(
                 sequence,
                 child_index,
                 child,
@@ -1248,7 +1122,6 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
                 &args.text_variants,
                 &mut rng,
             );
-            event.server_sender_risk_hint = server_reputation.hint(&event.sender_id);
             sequence += 1;
 
             let input = MessageInput {
@@ -1260,7 +1133,6 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
                 language: Some(event.child_language.to_string()),
                 conversation_type: event.conversation_type,
                 member_count: event.member_count,
-                server_sender_risk_hint: event.server_sender_risk_hint,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             };
@@ -1329,15 +1201,6 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
                     wrong_threat_positive,
                     false_positive,
                 );
-            by_server_hint
-                .entry(server_hint_label(event.server_sender_risk_hint).to_string())
-                .or_default()
-                .record(
-                    event.expected_threat,
-                    expected_detected,
-                    wrong_threat_positive,
-                    false_positive,
-                );
             by_language
                 .entry(event.child_language.to_string())
                 .or_default()
@@ -1378,12 +1241,6 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
                 expected_detected,
                 false_positive,
             );
-            if let Some(telemetry) =
-                client_safety_telemetry_from_result(&event, &result, detected_score)
-            {
-                server_reputation.record(telemetry);
-            }
-
             if event.expected_threat.is_some() && !expected_detected {
                 findings.push(Finding {
                     kind: if wrong_threat_positive {
@@ -1397,7 +1254,6 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
                     event_kind: event.kind,
                     scenario: event.scenario,
                     text_variant: event.text_variant,
-                    server_sender_risk_hint: event.server_sender_risk_hint,
                     expected_threat: event.expected_threat,
                     detected_threat: result.threat_type,
                     action: result.action,
@@ -1417,7 +1273,6 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
                     event_kind: event.kind,
                     scenario: event.scenario,
                     text_variant: event.text_variant,
-                    server_sender_risk_hint: event.server_sender_risk_hint,
                     expected_threat: None,
                     detected_threat: result.threat_type,
                     action: result.action,
@@ -1455,11 +1310,10 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
         &by_surface,
         &by_scenario,
         &by_text_variant,
-        &by_server_hint,
         args,
     );
     let mut report = CommunitySimReport {
-        schema_version: "aura.community_surface_sim.v1",
+        schema_version: "aura.community_surface_sim.v2",
         generated_at_unix_ms: generated_at_unix_ms(),
         profile: args.profile,
         seed: args.seed,
@@ -1474,7 +1328,6 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
         by_kind: metric_rows(by_kind),
         by_scenario: metric_rows(by_scenario),
         by_text_variant: metric_rows(by_text_variant),
-        by_server_hint: metric_rows(by_server_hint),
         by_language: metric_rows(by_language),
         by_expected_threat: metric_rows(by_expected_threat),
         action_counts,
@@ -1496,7 +1349,6 @@ fn run_seed_matrix(args: &Args) -> CommunityMatrixReport {
     let mut by_kind = BTreeMap::<String, MetricCounts>::new();
     let mut by_scenario = BTreeMap::<String, MetricCounts>::new();
     let mut by_text_variant = BTreeMap::<String, MetricCounts>::new();
-    let mut by_server_hint = BTreeMap::<String, MetricCounts>::new();
     let mut by_language = BTreeMap::<String, MetricCounts>::new();
     let mut by_expected_threat = BTreeMap::<String, MetricCounts>::new();
     let mut seed_reports = Vec::with_capacity(args.seeds.len());
@@ -1508,7 +1360,6 @@ fn run_seed_matrix(args: &Args) -> CommunityMatrixReport {
         merge_metric_rows(&mut by_kind, &report.by_kind);
         merge_metric_rows(&mut by_scenario, &report.by_scenario);
         merge_metric_rows(&mut by_text_variant, &report.by_text_variant);
-        merge_metric_rows(&mut by_server_hint, &report.by_server_hint);
         merge_metric_rows(&mut by_language, &report.by_language);
         merge_metric_rows(&mut by_expected_threat, &report.by_expected_threat);
         findings.extend(
@@ -1555,13 +1406,12 @@ fn run_seed_matrix(args: &Args) -> CommunityMatrixReport {
         &by_surface,
         &by_scenario,
         &by_text_variant,
-        &by_server_hint,
         elapsed_ms,
         args,
     );
 
     CommunityMatrixReport {
-        schema_version: "aura.community_surface_matrix.v1",
+        schema_version: "aura.community_surface_matrix.v2",
         generated_at_unix_ms: generated_at_unix_ms(),
         profile: args.profile,
         seeds: args.seeds.clone(),
@@ -1577,7 +1427,6 @@ fn run_seed_matrix(args: &Args) -> CommunityMatrixReport {
         by_kind: metric_rows(by_kind),
         by_scenario: metric_rows(by_scenario),
         by_text_variant: metric_rows(by_text_variant),
-        by_server_hint: metric_rows(by_server_hint),
         by_language: metric_rows(by_language),
         by_expected_threat: metric_rows(by_expected_threat),
         seed_reports,
@@ -1748,7 +1597,6 @@ fn build_event(
         conversation_id,
         conversation_type,
         member_count,
-        server_sender_risk_hint: None,
         text,
     }
 }
@@ -2445,65 +2293,6 @@ fn threshold_for(threat: ThreatType) -> f32 {
     }
 }
 
-fn client_safety_telemetry_from_result(
-    event: &SimEvent,
-    result: &aura_core::AnalysisResult,
-    detected_score: f32,
-) -> Option<ClientSafetyTelemetryEvent> {
-    if result.threat_type == ThreatType::None {
-        return None;
-    }
-
-    let threshold = threshold_for(result.threat_type);
-    if detected_score < threshold && result.action == Action::Allow {
-        return None;
-    }
-
-    Some(ClientSafetyTelemetryEvent {
-        // In production these are stable, privacy-preserving tokens, not raw
-        // identifiers. The simulation keeps readable IDs so reports remain
-        // debuggable.
-        sender_token: event.sender_id.clone(),
-        protected_account_token: event.child_id.clone(),
-        surface: event.surface.label(),
-        threat_type: result.threat_type,
-        severity: telemetry_severity_bucket(result.action, detected_score),
-        confidence: telemetry_confidence_bucket(result.action, detected_score),
-        timestamp_hour: event.timestamp_ms / 3_600_000,
-        action: result.action,
-    })
-}
-
-fn telemetry_severity_bucket(action: Action, score: f32) -> TelemetrySeverityBucket {
-    match action {
-        Action::Block => TelemetrySeverityBucket::Critical,
-        Action::Warn => TelemetrySeverityBucket::High,
-        Action::Blur | Action::Mark => TelemetrySeverityBucket::Medium,
-        Action::Allow if score >= 0.90 => TelemetrySeverityBucket::High,
-        Action::Allow if score >= 0.65 => TelemetrySeverityBucket::Medium,
-        Action::Allow => TelemetrySeverityBucket::Low,
-    }
-}
-
-fn telemetry_confidence_bucket(action: Action, score: f32) -> TelemetryConfidenceBucket {
-    match action {
-        Action::Block | Action::Warn if score >= 0.75 => TelemetryConfidenceBucket::High,
-        Action::Blur | Action::Mark if score >= 0.55 => TelemetryConfidenceBucket::Medium,
-        _ if score >= 0.85 => TelemetryConfidenceBucket::High,
-        _ if score >= 0.60 => TelemetryConfidenceBucket::Medium,
-        _ => TelemetryConfidenceBucket::Low,
-    }
-}
-
-fn server_hint_label(hint: Option<f32>) -> &'static str {
-    match hint {
-        Some(score) if score >= 0.70 => "high",
-        Some(score) if score >= 0.40 => "medium",
-        Some(score) if score > 0.0 => "low",
-        _ => "none",
-    }
-}
-
 fn record_sender(
     senders: &mut HashMap<String, SenderRiskRow>,
     event: &SimEvent,
@@ -2578,7 +2367,6 @@ fn evaluate_gates(
     by_surface: &BTreeMap<String, MetricCounts>,
     by_scenario: &BTreeMap<String, MetricCounts>,
     by_text_variant: &BTreeMap<String, MetricCounts>,
-    by_server_hint: &BTreeMap<String, MetricCounts>,
     args: &Args,
 ) -> GateReport {
     let positive_kind_coverage = required_positive_kind_coverage(by_kind);
@@ -2594,9 +2382,6 @@ fn evaluate_gates(
     let min_text_variant_detect_rate =
         min_text_variant_detect_rate(by_text_variant, &args.text_variants);
     let max_text_variant_fp_rate = max_text_variant_fp_rate(by_text_variant, &args.text_variants);
-    let server_hint_positive_events = server_hint_positive_events(by_server_hint);
-    let server_hint_detect_rate = server_hint_detect_rate(by_server_hint);
-    let server_hint_fp_rate = server_hint_fp_rate(by_server_hint);
 
     let mut checks = vec![
         GateCheck {
@@ -2690,27 +2475,6 @@ fn evaluate_gates(
             comparison: "at_most".to_string(),
             passed: max_text_variant_fp_rate <= args.max_safe_fp_rate,
         },
-        GateCheck {
-            name: "server_hint_positive_events".to_string(),
-            actual: server_hint_positive_events as f64,
-            threshold: 1.0,
-            comparison: "at_least".to_string(),
-            passed: server_hint_positive_events > 0,
-        },
-        GateCheck {
-            name: "server_hint_positive_detect_rate".to_string(),
-            actual: server_hint_detect_rate,
-            threshold: args.min_detect_rate,
-            comparison: "at_least".to_string(),
-            passed: server_hint_detect_rate >= args.min_detect_rate,
-        },
-        GateCheck {
-            name: "server_hint_safe_false_positive_rate".to_string(),
-            actual: server_hint_fp_rate,
-            threshold: args.max_safe_fp_rate,
-            comparison: "at_most".to_string(),
-            passed: server_hint_fp_rate <= args.max_safe_fp_rate,
-        },
     ];
     if let Some(max_elapsed_ms) = args.max_elapsed_ms {
         checks.push(GateCheck {
@@ -2736,7 +2500,6 @@ fn evaluate_matrix_gates(
     by_surface: &BTreeMap<String, MetricCounts>,
     by_scenario: &BTreeMap<String, MetricCounts>,
     by_text_variant: &BTreeMap<String, MetricCounts>,
-    by_server_hint: &BTreeMap<String, MetricCounts>,
     elapsed_ms: u128,
     args: &Args,
 ) -> GateReport {
@@ -2762,9 +2525,6 @@ fn evaluate_matrix_gates(
     let min_text_variant_detect_rate =
         min_text_variant_detect_rate(by_text_variant, &args.text_variants);
     let max_text_variant_fp_rate = max_text_variant_fp_rate(by_text_variant, &args.text_variants);
-    let server_hint_positive_events = server_hint_positive_events(by_server_hint);
-    let server_hint_detect_rate = server_hint_detect_rate(by_server_hint);
-    let server_hint_fp_rate = server_hint_fp_rate(by_server_hint);
 
     let mut checks = vec![
         GateCheck {
@@ -2878,27 +2638,6 @@ fn evaluate_matrix_gates(
             threshold: args.max_safe_fp_rate,
             comparison: "at_most".to_string(),
             passed: max_text_variant_fp_rate <= args.max_safe_fp_rate,
-        },
-        GateCheck {
-            name: "server_hint_positive_events".to_string(),
-            actual: server_hint_positive_events as f64,
-            threshold: 1.0,
-            comparison: "at_least".to_string(),
-            passed: server_hint_positive_events > 0,
-        },
-        GateCheck {
-            name: "server_hint_positive_detect_rate".to_string(),
-            actual: server_hint_detect_rate,
-            threshold: args.min_detect_rate,
-            comparison: "at_least".to_string(),
-            passed: server_hint_detect_rate >= args.min_detect_rate,
-        },
-        GateCheck {
-            name: "server_hint_safe_false_positive_rate".to_string(),
-            actual: server_hint_fp_rate,
-            threshold: args.max_safe_fp_rate,
-            comparison: "at_most".to_string(),
-            passed: server_hint_fp_rate <= args.max_safe_fp_rate,
         },
     ];
 
@@ -3056,38 +2795,6 @@ fn max_text_variant_fp_rate(
                 .map_or(0.0, |counts| counts.fp_rate)
         })
         .fold(0.0, f64::max)
-}
-
-fn server_hint_positive_events(by_server_hint: &BTreeMap<String, MetricCounts>) -> usize {
-    SERVER_HINTED_LABELS
-        .iter()
-        .filter_map(|label| by_server_hint.get(*label))
-        .map(|counts| counts.positives)
-        .sum()
-}
-
-fn server_hint_detect_rate(by_server_hint: &BTreeMap<String, MetricCounts>) -> f64 {
-    let mut counts = MetricCounts::default();
-    for label in SERVER_HINTED_LABELS {
-        if let Some(row) = by_server_hint.get(*label) {
-            counts.merge(row);
-        }
-    }
-    if counts.positives == 0 {
-        0.0
-    } else {
-        counts.detect_rate
-    }
-}
-
-fn server_hint_fp_rate(by_server_hint: &BTreeMap<String, MetricCounts>) -> f64 {
-    let mut counts = MetricCounts::default();
-    for label in SERVER_HINTED_LABELS {
-        if let Some(row) = by_server_hint.get(*label) {
-            counts.merge(row);
-        }
-    }
-    counts.fp_rate
 }
 
 fn evaluate_runtime_gate(report: &mut CommunitySimReport, args: &Args) {
@@ -3750,7 +3457,6 @@ fn print_report(report: &CommunitySimReport) {
     print_metric_table("By event kind", &report.by_kind);
     print_metric_table("By scenario", &report.by_scenario);
     print_metric_table("By text variant", &report.by_text_variant);
-    print_metric_table("By server hint", &report.by_server_hint);
     print_metric_table("By expected threat", &report.by_expected_threat);
 
     println!();
@@ -3782,13 +3488,12 @@ fn print_report(report: &CommunitySimReport) {
         println!("First {} findings", report.findings.len().min(20));
         for finding in report.findings.iter().take(20) {
             println!(
-                "  #{:<5} {:<14} {:<12} scenario={:<28} variant={:<14} hint={:<6} expected={:?} detected={:?} action={:?} score={:.2} expected_score={} text={}",
+                "  #{:<5} {:<14} {:<12} scenario={:<28} variant={:<14} expected={:?} detected={:?} action={:?} score={:.2} expected_score={} text={}",
                 finding.sequence,
                 finding.kind,
                 finding.surface.label(),
                 finding.scenario.label(),
                 finding.text_variant.label(),
-                format_optional_hint(finding.server_sender_risk_hint),
                 finding.expected_threat,
                 finding.detected_threat,
                 finding.action,
@@ -3892,7 +3597,6 @@ fn print_matrix_report(report: &CommunityMatrixReport) {
     print_metric_table("By event kind", &report.by_kind);
     print_metric_table("By scenario", &report.by_scenario);
     print_metric_table("By text variant", &report.by_text_variant);
-    print_metric_table("By server hint", &report.by_server_hint);
     print_metric_table("By expected threat", &report.by_expected_threat);
 
     println!();
@@ -3903,14 +3607,13 @@ fn print_matrix_report(report: &CommunityMatrixReport) {
         for matrix_finding in report.findings.iter().take(20) {
             let finding = &matrix_finding.finding;
             println!(
-                "  seed={} #{:<5} {:<14} {:<12} scenario={:<28} variant={:<14} hint={:<6} expected={:?} detected={:?} action={:?} score={:.2} expected_score={} text={}",
+                "  seed={} #{:<5} {:<14} {:<12} scenario={:<28} variant={:<14} expected={:?} detected={:?} action={:?} score={:.2} expected_score={} text={}",
                 matrix_finding.seed,
                 finding.sequence,
                 finding.kind,
                 finding.surface.label(),
                 finding.scenario.label(),
                 finding.text_variant.label(),
-                format_optional_hint(finding.server_sender_risk_hint),
                 finding.expected_threat,
                 finding.detected_threat,
                 finding.action,
@@ -4045,12 +3748,6 @@ fn format_optional_score(score: Option<f32>) -> String {
         .unwrap_or_else(|| "-".to_string())
 }
 
-fn format_optional_hint(score: Option<f32>) -> String {
-    score
-        .map(|score| format!("{score:.2}"))
-        .unwrap_or_else(|| "-".to_string())
-}
-
 fn format_signed_rate(rate: Option<f64>) -> String {
     rate.map(|rate| format!("{:+.1}%", rate * 100.0))
         .unwrap_or_else(|| "-".to_string())
@@ -4061,7 +3758,6 @@ fn format_gate_value(check: &GateCheck) -> String {
         format!("{:.0}ms", check.actual)
     } else if check.name == "history_has_prior_runs"
         || check.name == "text_variants_with_positive_events"
-        || check.name == "server_hint_positive_events"
         || check.name.ends_with("_covered")
     {
         format!("{:.0}", check.actual)
@@ -4081,7 +3777,6 @@ fn format_gate_threshold(check: &GateCheck) -> String {
         format!("{:.0}ms", check.threshold)
     } else if check.name == "history_has_prior_runs"
         || check.name == "text_variants_with_positive_events"
-        || check.name == "server_hint_positive_events"
         || check.name.ends_with("_covered")
     {
         format!("{:.0}", check.threshold)

@@ -115,7 +115,7 @@ impl AuraDomainRuntime {
         protection_level: ProtectionLevel,
         input: &MessageInput,
     ) -> Option<DomainOutput> {
-        self.analyze_for_mode_with_hints(domain_mode, protection_level, input, None, None)
+        self.analyze_for_mode_with_hints(domain_mode, protection_level, input, None)
     }
 
     pub fn analyze_for_mode_with_hints(
@@ -124,7 +124,6 @@ impl AuraDomainRuntime {
         protection_level: ProtectionLevel,
         input: &MessageInput,
         ml_safety_hint: Option<MlSafetyHint>,
-        server_sender_risk_hint: Option<f32>,
     ) -> Option<DomainOutput> {
         let module_id = domain_module_id_for_mode(domain_mode)?;
         let risk_profile = domain_risk_profile_for_mode(domain_mode, protection_level);
@@ -137,7 +136,6 @@ impl AuraDomainRuntime {
             risk_profile,
             conversation_type,
             ml_safety_hint,
-            server_sender_risk_hint,
         };
         self.registry.run(module_id, &domain_input)
     }
@@ -1393,7 +1391,6 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         };
@@ -1413,7 +1410,6 @@ mod tests {
             language: Some("en".to_string()),
             conversation_type: ConversationType::Direct,
             member_count: None,
-            server_sender_risk_hint: None,
             sender_relationship: Default::default(),
             relationship_trust_source: Default::default(),
         };

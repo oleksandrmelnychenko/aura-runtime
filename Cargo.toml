@@ -44,6 +44,7 @@ prost-build = "0.14"
 protoc-bin-vendored = "3"
 sha2 = "0.11"
 regex = "1"
+ed25519-dalek = { version = "2.2", default-features = false, features = ["std"] }
 
 # ── Release profiles ─────────────────────────────────────────────────
 

@@ -95,8 +95,8 @@ Latest known expanded lifecycle-suite gate:
   guardian-verified, school directory, platform verified, address book,
   local heuristic, self-declared, server reputation.
 - [ ] Add trust-source freshness and revocation semantics.
-- [ ] Add server risk hints that map cleanly into local
-  `server_sender_risk_hint` and relationship metadata.
+- [ ] Keep server reputation inside authenticated server-side correlation and
+  reporting flows; do not inject it into local message analysis.
 
 ### Server AI Models
 

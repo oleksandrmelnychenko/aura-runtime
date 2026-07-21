@@ -27,20 +27,30 @@ public final class AuraAgentRuntime: @unchecked Sendable {
         native_aura_agent_version().map { String(cString: $0) } ?? "unknown"
     }
 
-    public func analyzeContext(requestBytes: Data) throws -> Data {
-        try withOutputBuffer { out in
-            try Self.withBytePointer(requestBytes) { ptr, count in
-                native_aura_agent_analyze_context(handle, ptr, count, out)
-            }
-        }
-    }
-
     /// Canonically analyzes one event revision and updates Safety Case state at
     /// most once. The request and response are protobuf encoded.
     public func analyzeCanonicalSafety(requestBytes: Data) throws -> Data {
         try withOutputBuffer { out in
             try Self.withBytePointer(requestBytes) { ptr, count in
                 native_aura_agent_analyze_canonical_safety(handle, ptr, count, out)
+            }
+        }
+    }
+
+    /// Returns the native canonical artifact attestation response bytes.
+    public func attestRuntimeArtifacts(requestBytes: Data) throws -> Data {
+        try withOutputBuffer { out in
+            try Self.withBytePointer(requestBytes) { request, count in
+                native_aura_agent_attest_runtime_artifacts(handle, request, count, out)
+            }
+        }
+    }
+
+    /// Applies one exact signed execution-policy wire against the native floor.
+    public func applyExecutionPolicy(requestBytes: Data) throws -> Data {
+        try withOutputBuffer { out in
+            try Self.withBytePointer(requestBytes) { request, count in
+                native_aura_agent_apply_execution_policy(handle, request, count, out)
             }
         }
     }
@@ -73,26 +83,79 @@ public final class AuraAgentRuntime: @unchecked Sendable {
         }
     }
 
-    public func analyze(messageBytes: Data) throws -> Data {
+    /// Returns the native reducer's account-scoped, content-free report
+    /// projection. The request and response are protobuf encoded.
+    public func exportGuardianReportSnapshot(requestBytes: Data) throws -> Data {
         try withOutputBuffer { out in
-            try Self.withBytePointer(messageBytes) { ptr, count in
-                native_aura_agent_analyze(handle, ptr, count, out)
+            try Self.withBytePointer(requestBytes) { ptr, count in
+                native_aura_agent_export_guardian_report_snapshot(handle, ptr, count, out)
             }
         }
     }
 
-    public func analyzeBatch(requestBytes: Data) throws -> Data {
+    /// Returns every pending or deferred report projection in one account.
+    public func exportGuardianReportAccountSnapshot(requestBytes: Data) throws -> Data {
         try withOutputBuffer { out in
             try Self.withBytePointer(requestBytes) { ptr, count in
-                native_aura_agent_analyze_batch(handle, ptr, count, out)
+                native_aura_agent_export_guardian_report_account_snapshot(
+                    handle,
+                    ptr,
+                    count,
+                    out
+                )
             }
         }
     }
 
-    public func buildShadowBundle(requestBytes: Data) throws -> Data {
+    /// Flushes one exact eligible deferred report and returns its new snapshot.
+    public func flushDeferredGuardianReport(requestBytes: Data) throws -> Data {
         try withOutputBuffer { out in
             try Self.withBytePointer(requestBytes) { ptr, count in
-                native_aura_agent_build_shadow_bundle(handle, ptr, count, out)
+                native_aura_agent_flush_deferred_guardian_report(
+                    handle,
+                    ptr,
+                    count,
+                    out
+                )
+            }
+        }
+    }
+
+    /// Locks one exact pending report after its complete encrypted recipient
+    /// fanout has been atomically persisted by the host.
+    public func confirmGuardianReportPrepared(requestBytes: Data) throws -> Data {
+        try withOutputBuffer { out in
+            try Self.withBytePointer(requestBytes) { ptr, count in
+                native_aura_agent_confirm_guardian_report_prepared(
+                    handle,
+                    ptr,
+                    count,
+                    out
+                )
+            }
+        }
+    }
+
+    /// Suppresses one exact unprepared report under verified host policy.
+    public func suppressGuardianReport(requestBytes: Data) throws -> Data {
+        try withOutputBuffer { out in
+            try Self.withBytePointer(requestBytes) { ptr, count in
+                native_aura_agent_suppress_guardian_report(
+                    handle,
+                    ptr,
+                    count,
+                    out
+                )
+            }
+        }
+    }
+
+    /// Records one exact report as delivered after the complete device fanout
+    /// has authenticated durable-enqueue receipts.
+    public func acknowledgeGuardianReport(requestBytes: Data) throws -> Data {
+        try withOutputBuffer { out in
+            try Self.withBytePointer(requestBytes) { ptr, count in
+                native_aura_agent_acknowledge_guardian_report(handle, ptr, count, out)
             }
         }
     }
@@ -136,81 +199,6 @@ public final class AuraAgentRuntime: @unchecked Sendable {
         }
         guard ok else {
             throw AuraAgentError.callFailed(Self.consumeLastError())
-        }
-    }
-
-    public func cleanupContext(nowMilliseconds: UInt64) throws {
-        guard native_aura_agent_cleanup_context(handle, nowMilliseconds) else {
-            throw AuraAgentError.callFailed(Self.consumeLastError())
-        }
-    }
-
-    public func updateConfig(configBytes: Data) throws {
-        let ok = try Self.withBytePointer(configBytes) { ptr, count in
-            native_aura_agent_update_config(handle, ptr, count)
-        }
-        guard ok else {
-            throw AuraAgentError.callFailed(Self.consumeLastError())
-        }
-    }
-
-    public func reloadPatterns(requestBytes: Data) throws -> Data {
-        try withOutputBuffer { out in
-            try Self.withBytePointer(requestBytes) { ptr, count in
-                native_aura_agent_reload_patterns(handle, ptr, count, out)
-            }
-        }
-    }
-
-    public func contactsByRisk() throws -> Data {
-        try withOutputBuffer { out in
-            native_aura_agent_get_contacts_by_risk(handle, out)
-        }
-    }
-
-    public func contactProfile(requestBytes: Data) throws -> Data {
-        try withOutputBuffer { out in
-            try Self.withBytePointer(requestBytes) { ptr, count in
-                native_aura_agent_get_contact_profile(handle, ptr, count, out)
-            }
-        }
-    }
-
-    public func markContactTrusted(requestBytes: Data) throws {
-        let ok = try Self.withBytePointer(requestBytes) { ptr, count in
-            native_aura_agent_mark_contact_trusted(handle, ptr, count)
-        }
-        guard ok else {
-            throw AuraAgentError.callFailed(Self.consumeLastError())
-        }
-    }
-
-    public func quickCheck(textBytes: Data) throws -> Data {
-        try withOutputBuffer { out in
-            try Self.withBytePointer(textBytes) { ptr, count in
-                native_aura_agent_quick_check(handle, ptr, count, out)
-            }
-        }
-    }
-
-    public func detectSuspiciousURL(urlBytes: Data) throws -> Data {
-        try withOutputBuffer { out in
-            try Self.withBytePointer(urlBytes) { ptr, count in
-                native_aura_agent_detect_suspicious_url(handle, ptr, count, out)
-            }
-        }
-    }
-
-    public func conversationSummary() throws -> Data {
-        try withOutputBuffer { out in
-            native_aura_agent_get_conversation_summary(handle, out)
-        }
-    }
-
-    /// Returns a protobuf-encoded RuntimeCapabilities snapshot.
-    public func runtimeCapabilities() throws -> Data {
-        try withOutputBuffer { out in
-            native_aura_agent_get_runtime_capabilities(handle, out)
         }
     }
 

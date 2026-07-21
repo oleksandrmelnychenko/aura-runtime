@@ -966,7 +966,6 @@ fn build_external_curated_scenario(spec: &ExternalCuratedCaseSpec) -> ExternalCu
                     ConversationType::Group => true,
                 }
                 .then_some(6),
-                server_sender_risk_hint: None,
                 sender_relationship: Default::default(),
                 relationship_trust_source: Default::default(),
             },
