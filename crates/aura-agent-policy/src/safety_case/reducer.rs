@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use aura_contracts::{Confidence, ThreatType};
 use serde::{Deserialize, Serialize};
 
@@ -1515,9 +1517,11 @@ mod tests {
 
     use super::{SafetyCaseCommand, SafetyCasePolicy, SafetyCaseReducer};
     use crate::safety_case::{
-        ConversationEventKey, GuardianReportDirective, RiskScore, SafetyCase, SafetyCaseId,
-        SafetyCaseSeverity, SafetyCaseStatus, SafetyCaseSubjectKey, SafetyObservation,
-        SafetyObservationId, SafetyReasonCode, SourceEventId, SourceEventKey,
+        ConversationEventKey, GuardianDeliveryClass, GuardianExecutionMode,
+        GuardianExecutionPolicy, GuardianExecutionRule, GuardianReportDirective,
+        GuardianReportTrigger, RiskScore, SafetyCase, SafetyCaseId, SafetyCaseSeverity,
+        SafetyCaseStatus, SafetyCaseSubjectKey, SafetyObservation, SafetyObservationId,
+        SafetyReasonCode, SourceEventId, SourceEventKey,
     };
 
     fn case() -> SafetyCase {
@@ -1553,6 +1557,77 @@ mod tests {
         .unwrap()
         .with_reason_codes(vec![SafetyReasonCode::new("kids.grooming.secrecy").unwrap()])
         .unwrap()
+    }
+
+    fn reporting_policy() -> SafetyCasePolicy {
+        let reason_code = SafetyReasonCode::new("kids.grooming.secrecy").unwrap();
+        let rule = |rule_id: &str,
+                    trigger,
+                    required_case_status,
+                    minimum_severity,
+                    delivery_class,
+                    urgent_bypasses_cooldown,
+                    digest_byte| GuardianExecutionRule {
+            rule_id: rule_id.to_string(),
+            risk_family: ThreatType::Grooming,
+            trigger,
+            required_case_status,
+            minimum_severity,
+            minimum_confidence: Confidence::High,
+            minimum_observation_count: 1,
+            minimum_peak_risk_basis_points: 8_000,
+            cooldown_ms: 30 * 60 * 1_000,
+            urgent_bypasses_cooldown,
+            maximum_report_reason_codes: 1,
+            maximum_evidence_commitments: 1,
+            allowed_report_reason_codes: vec![reason_code.clone()],
+            delivery_class: Some(delivery_class),
+            rule_digest: [digest_byte; 32],
+        };
+        let execution_policy = GuardianExecutionPolicy {
+            authority_lineage_id: "test-authority".to_string(),
+            policy_epoch: 1,
+            policy_version: "test-v1".to_string(),
+            policy_assertion_digest: [1; 32],
+            runtime_capabilities_digest: [2; 32],
+            model_manifest_digest: [3; 32],
+            execution_policy_trust_keyring_digest: [4; 32],
+            valid_from_ms: 1_000,
+            valid_until_ms: 60_000,
+            execution_mode: GuardianExecutionMode::CaseTransitions,
+            rules: vec![
+                rule(
+                    "case-escalated",
+                    GuardianReportTrigger::CaseEscalated,
+                    SafetyCaseStatus::Escalated,
+                    SafetyCaseSeverity::High,
+                    GuardianDeliveryClass::NeedsAttention,
+                    false,
+                    5,
+                ),
+                rule(
+                    "case-opened",
+                    GuardianReportTrigger::CaseOpened,
+                    SafetyCaseStatus::Open,
+                    SafetyCaseSeverity::Elevated,
+                    GuardianDeliveryClass::NeedsAttention,
+                    false,
+                    6,
+                ),
+                rule(
+                    "urgent-review",
+                    GuardianReportTrigger::UrgentReview,
+                    SafetyCaseStatus::Urgent,
+                    SafetyCaseSeverity::Critical,
+                    GuardianDeliveryClass::Urgent,
+                    true,
+                    7,
+                ),
+            ],
+        };
+        SafetyCasePolicy::default()
+            .with_execution_policy(Some(execution_policy))
+            .unwrap()
     }
 
     #[test]
@@ -1597,6 +1672,7 @@ mod tests {
 
     #[test]
     fn elevated_observation_opens_case_and_queues_one_report() {
+        let policy = reporting_policy();
         let reduction = SafetyCaseReducer::reduce(
             &case(),
             SafetyCaseCommand::ApplyObservation {
@@ -1607,7 +1683,7 @@ mod tests {
                     2_000,
                 ),
             },
-            &SafetyCasePolicy::default(),
+            &policy,
         )
         .unwrap();
 
@@ -1619,7 +1695,7 @@ mod tests {
 
     #[test]
     fn escalation_inside_cooldown_is_deferred() {
-        let policy = SafetyCasePolicy::default();
+        let policy = reporting_policy();
         let opened = SafetyCaseReducer::reduce(
             &case(),
             SafetyCaseCommand::ApplyObservation {
@@ -1680,7 +1756,7 @@ mod tests {
 
     #[test]
     fn urgent_transition_bypasses_cooldown() {
-        let policy = SafetyCasePolicy::default();
+        let policy = reporting_policy();
         let opened = SafetyCaseReducer::reduce(
             &case(),
             SafetyCaseCommand::ApplyObservation {
