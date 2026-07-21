@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "source_revision": "c2481dbe568d6292c8cb10e55658d40b7a77a0a9",
+  "source_tree_dirty": false,
+  "cargo_profile": "release",
+  "cargo_features": [],
+  "ffi_contract_version": 1,
+  "aura_ffi_header_sha256": "bf55ff30f5a35407b3e595ecc3d56c8b8e8901a149bc9912219246316e4bcf86",
+  "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
+  "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
+  "execution_policy_trust_keyring_sha256": "9339c0165962cfeb66a677bcf47de5318f5655ad24e3e006e2d1e40aa8164152"
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "keyring_version": "aura-execution-policy-keyring-local-v1",
+  "authority_lineage_id": "aura-execution-policy-local-f3a2640fb7f0806a8df978ac94baa1d82758235843a66600ba3c32e5dfb9d5cb",
+  "accepted_policy_versions": [
+    "aura.execution-policy.local.v1"
+  ],
+  "maximum_policy_validity_ms": 604800000,
+  "maximum_case_state_ttl_ms": 7776000000,
+  "maximum_case_observations": 4096,
+  "maximum_case_reason_codes": 64,
+  "maximum_rule_count": 64,
+  "maximum_rule_reason_codes": 16,
+  "maximum_rule_evidence_commitments": 16,
+  "maximum_rule_cooldown_ms": 2592000000,
+  "keys": [
+    {
+      "key_id": "aura-execution-policy-local-v1",
+      "public_key_hex": "7afadef598e580940c4e1888d616a32bbd5630f5ae7e493f52931f84e728454d",
+      "minimum_policy_epoch": 1,
+      "maximum_policy_epoch": 9223372036854775807,
+      "minimum_safety_profile_authority_epoch": 1,
+      "maximum_safety_profile_authority_epoch": 9223372036854775807,
+      "valid_from_ms": 1,
+      "valid_until_ms": 4102444800000
+    }
+  ]
+}
