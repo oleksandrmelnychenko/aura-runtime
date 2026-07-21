@@ -138,7 +138,7 @@ if [[ "$PROFILE" == "release" ]]; then
   profile_dir="release"
 fi
 
-RUST_HOST="$(rustc -vV | awk '/^host: / { print $2; exit }')"
+RUST_HOST="$(rustc -vV | sed -n 's/^host: //p')"
 RUST_SYSROOT="$(rustc --print sysroot)"
 LLVM_NM="${AURA_LLVM_NM:-$RUST_SYSROOT/lib/rustlib/$RUST_HOST/bin/llvm-nm}"
 LLVM_STRIP="${AURA_LLVM_STRIP:-$RUST_SYSROOT/lib/rustlib/$RUST_HOST/bin/llvm-strip}"
