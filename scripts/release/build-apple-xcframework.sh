@@ -138,8 +138,23 @@ if [[ "$PROFILE" == "release" ]]; then
   profile_dir="release"
 fi
 
-SIM_LIB="$DIST_DIR/libaura_agent_ffi_ios_sim.a"
-MACABI_LIB="$DIST_DIR/libaura_agent_ffi_maccatalyst.a"
+RUST_HOST="$(rustc -vV | awk '/^host: / { print $2; exit }')"
+RUST_SYSROOT="$(rustc --print sysroot)"
+LLVM_NM="${AURA_LLVM_NM:-$RUST_SYSROOT/lib/rustlib/$RUST_HOST/bin/llvm-nm}"
+LLVM_STRIP="${AURA_LLVM_STRIP:-$RUST_SYSROOT/lib/rustlib/$RUST_HOST/bin/llvm-strip}"
+if [[ ! -x "$LLVM_NM" || ! -x "$LLVM_STRIP" ]]; then
+  echo "Rust llvm-nm and llvm-strip are required to package Apple artifacts." >&2
+  echo "Install them with: rustup component add llvm-tools-preview" >&2
+  exit 2
+fi
+
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/aura-apple-release.XXXXXXXX")"
+trap 'rm -rf "$WORK_DIR"' EXIT HUP INT TERM
+DEVICE_LIB="$WORK_DIR/libaura_agent_ffi.a"
+SIM_LIB="$WORK_DIR/libaura_agent_ffi_ios_sim.a"
+MACABI_LIB="$WORK_DIR/libaura_agent_ffi_maccatalyst.a"
+
+cp "$ROOT/target/aarch64-apple-ios/$profile_dir/libaura_agent_ffi.a" "$DEVICE_LIB"
 
 lipo -create \
   "$ROOT/target/aarch64-apple-ios-sim/$profile_dir/libaura_agent_ffi.a" \
@@ -150,6 +165,13 @@ lipo -create \
   "$ROOT/target/aarch64-apple-ios-macabi/$profile_dir/libaura_agent_ffi.a" \
   "$ROOT/target/x86_64-apple-ios-macabi/$profile_dir/libaura_agent_ffi.a" \
   -output "$MACABI_LIB"
+
+# Cargo cannot strip every object embedded in a Mach-O static archive. Remove
+# debug sections from the package copies with the matching Rust LLVM toolchain;
+# keep all external symbols required by the final application link.
+"$LLVM_STRIP" -S "$DEVICE_LIB"
+"$LLVM_STRIP" -S "$SIM_LIB"
+"$LLVM_STRIP" -S "$MACABI_LIB"
 
 required_symbols=(
   _aura_agent_init
@@ -198,12 +220,23 @@ forbidden_symbols=(
 
 verify_archive_symbols() {
   local archive="$1"
+  local raw_symbols
   local symbols
-  # Newer Rust toolchains can emit LLVM attributes in compiler_builtins archive
-  # members that the Apple nm bundled with the current Xcode cannot decode yet.
-  # Keep the symbols it can read; the explicit allow/deny checks below still
-  # fail closed if the Aura FFI object itself cannot be inspected.
-  symbols="$({ xcrun nm -gU "$archive" 2>/dev/null || true; } | awk '{print $NF}')"
+  # Use llvm-nm from the active Rust toolchain. Apple nm can lag the LLVM
+  # producer embedded in stable Rust and skip the exact Aura object while
+  # successfully reading older compiler-builtins members.
+  if ! raw_symbols="$(
+    "$LLVM_NM" --defined-only --extern-only "$archive" 2>&1
+  )"; then
+    printf '%s\n' "$raw_symbols" >&2
+    echo "Failed to inspect symbols in $archive" >&2
+    exit 1
+  fi
+  symbols="$(
+    printf '%s\n' "$raw_symbols" \
+      | grep -v ': no symbols$' \
+      | awk '{print $NF}'
+  )"
 
   for symbol in "${required_symbols[@]}"; do
     if ! grep -Fqx "$symbol" <<<"$symbols"; then
@@ -228,13 +261,13 @@ verify_archive_symbols() {
   done < <(grep '^_aura_' <<<"$symbols" || true)
 }
 
-verify_archive_symbols "$ROOT/target/aarch64-apple-ios/$profile_dir/libaura_agent_ffi.a"
+verify_archive_symbols "$DEVICE_LIB"
 verify_archive_symbols "$SIM_LIB"
 verify_archive_symbols "$MACABI_LIB"
 
 rm -rf "$DIST_DIR/AuraAgentFFI.xcframework"
 xcodebuild -create-xcframework \
-  -library "$ROOT/target/aarch64-apple-ios/$profile_dir/libaura_agent_ffi.a" -headers "$INCLUDE_DIR" \
+  -library "$DEVICE_LIB" -headers "$INCLUDE_DIR" \
   -library "$SIM_LIB" -headers "$INCLUDE_DIR" \
   -library "$MACABI_LIB" -headers "$INCLUDE_DIR" \
   -output "$DIST_DIR/AuraAgentFFI.xcframework"

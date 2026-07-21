@@ -6,3 +6,4 @@
 *.onnx.data filter=lfs diff=lfs merge=lfs -text
 *.parquet filter=lfs diff=lfs merge=lfs -text
 *.arrow filter=lfs diff=lfs merge=lfs -text
+dist/apple/AuraAgentFFI.xcframework/**/*.a filter=lfs diff=lfs merge=lfs -text
