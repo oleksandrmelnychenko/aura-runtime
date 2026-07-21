@@ -3564,7 +3564,8 @@ mod tests {
         assert!(kids_memory_state_from_proto(&noncurrent).is_err());
 
         let mut missing_conversation_index = noncurrent.clone();
-        missing_conversation_index.schema_version = KIDS_MEMORY_STATE_VERSION;
+        missing_conversation_index.schema_version =
+            aura_agent_core::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION;
         missing_conversation_index.senders[0].last_activity_index = Some(42);
         assert!(kids_memory_state_from_proto(&missing_conversation_index).is_err());
 
