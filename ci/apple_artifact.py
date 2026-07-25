@@ -155,6 +155,36 @@ def source_tree_dirty(root: Path) -> bool:
     return any(not _is_generated_source_path(path) for path in changed)
 
 
+def _source_revision_is_ancestor(
+    root: Path,
+    source_revision: str,
+    current_revision: str,
+) -> bool:
+    """Allow an artifact-only commit to follow the exact source revision."""
+
+    result = subprocess.run(
+        [
+            "git",
+            "merge-base",
+            "--is-ancestor",
+            source_revision,
+            current_revision,
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    raise ArtifactError(
+        "git merge-base --is-ancestor failed: "
+        f"{result.stderr.strip() or 'unknown Git error'}"
+    )
+
+
 def _sha256_file(path: Path) -> str:
     hasher = hashlib.sha256()
     with path.open("rb") as file:
@@ -317,7 +347,18 @@ def _verify_release_documents(
             f"{field} differs between manifest and runtime descriptor",
         )
 
-    _require(manifest["source_revision"] == current_revision, "source revision mismatch")
+    source_revision = manifest.get("source_revision")
+    _require(
+        isinstance(source_revision, str)
+        and len(source_revision) == 40
+        and all(character in "0123456789abcdef" for character in source_revision),
+        "source revision must be a full lowercase Git SHA-1",
+    )
+    assert isinstance(source_revision, str)
+    _require(
+        _source_revision_is_ancestor(root, source_revision, current_revision),
+        "source revision is not an ancestor of the current revision",
+    )
     _require(
         manifest["source_tree_sha256"] == current_digest,
         "source tree digest mismatch",

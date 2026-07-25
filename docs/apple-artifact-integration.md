@@ -64,16 +64,20 @@ build phase.
 1. Land the reviewed Rust refactor and Stage 7 provenance changes.
 2. Build `dist/apple` from that clean revision with
    `just apple-artifact-build-release`.
-3. Preserve the passing
+3. Commit only the generated `dist/apple` outputs. The manifest keeps the
+   exact source commit as `source_revision`; the verifier accepts the following
+   artifact-only commit only when that source revision is its ancestor and the
+   reviewable source-tree digest is unchanged.
+4. Preserve the passing
    `artifacts/apple-release-verification.json`.
-4. Isolate or finish the unrelated iOS BLE/offline worktree.
-5. Update `AuraNativeReleaseArtifactContract.swift` for schemas `5` and `3`.
-6. Update the local-package/artifact pin to the exact Rust source revision and
+5. Isolate or finish the unrelated iOS BLE/offline worktree.
+6. Update `AuraNativeReleaseArtifactContract.swift` for schemas `5` and `3`.
+7. Update the local-package/artifact pin to the exact Rust source revision and
    binary hashes.
-7. Run the production trust-manifest build phase and focused Aura runtime
+8. Run the production trust-manifest build phase and focused Aura runtime
    contract tests against device and simulator slices.
-8. Record the Rust revision, iOS revision, source-tree digest, binary digests,
-   and test result in the release evidence bundle.
+9. Record the Rust source revision, artifact commit, iOS revision, source-tree
+   digest, binary digests, and test result in the release evidence bundle.
 
 No pin should reference an uncommitted source tree or a verification report
 whose `shippable` field is false.

@@ -3,7 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ci.apple_artifact import source_tree_digest, source_tree_dirty
+from ci.apple_artifact import (
+    _source_revision_is_ancestor,
+    source_tree_digest,
+    source_tree_dirty,
+)
 
 
 class SourceTreeIdentityTests(unittest.TestCase):
@@ -61,6 +65,52 @@ class SourceTreeIdentityTests(unittest.TestCase):
 
         self.assertNotEqual(source_tree_digest(self.root), baseline)
         self.assertTrue(source_tree_dirty(self.root))
+
+    def test_artifact_only_commit_can_follow_source_revision(self) -> None:
+        source_revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        baseline = source_tree_digest(self.root)
+
+        (self.root / "dist" / "apple" / "release-manifest.json").write_text(
+            '{"schema_version": 5}\n'
+        )
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Aura Test",
+                "-c",
+                "user.email=aura-test@example.invalid",
+                "commit",
+                "-qm",
+                "artifact",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+        artifact_revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+        self.assertTrue(
+            _source_revision_is_ancestor(
+                self.root,
+                source_revision,
+                artifact_revision,
+            )
+        )
+        self.assertEqual(source_tree_digest(self.root), baseline)
+        self.assertFalse(source_tree_dirty(self.root))
 
 
 if __name__ == "__main__":
