@@ -1,10 +1,17 @@
 {
-  "schema_version": 4,
-  "source_revision": "c2481dbe568d6292c8cb10e55658d40b7a77a0a9",
+  "schema_version": 5,
+  "source_revision": "7feb825daad1cc98bc0f39c3cea0b0678bff3c18",
   "source_tree_dirty": false,
+  "source_tree_sha256": "e775dbdd99b7916bda42baa65bdcb09ee7ad733f084db388dd12c84149c38b0c",
+  "shippable": true,
   "cargo_profile": "release",
   "cargo_locked": true,
   "cargo_features": [],
+  "runtime_release_version": "0.2.0",
+  "wire_package": "aura.messenger.v1",
+  "wire_major_version": 1,
+  "state_schema_version": 3,
+  "ffi_contract_version": 1,
   "minimum_ios_version": "18.0",
   "target_triples": [
     "aarch64-apple-ios",
@@ -15,15 +22,15 @@
   ],
   "aura_ffi_header_sha256": "bf55ff30f5a35407b3e595ecc3d56c8b8e8901a149bc9912219246316e4bcf86",
   "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
-  "runtime_artifact_descriptor_sha256": "5dd5e053b759b9b6ae2b45833fa0a2d073b2ccc36ffa4717e71e83316cde0f02",
-  "runtime_artifact_identities_env_sha256": "6dab7f7d7ee58c339ea49c5684651f3b9a374934113430cd420478a70b87f486",
+  "runtime_artifact_descriptor_sha256": "5c59b063c3d636d28f8090602f596cba6333e7f52b8b7a1a87a88239eeeb107a",
+  "runtime_artifact_identities_env_sha256": "8f595dc2e4801e57acd7daa6a116a92196ef0b15415069d96fff8c273015a1fc",
   "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
   "execution_policy_trust_keyring_sha256": "9339c0165962cfeb66a677bcf47de5318f5655ad24e3e006e2d1e40aa8164152",
-  "xcframework_info_plist_sha256": "900e3c83f0ee7102c06e884f61113a173ae4b9b01538d0f6992e9f6ebd265e01",
+  "xcframework_info_plist_sha256": "b44c6a2dd464f217c817c25474bd5ed990630200d3921948465877f672934c00",
   "binary_sha256": {
-    "ios-arm64": "deac8ac069c51641a2ed81fcfffa2774b8952f2ca347a5503c38b86f3e3b44d0",
-    "ios-arm64_x86_64-simulator": "1fba940c69c5bfc80a51bbaf9350a26a4221d493cbd0bff9bf8b26510051b056",
-    "ios-arm64_x86_64-maccatalyst": "08488cbd55b2f788392cea3e810cf48a8bd6a636d315db3c6ab3608152af45e7"
+    "ios-arm64": "2cf7b4dc764233f1315a80f2eeb9bec996448f82cbf76726cde1322851681c29",
+    "ios-arm64_x86_64-simulator": "a7f49f97c00102093f15d4b0f7335adc2cec27faee5cf4dafd185c0c461decfa",
+    "ios-arm64_x86_64-maccatalyst": "1c1fbeafbe64a8f3a76de1f85d50149c8740145f83eb5e358187ed3f0173fd08"
   },
   "model_bundle_included": false
 }
