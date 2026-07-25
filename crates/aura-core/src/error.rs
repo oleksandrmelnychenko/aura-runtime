@@ -27,6 +27,10 @@ pub enum AuraError {
     #[error("pattern loading failed: {0}")]
     PatternLoadFailed(String),
 
+    /// Indicates that bundled context rule packs failed validation.
+    #[error("context rule pack validation failed: {0}")]
+    ContextRulePack(#[from] crate::context::rules::ContextRuleError),
+
     /// Indicates that an ML model file was not found at the expected path.
     #[error("ML model not found at path: {0}")]
     ModelNotFound(String),

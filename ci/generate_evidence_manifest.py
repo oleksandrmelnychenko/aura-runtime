@@ -65,6 +65,21 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to world lifecycle simulation suite JSON.",
     )
+    parser.add_argument(
+        "--world-performance-report",
+        default=None,
+        help="Optional path to world performance gate JSON.",
+    )
+    parser.add_argument(
+        "--refactor-diff-report",
+        default=None,
+        help="Optional path to AURA Core refactor differential report JSON.",
+    )
+    parser.add_argument(
+        "--apple-artifact-verification",
+        default=None,
+        help="Optional path to Apple XCFramework verification JSON.",
+    )
     return parser.parse_args()
 
 
@@ -226,6 +241,58 @@ def world_lifecycle_status(payload: dict | None) -> str | None:
     return "pass"
 
 
+def world_performance_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != "aura_world_performance_gate.v1":
+        return "invalid_schema"
+    tiers = payload.get("tiers")
+    if not isinstance(tiers, list) or not tiers:
+        return "invalid_summary"
+    if payload.get("status") != "pass":
+        return "fail"
+    if payload.get("failures"):
+        return "fail"
+    if any(
+        not isinstance(tier, dict) or tier.get("status") != "pass"
+        for tier in tiers
+    ):
+        return "fail"
+    return "pass"
+
+
+def refactor_diff_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != "aura.refactor_diff.v1":
+        return "invalid_schema"
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        return "invalid_summary"
+    if summary.get("regression") != 0:
+        return "regression"
+    if summary.get("invalid_approval_count") != 0:
+        return "invalid_approval"
+    return "pass" if payload.get("status") == "pass" else "fail"
+
+
+def apple_artifact_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != "aura.apple_artifact_verification.v1":
+        return "invalid_schema"
+    if payload.get("status") != "pass":
+        return "fail"
+    if payload.get("shippable") is not True:
+        return "non_shippable"
+    if payload.get("source_tree_dirty") is not False:
+        return "non_shippable"
+    slices = payload.get("slices")
+    if not isinstance(slices, list) or len(slices) != 3:
+        return "invalid_summary"
+    return "pass"
+
+
 def evidence_status(artifacts: dict, summary: dict) -> str:
     if any(meta["required"] and not meta["exists"] for meta in artifacts.values()):
         return "blocked"
@@ -260,6 +327,12 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["world_lifecycle_status"] not in (None, "pass"):
         return "fail"
+    if summary["world_performance_status"] not in (None, "pass"):
+        return "fail"
+    if summary["refactor_diff_status"] not in (None, "pass"):
+        return "fail"
+    if summary["apple_artifact_status"] not in (None, "pass"):
+        return "fail"
     return "pass"
 
 
@@ -277,6 +350,9 @@ def attach_payload_details(
     kids_preprod_dry_run_payload: dict | None,
     community_surface_payload: dict | None,
     world_lifecycle_payload: dict | None,
+    world_performance_payload: dict | None,
+    refactor_diff_payload: dict | None,
+    apple_artifact_payload: dict | None,
 ) -> None:
     if release_payload is not None:
         artifacts["release_report"]["observed_status"] = release_payload.get("overall_status")
@@ -424,6 +500,66 @@ def attach_payload_details(
         artifacts["world_lifecycle_report"]["finding_count"] = world_lifecycle_payload.get(
             "total_findings"
         )
+    if world_performance_payload is not None:
+        artifacts["world_performance_report"][
+            "observed_status"
+        ] = world_performance_status(world_performance_payload)
+        artifacts["world_performance_report"][
+            "schema_version"
+        ] = world_performance_payload.get("schema_version")
+        artifacts["world_performance_report"]["tier_count"] = len(
+            world_performance_payload.get("tiers", [])
+        )
+        artifacts["world_performance_report"]["tiers"] = [
+            {
+                "tier": tier.get("tier"),
+                "status": tier.get("status"),
+                "total_events": tier.get("total_events"),
+                "elapsed_seconds": tier.get("timing", {}).get("elapsed_seconds"),
+                "max_rss_mb": tier.get("timing", {}).get("max_rss_mb"),
+            }
+            for tier in world_performance_payload.get("tiers", [])
+            if isinstance(tier, dict)
+        ]
+    if refactor_diff_payload is not None:
+        artifacts["refactor_diff_report"][
+            "observed_status"
+        ] = refactor_diff_status(refactor_diff_payload)
+        artifacts["refactor_diff_report"][
+            "schema_version"
+        ] = refactor_diff_payload.get("schema_version")
+        diff_summary = refactor_diff_payload.get("summary", {})
+        artifacts["refactor_diff_report"]["change_count"] = diff_summary.get(
+            "change_count"
+        )
+        artifacts["refactor_diff_report"]["regression_count"] = diff_summary.get(
+            "regression"
+        )
+        artifacts["refactor_diff_report"][
+            "approved_safety_improvement_count"
+        ] = diff_summary.get("approved_safety_improvement")
+        artifacts["refactor_diff_report"][
+            "structural_only_count"
+        ] = diff_summary.get("structural_only")
+    if apple_artifact_payload is not None:
+        artifacts["apple_artifact_verification"][
+            "observed_status"
+        ] = apple_artifact_status(apple_artifact_payload)
+        artifacts["apple_artifact_verification"][
+            "schema_version"
+        ] = apple_artifact_payload.get("schema_version")
+        artifacts["apple_artifact_verification"]["shippable"] = (
+            apple_artifact_payload.get("shippable")
+        )
+        artifacts["apple_artifact_verification"]["source_revision"] = (
+            apple_artifact_payload.get("source_revision")
+        )
+        artifacts["apple_artifact_verification"]["source_tree_sha256"] = (
+            apple_artifact_payload.get("source_tree_sha256")
+        )
+        artifacts["apple_artifact_verification"]["slice_count"] = len(
+            apple_artifact_payload.get("slices", [])
+        )
 
 
 def main() -> int:
@@ -455,6 +591,18 @@ def main() -> int:
         args.world_lifecycle_report,
         required=args.world_lifecycle_report is not None,
     ) if args.world_lifecycle_report else (None, None)
+    world_performance_payload, world_performance_artifact = load_json_artifact(
+        args.world_performance_report,
+        required=args.world_performance_report is not None,
+    ) if args.world_performance_report else (None, None)
+    refactor_diff_payload, refactor_diff_artifact = load_json_artifact(
+        args.refactor_diff_report,
+        required=args.refactor_diff_report is not None,
+    ) if args.refactor_diff_report else (None, None)
+    apple_artifact_payload, apple_artifact_artifact = load_json_artifact(
+        args.apple_artifact_verification,
+        required=args.apple_artifact_verification is not None,
+    ) if args.apple_artifact_verification else (None, None)
     smoke_payload, smoke_artifact = load_json_artifact(
         args.ffi_smoke, required=args.ffi_smoke is not None
     ) if args.ffi_smoke else (None, None)
@@ -478,6 +626,12 @@ def main() -> int:
         artifacts["community_surface_report"] = community_surface_artifact
     if world_lifecycle_artifact is not None:
         artifacts["world_lifecycle_report"] = world_lifecycle_artifact
+    if world_performance_artifact is not None:
+        artifacts["world_performance_report"] = world_performance_artifact
+    if refactor_diff_artifact is not None:
+        artifacts["refactor_diff_report"] = refactor_diff_artifact
+    if apple_artifact_artifact is not None:
+        artifacts["apple_artifact_verification"] = apple_artifact_artifact
     if smoke_artifact is not None:
         artifacts["ffi_smoke"] = smoke_artifact
 
@@ -495,6 +649,9 @@ def main() -> int:
         kids_preprod_dry_run_payload=kids_preprod_dry_run_payload,
         community_surface_payload=community_surface_payload,
         world_lifecycle_payload=world_lifecycle_payload,
+        world_performance_payload=world_performance_payload,
+        refactor_diff_payload=refactor_diff_payload,
+        apple_artifact_payload=apple_artifact_payload,
     )
 
     request_limits = (
@@ -689,6 +846,73 @@ def main() -> int:
         ),
         "world_lifecycle_finding_count": (
             world_lifecycle_payload.get("total_findings") if world_lifecycle_payload else None
+        ),
+        "world_performance_status": world_performance_status(
+            world_performance_payload
+        ),
+        "world_performance_schema_version": (
+            world_performance_payload.get("schema_version")
+            if world_performance_payload
+            else None
+        ),
+        "world_performance_tier_count": (
+            len(world_performance_payload.get("tiers", []))
+            if world_performance_payload
+            else None
+        ),
+        "refactor_diff_status": refactor_diff_status(refactor_diff_payload),
+        "refactor_diff_schema_version": (
+            refactor_diff_payload.get("schema_version")
+            if refactor_diff_payload
+            else None
+        ),
+        "refactor_diff_change_count": (
+            refactor_diff_payload.get("summary", {}).get("change_count")
+            if refactor_diff_payload
+            else None
+        ),
+        "refactor_diff_regression_count": (
+            refactor_diff_payload.get("summary", {}).get("regression")
+            if refactor_diff_payload
+            else None
+        ),
+        "refactor_diff_structural_only_count": (
+            refactor_diff_payload.get("summary", {}).get("structural_only")
+            if refactor_diff_payload
+            else None
+        ),
+        "refactor_diff_approved_safety_improvement_count": (
+            refactor_diff_payload.get("summary", {}).get(
+                "approved_safety_improvement"
+            )
+            if refactor_diff_payload
+            else None
+        ),
+        "apple_artifact_status": apple_artifact_status(apple_artifact_payload),
+        "apple_artifact_schema_version": (
+            apple_artifact_payload.get("schema_version")
+            if apple_artifact_payload
+            else None
+        ),
+        "apple_artifact_shippable": (
+            apple_artifact_payload.get("shippable")
+            if apple_artifact_payload
+            else None
+        ),
+        "apple_artifact_source_revision": (
+            apple_artifact_payload.get("source_revision")
+            if apple_artifact_payload
+            else None
+        ),
+        "apple_artifact_source_tree_sha256": (
+            apple_artifact_payload.get("source_tree_sha256")
+            if apple_artifact_payload
+            else None
+        ),
+        "apple_artifact_slice_count": (
+            len(apple_artifact_payload.get("slices", []))
+            if apple_artifact_payload
+            else None
         ),
         "ffi_export_count": (
             len(contract_payload.get("abi", {}).get("exported_functions", []))

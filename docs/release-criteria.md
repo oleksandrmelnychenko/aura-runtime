@@ -11,9 +11,16 @@ contract stability, and privacy constraints all pass together.
 Current automation enforces this through:
 
 - `cargo run --quiet --example release_report -p aura-core -- --output ... --require-pass`
-- `python ci/generate_evidence_manifest.py --output ...`
+- `python3 ci/generate_evidence_manifest.py --output ...`
 - `.github/workflows/rust.yml`
 - `.github/workflows/promotion-gate.yml`
+
+Apple release-boundary verification uses:
+
+- `just apple-artifact-build-local` for a non-shippable dirty-tree rehearsal;
+- `just apple-artifact-build-release` for the clean, locked release artifact;
+- `python3 ci/apple_artifact.py verify --root . --dist-dir dist/apple
+  --require-clean-source` for independent provenance verification.
 
 ## Release Statuses
 
@@ -28,6 +35,10 @@ The release system exposes four explicit statuses:
 
 `INSUFFICIENT_SUPPORT` is not a soft success. It is a signal that the release
 cannot be called stable yet.
+
+An Apple artifact with `source_tree_dirty=true`, `shippable=false`, a mismatched
+`source_tree_sha256`, an unexpected export, or a slice/header/hash mismatch is
+`BLOCKED` regardless of runtime evaluation results.
 
 ## Blocking Suite Set
 
@@ -218,13 +229,17 @@ Each release candidate should produce one machine-readable artifact containing:
 
 The current entrypoint is a unified evidence manifest that points to the
 release report, contract evidence, dataset evidence, audit evidence, FFI smoke
-evidence, and FFI state-sync soak evidence for the same commit or tag.
+evidence, FFI state-sync soak evidence, world performance report, and AURA Core
+refactor differential report for the same commit or tag.
 
 Current manifest contract:
 
 - schema: `aura.evidence_manifest.v1`
 - release report schema: `3`
 - audit schema: `aura.audit_record.v1`
+- refactor baseline schema: `aura.refactor_baseline.v1`
+- refactor diff schema: `aura.refactor_diff.v1`
+- world performance schema: `aura_world_performance_gate.v1`
 
 ## Release Checklist
 
@@ -237,6 +252,8 @@ Current manifest contract:
 - Dataset evidence is green
 - Privacy and audit constraints are unchanged or explicitly approved
 - Audit evidence proves forbidden fields are absent
+- Refactor differential evidence contains no unapproved regression
+- Performance evidence stays inside the reviewed envelope
 - Local promotion rehearsal is treated as `BLOCKED`, not green, if the FFI
   smoke compile is only a stub due to a missing local compiler
 

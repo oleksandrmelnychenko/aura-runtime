@@ -39,6 +39,11 @@ artifact contains or activates those models.
 
 ## Production Notes
 
+- Apple release manifest v5 binds the binary slices to both a Git revision and
+  deterministic `source_tree_sha256`; dirty local builds are explicitly
+  `shippable=false`.
+- Runtime descriptor v3 records runtime release, wire, persisted-state, and FFI
+  contract versions independently.
 - Intent model is native 4-label (no truncation path used).
 - Safety model is now native 5-label (grooming, bullying, self_harm, manipulation, safe).
 - `download_models.py` supports a production path for prebuilt native safety ONNX via `--safety-onnx-path`.

@@ -987,26 +987,39 @@ pub fn negative_control_counter_speech_propaganda_case() -> ScenarioCase {
 }
 
 pub fn military_coordinate_leak_case() -> ScenarioCase {
+    let minute = 60_000_u64;
     ScenarioCase {
         name: "military_coordinate_leak".to_string(),
         config: military_config(),
         primary_threat: Some(ThreatType::CoordinateLeak),
-        onset_step: Some(0),
+        onset_step: Some(1),
         detection_threshold: 0.55,
         tracked_threats: vec![ThreatType::CoordinateLeak],
-        steps: vec![ScenarioStep {
-            timestamp_ms: 0,
-            input: direct_msg(
-                "Our coordinates are 48.4500, 35.0000. Hold this point.",
-                "soldier_1",
-                "opsec_dm",
-            ),
-            observed_threats: vec![ThreatType::CoordinateLeak],
-        }],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: direct_msg(
+                    "Confirm when the team is ready for the next instruction.",
+                    "soldier_1",
+                    "opsec_dm",
+                ),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: minute,
+                input: direct_msg(
+                    "Our coordinates are 48.4500, 35.0000. Hold this point.",
+                    "soldier_1",
+                    "opsec_dm",
+                ),
+                observed_threats: vec![ThreatType::CoordinateLeak],
+            },
+        ],
     }
 }
 
 pub fn negative_control_opsec_warning_case() -> ScenarioCase {
+    let minute = 60_000_u64;
     ScenarioCase {
         name: "negative_control_opsec_warning".to_string(),
         config: military_config(),
@@ -1014,15 +1027,26 @@ pub fn negative_control_opsec_warning_case() -> ScenarioCase {
         onset_step: None,
         detection_threshold: 0.55,
         tracked_threats: vec![ThreatType::CoordinateLeak, ThreatType::OpsecViolation],
-        steps: vec![ScenarioStep {
-            timestamp_ms: 0,
-            input: direct_msg(
-                "Don't post coordinates like 48.4500, 35.0000 in chat. Remove them now.",
-                "soldier_2",
-                "opsec_warn_dm",
-            ),
-            observed_threats: vec![],
-        }],
+        steps: vec![
+            ScenarioStep {
+                timestamp_ms: 0,
+                input: direct_msg(
+                    "Don't post coordinates like 48.4500, 35.0000 in chat. Remove them now.",
+                    "soldier_2",
+                    "opsec_warn_dm",
+                ),
+                observed_threats: vec![],
+            },
+            ScenarioStep {
+                timestamp_ms: minute,
+                input: direct_msg(
+                    "Share operational locations only through the approved secure channel.",
+                    "soldier_2",
+                    "opsec_warn_dm",
+                ),
+                observed_threats: vec![],
+            },
+        ],
     }
 }
 

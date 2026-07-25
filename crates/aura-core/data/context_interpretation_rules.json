@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "policy_version": "aura.context.interpretation.v1",
+  "rules": [
+    {
+      "id": "defender-pile-on-suppression",
+      "priority": 800,
+      "condition": "defender",
+      "effect": {
+        "kind": "suppress_signals",
+        "selectors": [
+          {
+            "threat_types": [
+              "bullying"
+            ],
+            "layer": "context_analysis",
+            "explanation_contains_any": [
+              "Group bullying",
+              "Isolation"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "safe-media-grooming-suppression",
+      "priority": 700,
+      "condition": "safe_media_context",
+      "effect": {
+        "kind": "suppress_signals",
+        "selectors": [
+          {
+            "threat_types": [
+              "grooming"
+            ],
+            "max_score": 0.5,
+            "unless_high_risk_grooming": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "friendly-timing-grooming-suppression",
+      "priority": 600,
+      "condition": "friendly_timing",
+      "effect": {
+        "kind": "suppress_signals",
+        "selectors": [
+          {
+            "threat_types": [
+              "grooming"
+            ],
+            "layer": "context_analysis",
+            "max_score": 0.5,
+            "reason_code_prefix": "conversation.timing."
+          }
+        ]
+      }
+    },
+    {
+      "id": "safe-gaming-banter-suppression",
+      "priority": 500,
+      "condition": "safe_gaming_banter",
+      "effect": {
+        "kind": "suppress_signals",
+        "selectors": [
+          {
+            "threat_types": [
+              "bullying",
+              "explicit",
+              "threat"
+            ],
+            "max_score": 0.75
+          },
+          {
+            "threat_types": [
+              "grooming"
+            ],
+            "max_score": 0.35,
+            "reason_code": "conversation.contact.new_risky_contact"
+          }
+        ]
+      }
+    },
+    {
+      "id": "deescalating-peer-conflict-suppression",
+      "priority": 400,
+      "condition": "deescalating_peer_conflict",
+      "effect": {
+        "kind": "suppress_signals",
+        "selectors": [
+          {
+            "threat_types": [
+              "bullying",
+              "explicit",
+              "threat"
+            ],
+            "max_score": 0.85
+          }
+        ]
+      }
+    },
+    {
+      "id": "friendly-playful-banter-suppression",
+      "priority": 300,
+      "condition": "friendly_playful_banter",
+      "effect": {
+        "kind": "suppress_signals",
+        "selectors": [
+          {
+            "threat_types": [
+              "bullying",
+              "explicit",
+              "threat"
+            ],
+            "max_score": 0.6
+          }
+        ]
+      }
+    },
+    {
+      "id": "supportive-late-night-suppression",
+      "priority": 200,
+      "condition": "supportive_neutral_or_opposed",
+      "effect": {
+        "kind": "suppress_signals",
+        "selectors": [
+          {
+            "threat_types": [
+              "grooming"
+            ],
+            "reason_code": "conversation.timing.late_night_minor_contact"
+          }
+        ]
+      }
+    },
+    {
+      "id": "direct-new-contact-grooming-corroboration",
+      "priority": 100,
+      "condition": "directed_new_contact_one_sided",
+      "effect": {
+        "kind": "corroboration_boost",
+        "threat_type": "grooming",
+        "pattern_reason_prefix": "pattern.grooming_flattery_",
+        "ml_reason_code": "ml.safety.grooming",
+        "score_add": 0.12,
+        "score_cap": 0.98
+      }
+    }
+  ]
+}

@@ -1,16 +1,56 @@
+use std::sync::Arc;
+
 use crate::context::events::{
     ContextEvent, EventContextFrame, EventDirectionality, EventKind, EventSpeechAct, EventStance,
 };
 use crate::context::observation::{
     materialize_event_hints, split_observations, RawEventHint, RawObservation,
 };
+use crate::context::rules::{
+    builtin_context_rule_packs, ContextRuleError, ContextRulePacks, EventSelector,
+    InterpretationCondition, InterpretationEffect, InterpretationRule, MemoryCondition, MemoryRule,
+    PolicyCondition, PolicyRule, SignalSelector,
+};
 use crate::context::tracker::ConversationTimeline;
 use crate::types::{
-    AnalysisContextSummary, BehavioralTrend, CircleTier, Confidence, ContactSnapshot,
+    AccountType, AnalysisContextSummary, BehavioralTrend, CircleTier, Confidence, ContactSnapshot,
     ContextDirectionality, ContextReciprocity, ContextRelationshipSummary, ContextSpeechAct,
     ContextStance, ContextTrajectorySummary, ConversationType, DetectionLayer, DetectionSignal,
-    MessageInput, ThreatType,
+    MessageInput, RelationshipTrustSource, SenderRelationship, ThreatType,
 };
+use aura_patterns::TextNormalizer;
+
+/// Interpreter-approved event that may be persisted by the conversation tracker.
+///
+/// The inner event is intentionally private: detector output must pass through
+/// [`ContextInterpreter`] before it can cross the tracker boundary.
+#[derive(Debug, Clone)]
+pub struct ConfirmedEvent(ContextEvent);
+
+impl ConfirmedEvent {
+    fn new(event: ContextEvent) -> Self {
+        Self(event)
+    }
+
+    pub(super) fn into_event(self) -> ContextEvent {
+        self.0
+    }
+}
+
+impl std::ops::Deref for ConfirmedEvent {
+    type Target = ContextEvent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl From<ContextEvent> for ConfirmedEvent {
+    fn from(event: ContextEvent) -> Self {
+        Self::new(event)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpeechAct {
@@ -79,16 +119,142 @@ pub struct ThreatContextFrame {
 pub struct ContextInterpretation {
     pub frame: ThreatContextFrame,
     pub adjusted_signals: Vec<DetectionSignal>,
-    pub confirmed_events: Vec<ContextEvent>,
+    pub confirmed_events: Vec<ConfirmedEvent>,
     pub suppressed_reason_codes: Vec<String>,
+    pub(crate) signal_adjustments: ContextSignalAdjustments,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ContextInterpreter;
+/// Semantic calibration decisions owned by the context interpreter.
+///
+/// The analyzer may apply this value after tracker-derived signals and
+/// contact/escalation calibration have been staged, but it cannot re-derive
+/// context semantics from the public summary.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ContextSignalAdjustments {
+    effects: Vec<InterpretationEffect>,
+}
+
+impl ContextSignalAdjustments {
+    fn from_frame(frame: &ThreatContextFrame, rules: &[InterpretationRule]) -> Self {
+        Self {
+            effects: rules
+                .iter()
+                .filter(|rule| interpretation_frame_condition_matches(rule.condition, frame))
+                .map(|rule| rule.effect.clone())
+                .collect(),
+        }
+    }
+
+    pub(crate) fn apply_calibration(self, signals: &mut Vec<DetectionSignal>) {
+        for effect in self.effects {
+            match effect {
+                InterpretationEffect::SuppressSignals { selectors } => {
+                    apply_signal_suppression(&selectors, signals);
+                }
+                InterpretationEffect::CorroborationBoost {
+                    threat_type,
+                    pattern_reason_prefix,
+                    ml_reason_code,
+                    score_add,
+                    score_cap,
+                } => {
+                    let has_pattern = signals.iter().any(|signal| {
+                        signal.threat_type == threat_type
+                            && signal.layer == DetectionLayer::PatternMatching
+                            && signal.reason_code.starts_with(&pattern_reason_prefix)
+                    });
+                    let has_ml = signals.iter().any(|signal| {
+                        signal.threat_type == threat_type
+                            && signal.layer == DetectionLayer::MlClassification
+                            && signal.reason_code == ml_reason_code
+                    });
+                    if !(has_pattern && has_ml) {
+                        continue;
+                    }
+
+                    for signal in &mut *signals {
+                        let corroborated = signal.threat_type == threat_type
+                            && match signal.layer {
+                                DetectionLayer::PatternMatching => {
+                                    signal.reason_code.starts_with(&pattern_reason_prefix)
+                                }
+                                DetectionLayer::MlClassification => {
+                                    signal.reason_code == ml_reason_code
+                                }
+                                DetectionLayer::ContextAnalysis => false,
+                            };
+                        if corroborated {
+                            signal.score = (signal.score + score_add).min(score_cap);
+                            signal.confidence = confidence_from_score(signal.score);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn interpretation_frame_condition_matches(
+    condition: InterpretationCondition,
+    frame: &ThreatContextFrame,
+) -> bool {
+    match condition {
+        InterpretationCondition::SupportiveNeutralOrOpposed => {
+            matches!(frame.speech_act, SpeechAct::Support)
+                && matches!(frame.stance, Stance::Neutral | Stance::Oppose)
+        }
+        InterpretationCondition::DirectedNewContactOneSided => {
+            frame.directionality == Directionality::DirectedAtUser
+                && frame.relationship.is_new_contact
+                && frame.reciprocity == Reciprocity::OneSided
+        }
+        InterpretationCondition::Defender
+        | InterpretationCondition::SafeMediaContext
+        | InterpretationCondition::FriendlyTiming
+        | InterpretationCondition::SafeGamingBanter
+        | InterpretationCondition::DeescalatingPeerConflict
+        | InterpretationCondition::FriendlyPlayfulBanter => false,
+    }
+}
+
+fn apply_signal_suppression(selectors: &[SignalSelector], signals: &mut Vec<DetectionSignal>) {
+    signals.retain(|signal| {
+        !selectors.iter().any(|selector| {
+            selector.matches(signal)
+                && !(selector.unless_high_risk_grooming && is_high_risk_grooming_signal(signal))
+        })
+    });
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextInterpreter {
+    rules: Arc<ContextRulePacks>,
+}
+
+impl Default for ContextInterpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ContextInterpreter {
+    /// Creates an interpreter using the bundled, validated context rule packs.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a bundled pack is invalid. Release initialization should use
+    /// [`Self::try_new`] to surface the typed error instead.
     pub fn new() -> Self {
-        Self
+        match Self::try_new() {
+            Ok(interpreter) => interpreter,
+            Err(error) => panic!("bundled context rule packs failed validation: {error}"),
+        }
+    }
+
+    pub fn try_new() -> Result<Self, ContextRuleError> {
+        Ok(Self {
+            rules: builtin_context_rule_packs()?,
+        })
     }
 
     pub fn interpret_observations(
@@ -97,9 +263,20 @@ impl ContextInterpreter {
         text: Option<&str>,
         timestamp_ms: Option<u64>,
         timeline: Option<&ConversationTimeline>,
-        observations: Vec<RawObservation>,
+        mut observations: Vec<RawObservation>,
         snapshot: Option<&ContactSnapshot>,
     ) -> ContextInterpretation {
+        if let (Some(text), Some(timestamp_ms)) = (text, timestamp_ms) {
+            apply_contextual_observation_filters(
+                input,
+                text,
+                timestamp_ms,
+                timeline,
+                snapshot,
+                self.rules.memory_rules(),
+                &mut observations,
+            );
+        }
         let (signals, event_hints) = split_observations(observations);
         self.interpret_raw(
             input,
@@ -110,6 +287,35 @@ impl ContextInterpreter {
             event_hints,
             snapshot,
         )
+    }
+
+    pub(crate) fn apply_downstream_signal_semantics(
+        &self,
+        input: &MessageInput,
+        text: &str,
+        timestamp_ms: u64,
+        timeline: Option<&ConversationTimeline>,
+        snapshot: Option<&ContactSnapshot>,
+        signals: &mut Vec<DetectionSignal>,
+    ) {
+        apply_downstream_context_signal_filters(
+            input,
+            text,
+            timestamp_ms,
+            timeline,
+            snapshot,
+            self.rules.interpretation_rules(),
+            signals,
+        );
+    }
+
+    pub(crate) fn apply_relationship_metadata(
+        &self,
+        input: &MessageInput,
+        account_type: AccountType,
+        signals: &mut [DetectionSignal],
+    ) -> RelationshipMetadataContext {
+        apply_relationship_metadata_context(input, account_type, self.rules.policy_rules(), signals)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -132,6 +338,8 @@ impl ContextInterpreter {
             &event_hints,
             snapshot,
         );
+        let signal_adjustments =
+            ContextSignalAdjustments::from_frame(&frame, self.rules.interpretation_rules());
         let Some(text) = text else {
             let confirmed_events =
                 materialize_confirmed_events(event_hints, timestamp_ms, input, &frame);
@@ -140,6 +348,7 @@ impl ContextInterpreter {
                 adjusted_signals: signals,
                 confirmed_events,
                 suppressed_reason_codes: Vec::new(),
+                signal_adjustments,
             };
         };
 
@@ -177,6 +386,7 @@ impl ContextInterpreter {
             adjusted_signals,
             confirmed_events,
             suppressed_reason_codes,
+            signal_adjustments,
         }
     }
 
@@ -624,82 +834,1015 @@ impl ContextInterpretation {
     }
 
     pub fn diagnostic_reason_codes(&self) -> Vec<String> {
-        let mut codes = Vec::new();
-
-        match self.frame.speech_act {
-            SpeechAct::Assert => {}
-            SpeechAct::Ask => codes.push("context.speech_act.ask".to_string()),
-            SpeechAct::Quote => codes.push("context.speech_act.quote".to_string()),
-            SpeechAct::Report => codes.push("context.speech_act.report".to_string()),
-            SpeechAct::Counter => codes.push("context.speech_act.counter".to_string()),
-            SpeechAct::Support => codes.push("context.speech_act.support".to_string()),
-            SpeechAct::Solicit => codes.push("context.speech_act.solicit".to_string()),
-        }
-
-        match self.frame.stance {
-            Stance::Endorse => {}
-            Stance::Oppose => codes.push("context.stance.oppose".to_string()),
-            Stance::Neutral => codes.push("context.stance.neutral".to_string()),
-            Stance::Ambiguous => codes.push("context.stance.ambiguous".to_string()),
-        }
-
-        match self.frame.directionality {
-            Directionality::DirectedAtUser => {
-                codes.push("context.direction.directed_at_user".to_string())
-            }
-            Directionality::SelfReferential => {
-                codes.push("context.direction.self_referential".to_string())
-            }
-            Directionality::ThirdParty => codes.push("context.direction.third_party".to_string()),
-            Directionality::Broadcast | Directionality::Unknown => {}
-        }
-
-        if self.frame.relationship.is_new_contact
-            && matches!(
-                self.frame.speech_act,
-                SpeechAct::Ask | SpeechAct::Solicit | SpeechAct::Assert
-            )
-        {
-            codes.push("context.relationship.new_contact".to_string());
-        }
-
-        if (self.frame.relationship.is_trusted || self.frame.relationship.trust_level >= 0.80)
-            && matches!(
-                self.frame.speech_act,
-                SpeechAct::Support
-                    | SpeechAct::Report
-                    | SpeechAct::Ask
-                    | SpeechAct::Quote
-                    | SpeechAct::Counter
-            )
-        {
-            codes.push("context.relationship.trusted".to_string());
-        }
-
-        if self.frame.relationship.is_new_contact && self.frame.reciprocity == Reciprocity::OneSided
-        {
-            codes.push("context.reciprocity.one_sided".to_string());
-        }
-
-        if self.frame.trajectory.repeated_by_sender {
-            codes.push("context.trajectory.repeated_sender".to_string());
-        }
-        if self.frame.trajectory.escalating {
-            codes.push("context.trajectory.escalating".to_string());
-        }
-        if self.frame.trajectory.cross_conversation {
-            codes.push("context.trajectory.cross_conversation".to_string());
-        }
-        if self.frame.trajectory.bursty {
-            codes.push("context.trajectory.bursty".to_string());
-        }
-
-        if !self.suppressed_reason_codes.is_empty() {
-            codes.push("context.filter.applied".to_string());
-        }
-
-        dedupe_codes(codes)
+        self.analysis_context_summary().context_markers()
     }
+}
+
+fn apply_contextual_observation_filters(
+    input: &MessageInput,
+    text: &str,
+    timestamp_ms: u64,
+    timeline: Option<&ConversationTimeline>,
+    snapshot: Option<&ContactSnapshot>,
+    rules: &[MemoryRule],
+    observations: &mut Vec<RawObservation>,
+) {
+    let has_friendly_context =
+        has_recent_playful_reciprocity(timeline, &input.sender_id, timestamp_ms)
+            || snapshot.is_some_and(is_established_friendly_contact);
+
+    for rule in rules {
+        if memory_condition_matches(
+            rule.condition,
+            input,
+            text,
+            timestamp_ms,
+            timeline,
+            has_friendly_context,
+            observations,
+        ) {
+            observations.retain(|observation| !memory_rule_suppresses(rule, observation));
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn memory_condition_matches(
+    condition: MemoryCondition,
+    input: &MessageInput,
+    text: &str,
+    timestamp_ms: u64,
+    timeline: Option<&ConversationTimeline>,
+    has_friendly_context: bool,
+    observations: &[RawObservation],
+) -> bool {
+    match condition {
+        MemoryCondition::Always => true,
+        MemoryCondition::SubstancePressureContext => observations.iter().any(|observation| {
+            observation.signal_matches(|signal| {
+                signal.reason_code.starts_with("pattern.substance_")
+                    || signal.reason_code == "pattern.manipulation_pressure_uk"
+                    || signal.reason_code == "pattern.manipulation_pressure_en"
+                    || signal.reason_code == "pattern.false_consensus_uk"
+                    || signal.reason_code == "pattern.false_consensus_en"
+            })
+        }),
+        MemoryCondition::SelfReferentialDistressProfanity => {
+            is_self_referential_distress_profanity_message(text)
+        }
+        MemoryCondition::DeescalatingPeerConflict => is_deescalating_peer_conflict_message(text),
+        MemoryCondition::PlainPeerCompliment => {
+            let has_high_risk_grooming = observations
+                .iter()
+                .any(|observation| observation.signal_matches(is_high_risk_grooming_signal));
+            input.conversation_type == ConversationType::Direct
+                && (has_friendly_context || is_casual_appearance_compliment_message(text))
+                && is_plain_peer_compliment_message(text)
+                && !has_high_risk_grooming
+        }
+        MemoryCondition::NonRomanticGroupPraise => {
+            let has_high_risk_grooming = observations
+                .iter()
+                .any(|observation| observation.signal_matches(is_high_risk_grooming_signal));
+            input.conversation_type != ConversationType::Direct
+                && is_non_romantic_group_praise_message(text)
+                && !has_high_risk_grooming
+        }
+        MemoryCondition::CompetitiveGamingBanter => {
+            let has_high_threat_or_hate = observations.iter().any(|observation| {
+                observation.signal_matches(|signal| {
+                    matches!(
+                        signal.threat_type,
+                        ThreatType::Threat | ThreatType::HateSpeech
+                    ) && signal.score >= 0.75
+                })
+            });
+            input.conversation_type != ConversationType::Direct
+                && (is_competitive_gaming_banter_message(text)
+                    || is_lightweight_competitive_banter_message(text))
+                && !has_high_threat_or_hate
+        }
+        MemoryCondition::CasualMediaShare => is_casual_media_share_message(text),
+        MemoryCondition::PlayfulBanter => {
+            is_playful_banter_message(input, text, timestamp_ms, timeline)
+        }
+    }
+}
+
+fn memory_rule_suppresses(rule: &MemoryRule, observation: &RawObservation) -> bool {
+    let protected_high_risk = observation.signal_matches(is_high_risk_grooming_signal);
+    let suppresses_signal = rule.signal_selectors.iter().any(|selector| {
+        observation.signal_matches(|signal| {
+            selector.matches(signal)
+                && !(selector.unless_high_risk_grooming && is_high_risk_grooming_signal(signal))
+        })
+    });
+    let suppresses_event = rule.event_selectors.iter().any(|selector| {
+        event_selector_matches(selector, observation)
+            && !(selector.unless_high_risk_grooming && protected_high_risk)
+    });
+
+    suppresses_signal || suppresses_event
+}
+
+fn event_selector_matches(selector: &EventSelector, observation: &RawObservation) -> bool {
+    observation.event_kind_matches(|kind| kind == &selector.kind)
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct RelationshipMetadataContext {
+    pub(crate) context_markers: Vec<String>,
+    pub(crate) reason_codes: Vec<String>,
+}
+
+fn apply_relationship_metadata_context(
+    input: &MessageInput,
+    account_type: AccountType,
+    rules: &[PolicyRule],
+    signals: &mut [DetectionSignal],
+) -> RelationshipMetadataContext {
+    if input.sender_relationship == SenderRelationship::Unknown {
+        return RelationshipMetadataContext::default();
+    }
+
+    let mut context = RelationshipMetadataContext::default();
+    context.context_markers.push(format!(
+        "context.relationship.sender.{}",
+        sender_relationship_marker(input.sender_relationship)
+    ));
+    context.context_markers.push(format!(
+        "context.relationship.source.{}",
+        relationship_trust_source_marker(input.relationship_trust_source)
+    ));
+
+    for rule in rules {
+        if !policy_condition_matches(rule.condition, input, account_type) {
+            continue;
+        }
+
+        if let Some(context_marker) = &rule.effect.context_marker {
+            context.context_markers.push(context_marker.clone());
+        }
+
+        let has_relevant_signal = signals.iter().any(|signal| {
+            signal.score > 0.0 && rule.effect.threat_types.contains(&signal.threat_type)
+        });
+        if has_relevant_signal {
+            if let Some(reason_code) = &rule.effect.reason_code {
+                context.reason_codes.push(reason_code.clone());
+            }
+            if rule.effect.score_add > 0.0 {
+                for signal in &mut *signals {
+                    if signal.score > 0.0 && rule.effect.threat_types.contains(&signal.threat_type)
+                    {
+                        signal.score = (signal.score + rule.effect.score_add).min(1.0);
+                    }
+                }
+            }
+        }
+    }
+
+    context
+}
+
+fn policy_condition_matches(
+    condition: PolicyCondition,
+    input: &MessageInput,
+    account_type: AccountType,
+) -> bool {
+    let minor_account = matches!(account_type, AccountType::Child | AccountType::Teen);
+    match condition {
+        PolicyCondition::UnknownAdultMinor => {
+            minor_account && input.sender_relationship == SenderRelationship::UnknownAdult
+        }
+        PolicyCondition::SelfDeclared => {
+            input.relationship_trust_source == RelationshipTrustSource::SelfDeclared
+        }
+        PolicyCondition::SelfDeclaredPrivileged => {
+            input.relationship_trust_source == RelationshipTrustSource::SelfDeclared
+                && privileged_relationship_claim(input.sender_relationship)
+        }
+        PolicyCondition::SelfDeclaredPrivilegedMinor => {
+            minor_account
+                && input.relationship_trust_source == RelationshipTrustSource::SelfDeclared
+                && privileged_relationship_claim(input.sender_relationship)
+        }
+        PolicyCondition::VerifiedFamily => {
+            verified_relationship_source(input.relationship_trust_source)
+                && trusted_family_or_guardian_relationship(input.sender_relationship)
+        }
+    }
+}
+
+fn apply_downstream_context_signal_filters(
+    input: &MessageInput,
+    text: &str,
+    timestamp_ms: u64,
+    timeline: Option<&ConversationTimeline>,
+    snapshot: Option<&ContactSnapshot>,
+    rules: &[InterpretationRule],
+    signals: &mut Vec<DetectionSignal>,
+) {
+    let sender_is_defender = timeline.is_some_and(|timeline| {
+        timeline.all_events().iter().any(|event| {
+            event.sender_id == input.sender_id && event.kind == EventKind::DefenseOfVictim
+        })
+    });
+    let friendly_context = has_recent_playful_reciprocity(timeline, &input.sender_id, timestamp_ms)
+        || snapshot.is_some_and(is_established_friendly_contact);
+
+    for rule in rules {
+        let condition_matches = match rule.condition {
+            InterpretationCondition::Defender => sender_is_defender,
+            InterpretationCondition::SafeMediaContext => {
+                is_casual_media_share_message(text)
+                    || is_non_romantic_group_praise_message(text)
+                    || (friendly_context && is_lightweight_media_banter_message(text))
+            }
+            InterpretationCondition::FriendlyTiming => {
+                friendly_context && !signals.iter().any(is_high_risk_grooming_signal)
+            }
+            InterpretationCondition::SafeGamingBanter => {
+                input.conversation_type != ConversationType::Direct
+                    && is_lightweight_competitive_banter_message(text)
+            }
+            InterpretationCondition::DeescalatingPeerConflict => {
+                is_deescalating_peer_conflict_message(text)
+            }
+            InterpretationCondition::FriendlyPlayfulBanter => {
+                friendly_context && is_playful_banter_message(input, text, timestamp_ms, timeline)
+            }
+            InterpretationCondition::SupportiveNeutralOrOpposed
+            | InterpretationCondition::DirectedNewContactOneSided => false,
+        };
+        if !condition_matches {
+            continue;
+        }
+        if let InterpretationEffect::SuppressSignals { selectors } = &rule.effect {
+            apply_signal_suppression(selectors, signals);
+        }
+    }
+}
+
+fn privileged_relationship_claim(relationship: SenderRelationship) -> bool {
+    matches!(
+        relationship,
+        SenderRelationship::Parent
+            | SenderRelationship::Guardian
+            | SenderRelationship::Teacher
+            | SenderRelationship::Coach
+            | SenderRelationship::Authority
+    )
+}
+
+fn trusted_family_or_guardian_relationship(relationship: SenderRelationship) -> bool {
+    matches!(
+        relationship,
+        SenderRelationship::Parent
+            | SenderRelationship::Guardian
+            | SenderRelationship::Family
+            | SenderRelationship::Sibling
+    )
+}
+
+fn verified_relationship_source(source: RelationshipTrustSource) -> bool {
+    matches!(
+        source,
+        RelationshipTrustSource::UserVerified
+            | RelationshipTrustSource::GuardianVerified
+            | RelationshipTrustSource::PlatformVerified
+            | RelationshipTrustSource::AddressBook
+            | RelationshipTrustSource::SchoolDirectory
+    )
+}
+
+fn sender_relationship_marker(relationship: SenderRelationship) -> &'static str {
+    match relationship {
+        SenderRelationship::Unknown => "unknown",
+        SenderRelationship::Parent => "parent",
+        SenderRelationship::Guardian => "guardian",
+        SenderRelationship::Family => "family",
+        SenderRelationship::Sibling => "sibling",
+        SenderRelationship::Peer => "peer",
+        SenderRelationship::Teacher => "teacher",
+        SenderRelationship::Coach => "coach",
+        SenderRelationship::Authority => "authority",
+        SenderRelationship::Service => "service",
+        SenderRelationship::UnknownAdult => "unknown_adult",
+        SenderRelationship::UnknownPeer => "unknown_peer",
+    }
+}
+
+fn relationship_trust_source_marker(source: RelationshipTrustSource) -> &'static str {
+    match source {
+        RelationshipTrustSource::Unknown => "unknown",
+        RelationshipTrustSource::UserVerified => "user_verified",
+        RelationshipTrustSource::GuardianVerified => "guardian_verified",
+        RelationshipTrustSource::PlatformVerified => "platform_verified",
+        RelationshipTrustSource::AddressBook => "address_book",
+        RelationshipTrustSource::SchoolDirectory => "school_directory",
+        RelationshipTrustSource::ServerReputation => "server_reputation",
+        RelationshipTrustSource::LocalHeuristic => "local_heuristic",
+        RelationshipTrustSource::SelfDeclared => "self_declared",
+    }
+}
+
+fn is_established_friendly_contact(snapshot: &ContactSnapshot) -> bool {
+    !snapshot.is_new_contact
+        && snapshot.conversation_count > 0
+        && (snapshot.is_trusted
+            || snapshot.trust_level >= 0.60
+            || snapshot.circle_tier != CircleTier::New)
+}
+
+fn has_recent_playful_reciprocity(
+    timeline: Option<&ConversationTimeline>,
+    sender_id: &str,
+    now_ms: u64,
+) -> bool {
+    let Some(timeline) = timeline else {
+        return false;
+    };
+    let since = now_ms.saturating_sub(15 * 60 * 1000);
+    let recent = timeline.events_since(since);
+    let sender_has_prior = recent.iter().any(|event| event.sender_id == sender_id);
+    let other_sender_replied = recent
+        .iter()
+        .any(|event| event.sender_id != sender_id && event.kind == EventKind::NormalConversation);
+
+    sender_has_prior && other_sender_replied
+}
+
+fn is_playful_banter_message(
+    input: &MessageInput,
+    text: &str,
+    timestamp_ms: u64,
+    timeline: Option<&ConversationTimeline>,
+) -> bool {
+    let lower = text.to_lowercase();
+    let joke_disclaimer = contains_any(
+        &lower,
+        &["жартую", "jk", "just kidding", "just kiddin", "kidding"],
+    );
+    let playful_marker = contains_any(
+        &lower,
+        &[
+            "ахаха",
+            "хаха",
+            "😂",
+            "🤣",
+            "😜",
+            "😈",
+            "💀",
+            "рофл",
+            "лол",
+            "мем",
+            "bro",
+            "бро",
+        ],
+    );
+    let mild_teasing_marker = contains_any(
+        &lower,
+        &[
+            "дурень",
+            "дурна",
+            "дебіли",
+            "дебіли",
+            "кринж",
+            "заткнись",
+            "ненавіджу вас",
+            "сук!",
+            "сук ",
+        ],
+    );
+    let silly_object = contains_any(
+        &lower,
+        &[
+            "бутерброд",
+            "бутік",
+            "обід",
+            "снідан",
+            "піц",
+            "pizza",
+            "sandwich",
+            "lunch",
+            "мем",
+        ],
+    );
+    let media_marker = contains_any(
+        &lower,
+        &[
+            "тікток",
+            "tiktok",
+            "мем",
+            "відео",
+            "video",
+            "пост",
+            "інста",
+            "instagram",
+            "селфі",
+            "selfie",
+            "скетч",
+            "зошит",
+        ],
+    );
+    let gaming_marker = contains_any(
+        &lower,
+        &[
+            "катк",
+            "лобі",
+            "клатч",
+            "кіл",
+            "кіли",
+            "сервер",
+            "хіліл",
+            "rank",
+            "рейд",
+            "матч",
+            "game",
+            "гру",
+            "катку",
+        ],
+    );
+    let crush_marker = contains_any(
+        &lower,
+        &[
+            "подобається",
+            "краш",
+            "подобаєшся",
+            "ти думаєш",
+            "😳",
+            "🥺",
+            "😍",
+            "💕",
+        ],
+    );
+    let exam_marker = contains_any(
+        &lower,
+        &["контрольн", "матеш", "урок", "екзам", "школи", "дз"],
+    );
+    let goodnight_marker = contains_any(
+        &lower,
+        &[
+            "на добраніч",
+            "добраніч",
+            "goodnight",
+            "gn",
+            "не проспи",
+            "соня",
+        ],
+    );
+    let reciprocal_play = has_recent_playful_reciprocity(timeline, &input.sender_id, timestamp_ms);
+
+    if looks_like_unresolved_future_violence(&lower) {
+        return false;
+    }
+
+    let self_nullified_teasing = joke_disclaimer && (playful_marker || reciprocal_play);
+    let playful_hyperbole = lower.contains("я тебе вб'ю за")
+        || lower.contains("kill you for")
+        || lower.contains("помру від сміх")
+        || lower.contains("здохну від")
+        || lower.contains("dying from laughing")
+        || lower.contains("dead from laughing")
+        || (lower.contains("монстр") && (playful_marker || reciprocal_play))
+        || ((lower.contains("вбивця") || lower.contains("знищ") || lower.contains("тікайте"))
+            && silly_object
+            && playful_marker);
+    let casual_death_hyperbole = contains_any(
+        &lower,
+        &[
+            "я здохла",
+            "я здох",
+            "я мертва",
+            "я мертвий",
+            "я помру",
+            "ми всі здохнемо",
+            "не здохніть",
+            "ледь жива",
+            "ледь живий",
+            "i'm dead",
+            "im dead",
+            "literally died",
+            "i died",
+        ],
+    ) && (playful_marker
+        || reciprocal_play
+        || media_marker
+        || gaming_marker
+        || crush_marker
+        || exam_marker);
+    let conditional_mock_threat = reciprocal_play
+        && (lower.contains("я тебе вб'ю якщо") || lower.contains("kill you if you"))
+        && !contains_any(
+            &lower,
+            &[
+                "знаю де ти живеш",
+                "i know where you live",
+                "школ",
+                "поб'ю",
+                "beat you",
+                "заріжу",
+                "збро",
+                "knife",
+            ],
+        );
+    let joking_mild_teasing = mild_teasing_marker
+        && (playful_marker || joke_disclaimer || reciprocal_play)
+        && !contains_any(
+            &lower,
+            &[
+                "(ні)",
+                "не жарт",
+                "не шучу",
+                "всі знають",
+                "найтуп",
+                "ніхто",
+            ],
+        );
+    let friendly_goodnight_teasing = goodnight_marker
+        && reciprocal_play
+        && (playful_marker || mild_teasing_marker || lower.contains("не проспи"));
+
+    self_nullified_teasing
+        || playful_hyperbole
+        || casual_death_hyperbole
+        || conditional_mock_threat
+        || joking_mild_teasing
+        || friendly_goodnight_teasing
+}
+
+fn looks_like_unresolved_future_violence(lower: &str) -> bool {
+    if unresolved_future_violence_in(lower) {
+        return true;
+    }
+
+    let normalized = TextNormalizer::new().normalize(lower);
+    normalized != lower && unresolved_future_violence_in(&normalized)
+}
+
+fn unresolved_future_violence_in(lower: &str) -> bool {
+    let violent_action = contains_any(
+        lower,
+        &[
+            "kill u",
+            "kill you",
+            "hurt you",
+            "shoot you",
+            "stab you",
+            "beat you",
+            "break your",
+            "gonna kill",
+            "going to kill",
+            "wont make it",
+            "won't make it",
+        ],
+    );
+    let future_or_ambiguous = contains_any(
+        lower,
+        &[
+            "tmrw",
+            "tomorrow",
+            "tonight",
+            "next week",
+            "after school",
+            "unless",
+            "outside",
+            "come out",
+            "waiting",
+        ],
+    );
+
+    violent_action && future_or_ambiguous
+}
+
+fn is_deescalating_peer_conflict_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    if is_deescalating_peer_conflict_text(&lower) {
+        return true;
+    }
+
+    let normalizer = TextNormalizer::new();
+    normalizer
+        .normalize_cyrillic_leet_variants(text, "uk")
+        .iter()
+        .any(|normalized| normalized != &lower && is_deescalating_peer_conflict_text(normalized))
+}
+
+fn is_deescalating_peer_conflict_text(lower: &str) -> bool {
+    if contains_any(
+        lower,
+        &[
+            "здох",
+            "вбий",
+            "убей",
+            "kill yourself",
+            "nobody wants",
+            "nobody likes",
+            "everyone hates",
+            "worthless",
+            "pathetic",
+            "нікому не",
+            "никому не",
+            "ніхто тебе",
+            "никто тебя",
+            "потвор",
+            "урод",
+            "ненавид",
+        ],
+    ) {
+        return false;
+    }
+
+    let deescalation = contains_any(
+        lower,
+        &[
+            "без сварок",
+            "без ссор",
+            "не свар",
+            "не ссор",
+            "не треба кричати",
+            "не надо кричать",
+            "не треба свар",
+            "не надо ссор",
+            "lets not fight",
+            "let's not fight",
+            "dont fight",
+            "don't fight",
+            "stop fighting",
+            "calm down",
+            "i disagree but",
+            "я не згоден, але",
+            "я не согласен, но",
+        ],
+    );
+    let repair_context = contains_any(
+        lower,
+        &[
+            "переробимо",
+            "переделаем",
+            "fix the project",
+            "fix the slides",
+            "слайд",
+            "slides",
+            "презентац",
+            "presentation",
+            "проєкт",
+            "проект",
+            "project",
+            "тактик",
+            "tactic",
+            "розберемо",
+            "розберем",
+            "review the play",
+            "review the game",
+            "момент",
+            "match",
+            "матч",
+            "тренув",
+            "training",
+            "after class",
+            "після урок",
+            "после урок",
+        ],
+    );
+
+    deescalation && repair_context
+}
+
+fn is_plain_peer_compliment_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let compliment_markers = [
+        "beautiful",
+        "pretty",
+        "gorgeous",
+        "cute",
+        "amazing",
+        "perfect",
+        "incredible",
+        "special",
+        "wonderful",
+        "lovely",
+        "adorable",
+        "sweet",
+        "таланов",
+        "гарн",
+        "крас",
+        "подобає",
+        "зачіск",
+        "найкращ",
+        "чудов",
+        "мила",
+        "крутан",
+        "талант",
+        "ідеаль",
+        "неймовірн",
+        "особлив",
+        "чарівн",
+    ];
+    let grooming_anchors = [
+        "for your age",
+        "для свого віку",
+        "special connection",
+        "особливий зв'язок",
+        "не кажи",
+        "secret",
+        "секрет",
+        "зустрінем",
+        "meet",
+        "photo",
+        "фото",
+        "selfie",
+        "camera",
+        "камера",
+        "parents",
+        "батьк",
+        "where do you live",
+        "де ти живеш",
+        "gift",
+        "подар",
+        "money",
+        "грош",
+    ];
+
+    let compliment_count = count_contains(&lower, &compliment_markers);
+    compliment_count > 0 && compliment_count <= 2 && !contains_any(&lower, &grooming_anchors)
+}
+
+fn is_casual_appearance_compliment_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "гарна сьогодні",
+            "гарно сьогодні",
+            "красива сьогодні",
+            "pretty today",
+            "look nice today",
+            "look good today",
+            "класна зачіска",
+            "класний лук",
+            "nice haircut",
+            "nice outfit",
+        ],
+    )
+}
+
+fn is_non_romantic_group_praise_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let praise_markers = [
+        "ти бог",
+        "you are god",
+        "ти топ",
+        "рятівниц",
+        "шедевр",
+        "легенда",
+        "неймовірна",
+        "неймовірний",
+        "найкраща",
+        "найкращий",
+    ];
+    let context_markers = [
+        "катк",
+        "лобі",
+        "клатч",
+        "кіл",
+        "сервер",
+        "дз",
+        "зошит",
+        "проект",
+        "скетч",
+        "портрет",
+        "селфі",
+        "групове",
+        "фотограф",
+    ];
+    contains_any(&lower, &praise_markers)
+        && contains_any(&lower, &context_markers)
+        && !contains_any(
+            &lower,
+            &[
+                "секрет",
+                "батьк",
+                "мама",
+                "купальник",
+                "гола",
+                "тіло",
+                "адрес",
+            ],
+        )
+}
+
+fn is_casual_media_share_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let char_len = lower.chars().count();
+    let media_markers = [
+        "тікток",
+        "tiktok",
+        "мем",
+        "відео",
+        "video",
+        "пост",
+        "запостив",
+        "інста",
+        "instagram",
+        "селфі",
+        "selfie",
+        "скетч",
+        "зошит",
+        "проект",
+        "фотку зошита",
+        "групове селфі",
+        "фотограф",
+    ];
+    let share_markers = ["скинь", "покажи", "дивись", "кидаю", "покажи", "сфотк"];
+    let curiosity_markers = [
+        "який",
+        "шо там",
+        "що там",
+        "ні шо там",
+        "нi шо там",
+        "не покажу нікому",
+        "не скажу нікому",
+        "тільки не показуй нікому",
+        "клянусь",
+    ];
+    let risky_markers = [
+        "купальник",
+        "ліфчик",
+        "гола",
+        "голий",
+        "тіло",
+        "огол",
+        "камера",
+        "адрес",
+        "локац",
+        "де ти живеш",
+        "батьк",
+        "мама",
+        "зустрінем",
+    ];
+
+    (contains_any(&lower, &media_markers)
+        || (contains_any(&lower, &share_markers)
+            && (contains_any(
+                &lower,
+                &["мем", "відео", "тікток", "зошит", "селфі", "пост"],
+            ) || char_len <= 40))
+        || (contains_any(&lower, &curiosity_markers)
+            && (contains_any(&lower, &media_markers)
+                || contains_any(
+                    &lower,
+                    &["😂", "🤣", "💀", "😭", "кринж", "тіпа", "ахаха", "хахах"],
+                )
+                || char_len <= 14)))
+        && !contains_any(&lower, &risky_markers)
+}
+
+fn is_lightweight_media_banter_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "помирала від",
+            "помираю від цього",
+            "я мертва",
+            "який скинь",
+            "ні шо там",
+            "що там",
+            "покажи я помру",
+            "покажи я здохну",
+            "не скажу нікому",
+            "не покажу нікому",
+            "це реально він",
+            "групове селфі",
+        ],
+    ) && contains_any(
+        &lower,
+        &["😂", "🤣", "💀", "😭", "тікток", "мем", "відео", "селфі"],
+    )
+}
+
+fn is_high_risk_grooming_signal(signal: &DetectionSignal) -> bool {
+    signal.threat_type == ThreatType::Grooming
+        && (signal.score > 0.55
+            || contains_any(
+                &signal.reason_code,
+                &[
+                    "secrecy",
+                    "gift",
+                    "money",
+                    "photo",
+                    "meeting",
+                    "platform",
+                    "sexual",
+                    "location",
+                    "personal_info",
+                    "identity_erosion",
+                ],
+            ))
+}
+
+fn is_lightweight_competitive_banter_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "ти шо робиш там",
+            "ти шо робиш",
+            "мене вбили через",
+            "ти бог",
+            "ти топ",
+            "ми мусор",
+            "минулі 10 каток",
+            "ще катку",
+            "ненавіджу (жарт)",
+            "ненавіджу жарт",
+        ],
+    ) || (contains_any(&lower, &["😂", "🤣", "💀", "😤"])
+        && contains_any(&lower, &["катк", "лобі", "клатч", "кіл", "хіліл"]))
+}
+
+fn is_self_referential_distress_profanity_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "мені мама дала",
+            "мене мама",
+            "мені пздц",
+            "мені пізда",
+            "мені п*зда",
+            "мені хана",
+            "ми в сраці",
+            "я в сраці",
+            "я в жопі",
+        ],
+    ) && !contains_any(
+        &lower,
+        &[
+            "тобі",
+            "тобе",
+            "ти ",
+            "тебе",
+            "він ",
+            "вона ",
+            "вони ",
+            "з тобою",
+        ],
+    )
+}
+
+fn is_competitive_gaming_banter_message(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let gaming_markers = [
+        "катк",
+        "лобі",
+        "клатч",
+        "кіл",
+        "кіли",
+        "хіліл",
+        "сервер",
+        "game",
+        "гру",
+        "катку",
+        "матч",
+    ];
+    let banter_markers = [
+        "лол",
+        "ахах",
+        "😂",
+        "🤣",
+        "💀",
+        "😤",
+        "го",
+        "рілі",
+        "бог",
+        "топ",
+        "мусор",
+    ];
+    let severe_abuse = [
+        "потвора",
+        "шмара",
+        "урод",
+        "здохни",
+        "нехай здохне",
+        "нікому не потрібна",
+        "всі тебе ненавидять",
+    ];
+
+    contains_any(&lower, &gaming_markers)
+        && (contains_any(&lower, &banter_markers)
+            || lower.contains("ти шо робиш")
+            || lower.contains("ще катку"))
+        && !contains_any(&lower, &severe_abuse)
+}
+
+fn count_contains(text: &str, needles: &[&str]) -> usize {
+    needles
+        .iter()
+        .filter(|needle| text.contains(**needle))
+        .count()
 }
 
 fn strip_redundant_normal_events(mut events: Vec<ContextEvent>) -> Vec<ContextEvent> {
@@ -721,7 +1864,7 @@ fn materialize_confirmed_events(
     timestamp_ms: Option<u64>,
     input: &MessageInput,
     frame: &ThreatContextFrame,
-) -> Vec<ContextEvent> {
+) -> Vec<ConfirmedEvent> {
     let events = materialize_event_hints(
         event_hints,
         timestamp_ms,
@@ -731,11 +1874,19 @@ fn materialize_confirmed_events(
     with_event_context(strip_redundant_normal_events(events), frame)
 }
 
-fn with_event_context(events: Vec<ContextEvent>, frame: &ThreatContextFrame) -> Vec<ContextEvent> {
+fn with_event_context(
+    events: Vec<ContextEvent>,
+    frame: &ThreatContextFrame,
+) -> Vec<ConfirmedEvent> {
     let context = compact_event_context(frame);
     let mut decorated = Vec::with_capacity(events.len());
     for event in events {
-        decorated.push(event.with_context(context));
+        let event = if event.kind == EventKind::NormalConversation {
+            event
+        } else {
+            event.with_context(context)
+        };
+        decorated.push(ConfirmedEvent::new(event));
     }
     decorated
 }
@@ -773,16 +1924,6 @@ fn compact_event_context(frame: &ThreatContextFrame) -> EventContextFrame {
         bursty: frame.trajectory.bursty,
         confidence: frame.confidence,
     }
-}
-
-fn dedupe_codes(codes: Vec<String>) -> Vec<String> {
-    let mut unique = Vec::with_capacity(codes.len());
-    for code in codes {
-        if !unique.iter().any(|existing| existing == &code) {
-            unique.push(code);
-        }
-    }
-    unique
 }
 
 fn confidence_from_score(score: f32) -> Confidence {
@@ -1020,12 +2161,6 @@ fn looks_like_report_context(lower: &str) -> bool {
 
 fn looks_like_direct_military_social_eng_pretext(signal: &DetectionSignal, lower: &str) -> bool {
     if signal.threat_type != ThreatType::MilitarySocialEng {
-        return false;
-    }
-    if !(signal.reason_code.contains("military.social_eng.")
-        || signal.reason_code.starts_with("pattern.intel_honeytrap_")
-        || signal.reason_code.starts_with("pattern.intel_probing_"))
-    {
         return false;
     }
 
@@ -1673,6 +2808,96 @@ mod tests {
     }
 
     #[test]
+    fn contextual_observation_filter_blocks_safe_gaming_banter_memory() {
+        let interpreter = ContextInterpreter::new();
+        let text = "ти шо робиш там 😂 ще катку";
+        let mut group_input = input(text);
+        group_input.conversation_type = ConversationType::Group;
+        let result = interpreter.interpret_observations(
+            &group_input,
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::signal_with_event(
+                signal(ThreatType::Bullying, "pattern.bullying_test", 0.55),
+                EventKind::Insult,
+                0.55,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert!(result.adjusted_signals.is_empty(), "{result:?}");
+        assert!(result.confirmed_events.is_empty(), "{result:?}");
+    }
+
+    #[test]
+    fn interpreter_owned_calibration_boosts_only_corroborated_grooming_pair() {
+        let interpreter = ContextInterpreter::new();
+        let text = "you are beautiful";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            vec![
+                RawObservation::signal(signal(
+                    ThreatType::Grooming,
+                    "pattern.grooming_flattery_001",
+                    0.30,
+                )),
+                RawObservation::signal(DetectionSignal::ml(
+                    ThreatType::Grooming,
+                    0.50,
+                    Confidence::Medium,
+                    "ml.safety.grooming",
+                    "test ml signal",
+                )),
+                RawObservation::signal(signal(
+                    ThreatType::Grooming,
+                    "pattern.grooming_secrecy_001",
+                    0.70,
+                )),
+            ],
+            None,
+        );
+        let adjustments = result.signal_adjustments;
+        let mut signals = result.adjusted_signals;
+
+        adjustments.apply_calibration(&mut signals);
+
+        assert!((signals[0].score - 0.42).abs() < f32::EPSILON);
+        assert!((signals[1].score - 0.62).abs() < f32::EPSILON);
+        assert!((signals[2].score - 0.70).abs() < f32::EPSILON);
+        assert_eq!(signals[0].confidence, Confidence::Low);
+        assert_eq!(signals[1].confidence, Confidence::Medium);
+    }
+
+    #[test]
+    fn interpreter_owned_calibration_removes_supportive_timing_signal() {
+        let interpreter = ContextInterpreter::new();
+        let text = "I'm here with you. Let's tell your parents and get help.";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            Vec::new(),
+            None,
+        );
+        let mut signals = vec![signal(
+            ThreatType::Grooming,
+            "conversation.timing.late_night_minor_contact",
+            0.40,
+        )];
+
+        result.signal_adjustments.apply_calibration(&mut signals);
+
+        assert!(signals.is_empty());
+    }
+
+    #[test]
     fn counter_speech_suppresses_propaganda_signal_and_event() {
         let interpreter = ContextInterpreter::new();
         let result = interpreter.interpret_observations(
@@ -2072,6 +3297,36 @@ mod tests {
 
         assert!(result.adjusted_signals.is_empty(), "{result:?}");
         assert!(result.confirmed_events.is_empty(), "{result:?}");
+    }
+
+    #[test]
+    fn normal_observation_crosses_confirmed_boundary_without_state_semantic_drift() {
+        let interpreter = ContextInterpreter::new();
+        let text = "Sounds good, see you tomorrow.";
+        let result = interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::event(
+                EventKind::NormalConversation,
+                1.0,
+                None,
+                Some(7),
+            )],
+            None,
+        );
+
+        assert_eq!(result.confirmed_events.len(), 1);
+        assert_eq!(
+            result.confirmed_events[0].kind,
+            EventKind::NormalConversation
+        );
+        assert_eq!(result.confirmed_events[0].content_hash, Some(7));
+        assert_eq!(
+            result.confirmed_events[0].context,
+            EventContextFrame::default()
+        );
     }
 
     #[test]

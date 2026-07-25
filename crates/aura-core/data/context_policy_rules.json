@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "policy_version": "aura.context.policy.v1",
+  "rules": [
+    {
+      "id": "unknown-adult-minor-risk",
+      "priority": 300,
+      "condition": "unknown_adult_minor",
+      "effect": {
+        "context_marker": "context.relationship.unknown_adult_minor",
+        "reason_code": "context.relationship.unknown_adult_minor",
+        "score_add": 0.08,
+        "threat_types": [
+          "grooming",
+          "manipulation",
+          "explicit",
+          "threat",
+          "doxxing",
+          "pii_leakage"
+        ]
+      }
+    },
+    {
+      "id": "self-declared-untrusted",
+      "priority": 200,
+      "condition": "self_declared",
+      "effect": {
+        "context_marker": "context.relationship.self_declared_untrusted"
+      }
+    },
+    {
+      "id": "self-declared-privileged-minor-risk",
+      "priority": 100,
+      "condition": "self_declared_privileged_minor",
+      "effect": {
+        "reason_code": "context.relationship.self_declared_privileged_claim",
+        "score_add": 0.05,
+        "threat_types": [
+          "grooming",
+          "manipulation",
+          "explicit",
+          "threat",
+          "doxxing",
+          "pii_leakage"
+        ]
+      }
+    },
+    {
+      "id": "self-declared-privileged-marker",
+      "priority": 110,
+      "condition": "self_declared_privileged",
+      "effect": {
+        "context_marker": "context.relationship.self_declared_privileged_claim"
+      }
+    },
+    {
+      "id": "verified-family-context",
+      "priority": 50,
+      "condition": "verified_family",
+      "effect": {
+        "context_marker": "context.relationship.verified_family_context"
+      }
+    }
+  ]
+}

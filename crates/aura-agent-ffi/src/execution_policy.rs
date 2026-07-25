@@ -148,14 +148,16 @@ pub fn policy_from_apply_request(
     }
     validate_document(
         &document,
-        request.authenticated_server_time_unix_ms,
-        &runtime_capabilities_digest,
-        &model_manifest_digest,
-        &request.account_key,
-        runtime.account_type(),
-        runtime.effective_domain_mode(),
-        runtime.language(),
-        &trust_keyring,
+        DocumentValidationContext {
+            authenticated_server_time_ms: request.authenticated_server_time_unix_ms,
+            runtime_capabilities_digest: &runtime_capabilities_digest,
+            model_manifest_digest: &model_manifest_digest,
+            account_key: &request.account_key,
+            runtime_account_type: runtime.account_type(),
+            runtime_domain_mode: runtime.effective_domain_mode(),
+            runtime_language: runtime.language(),
+            trust_keyring: &trust_keyring,
+        },
     )?;
 
     let rules = document
@@ -327,17 +329,31 @@ pub(crate) fn runtime_capabilities_to_proto(
     }
 }
 
-fn validate_document(
-    document: &proto::AuraExecutionPolicyDocument,
+struct DocumentValidationContext<'a> {
     authenticated_server_time_ms: i64,
-    runtime_capabilities_digest: &[u8; 32],
-    model_manifest_digest: &[u8; 32],
-    account_key: &str,
+    runtime_capabilities_digest: &'a [u8; 32],
+    model_manifest_digest: &'a [u8; 32],
+    account_key: &'a str,
     runtime_account_type: AccountType,
     runtime_domain_mode: DomainMode,
-    runtime_language: &str,
-    trust_keyring: &ExecutionPolicyTrustKeyring,
+    runtime_language: &'a str,
+    trust_keyring: &'a ExecutionPolicyTrustKeyring,
+}
+
+fn validate_document(
+    document: &proto::AuraExecutionPolicyDocument,
+    context: DocumentValidationContext<'_>,
 ) -> Result<(), String> {
+    let DocumentValidationContext {
+        authenticated_server_time_ms,
+        runtime_capabilities_digest,
+        model_manifest_digest,
+        account_key,
+        runtime_account_type,
+        runtime_domain_mode,
+        runtime_language,
+        trust_keyring,
+    } = context;
     if document.schema_version != POLICY_SCHEMA_VERSION
         || document.required_guardian_report_schema_version != GUARDIAN_REPORT_SCHEMA_VERSION
         || document.required_delivery_operation_schema_version != DELIVERY_OPERATION_SCHEMA_VERSION

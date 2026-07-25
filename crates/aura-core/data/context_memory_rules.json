@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "policy_version": "aura.context.memory.v1",
+  "rules": [
+    {
+      "id": "profanity-euphemism-suppression",
+      "priority": 900,
+      "condition": "always",
+      "signal_selectors": [
+        {
+          "reason_code": "pattern.profanity_uk_euphemisms"
+        }
+      ]
+    },
+    {
+      "id": "substance-pressure-profanity-suppression",
+      "priority": 800,
+      "condition": "substance_pressure_context",
+      "signal_selectors": [
+        {
+          "threat_types": [
+            "explicit"
+          ],
+          "reason_code_prefix": "pattern.profanity_uk_"
+        }
+      ]
+    },
+    {
+      "id": "self-distress-profanity-suppression",
+      "priority": 700,
+      "condition": "self_referential_distress_profanity",
+      "signal_selectors": [
+        {
+          "threat_types": [
+            "explicit",
+            "bullying"
+          ],
+          "reason_code_prefix": "pattern.profanity_uk_"
+        }
+      ],
+      "event_selectors": [
+        {
+          "kind": "insult"
+        },
+        {
+          "kind": "denigration"
+        },
+        {
+          "kind": "mockery"
+        }
+      ]
+    },
+    {
+      "id": "deescalating-peer-conflict-memory-suppression",
+      "priority": 600,
+      "condition": "deescalating_peer_conflict",
+      "signal_selectors": [
+        {
+          "threat_types": [
+            "bullying",
+            "explicit",
+            "threat"
+          ],
+          "max_score": 0.75
+        }
+      ],
+      "event_selectors": [
+        {
+          "kind": "insult"
+        },
+        {
+          "kind": "denigration"
+        },
+        {
+          "kind": "mockery"
+        },
+        {
+          "kind": "physical_threat"
+        }
+      ]
+    },
+    {
+      "id": "plain-peer-compliment-memory-suppression",
+      "priority": 500,
+      "condition": "plain_peer_compliment",
+      "signal_selectors": [
+        {
+          "threat_types": [
+            "grooming"
+          ],
+          "max_score": 0.3
+        }
+      ],
+      "event_selectors": [
+        {
+          "kind": "flattery"
+        },
+        {
+          "kind": "love_bombing"
+        }
+      ]
+    },
+    {
+      "id": "group-praise-memory-suppression",
+      "priority": 400,
+      "condition": "non_romantic_group_praise",
+      "signal_selectors": [
+        {
+          "threat_types": [
+            "grooming"
+          ],
+          "max_score": 0.35
+        }
+      ],
+      "event_selectors": [
+        {
+          "kind": "flattery"
+        },
+        {
+          "kind": "love_bombing"
+        }
+      ]
+    },
+    {
+      "id": "competitive-gaming-memory-suppression",
+      "priority": 300,
+      "condition": "competitive_gaming_banter",
+      "signal_selectors": [
+        {
+          "threat_types": [
+            "bullying",
+            "explicit",
+            "threat"
+          ],
+          "max_score": 0.6
+        }
+      ],
+      "event_selectors": [
+        {
+          "kind": "insult"
+        },
+        {
+          "kind": "denigration"
+        },
+        {
+          "kind": "mockery"
+        }
+      ]
+    },
+    {
+      "id": "casual-media-memory-suppression",
+      "priority": 200,
+      "condition": "casual_media_share",
+      "signal_selectors": [
+        {
+          "threat_types": [
+            "grooming"
+          ],
+          "max_score": 0.5,
+          "unless_high_risk_grooming": true
+        }
+      ],
+      "event_selectors": [
+        {
+          "kind": "photo_request",
+          "unless_high_risk_grooming": true
+        },
+        {
+          "kind": "secrecy_request",
+          "unless_high_risk_grooming": true
+        },
+        {
+          "kind": "casual_meeting_request",
+          "unless_high_risk_grooming": true
+        },
+        {
+          "kind": "flattery",
+          "unless_high_risk_grooming": true
+        },
+        {
+          "kind": "love_bombing",
+          "unless_high_risk_grooming": true
+        }
+      ]
+    },
+    {
+      "id": "playful-banter-memory-suppression",
+      "priority": 100,
+      "condition": "playful_banter",
+      "signal_selectors": [
+        {
+          "threat_types": [
+            "threat",
+            "bullying",
+            "explicit",
+            "self_harm"
+          ]
+        }
+      ],
+      "event_selectors": [
+        {
+          "kind": "insult"
+        },
+        {
+          "kind": "denigration"
+        },
+        {
+          "kind": "mockery"
+        },
+        {
+          "kind": "physical_threat"
+        },
+        {
+          "kind": "sexual_content"
+        },
+        {
+          "kind": "hopelessness"
+        },
+        {
+          "kind": "suicidal_ideation"
+        }
+      ]
+    }
+  ]
+}

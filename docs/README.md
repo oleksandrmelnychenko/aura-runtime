@@ -3,10 +3,14 @@
 This folder holds the planning and operating documents that turn AURA Core from
 an evaluation-heavy prototype into a production-grade safety runtime.
 
-Status: synchronized with runtime and policy behavior on March 25, 2026.
+Status: synchronized with runtime and policy behavior on July 25, 2026.
 
 ## Active Operating Set
 
+- [AURA Core Refactor Completion Plan](./aura-core-refactor-completion-plan.md)
+- [AURA Core Research Evidence Roadmap](./research-evidence-roadmap.md)
+- [Apple Artifact Integration Contract](./apple-artifact-integration.md)
+- [AURA Core Refactor Baseline](./refactor-baseline.md)
 - [Phase 2 Production Roadmap](./phase-2-production-roadmap.md)
 - [Phase 3 Pilot Readiness Roadmap](./phase-3-pilot-readiness-roadmap.md)
 - [Server, Client, and Feature Backlog](./server-client-feature-backlog.md)
@@ -35,6 +39,7 @@ Status: synchronized with runtime and policy behavior on March 25, 2026.
 
 ## Historical and Research Docs
 
+- [AURA Core Research Evidence Roadmap](./research-evidence-roadmap.md)
 - [Messenger Psychology Research Spec](./messenger-psychology-research-spec.md)
 - [Pig Butchering Scam Research](./pig-butchering-scam-research.md)
 - [Russian Propaganda and Disinformation Research](./russian-propaganda-detection-research.md)
@@ -71,6 +76,8 @@ Status: synchronized with runtime and policy behavior on March 25, 2026.
   debugging hooks.
 - Use the dataset governance document before changing realistic or external
   curated corpora.
+- Use the research evidence roadmap before turning production or pilot results
+  into a scientific hypothesis, experiment, or doctoral claim.
 - Use the incident runbook when planning operational safeguards, kill switches,
   and rollback behavior.
 - Use the Olena scenarios doc when preparing product demos, guardian-facing

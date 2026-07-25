@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
 use aura_patterns::PatternDatabase;
@@ -13,10 +13,19 @@ use crate::{
     negative_control_supportive_selfharm_response_case, pre_release_corpus_style_gates,
     pre_release_policy_action_gates, run_scenario_cases,
     summarize_policy_actions_with_expectation_names, summarize_scenario_runs, AccountType,
-    ConversationType, CorpusStyleProfile, LatentStateKind, PolicyActionQualityGates,
+    ConversationType, CorpusStyleProfile, DomainMode, LatentStateKind, PolicyActionQualityGates,
     PolicyActionSummary, RiskHorizon, ScenarioCase, ScenarioEvaluationSummary, ScenarioGateReport,
     ScenarioQualityGates, ScenarioRunResult, ThreatType,
 };
+
+const MANDATORY_BOUNDARY_COHORTS: [&str; 6] = [
+    "propaganda_discussion_boundary",
+    "selfharm_support_boundary",
+    "peer_banter_boundary",
+    "trusted_adult_logistics_boundary",
+    "opsec_warning_boundary",
+    "hate_counter_speech_boundary",
+];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SocialContextCohortSummary {
@@ -72,7 +81,18 @@ struct SocialContextCohortSpec {
     style_profiles: Vec<String>,
     #[serde(default)]
     inference_expectations: Vec<SocialContextInferenceExpectationSpec>,
+    #[serde(default)]
+    boundary_coverage: Option<SocialContextBoundaryCoverageSpec>,
     gates: SocialContextGateSpec,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SocialContextBoundaryCoverageSpec {
+    risky_case_name: String,
+    safe_case_name: String,
+    account_type: AccountType,
+    domain_mode: DomainMode,
+    style_profile: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -141,6 +161,7 @@ pub fn canonical_social_context_seed_scenarios() -> Vec<crate::ScenarioCase> {
     canonical_corpus_seed_scenarios()
         .into_iter()
         .chain(canonical_propaganda_scenarios())
+        .chain(crate::scenario_packs::hate_speech::canonical_hate_speech_scenarios())
         .chain([
             direct_threat_case(),
             negative_control_quoted_threat_report_case(),
@@ -651,8 +672,8 @@ fn validate_social_context_file(file: &SocialContextFile) -> Result<(), String> 
     let mut ids = BTreeSet::new();
     let known_cases = canonical_social_context_seed_scenarios()
         .into_iter()
-        .map(|case| case.name)
-        .collect::<BTreeSet<_>>();
+        .map(|case| (case.name.clone(), case))
+        .collect::<BTreeMap<_, _>>();
     let known_profiles = default_corpus_style_profiles()
         .into_iter()
         .map(|profile| profile.label().to_string())
@@ -678,7 +699,7 @@ fn validate_social_context_file(file: &SocialContextFile) -> Result<(), String> 
             ));
         }
         for case_name in &cohort.base_case_names {
-            if !known_cases.contains(case_name) {
+            if !known_cases.contains_key(case_name) {
                 return Err(format!(
                     "social context cohort {} references unknown base case {}",
                     cohort.id, case_name
@@ -705,7 +726,111 @@ fn validate_social_context_file(file: &SocialContextFile) -> Result<(), String> 
         validate_gate_spec(&cohort.id, &cohort.gates)?;
     }
 
+    validate_mandatory_boundary_coverage(file, &known_cases, &known_profiles)?;
+
     Ok(())
+}
+
+fn validate_mandatory_boundary_coverage(
+    file: &SocialContextFile,
+    known_cases: &BTreeMap<String, ScenarioCase>,
+    known_profiles: &BTreeSet<String>,
+) -> Result<(), String> {
+    for cohort_id in MANDATORY_BOUNDARY_COHORTS {
+        let cohort = file
+            .cohorts
+            .iter()
+            .find(|cohort| cohort.id == cohort_id)
+            .ok_or_else(|| format!("missing mandatory boundary cohort {cohort_id}"))?;
+        let coverage = cohort.boundary_coverage.as_ref().ok_or_else(|| {
+            format!("mandatory boundary cohort {cohort_id} has no boundary_coverage")
+        })?;
+
+        let risky = validate_boundary_case(cohort, known_cases, &coverage.risky_case_name)?;
+        let safe = validate_boundary_case(cohort, known_cases, &coverage.safe_case_name)?;
+
+        if risky.primary_threat.is_none()
+            || !risky.steps.iter().any(|step| {
+                step.observed_threats
+                    .iter()
+                    .any(|threat| Some(*threat) == risky.primary_threat)
+            })
+        {
+            return Err(format!(
+                "mandatory boundary cohort {cohort_id} risky case {} is not a labeled positive",
+                coverage.risky_case_name
+            ));
+        }
+        if risky.steps.len() < 2 || risky.onset_step.is_none() {
+            return Err(format!(
+                "mandatory boundary cohort {cohort_id} risky case {} is not a multi-turn escalation",
+                coverage.risky_case_name
+            ));
+        }
+        if safe.primary_threat.is_some()
+            || safe
+                .steps
+                .iter()
+                .any(|step| !step.observed_threats.is_empty())
+        {
+            return Err(format!(
+                "mandatory boundary cohort {cohort_id} safe case {} is not a clean negative",
+                coverage.safe_case_name
+            ));
+        }
+        if safe.steps.len() < 2 {
+            return Err(format!(
+                "mandatory boundary cohort {cohort_id} safe case {} cannot exercise restart continuation",
+                coverage.safe_case_name
+            ));
+        }
+        for case in [risky, safe] {
+            if case.config.account_type != coverage.account_type {
+                return Err(format!(
+                    "mandatory boundary cohort {cohort_id} case {} does not match account boundary {:?}",
+                    case.name, coverage.account_type
+                ));
+            }
+            if case.config.effective_domain_mode() != coverage.domain_mode {
+                return Err(format!(
+                    "mandatory boundary cohort {cohort_id} case {} does not match domain boundary {:?}",
+                    case.name, coverage.domain_mode
+                ));
+            }
+        }
+        if !known_profiles.contains(&coverage.style_profile) {
+            return Err(format!(
+                "mandatory boundary cohort {cohort_id} references unknown boundary style profile {}",
+                coverage.style_profile
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_boundary_case<'a>(
+    cohort: &SocialContextCohortSpec,
+    known_cases: &'a BTreeMap<String, ScenarioCase>,
+    case_name: &str,
+) -> Result<&'a ScenarioCase, String> {
+    if !cohort
+        .base_case_names
+        .iter()
+        .any(|candidate| candidate == case_name)
+    {
+        return Err(format!(
+            "mandatory boundary cohort {} coverage references case {} outside base_case_names",
+            cohort.id, case_name
+        ));
+    }
+
+    known_cases.get(case_name).ok_or_else(|| {
+        format!(
+            "mandatory boundary cohort {} coverage references unknown case {}",
+            cohort.id, case_name
+        )
+    })
 }
 
 fn validate_inference_expectations(cohort: &SocialContextCohortSpec) -> Result<(), String> {
@@ -864,9 +989,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        acute_selfharm_case, negative_control_trusted_adult_case, run_scenario_case,
-        trusted_adult_grooming_case, AnalysisResult, LatentStateKind, RiskHorizon,
-        ScenarioRunResult,
+        acute_selfharm_case, generate_corpus_style_variants, negative_control_trusted_adult_case,
+        predicted_score_for_threat, run_scenario_case, trusted_adult_grooming_case, AnalysisResult,
+        Analyzer, LatentStateKind, RiskHorizon, ScenarioRunResult,
     };
 
     fn final_result(case: &ScenarioCase) -> AnalysisResult {
@@ -895,6 +1020,80 @@ mod tests {
         })
     }
 
+    fn mandatory_boundary_cohorts() -> Vec<&'static SocialContextCohortSpec> {
+        MANDATORY_BOUNDARY_COHORTS
+            .iter()
+            .map(|cohort_id| {
+                social_context_file()
+                    .cohorts
+                    .iter()
+                    .find(|cohort| cohort.id == *cohort_id)
+                    .unwrap_or_else(|| panic!("missing mandatory cohort {cohort_id}"))
+            })
+            .collect()
+    }
+
+    fn seed_case(case_name: &str) -> ScenarioCase {
+        canonical_social_context_seed_scenarios()
+            .into_iter()
+            .find(|case| case.name == case_name)
+            .unwrap_or_else(|| panic!("missing social-context seed case {case_name}"))
+    }
+
+    fn normalized_result(result: &AnalysisResult) -> serde_json::Value {
+        let mut value = serde_json::to_value(result).expect("serialize analysis result");
+        value
+            .as_object_mut()
+            .expect("analysis result object")
+            .insert("analysis_time_us".to_string(), serde_json::Value::from(0));
+        value
+    }
+
+    fn analyze_case(case: &ScenarioCase) -> Vec<AnalysisResult> {
+        let db = PatternDatabase::default_mvp();
+        let mut analyzer = Analyzer::new(case.config.clone(), &db);
+        case.steps
+            .iter()
+            .map(|step| analyzer.analyze_with_context(&step.input, step.timestamp_ms))
+            .collect()
+    }
+
+    fn analyze_case_with_restart(case: &ScenarioCase) -> Vec<AnalysisResult> {
+        assert!(case.steps.len() >= 2, "restart case must be multi-turn");
+        let split = case.steps.len() / 2;
+        let db = PatternDatabase::default_mvp();
+        let mut before_restart = Analyzer::new(case.config.clone(), &db);
+        let mut results = case.steps[..split]
+            .iter()
+            .map(|step| before_restart.analyze_with_context(&step.input, step.timestamp_ms))
+            .collect::<Vec<_>>();
+
+        let context_state = before_restart.export_context_state();
+        let kids_state = before_restart.export_kids_memory_state();
+        let mut after_restart = Analyzer::new(case.config.clone(), &db);
+        after_restart
+            .import_context_state(context_state)
+            .expect("restart context state should import");
+        assert!(
+            after_restart.import_kids_memory_state(&kids_state),
+            "restart kids state should import"
+        );
+
+        results.extend(
+            case.steps[split..]
+                .iter()
+                .map(|step| after_restart.analyze_with_context(&step.input, step.timestamp_ms)),
+        );
+        results
+    }
+
+    fn corpus_style_profile(label: &str) -> CorpusStyleProfile {
+        default_social_context_profiles()
+            .into_iter()
+            .find(|profile| profile.label() == label)
+            .unwrap_or_else(|| panic!("missing corpus style profile {label}"))
+    }
+
     #[test]
     fn social_context_file_loads_expected_cohorts() {
         let file = social_context_file();
@@ -904,14 +1103,15 @@ mod tests {
             .map(|cohort| cohort.id.as_str())
             .collect::<BTreeSet<_>>();
         assert!(ids.contains("child_stranger_direct"));
-        assert!(ids.contains("trusted_adult_authority_boundary"));
+        assert!(ids.contains("trusted_adult_logistics_boundary"));
         assert!(ids.contains("peer_intimacy_boundary"));
-        assert!(ids.contains("school_group_social_pressure"));
-        assert!(ids.contains("selfharm_disclosure_support_boundary"));
+        assert!(ids.contains("peer_banter_boundary"));
+        assert!(ids.contains("selfharm_support_boundary"));
         assert!(ids.contains("image_blackmail_reputation_control"));
         assert!(ids.contains("quote_report_direct_threat_boundary"));
         assert!(ids.contains("propaganda_discussion_boundary"));
-        assert!(ids.contains("military_opsec_warning_boundary"));
+        assert!(ids.contains("opsec_warning_boundary"));
+        assert!(ids.contains("hate_counter_speech_boundary"));
     }
 
     #[test]
@@ -938,7 +1138,7 @@ mod tests {
         let cohort = summary
             .cohorts
             .iter()
-            .find(|cohort| cohort.cohort_id == "trusted_adult_authority_boundary")
+            .find(|cohort| cohort.cohort_id == "trusted_adult_logistics_boundary")
             .expect("trusted adult cohort");
 
         assert!(cohort
@@ -993,7 +1193,7 @@ mod tests {
         let cohort = summary
             .cohorts
             .iter()
-            .find(|cohort| cohort.cohort_id == "military_opsec_warning_boundary")
+            .find(|cohort| cohort.cohort_id == "opsec_warning_boundary")
             .expect("military opsec boundary cohort");
 
         assert!(cohort
@@ -1002,6 +1202,165 @@ mod tests {
         assert!(cohort
             .base_cases
             .contains(&"negative_control_opsec_warning".to_string()));
+    }
+
+    #[test]
+    fn hate_counter_speech_boundary_contains_safe_and_risky_cases() {
+        let summary = cached_social_context_summary();
+        let cohort = summary
+            .cohorts
+            .iter()
+            .find(|cohort| cohort.cohort_id == "hate_counter_speech_boundary")
+            .expect("hate counter-speech boundary cohort");
+
+        assert!(cohort
+            .base_cases
+            .contains(&"hate_dehumanizing_metaphor_en".to_string()));
+        assert!(cohort
+            .base_cases
+            .contains(&"hate_neg_counterspeech".to_string()));
+    }
+
+    #[test]
+    fn mandatory_boundaries_have_detected_counterfactual_pairs_and_profile_variants() {
+        for cohort in mandatory_boundary_cohorts() {
+            let coverage = cohort
+                .boundary_coverage
+                .as_ref()
+                .expect("mandatory boundary coverage");
+            let risky = seed_case(&coverage.risky_case_name);
+            let safe = seed_case(&coverage.safe_case_name);
+            let primary_threat = risky.primary_threat.expect("risky primary threat");
+            let risky_run = scenario_run(&risky);
+            let safe_run = scenario_run(&safe);
+            let risky_peak = risky_run
+                .step_results
+                .iter()
+                .map(|result| predicted_score_for_threat(result, primary_threat))
+                .fold(0.0, f32::max);
+            let safe_peak = safe_run
+                .step_results
+                .iter()
+                .map(|result| predicted_score_for_threat(result, primary_threat))
+                .fold(0.0, f32::max);
+
+            assert!(
+                risky_peak >= risky.detection_threshold,
+                "cohort {} risky case {} missed: peak={risky_peak:.3}, threshold={:.3}",
+                cohort.id,
+                risky.name,
+                risky.detection_threshold
+            );
+            assert!(
+                safe_peak < safe.detection_threshold,
+                "cohort {} safe case {} false-positive: peak={safe_peak:.3}, threshold={:.3}",
+                cohort.id,
+                safe.name,
+                safe.detection_threshold
+            );
+
+            let profile = corpus_style_profile(&coverage.style_profile);
+            let variants =
+                generate_corpus_style_variants(&[risky.clone(), safe.clone()], &[profile]);
+            let variant_cases = variants
+                .iter()
+                .map(|variant| variant.base_case_name.as_str())
+                .collect::<BTreeSet<_>>();
+            assert!(
+                variant_cases.contains(risky.name.as_str())
+                    || variant_cases.contains(safe.name.as_str()),
+                "cohort {} lacks profile-boundary variants for {}",
+                cohort.id,
+                coverage.style_profile
+            );
+        }
+    }
+
+    #[test]
+    fn mandatory_boundary_restart_continuation_matches_uninterrupted_analysis() {
+        for cohort in mandatory_boundary_cohorts() {
+            let coverage = cohort
+                .boundary_coverage
+                .as_ref()
+                .expect("mandatory boundary coverage");
+            for case_name in [&coverage.risky_case_name, &coverage.safe_case_name] {
+                let case = seed_case(case_name);
+                let uninterrupted = analyze_case(&case);
+                let restarted = analyze_case_with_restart(&case);
+                let uninterrupted = uninterrupted
+                    .iter()
+                    .map(normalized_result)
+                    .collect::<Vec<_>>();
+                let restarted = restarted.iter().map(normalized_result).collect::<Vec<_>>();
+
+                assert_eq!(
+                    restarted, uninterrupted,
+                    "cohort {} case {} changed after state export/import restart",
+                    cohort.id, case.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mandatory_boundary_outputs_are_deterministic() {
+        for cohort in mandatory_boundary_cohorts() {
+            let coverage = cohort
+                .boundary_coverage
+                .as_ref()
+                .expect("mandatory boundary coverage");
+            for case_name in [&coverage.risky_case_name, &coverage.safe_case_name] {
+                let case = seed_case(case_name);
+                let first = analyze_case(&case)
+                    .iter()
+                    .map(normalized_result)
+                    .collect::<Vec<_>>();
+                let second = analyze_case(&case)
+                    .iter()
+                    .map(normalized_result)
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    second, first,
+                    "cohort {} case {} produced nondeterministic ordering or output",
+                    cohort.id, case.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mandatory_safe_boundaries_are_not_contaminated_by_unrelated_risky_memory() {
+        for cohort in mandatory_boundary_cohorts() {
+            let coverage = cohort
+                .boundary_coverage
+                .as_ref()
+                .expect("mandatory boundary coverage");
+            let risky = seed_case(&coverage.risky_case_name);
+            let safe = seed_case(&coverage.safe_case_name);
+            let db = PatternDatabase::default_mvp();
+            let mut contaminated = Analyzer::new(risky.config.clone(), &db);
+
+            for step in &risky.steps {
+                let _ = contaminated.analyze_with_context(&step.input, step.timestamp_ms);
+            }
+            let after_risky = safe
+                .steps
+                .iter()
+                .map(|step| contaminated.analyze_with_context(&step.input, step.timestamp_ms))
+                .collect::<Vec<_>>();
+            let clean = analyze_case(&safe);
+            let after_risky = after_risky
+                .iter()
+                .map(normalized_result)
+                .collect::<Vec<_>>();
+            let clean = clean.iter().map(normalized_result).collect::<Vec<_>>();
+
+            assert_eq!(
+                after_risky, clean,
+                "cohort {} safe case {} was contaminated by unrelated risky memory",
+                cohort.id, safe.name
+            );
+        }
     }
 
     #[test]

@@ -2,16 +2,24 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DIST_DIR="$ROOT/dist/apple"
+DIST_DIR="${AURA_APPLE_DIST_DIR:-$ROOT/dist/apple}"
+if [[ "$DIST_DIR" != /* ]]; then
+  DIST_DIR="$ROOT/$DIST_DIR"
+fi
 INCLUDE_DIR="$ROOT/target/include/aura-agent-ffi"
 PROFILE="${PROFILE:-release}"
 CARGO_PROFILE_FLAG=("--release")
 CARGO_FEATURE_NAME=""
 SOURCE_REVISION="$(git -C "$ROOT" rev-parse HEAD)"
-SOURCE_TREE_DIRTY=false
-
-if [[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]]; then
-  SOURCE_TREE_DIRTY=true
+SOURCE_TREE_SHA256="$(
+  python3 "$ROOT/ci/apple_artifact.py" source-digest --root "$ROOT"
+)"
+SOURCE_TREE_DIRTY="$(
+  python3 "$ROOT/ci/apple_artifact.py" source-dirty --root "$ROOT"
+)"
+SHIPPABLE=false
+if [[ "$PROFILE" == "release" && "$SOURCE_TREE_DIRTY" == "false" ]]; then
+  SHIPPABLE=true
 fi
 
 if [[ "$PROFILE" == "release" && "$SOURCE_TREE_DIRTY" == "true" && "${ALLOW_DIRTY_SOURCE:-0}" != "1" ]]; then
@@ -55,6 +63,10 @@ if [[ ! -s "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH" ]]; then
   echo "Execution-policy trust keyring must not be empty." >&2
   exit 2
 fi
+AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH="$(
+  cd "$(dirname "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH")"
+  printf '%s/%s\n' "$PWD" "$(basename "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH")"
+)"
 export AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH
 export AURA_EXECUTION_POLICY_TRUST_KEYRING_SHA256
 AURA_EXECUTION_POLICY_TRUST_KEYRING_SHA256="$(shasum -a 256 "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH" | awk '{print $1}')"
@@ -72,7 +84,7 @@ identity_args=(
 if [[ -n "$CARGO_FEATURE_NAME" ]]; then
   identity_args+=(--features "$CARGO_FEATURE_NAME")
 fi
-read -r RUNTIME_CAPABILITIES_SHA256 MODEL_MANIFEST_SHA256 < <(
+read -r RUNTIME_CAPABILITIES_SHA256 MODEL_MANIFEST_SHA256 RUNTIME_RELEASE_VERSION STATE_SCHEMA_VERSION < <(
   cargo "${identity_args[@]}"
 )
 if [[ ! "$RUNTIME_CAPABILITIES_SHA256" =~ ^[0-9a-f]{64}$ \
@@ -82,14 +94,25 @@ if [[ ! "$RUNTIME_CAPABILITIES_SHA256" =~ ^[0-9a-f]{64}$ \
   echo "Aura release identity emitter returned malformed artifact digests." >&2
   exit 2
 fi
+if [[ ! "$RUNTIME_RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ \
+  || ! "$STATE_SCHEMA_VERSION" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Aura release identity emitter returned malformed version metadata." >&2
+  exit 2
+fi
 
 cat >"$DIST_DIR/runtime-artifact-descriptor.json" <<JSON
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "source_revision": "$SOURCE_REVISION",
   "source_tree_dirty": $SOURCE_TREE_DIRTY,
+  "source_tree_sha256": "$SOURCE_TREE_SHA256",
+  "shippable": $SHIPPABLE,
   "cargo_profile": "$PROFILE",
   "cargo_features": $FEATURES_JSON,
+  "runtime_release_version": "$RUNTIME_RELEASE_VERSION",
+  "wire_package": "aura.messenger.v1",
+  "wire_major_version": 1,
+  "state_schema_version": $STATE_SCHEMA_VERSION,
   "ffi_contract_version": 1,
   "aura_ffi_header_sha256": "$HEADER_SHA256",
   "runtime_capabilities_sha256": "$RUNTIME_CAPABILITIES_SHA256",
@@ -173,30 +196,15 @@ lipo -create \
 "$LLVM_STRIP" -S "$SIM_LIB"
 "$LLVM_STRIP" -S "$MACABI_LIB"
 
-required_symbols=(
-  _aura_agent_init
-  _aura_agent_version
-  _aura_attest_runtime_artifacts
-  _aura_apply_execution_policy
-  _aura_analyze_canonical_safety
-  _aura_apply_safety_case_lifecycle
-  _aura_activate_safety_case_successor
-  _aura_remove_safety_case_account
-  _aura_export_guardian_report_snapshot
-  _aura_export_guardian_report_account_snapshot
-  _aura_flush_deferred_guardian_report
-  _aura_confirm_guardian_report_prepared
-  _aura_suppress_guardian_report
-  _aura_acknowledge_guardian_report
-  _aura_export_context
-  _aura_import_context
-  _aura_export_safety_case_state
-  _aura_import_safety_case_state
-  _aura_last_error
-  _aura_free
-  _aura_free_string
-  _aura_free_buffer
-)
+required_symbols=()
+while IFS= read -r symbol; do
+  [[ -z "$symbol" || "$symbol" == \#* ]] && continue
+  required_symbols+=("_$symbol")
+done <"$ROOT/include/aura_ffi.exports"
+if [[ "${#required_symbols[@]}" -eq 0 ]]; then
+  echo "Aura export allowlist is empty." >&2
+  exit 2
+fi
 
 forbidden_symbols=(
   _aura_analyze
@@ -303,12 +311,19 @@ if [[ "$FINAL_TRUST_KEYRING_SHA256" != "$AURA_EXECUTION_POLICY_TRUST_KEYRING_SHA
 fi
 cat >"$DIST_DIR/release-manifest.json" <<JSON
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "source_revision": "$SOURCE_REVISION",
   "source_tree_dirty": $SOURCE_TREE_DIRTY,
+  "source_tree_sha256": "$SOURCE_TREE_SHA256",
+  "shippable": $SHIPPABLE,
   "cargo_profile": "$PROFILE",
   "cargo_locked": true,
   "cargo_features": $FEATURES_JSON,
+  "runtime_release_version": "$RUNTIME_RELEASE_VERSION",
+  "wire_package": "aura.messenger.v1",
+  "wire_major_version": 1,
+  "state_schema_version": $STATE_SCHEMA_VERSION,
+  "ffi_contract_version": 1,
   "minimum_ios_version": "18.0",
   "target_triples": [
     "aarch64-apple-ios",

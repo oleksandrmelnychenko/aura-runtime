@@ -2,6 +2,7 @@
 
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -90,22 +91,39 @@ def run_command(argv: list[str], cwd: Path, log_path: Path | None = None) -> int
     return process.returncode
 
 
-def parse_time_report(path: Path) -> dict:
+def parse_time_report(path: Path, system: str | None = None) -> dict:
     text = path.read_text(encoding="utf-8")
-    rss_kb = int(match_required(text, r"Maximum resident set size \(kbytes\):\s+(\d+)"))
-    elapsed_raw = match_required(text, r"Elapsed \(wall clock\) time \(h:mm:ss or m:ss\):\s+(.+)")
-    user_seconds = float(match_required(text, r"User time \(seconds\):\s+([0-9.]+)"))
-    system_seconds = float(match_required(text, r"System time \(seconds\):\s+([0-9.]+)"))
+    system = system or platform.system()
+    if system == "Darwin":
+        rss_bytes = int(match_required(text, r"(\d+)\s+maximum resident set size"))
+        elapsed_raw = match_required(text, r"^real\s+([0-9.]+)$")
+        user_seconds = float(match_required(text, r"^user\s+([0-9.]+)$"))
+        system_seconds = float(match_required(text, r"^sys\s+([0-9.]+)$"))
+        max_rss_mb = round(rss_bytes / (1024 * 1024), 3)
+    else:
+        rss_kb = int(
+            match_required(text, r"Maximum resident set size \(kbytes\):\s+(\d+)")
+        )
+        elapsed_raw = match_required(
+            text, r"Elapsed \(wall clock\) time \(h:mm:ss or m:ss\):\s+(.+)"
+        )
+        user_seconds = float(
+            match_required(text, r"User time \(seconds\):\s+([0-9.]+)")
+        )
+        system_seconds = float(
+            match_required(text, r"System time \(seconds\):\s+([0-9.]+)")
+        )
+        max_rss_mb = round(rss_kb / 1024, 3)
     return {
         "elapsed_seconds": parse_elapsed_seconds(elapsed_raw.strip()),
         "user_seconds": user_seconds,
         "system_seconds": system_seconds,
-        "max_rss_mb": round(rss_kb / 1024, 3),
+        "max_rss_mb": max_rss_mb,
     }
 
 
 def match_required(text: str, pattern: str) -> str:
-    match = re.search(pattern, text)
+    match = re.search(pattern, text, re.MULTILINE)
     if not match:
         raise SystemExit(f"could not parse /usr/bin/time output pattern: {pattern}")
     return match.group(1)
@@ -120,6 +138,34 @@ def parse_elapsed_seconds(value: str) -> float:
         hours, minutes, seconds = parts
         return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
     return float(value)
+
+
+def time_command(time_path: Path, binary: Path, arguments: list[str]) -> list[str]:
+    if platform.system() == "Darwin":
+        return [
+            "/usr/bin/time",
+            "-l",
+            "-p",
+            "-o",
+            str(time_path),
+            str(binary),
+            *arguments,
+        ]
+    return [
+        "/usr/bin/time",
+        "-v",
+        "-o",
+        str(time_path),
+        str(binary),
+        *arguments,
+    ]
+
+
+def display_path(path: Path, repo_root: Path) -> str:
+    try:
+        return path.relative_to(repo_root).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def check_report(tier: PerfTier, report: dict, timing: dict) -> list[str]:
@@ -192,12 +238,7 @@ def main() -> int:
         report_path = artifact_dir / f"world-performance-{tier.name}.json"
         time_path = artifact_dir / f"world-performance-{tier.name}.time.txt"
         log_path = artifact_dir / f"world-performance-{tier.name}.log"
-        argv = [
-            "/usr/bin/time",
-            "-v",
-            "-o",
-            str(time_path),
-            str(binary),
+        world_sim_arguments = [
             "--input",
             input_path,
             "--summary-only",
@@ -213,6 +254,7 @@ def main() -> int:
             "--repeat-multiplier",
             str(tier.repeat_multiplier),
         ]
+        argv = time_command(time_path, binary, world_sim_arguments)
 
         started = time.monotonic()
         rc = run_command(argv, cwd=repo_root, log_path=log_path)
@@ -237,9 +279,9 @@ def main() -> int:
             "context_store": report.get("context_store"),
             "timing": timing,
             "wall_seconds_observed_by_harness": duration,
-            "report_path": str(report_path.relative_to(repo_root)),
-            "time_path": str(time_path.relative_to(repo_root)),
-            "log_path": str(log_path.relative_to(repo_root)),
+            "report_path": display_path(report_path, repo_root),
+            "time_path": display_path(time_path, repo_root),
+            "log_path": display_path(log_path, repo_root),
             "status": "fail" if tier_failures else "pass",
         }
         results.append(result)
@@ -259,7 +301,10 @@ def main() -> int:
     }
     summary_path = artifact_dir / "world-performance-summary.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    print(f"Wrote performance summary to {summary_path.relative_to(repo_root)}", flush=True)
+    print(
+        f"Wrote performance summary to {display_path(summary_path, repo_root)}",
+        flush=True,
+    )
 
     if failures:
         print("Performance gate failed:", file=sys.stderr)

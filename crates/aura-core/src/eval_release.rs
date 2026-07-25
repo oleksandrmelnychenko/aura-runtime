@@ -1897,7 +1897,7 @@ mod tests {
             passed_expectations: 1,
             failed_expectations: 1,
             failures: vec![SocialContextInferenceFailureSnapshot {
-                cohort_id: "trusted_adult_authority_boundary".to_string(),
+                cohort_id: "trusted_adult_logistics_boundary".to_string(),
                 base_case_name: "negative_control_trusted_adult".to_string(),
                 failure_count: 1,
                 failures: vec!["risk_horizon was short_term, expected unknown".to_string()],
@@ -2218,7 +2218,7 @@ mod tests {
             evaluation: empty_scenario_summary(),
             policy: empty_policy_summary(),
             cohorts: vec![crate::SocialContextCohortSummary {
-                cohort_id: "trusted_adult_authority_boundary".to_string(),
+                cohort_id: "trusted_adult_logistics_boundary".to_string(),
                 description: "boundary".to_string(),
                 variant_count: 2,
                 base_cases: vec![
@@ -2258,7 +2258,7 @@ mod tests {
         assert_eq!(snapshot.failed_expectations, 1);
         assert_eq!(
             snapshot.failures[0].cohort_id,
-            "trusted_adult_authority_boundary"
+            "trusted_adult_logistics_boundary"
         );
         assert_eq!(
             snapshot.failures[0].base_case_name,
@@ -2383,7 +2383,7 @@ mod tests {
             .iter()
             .any(|line| { line == "social_context_inference=1/2 passed" }));
         assert!(summary.iter().any(|line| {
-            line.contains("cohort=trusted_adult_authority_boundary")
+            line.contains("cohort=trusted_adult_logistics_boundary")
                 && line.contains("case=negative_control_trusted_adult")
         }));
     }

@@ -40,7 +40,7 @@ pub fn run_military_pipeline(input: &DomainInput) -> DomainOutput {
         action = promote_action_to_warn(action);
     }
 
-    DomainOutput { signals, action }
+    DomainOutput::routed(signals, action, crate::routing::event_kind_for_signal)
 }
 
 fn apply_military_risk_amplifiers(signals: &mut Vec<DomainSignal>) {
@@ -185,6 +185,7 @@ mod tests {
         assert!(has_opsec, "expected opsec signals");
         assert!(has_psyops, "expected psyops signals");
         assert!(has_social, "expected social_eng signals");
+        assert!(output.has_complete_routing());
     }
 
     #[test]

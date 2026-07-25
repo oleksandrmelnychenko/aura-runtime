@@ -22,9 +22,11 @@ fn main() {
     let (runtime_capabilities_digest, model_manifest_digest) =
         release_runtime_artifact_digests(&runtime);
     println!(
-        "{} {}",
+        "{} {} {} {}",
         hex_digest(&runtime_capabilities_digest),
-        hex_digest(&model_manifest_digest)
+        hex_digest(&model_manifest_digest),
+        capabilities.runtime_version,
+        capabilities.state_schema_version
     );
 }
 

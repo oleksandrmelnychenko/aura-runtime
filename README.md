@@ -218,7 +218,7 @@ path in both `Rust` and `Promotion Gate` workflows.
 Local promotion rehearsal:
 
 ```bash
-python ci/run_promotion_rehearsal.py --target staging
+python3 ci/run_promotion_rehearsal.py --target staging
 ```
 
 This writes a full local evidence bundle under `artifacts/promotion-rehearsal/`.
@@ -247,10 +247,10 @@ Default workflow entrypoints:
 ```bash
 cargo run --quiet --example release_report -p aura-core -- --output artifacts/release-report.json --require-pass
 cargo run --quiet --example contract_evidence -p aura-core -- --output artifacts/contract-evidence.json
-python ci/generate_dataset_evidence.py --output artifacts/dataset-evidence.json
+python3 ci/generate_dataset_evidence.py --output artifacts/dataset-evidence.json
 cargo run --quiet --example audit_evidence -p aura-core -- --output artifacts/audit-evidence.json
-python ci/run_ffi_soak.py --output artifacts/ffi-state-sync-soak.json --iterations 2 --label local-check
-python ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.json --label local-check --release-report artifacts/release-report.json --contract-evidence artifacts/contract-evidence.json --dataset-evidence artifacts/dataset-evidence.json --audit-evidence artifacts/audit-evidence.json --ffi-soak artifacts/ffi-state-sync-soak.json --ffi-smoke artifacts/ffi-header-smoke.json
+python3 ci/run_ffi_soak.py --output artifacts/ffi-state-sync-soak.json --iterations 2 --label local-check
+python3 ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.json --label local-check --release-report artifacts/release-report.json --contract-evidence artifacts/contract-evidence.json --dataset-evidence artifacts/dataset-evidence.json --audit-evidence artifacts/audit-evidence.json --ffi-soak artifacts/ffi-state-sync-soak.json --ffi-smoke artifacts/ffi-header-smoke.json
 ```
 
 ## Usage (Rust)

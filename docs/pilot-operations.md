@@ -151,7 +151,7 @@ High-signal triggers:
 Local rehearsal already understands optional pilot signoffs:
 
 ```bash
-python ci/run_promotion_rehearsal.py \
+python3 ci/run_promotion_rehearsal.py \
   --target staging \
   --pilot-review-signoffs docs/pilot-review-signoffs.json
 ```

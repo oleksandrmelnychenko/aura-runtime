@@ -187,6 +187,7 @@ pub fn build_shadow_mode_event(input: ShadowModeEventInput<'_>) -> ShadowModeEve
     );
     let recommendation = input.result.recommended_action.as_ref();
     let top_threat_scores = audit_record.top_threat_scores.clone();
+    let context_markers = audit_record.context_markers.clone();
     let product_surface = build_product_decision_surface(input.result, ProductRolloutMode::Shadow);
 
     ShadowModeEvent {
@@ -206,7 +207,7 @@ pub fn build_shadow_mode_event(input: ShadowModeEventInput<'_>) -> ShadowModeEve
             action: input.result.action,
             score: input.result.score,
             reason_codes: input.result.reason_codes.clone(),
-            context_markers: input.result.context_markers.clone(),
+            context_markers,
             top_threat_scores,
             risk_breakdown: input.result.risk_breakdown.clone(),
             inference: input.result.inference.clone(),
@@ -446,12 +447,12 @@ mod tests {
     #[test]
     fn shadow_mode_mirror_respects_context_softened_product_surface() {
         let mut result = sample_result();
-        let context_markers = vec![
-            "context.filter.applied".to_string(),
-            "context.speech_act.quote".to_string(),
-            "context.stance.oppose".to_string(),
-        ];
-        result.context_summary = AnalysisContextSummary::from_markers(&context_markers);
+        result.context_summary = AnalysisContextSummary {
+            speech_act: crate::ContextSpeechAct::Quote,
+            stance: crate::ContextStance::Oppose,
+            filter_applied: true,
+            ..AnalysisContextSummary::default()
+        };
         result.context_markers = Vec::new();
         result.recommended_action.as_mut().unwrap().parent_alert = AlertPriority::None;
 
@@ -474,5 +475,13 @@ mod tests {
         assert!(!event.decision.mirror.would_open_review);
         assert!(!event.decision.product_surface.guardian.notify);
         assert!(!event.decision.product_surface.review.open_review);
+        assert_eq!(
+            event.decision.context_markers,
+            vec![
+                "context.speech_act.quote".to_string(),
+                "context.stance.oppose".to_string(),
+                "context.filter.applied".to_string(),
+            ]
+        );
     }
 }

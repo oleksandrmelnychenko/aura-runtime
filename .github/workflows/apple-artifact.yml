@@ -1,0 +1,70 @@
+name: Apple Artifact
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/**"
+      - "include/**"
+      - "models/manifest.json"
+      - "dist/apple/execution-policy-trust-keyring.json"
+      - "scripts/release/**"
+      - "ci/apple_artifact.py"
+      - "ci/test_apple_artifact.py"
+      - ".github/workflows/apple-artifact.yml"
+
+jobs:
+  xcframework:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+          targets: >-
+            aarch64-apple-ios,
+            aarch64-apple-ios-sim,
+            x86_64-apple-ios,
+            aarch64-apple-ios-macabi,
+            x86_64-apple-ios-macabi
+
+      - name: Test provenance helper
+        run: python3 -m unittest ci.test_apple_artifact
+
+      - name: Build clean locked XCFramework
+        env:
+          AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH: dist/apple/execution-policy-trust-keyring.json
+        run: bash scripts/release/build-apple-xcframework.sh
+
+      - name: Verify source and binary provenance
+        run: |
+          python3 ci/apple_artifact.py verify \
+            --root . \
+            --dist-dir dist/apple \
+            --output artifacts/apple-release-verification.json \
+            --require-clean-source
+
+      - name: Upload verified Apple release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aura-agent-apple-${{ github.sha }}
+          path: |
+            dist/apple/AuraAgentFFI.xcframework
+            dist/apple/execution-policy-trust-keyring.json
+            dist/apple/release-manifest.json
+            dist/apple/runtime-artifact-descriptor.json
+            dist/apple/runtime-artifact-identities.env
+            artifacts/apple-release-verification.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

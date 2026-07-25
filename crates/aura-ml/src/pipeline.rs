@@ -59,34 +59,39 @@ impl MlPipeline {
     const ANALYZE_BATCH_CHUNK_SIZE: usize = 256;
     pub fn try_new(config: MlConfig) -> Result<Self, MlError> {
         let config = Self::normalize_config_for_on_device_profile(config);
-        let mut validated_manifest = None;
         #[cfg(feature = "onnx")]
-        if config.validate_hashes {
-            if config.strict_manifest_validation
-                && config.manifest_path.is_none()
-                && Self::has_any_onnx_model_configured(&config)
-            {
-                return Err(MlError::ModelLoadFailed(
-                    "strict manifest validation requires manifest_path when ONNX models are configured".to_string(),
-                ));
-            }
-            if let Some(ref manifest_path) = config.manifest_path {
-                match manifest::validate_models_from_manifest(manifest_path) {
-                    Ok(validated) => {
-                        info!("Model manifest validation passed");
-                        validated_manifest = Some(validated);
-                    }
-                    Err(e) => {
-                        if config.strict_manifest_validation {
-                            return Err(MlError::ModelLoadFailed(format!(
-                                "model manifest validation failed in strict mode: {e}"
-                            )));
+        let validated_manifest = {
+            let mut validated_manifest = None;
+            if config.validate_hashes {
+                if config.strict_manifest_validation
+                    && config.manifest_path.is_none()
+                    && Self::has_any_onnx_model_configured(&config)
+                {
+                    return Err(MlError::ModelLoadFailed(
+                        "strict manifest validation requires manifest_path when ONNX models are configured".to_string(),
+                    ));
+                }
+                if let Some(ref manifest_path) = config.manifest_path {
+                    match manifest::validate_models_from_manifest(manifest_path) {
+                        Ok(validated) => {
+                            info!("Model manifest validation passed");
+                            validated_manifest = Some(validated);
                         }
-                        tracing::warn!("Model manifest validation failed: {e}");
+                        Err(e) => {
+                            if config.strict_manifest_validation {
+                                return Err(MlError::ModelLoadFailed(format!(
+                                    "model manifest validation failed in strict mode: {e}"
+                                )));
+                            }
+                            tracing::warn!("Model manifest validation failed: {e}");
+                        }
                     }
                 }
             }
-        }
+            validated_manifest
+        };
+        #[cfg(not(feature = "onnx"))]
+        let validated_manifest = None;
 
         let unified = Self::load_unified(&config);
 

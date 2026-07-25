@@ -496,6 +496,92 @@ impl AnalysisContextSummary {
         self.filter_applied && self.has_safe_policy_context() && !self.has_risky_policy_context()
     }
 
+    /// Projects the typed context into the stable diagnostic marker vocabulary.
+    ///
+    /// Markers are a compatibility and observability surface. Policy and product
+    /// decisions must consume the typed fields on this summary directly.
+    pub fn context_markers(&self) -> Vec<String> {
+        let mut markers = Vec::new();
+
+        match self.speech_act {
+            ContextSpeechAct::Unknown | ContextSpeechAct::Assert => {}
+            ContextSpeechAct::Ask => markers.push("context.speech_act.ask".to_string()),
+            ContextSpeechAct::Quote => markers.push("context.speech_act.quote".to_string()),
+            ContextSpeechAct::Report => markers.push("context.speech_act.report".to_string()),
+            ContextSpeechAct::Counter => markers.push("context.speech_act.counter".to_string()),
+            ContextSpeechAct::Support => markers.push("context.speech_act.support".to_string()),
+            ContextSpeechAct::Solicit => markers.push("context.speech_act.solicit".to_string()),
+        }
+
+        match self.stance {
+            ContextStance::Unknown | ContextStance::Endorse => {}
+            ContextStance::Oppose => markers.push("context.stance.oppose".to_string()),
+            ContextStance::Neutral => markers.push("context.stance.neutral".to_string()),
+            ContextStance::Ambiguous => markers.push("context.stance.ambiguous".to_string()),
+        }
+
+        match self.directionality {
+            ContextDirectionality::DirectedAtUser => {
+                markers.push("context.direction.directed_at_user".to_string());
+            }
+            ContextDirectionality::SelfReferential => {
+                markers.push("context.direction.self_referential".to_string());
+            }
+            ContextDirectionality::ThirdParty => {
+                markers.push("context.direction.third_party".to_string());
+            }
+            ContextDirectionality::Unknown | ContextDirectionality::Broadcast => {}
+        }
+
+        if self.relationship.is_new_contact
+            && matches!(
+                self.speech_act,
+                ContextSpeechAct::Ask | ContextSpeechAct::Solicit | ContextSpeechAct::Assert
+            )
+        {
+            markers.push("context.relationship.new_contact".to_string());
+        }
+
+        if (self.relationship.is_trusted || self.relationship.trust_level >= 0.80)
+            && matches!(
+                self.speech_act,
+                ContextSpeechAct::Support
+                    | ContextSpeechAct::Report
+                    | ContextSpeechAct::Ask
+                    | ContextSpeechAct::Quote
+                    | ContextSpeechAct::Counter
+            )
+        {
+            markers.push("context.relationship.trusted".to_string());
+        }
+
+        if self.relationship.is_new_contact && self.reciprocity == ContextReciprocity::OneSided {
+            markers.push("context.reciprocity.one_sided".to_string());
+        }
+
+        if self.trajectory.repeated_by_sender {
+            markers.push("context.trajectory.repeated_sender".to_string());
+        }
+        if self.trajectory.escalating {
+            markers.push("context.trajectory.escalating".to_string());
+        }
+        if self.trajectory.cross_conversation {
+            markers.push("context.trajectory.cross_conversation".to_string());
+        }
+        if self.trajectory.bursty {
+            markers.push("context.trajectory.bursty".to_string());
+        }
+        if self.filter_applied {
+            markers.push("context.filter.applied".to_string());
+        }
+
+        markers
+    }
+
+    /// Reconstructs typed context at legacy marker-only boundaries.
+    ///
+    /// New production code must carry `AnalysisContextSummary` from the
+    /// interpreter instead of using markers as a semantic transport.
     pub fn from_markers(context_markers: &[String]) -> Self {
         let mut summary = Self::default();
         for marker in context_markers {
@@ -602,6 +688,118 @@ impl AnalysisResult {
     /// Returns `true` if crisis support resources should be shown to the user.
     pub fn needs_crisis_resources(&self) -> bool {
         self.threat_type == ThreatType::SelfHarm
+    }
+
+    /// Returns compatibility markers for audit and shadow serialization.
+    ///
+    /// Existing markers are preserved byte-for-byte when present. Results that
+    /// only carry typed context are projected into the same marker vocabulary,
+    /// and context-prefixed diagnostic reason codes are appended without
+    /// duplicates.
+    pub fn compatibility_context_markers(&self) -> Vec<String> {
+        let mut markers = if self.context_markers.is_empty() {
+            self.context_summary.context_markers()
+        } else {
+            self.context_markers.clone()
+        };
+
+        for code in &self.reason_codes {
+            if code.starts_with("context.") && !markers.iter().any(|existing| existing == code) {
+                markers.push(code.clone());
+            }
+        }
+
+        markers
+    }
+}
+
+#[cfg(test)]
+mod context_summary_tests {
+    use super::*;
+
+    fn fully_marked_summary() -> AnalysisContextSummary {
+        AnalysisContextSummary {
+            speech_act: ContextSpeechAct::Ask,
+            stance: ContextStance::Oppose,
+            directionality: ContextDirectionality::DirectedAtUser,
+            reciprocity: ContextReciprocity::OneSided,
+            relationship: ContextRelationshipSummary {
+                is_new_contact: true,
+                is_trusted: true,
+                circle_tier: CircleTier::Inner,
+                trust_level: 0.9,
+                prior_conversation_count: 4,
+            },
+            trajectory: ContextTrajectorySummary {
+                repeated_by_sender: true,
+                escalating: true,
+                cross_conversation: true,
+                bursty: true,
+            },
+            filter_applied: true,
+            confidence: 0.92,
+        }
+    }
+
+    #[test]
+    fn typed_context_projects_stable_marker_vocabulary() {
+        assert_eq!(
+            fully_marked_summary().context_markers(),
+            vec![
+                "context.speech_act.ask".to_string(),
+                "context.stance.oppose".to_string(),
+                "context.direction.directed_at_user".to_string(),
+                "context.relationship.new_contact".to_string(),
+                "context.relationship.trusted".to_string(),
+                "context.reciprocity.one_sided".to_string(),
+                "context.trajectory.repeated_sender".to_string(),
+                "context.trajectory.escalating".to_string(),
+                "context.trajectory.cross_conversation".to_string(),
+                "context.trajectory.bursty".to_string(),
+                "context.filter.applied".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn legacy_marker_adapter_round_trips_policy_fields() {
+        let original = fully_marked_summary();
+        let reconstructed = AnalysisContextSummary::from_markers(&original.context_markers());
+
+        assert_eq!(reconstructed.speech_act, original.speech_act);
+        assert_eq!(reconstructed.stance, original.stance);
+        assert_eq!(reconstructed.directionality, original.directionality);
+        assert_eq!(reconstructed.reciprocity, original.reciprocity);
+        assert!(reconstructed.relationship.is_new_contact);
+        assert!(reconstructed.relationship.is_trusted);
+        assert_eq!(reconstructed.trajectory, original.trajectory);
+        assert_eq!(reconstructed.filter_applied, original.filter_applied);
+    }
+
+    #[test]
+    fn compatibility_markers_project_typed_context_and_keep_diagnostics() {
+        let mut result = AnalysisResult::clean(0);
+        result.context_summary = AnalysisContextSummary {
+            speech_act: ContextSpeechAct::Quote,
+            stance: ContextStance::Neutral,
+            filter_applied: true,
+            ..AnalysisContextSummary::default()
+        };
+        result.reason_codes = vec![
+            "context.relationship.sender.self_declared".to_string(),
+            "context.filter.applied".to_string(),
+            "conversation.grooming.stage_sequence".to_string(),
+        ];
+
+        assert_eq!(
+            result.compatibility_context_markers(),
+            vec![
+                "context.speech_act.quote".to_string(),
+                "context.stance.neutral".to_string(),
+                "context.filter.applied".to_string(),
+                "context.relationship.sender.self_declared".to_string(),
+            ]
+        );
     }
 }
 

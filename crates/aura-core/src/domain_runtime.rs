@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use aura_domain::{
-    DomainAction, DomainConversationType, DomainInput, DomainModuleId, DomainOutput,
-    DomainRegistry, DomainRiskProfile, MlSafetyHint,
+    DomainAction, DomainConversationType, DomainEventKind, DomainInput, DomainModuleId,
+    DomainOutput, DomainRegistry, DomainRiskProfile, MlSafetyHint,
 };
 use aura_kids::KidsModule;
 use aura_military::MilitaryModule;
@@ -67,10 +67,7 @@ impl AuraDomainRuntime {
         self.kids_module.export_memory()
     }
 
-    pub fn import_kids_memory(
-        &self,
-        state: &aura_kids::pipeline::ExportedKidsMemoryState,
-    ) -> bool {
+    pub fn import_kids_memory(&self, state: &aura_kids::pipeline::ExportedKidsMemoryState) -> bool {
         self.kids_module.import_memory(state)
     }
 
@@ -176,263 +173,116 @@ fn domain_conversation_type(conversation_type: ConversationType) -> DomainConver
     }
 }
 
-pub fn map_domain_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
-    if rule_id.contains("kids.grooming.secrecy") || rule_id.contains("kids.grooming.offplatform") {
-        return Some(EventKind::SecrecyRequest);
-    }
-    if rule_id.contains("kids.grooming.trust_isolation")
-        || rule_id.contains("kids.grooming.controlled_secrecy_compound")
-    {
-        return Some(EventKind::Exclusion);
-    }
-    if rule_id.contains("kids.bullying.group_pile_on")
-        || rule_id.contains("kids.bullying.harassment")
-    {
-        return Some(EventKind::Insult);
-    }
-    if rule_id.contains("kids.bullying.public_humiliation") {
-        return Some(EventKind::ReputationThreat);
-    }
-    if rule_id.contains("kids.selfharm.acute")
-        || rule_id.contains("kids.selfharm.ideation")
-        || rule_id.contains("kids.selfharm.planning_window")
-    {
-        return Some(EventKind::SuicidalIdeation);
-    }
-    if rule_id.contains("kids.manipulation.blackmail") {
-        return Some(EventKind::EmotionalBlackmail);
-    }
-    if rule_id.contains("kids.manipulation.image_sextortion")
-        || rule_id.contains("kids.memory.sustained_sextortion")
-    {
-        return Some(EventKind::ScreenshotThreat);
-    }
-    if rule_id.contains("kids.manipulation.gaslight") {
-        return Some(EventKind::Gaslighting);
-    }
-    if rule_id.contains("kids.manipulation.suicide_coercion") {
-        return Some(EventKind::SuicideCoercion);
-    }
-    if rule_id.contains("kids.manipulation.deadline_compliance") {
-        return Some(EventKind::PeerPressure);
-    }
-    if rule_id.contains("kids.bullying.selfharm_compound") {
-        return Some(EventKind::SuicidalIdeation);
-    }
-    if rule_id.contains("kids.selfharm.coercion_compound") {
-        return Some(EventKind::SuicideCoercion);
-    }
-    if rule_id.contains("kids.memory.grooming_progression") {
-        return Some(EventKind::SecrecyRequest);
-    }
-    if rule_id.contains("kids.memory.sender_risk_accumulation") {
-        return Some(EventKind::EmotionalBlackmail);
-    }
-    if rule_id.contains("kids.memory.new_sender_fast_escalation") {
-        return Some(EventKind::EmotionalBlackmail);
-    }
-    if rule_id.contains("kids.memory.cross_conversation_repeat_offender") {
-        return Some(EventKind::EmotionalBlackmail);
-    }
-    if rule_id.contains("kids.memory.victim_vulnerability_targeting") {
-        return Some(EventKind::SuicidalIdeation);
-    }
-    if rule_id.contains("kids.memory.bullying_cascade_selfharm") {
-        return Some(EventKind::SuicidalIdeation);
-    }
-    if rule_id.contains("military.opsec.coordinate_compound") {
-        return Some(EventKind::CoordinateMention);
-    }
-    if rule_id.contains("military.psyops.social_eng_compound")
-        || rule_id.contains("military.psyops.family_pressure")
-    {
-        return Some(EventKind::MilitaryDisinfo);
-    }
-    if rule_id.contains("military.social_eng.command_spoof") {
-        return Some(EventKind::MilitaryPhishing);
-    }
+pub fn map_pattern_rule_to_event_kind(rule_id: &str) -> Option<EventKind> {
+    aura_patterns::event_kind_for_rule(rule_id).map(event_kind_from_pattern)
+}
 
-    if rule_id.contains("encourage_harm") {
-        return Some(EventKind::HarmEncouragement);
+fn event_kind_from_pattern(kind: aura_patterns::PatternEventKind) -> EventKind {
+    match kind {
+        aura_patterns::PatternEventKind::HarmEncouragement => EventKind::HarmEncouragement,
+        aura_patterns::PatternEventKind::Denigration => EventKind::Denigration,
+        aura_patterns::PatternEventKind::Exclusion => EventKind::Exclusion,
+        aura_patterns::PatternEventKind::Mockery => EventKind::Mockery,
+        aura_patterns::PatternEventKind::Insult => EventKind::Insult,
+        aura_patterns::PatternEventKind::SecrecyRequest => EventKind::SecrecyRequest,
+        aura_patterns::PatternEventKind::GiftOffer => EventKind::GiftOffer,
+        aura_patterns::PatternEventKind::MeetingRequest => EventKind::MeetingRequest,
+        aura_patterns::PatternEventKind::PersonalInfoRequest => EventKind::PersonalInfoRequest,
+        aura_patterns::PatternEventKind::Flattery => EventKind::Flattery,
+        aura_patterns::PatternEventKind::PhotoRequest => EventKind::PhotoRequest,
+        aura_patterns::PatternEventKind::PlatformSwitch => EventKind::PlatformSwitch,
+        aura_patterns::PatternEventKind::SexualContent => EventKind::SexualContent,
+        aura_patterns::PatternEventKind::EmotionalBlackmail => EventKind::EmotionalBlackmail,
+        aura_patterns::PatternEventKind::VideoCallRequest => EventKind::VideoCallRequest,
+        aura_patterns::PatternEventKind::LocationRequest => EventKind::LocationRequest,
+        aura_patterns::PatternEventKind::MoneyOffer => EventKind::MoneyOffer,
+        aura_patterns::PatternEventKind::SuicidalIdeation => EventKind::SuicidalIdeation,
+        aura_patterns::PatternEventKind::Hopelessness => EventKind::Hopelessness,
+        aura_patterns::PatternEventKind::Devaluation => EventKind::Devaluation,
+        aura_patterns::PatternEventKind::Gaslighting => EventKind::Gaslighting,
+        aura_patterns::PatternEventKind::GuiltTripping => EventKind::GuiltTripping,
+        aura_patterns::PatternEventKind::PeerPressure => EventKind::PeerPressure,
+        aura_patterns::PatternEventKind::Darvo => EventKind::Darvo,
+        aura_patterns::PatternEventKind::SuicideCoercion => EventKind::SuicideCoercion,
+        aura_patterns::PatternEventKind::FalseConsensus => EventKind::FalseConsensus,
+        aura_patterns::PatternEventKind::DebtCreation => EventKind::DebtCreation,
+        aura_patterns::PatternEventKind::ReputationThreat => EventKind::ReputationThreat,
+        aura_patterns::PatternEventKind::IdentityErosion => EventKind::IdentityErosion,
+        aura_patterns::PatternEventKind::NetworkPoisoning => EventKind::NetworkPoisoning,
+        aura_patterns::PatternEventKind::FakeVulnerability => EventKind::FakeVulnerability,
+        aura_patterns::PatternEventKind::DoxxingAttempt => EventKind::DoxxingAttempt,
+        aura_patterns::PatternEventKind::ScreenshotThreat => EventKind::ScreenshotThreat,
+        aura_patterns::PatternEventKind::HateSpeech => EventKind::HateSpeech,
+        aura_patterns::PatternEventKind::PiiSelfDisclosure => EventKind::PiiSelfDisclosure,
+        aura_patterns::PatternEventKind::CasualMeetingRequest => EventKind::CasualMeetingRequest,
+        aura_patterns::PatternEventKind::DareChallenge => EventKind::DareChallenge,
+        aura_patterns::PatternEventKind::SuspiciousSource => EventKind::SuspiciousSource,
+        aura_patterns::PatternEventKind::CoordinateMention => EventKind::CoordinateMention,
+        aura_patterns::PatternEventKind::PositionLeak => EventKind::PositionLeak,
+        aura_patterns::PatternEventKind::UnitInfoLeak => EventKind::UnitInfoLeak,
+        aura_patterns::PatternEventKind::EquipmentLeak => EventKind::EquipmentLeak,
+        aura_patterns::PatternEventKind::MilitaryPhishing => EventKind::MilitaryPhishing,
+        aura_patterns::PatternEventKind::IntelGathering => EventKind::IntelGathering,
+        aura_patterns::PatternEventKind::MilitaryDisinfo => EventKind::MilitaryDisinfo,
     }
-    if rule_id.contains("bodyshame") || rule_id.contains("dehumanize") || rule_id.contains("ugly") {
-        return Some(EventKind::Denigration);
-    }
-    if rule_id.contains("exclusion")
-        || rule_id.contains("you_dont_belong")
-        || rule_id.contains("isolate_suggest")
-    {
-        return Some(EventKind::Exclusion);
-    }
-    if rule_id.contains("passive_agg") {
-        return Some(EventKind::Mockery);
-    }
-    if rule_id.contains("bullying") && rule_id.contains("003") {
-        return Some(EventKind::Exclusion);
-    }
-    if rule_id.contains("bullying") && rule_id.contains("002") {
-        return Some(EventKind::Denigration);
-    }
-    if rule_id.contains("bullying") {
-        return Some(EventKind::Insult);
-    }
+}
 
-    if rule_id.starts_with("grooming_secrecy") {
-        return Some(EventKind::SecrecyRequest);
+pub fn event_kind_from_domain(kind: DomainEventKind) -> EventKind {
+    match kind {
+        DomainEventKind::Flattery => EventKind::Flattery,
+        DomainEventKind::GiftOffer => EventKind::GiftOffer,
+        DomainEventKind::SecrecyRequest => EventKind::SecrecyRequest,
+        DomainEventKind::PlatformSwitch => EventKind::PlatformSwitch,
+        DomainEventKind::PersonalInfoRequest => EventKind::PersonalInfoRequest,
+        DomainEventKind::PhotoRequest => EventKind::PhotoRequest,
+        DomainEventKind::VideoCallRequest => EventKind::VideoCallRequest,
+        DomainEventKind::FinancialGrooming => EventKind::FinancialGrooming,
+        DomainEventKind::MeetingRequest => EventKind::MeetingRequest,
+        DomainEventKind::SexualContent => EventKind::SexualContent,
+        DomainEventKind::AgeInappropriate => EventKind::AgeInappropriate,
+        DomainEventKind::Insult => EventKind::Insult,
+        DomainEventKind::Denigration => EventKind::Denigration,
+        DomainEventKind::HarmEncouragement => EventKind::HarmEncouragement,
+        DomainEventKind::PhysicalThreat => EventKind::PhysicalThreat,
+        DomainEventKind::RumorSpreading => EventKind::RumorSpreading,
+        DomainEventKind::Exclusion => EventKind::Exclusion,
+        DomainEventKind::Mockery => EventKind::Mockery,
+        DomainEventKind::GuiltTripping => EventKind::GuiltTripping,
+        DomainEventKind::Gaslighting => EventKind::Gaslighting,
+        DomainEventKind::EmotionalBlackmail => EventKind::EmotionalBlackmail,
+        DomainEventKind::PeerPressure => EventKind::PeerPressure,
+        DomainEventKind::LoveBombing => EventKind::LoveBombing,
+        DomainEventKind::Darvo => EventKind::Darvo,
+        DomainEventKind::Devaluation => EventKind::Devaluation,
+        DomainEventKind::SuicidalIdeation => EventKind::SuicidalIdeation,
+        DomainEventKind::Hopelessness => EventKind::Hopelessness,
+        DomainEventKind::FarewellMessage => EventKind::FarewellMessage,
+        DomainEventKind::DoxxingAttempt => EventKind::DoxxingAttempt,
+        DomainEventKind::ScreenshotThreat => EventKind::ScreenshotThreat,
+        DomainEventKind::HateSpeech => EventKind::HateSpeech,
+        DomainEventKind::LocationRequest => EventKind::LocationRequest,
+        DomainEventKind::MoneyOffer => EventKind::MoneyOffer,
+        DomainEventKind::PiiSelfDisclosure => EventKind::PiiSelfDisclosure,
+        DomainEventKind::CasualMeetingRequest => EventKind::CasualMeetingRequest,
+        DomainEventKind::DareChallenge => EventKind::DareChallenge,
+        DomainEventKind::SuicideCoercion => EventKind::SuicideCoercion,
+        DomainEventKind::FalseConsensus => EventKind::FalseConsensus,
+        DomainEventKind::DebtCreation => EventKind::DebtCreation,
+        DomainEventKind::ReputationThreat => EventKind::ReputationThreat,
+        DomainEventKind::IdentityErosion => EventKind::IdentityErosion,
+        DomainEventKind::NetworkPoisoning => EventKind::NetworkPoisoning,
+        DomainEventKind::FakeVulnerability => EventKind::FakeVulnerability,
+        DomainEventKind::PropagandaNarrative => EventKind::PropagandaNarrative,
+        DomainEventKind::SuspiciousSource => EventKind::SuspiciousSource,
+        DomainEventKind::PositionLeak => EventKind::PositionLeak,
+        DomainEventKind::UnitInfoLeak => EventKind::UnitInfoLeak,
+        DomainEventKind::EquipmentLeak => EventKind::EquipmentLeak,
+        DomainEventKind::CoordinateMention => EventKind::CoordinateMention,
+        DomainEventKind::PsyopsPattern => EventKind::PsyopsPattern,
+        DomainEventKind::IntelGathering => EventKind::IntelGathering,
+        DomainEventKind::MilitaryPhishing => EventKind::MilitaryPhishing,
+        DomainEventKind::MilitaryDisinfo => EventKind::MilitaryDisinfo,
     }
-    if rule_id.starts_with("grooming_gifts") {
-        return Some(EventKind::GiftOffer);
-    }
-    if rule_id.starts_with("grooming_meeting") {
-        return Some(EventKind::MeetingRequest);
-    }
-    if rule_id.starts_with("grooming_age_probing") {
-        return Some(EventKind::PersonalInfoRequest);
-    }
-    if rule_id.starts_with("grooming_flattery") {
-        return Some(EventKind::Flattery);
-    }
-    if rule_id.starts_with("grooming_photo") {
-        return Some(EventKind::PhotoRequest);
-    }
-    if rule_id.starts_with("grooming_platform_switch") {
-        return Some(EventKind::PlatformSwitch);
-    }
-    if rule_id.starts_with("grooming_sexual") {
-        return Some(EventKind::SexualContent);
-    }
-    if rule_id.starts_with("grooming_emotional_dependency") {
-        return Some(EventKind::EmotionalBlackmail);
-    }
-    if rule_id.starts_with("grooming_video_call") {
-        return Some(EventKind::VideoCallRequest);
-    }
-    if rule_id.starts_with("grooming_body_comment") {
-        return Some(EventKind::SexualContent);
-    }
-    if rule_id.starts_with("grooming_location") {
-        return Some(EventKind::LocationRequest);
-    }
-    if rule_id.starts_with("grooming_money") {
-        return Some(EventKind::MoneyOffer);
-    }
-    if rule_id.starts_with("selfharm") && rule_id.contains("002") {
-        return Some(EventKind::SuicidalIdeation);
-    }
-    if rule_id.starts_with("selfharm") {
-        return Some(EventKind::Hopelessness);
-    }
-    if rule_id.starts_with("platform_switch_teen") {
-        return Some(EventKind::PlatformSwitch);
-    }
-    if rule_id.starts_with("gaming_bribery") {
-        return Some(EventKind::GiftOffer);
-    }
-    if rule_id.starts_with("emotional_withdrawal") {
-        return Some(EventKind::Devaluation);
-    }
-    if rule_id.starts_with("manipulation_gaslighting") {
-        return Some(EventKind::Gaslighting);
-    }
-    if rule_id.starts_with("manipulation_guilt") {
-        return Some(EventKind::GuiltTripping);
-    }
-    if rule_id.starts_with("manipulation_pressure") {
-        return Some(EventKind::PeerPressure);
-    }
-    if rule_id.starts_with("manipulation_isolation") {
-        return Some(EventKind::Exclusion);
-    }
-    if rule_id.starts_with("manipulation_blackmail") || rule_id.starts_with("sextortion") {
-        return Some(EventKind::EmotionalBlackmail);
-    }
-    if rule_id.starts_with("manipulation_darvo") {
-        return Some(EventKind::Darvo);
-    }
-    if rule_id.starts_with("manipulation_intermittent") {
-        return Some(EventKind::Devaluation);
-    }
-    if rule_id.starts_with("substance_") {
-        return Some(EventKind::PeerPressure);
-    }
-    if rule_id.starts_with("coercion_suicide") {
-        return Some(EventKind::SuicideCoercion);
-    }
-    if rule_id.starts_with("false_consensus") {
-        return Some(EventKind::FalseConsensus);
-    }
-    if rule_id.starts_with("debt_creation") {
-        return Some(EventKind::DebtCreation);
-    }
-    if rule_id.starts_with("reputation_threat") {
-        return Some(EventKind::ReputationThreat);
-    }
-    if rule_id.starts_with("identity_erosion") {
-        return Some(EventKind::IdentityErosion);
-    }
-    if rule_id.starts_with("network_poisoning") {
-        return Some(EventKind::NetworkPoisoning);
-    }
-    if rule_id.starts_with("fake_vulnerability") {
-        return Some(EventKind::FakeVulnerability);
-    }
-    if rule_id.starts_with("doxxing") {
-        return Some(EventKind::DoxxingAttempt);
-    }
-    if rule_id.starts_with("screenshot_threat") {
-        return Some(EventKind::ScreenshotThreat);
-    }
-    if rule_id.starts_with("hate_") {
-        return Some(EventKind::HateSpeech);
-    }
-    if rule_id.starts_with("pii_") {
-        return Some(EventKind::PiiSelfDisclosure);
-    }
-    if rule_id.starts_with("meeting_casual") {
-        return Some(EventKind::CasualMeetingRequest);
-    }
-    if rule_id.starts_with("dare_") || rule_id.starts_with("dangerous_") {
-        return Some(EventKind::DareChallenge);
-    }
-
-    if rule_id.starts_with("propaganda_domain_")
-        || rule_id.starts_with("propaganda_telegram_channel_")
-    {
-        return Some(EventKind::SuspiciousSource);
-    }
-    if rule_id.contains("conversation.propaganda.suspicious_source")
-        || rule_id.contains("conversation.propaganda.disinfo_source_blend")
-    {
-        return Some(EventKind::SuspiciousSource);
-    }
-    if rule_id.contains("conversation.propaganda.high_velocity")
-        || rule_id.contains("conversation.propaganda.coordinated")
-        || rule_id.contains("cross_conversation.propaganda.")
-    {
-        return Some(EventKind::PropagandaNarrative);
-    }
-    if rule_id.starts_with("opsec_coordinates_") {
-        return Some(EventKind::CoordinateMention);
-    }
-    if rule_id.starts_with("opsec_movement_") {
-        return Some(EventKind::PositionLeak);
-    }
-    if rule_id.starts_with("opsec_casualties_") || rule_id.starts_with("opsec_callsign_") {
-        return Some(EventKind::UnitInfoLeak);
-    }
-    if rule_id.starts_with("opsec_equipment_") {
-        return Some(EventKind::EquipmentLeak);
-    }
-    if rule_id.starts_with("military_phishing_") {
-        return Some(EventKind::MilitaryPhishing);
-    }
-    if rule_id.starts_with("intel_") {
-        return Some(EventKind::IntelGathering);
-    }
-    if rule_id.starts_with("psyops_fake_ceasefire_") {
-        return Some(EventKind::MilitaryDisinfo);
-    }
-    None
 }
 
 pub fn map_domain_threat_to_event_kind(threat_type: ThreatType) -> Option<EventKind> {
@@ -487,13 +337,9 @@ pub fn map_rule_or_threat_to_event_kind(
     rule_id: &str,
     threat_type: ThreatType,
 ) -> Option<EventKind> {
-    if let Some(kind) = map_domain_rule_to_event_kind(rule_id) {
+    if let Some(kind) = map_pattern_rule_to_event_kind(rule_id) {
         return Some(kind);
     }
-    map_threat_to_event_kind(threat_type)
-}
-
-pub fn map_domain_signal_to_event_kind(threat_type: ThreatType) -> Option<EventKind> {
     map_threat_to_event_kind(threat_type)
 }
 
@@ -809,64 +655,47 @@ pub fn merge_domain_output_effects(
     }
 }
 
-pub fn build_domain_detection_signals(
+pub fn build_domain_observations(
     domain_output: Option<&DomainOutput>,
-) -> Vec<DetectionSignal> {
+    content_hash: Option<u64>,
+) -> Vec<RawObservation> {
     let Some(domain_output) = domain_output else {
         return Vec::new();
     };
 
-    let mut signals = Vec::with_capacity(domain_output.signals.len());
-    for signal in &domain_output.signals {
-        let threat_type = domain_signal_threat_type(signal.threat_type.as_deref());
+    let mut observations = Vec::with_capacity(domain_output.signals.len());
+    for (signal_index, domain_signal) in domain_output.signals.iter().enumerate() {
+        let threat_type = domain_signal_threat_type(domain_signal.threat_type.as_deref());
         if threat_type == ThreatType::None {
             continue;
         }
 
-        let reason = if signal.reason_code.is_empty() {
-            format!("domain.{}", signal.threat_key)
+        let reason = if domain_signal.reason_code.is_empty() {
+            format!("domain.{}", domain_signal.threat_key)
         } else {
-            format!("domain.{}", signal.reason_code)
+            format!("domain.{}", domain_signal.reason_code)
         };
-        let confidence = domain_signal_confidence(signal.severity.as_deref(), signal.score);
+        let confidence =
+            domain_signal_confidence(domain_signal.severity.as_deref(), domain_signal.score);
         let signal = DetectionSignal::context(
             threat_type,
-            signal.score,
+            domain_signal.score,
             confidence,
             SignalFamily::Content,
             reason,
             "Domain module signal",
         )
-        .with_threat_subtype(signal.threat_key.clone());
-        signals.push(signal);
-    }
-    signals
-}
+        .with_threat_subtype(domain_signal.threat_key.clone());
+        let subtype = (!signal.threat_subtype.is_empty()).then(|| signal.threat_subtype.clone());
 
-pub fn build_domain_observations(
-    domain_signals: Vec<DetectionSignal>,
-    content_hash: Option<u64>,
-) -> Vec<RawObservation> {
-    let mut observations = Vec::with_capacity(domain_signals.len());
-    for signal in domain_signals {
-        let kind_from_reason = map_domain_rule_to_event_kind(&signal.reason_code);
-        let kind_from_subtype = map_domain_rule_to_event_kind(&signal.threat_subtype);
-        let kind = match (kind_from_reason, kind_from_subtype) {
-            (Some(kind), _) => Some(kind),
-            (None, Some(kind)) => Some(kind),
-            (None, None) => map_domain_signal_to_event_kind(signal.threat_type),
-        };
-        let subtype = if signal.threat_subtype.is_empty() {
-            None
-        } else {
-            Some(signal.threat_subtype.clone())
-        };
-
-        let observation = match kind {
-            Some(kind) => {
-                let score = signal.score;
-                RawObservation::signal_with_event(signal, kind, score, subtype, content_hash)
-            }
+        let observation = match domain_output.event_kind_for_signal(signal_index) {
+            Some(kind) => RawObservation::signal_with_event(
+                signal,
+                event_kind_from_domain(kind),
+                domain_signal.score,
+                subtype,
+                content_hash,
+            ),
             None => RawObservation::signal(signal),
         };
         observations.push(observation);
@@ -879,7 +708,7 @@ pub fn build_blocked_url_signal(blocked: &BlockedUrlMatch) -> DetectionSignal {
     let reason_code = blocked_url_reason_code(threat_type, &blocked.rule_id);
     let explanation = format!("{}: {}", blocked.explanation, blocked.url);
     let threat_subtype =
-        map_domain_threat_subtype(&blocked.rule_id, threat_type, Some(&blocked.url));
+        map_pattern_threat_subtype(&blocked.rule_id, threat_type, Some(&blocked.url));
 
     let mut signal = DetectionSignal::pattern(
         threat_type,
@@ -928,12 +757,14 @@ pub fn confidence_from_score(score: f32) -> Confidence {
     }
 }
 
-pub fn should_skip_domain_rule_override(rule_id: &str, matched_rule_ids: &HashSet<String>) -> bool {
-    rule_id == "opsec_coordinates_001"
-        && matched_rule_ids.contains("opsec_coordinates_ukraine_dd_001")
+pub fn should_skip_pattern_rule_override(
+    rule_id: &str,
+    matched_rule_ids: &HashSet<String>,
+) -> bool {
+    aura_patterns::is_shadowed_generic_coordinate_rule(rule_id, matched_rule_ids)
 }
 
-pub fn should_skip_domain_match(
+pub fn should_skip_pattern_match(
     text: &str,
     threat_type: ThreatType,
     rule_id: &str,
@@ -953,7 +784,7 @@ pub fn should_skip_domain_match(
         }
     }
 
-    if rule_id == "opsec_coordinates_001" {
+    if aura_patterns::requires_ukraine_coordinate_validation(rule_id) {
         let Some(matched_text) = matched_text else {
             return false;
         };
@@ -964,7 +795,7 @@ pub fn should_skip_domain_match(
     false
 }
 
-pub fn map_domain_threat_subtype(
+pub fn map_pattern_threat_subtype(
     rule_id: &str,
     threat_type: ThreatType,
     matched_text: Option<&str>,
@@ -973,10 +804,26 @@ pub fn map_domain_threat_subtype(
         ThreatType::Propaganda => NarrativeId::from_rule_id(rule_id)
             .map(|narrative| narrative.tag())
             .or_else(|| propaganda_source_subtype(rule_id)),
-        ThreatType::Psyops => psyops_subtype(rule_id, matched_text),
-        ThreatType::MilitarySocialEng => military_social_eng_subtype(rule_id),
-        ThreatType::CoordinateLeak => coordinate_subtype(rule_id),
-        ThreatType::OpsecViolation => opsec_subtype(rule_id),
+        ThreatType::Psyops => aura_patterns::military_threat_subtype(
+            rule_id,
+            aura_patterns::MilitaryPatternFamily::Psyops,
+            matched_text,
+        ),
+        ThreatType::MilitarySocialEng => aura_patterns::military_threat_subtype(
+            rule_id,
+            aura_patterns::MilitaryPatternFamily::SocialEngineering,
+            matched_text,
+        ),
+        ThreatType::CoordinateLeak => aura_patterns::military_threat_subtype(
+            rule_id,
+            aura_patterns::MilitaryPatternFamily::CoordinateLeak,
+            matched_text,
+        ),
+        ThreatType::OpsecViolation => aura_patterns::military_threat_subtype(
+            rule_id,
+            aura_patterns::MilitaryPatternFamily::Opsec,
+            matched_text,
+        ),
         ThreatType::None
         | ThreatType::Bullying
         | ThreatType::Grooming
@@ -1011,196 +858,66 @@ fn propaganda_source_subtype(rule_id: &str) -> Option<&'static str> {
     }
 }
 
-fn psyops_subtype(rule_id: &str, matched_text: Option<&str>) -> Option<&'static str> {
-    if rule_id.starts_with("psyops_surrender_") {
-        if matched_text
-            .map(|text| {
-                let lower = text.to_lowercase();
-                lower.contains("волга") || lower.contains("volga")
-            })
-            .unwrap_or(false)
-        {
-            Some("surrender_volga")
-        } else {
-            Some("surrender")
-        }
-    } else if rule_id.starts_with("psyops_distrust_") {
-        Some("command_distrust")
-    } else if rule_id.starts_with("psyops_family_target_") {
-        Some("family_targeting")
-    } else if rule_id.starts_with("psyops_division_regional_") {
-        Some("regional_division")
-    } else if rule_id.starts_with("psyops_command_distrust_") {
-        Some("command_distrust")
-    } else if rule_id.starts_with("psyops_fake_ceasefire_") {
-        Some("fake_ceasefire")
-    } else if rule_id.starts_with("psyops_demoralize_direct_") {
-        Some("demoralization")
-    } else {
-        None
-    }
-}
-
-fn military_social_eng_subtype(rule_id: &str) -> Option<&'static str> {
-    if rule_id.starts_with("military_phishing_diia_") {
-        Some("phishing_diia")
-    } else if rule_id.starts_with("military_phishing_tck_") {
-        Some("phishing_tck")
-    } else if rule_id.starts_with("military_phishing_delta_") {
-        Some("phishing_delta")
-    } else if rule_id.starts_with("military_phishing_command_") {
-        Some("phishing_command")
-    } else if rule_id.starts_with("military_phishing_account_") {
-        Some("phishing_account")
-    } else if rule_id.starts_with("intel_honeytrap_") {
-        Some("honeytrap")
-    } else if rule_id.starts_with("military_phishing_") {
-        Some("military_phishing")
-    } else {
-        None
-    }
-}
-
-fn coordinate_subtype(rule_id: &str) -> Option<&'static str> {
-    if rule_id.starts_with("opsec_coordinates_w3w_") {
-        Some("w3w")
-    } else if rule_id.starts_with("opsec_coordinates_google_maps_") {
-        Some("google_maps")
-    } else if rule_id.starts_with("opsec_coordinates_ukraine_dd_") {
-        Some("ukraine_dd")
-    } else if rule_id.starts_with("opsec_coordinates_milgrid_") {
-        Some("milgrid")
-    } else if rule_id.starts_with("opsec_coordinates_mgrs_") {
-        Some("mgrs")
-    } else if rule_id.starts_with("opsec_coordinates_pluscode_") {
-        Some("pluscode")
-    } else {
-        None
-    }
-}
-
-fn opsec_subtype(rule_id: &str) -> Option<&'static str> {
-    if rule_id.starts_with("opsec_movement_") {
-        Some("movement")
-    } else if rule_id.starts_with("opsec_casualties_") {
-        Some("casualties")
-    } else if rule_id.starts_with("opsec_equipment_") {
-        Some("equipment")
-    } else if rule_id.starts_with("opsec_callsign_") {
-        Some("callsign")
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        build_blocked_url_signal, build_domain_detection_signals, build_domain_observations,
-        core_action_from_domain_action, decide_action_with_domain_overrides,
-        detection_enabled_for_threat, domain_action_reason_marker, domain_conversation_type,
-        domain_risk_profile_for_mode, domain_signal_confidence, domain_signal_threat_type,
-        domain_threat_priority, is_domain_threat, is_link_family_threat, is_propaganda_threat,
-        map_domain_rule_to_event_kind, map_domain_signal_to_event_kind, map_domain_threat_subtype,
-        map_domain_threat_to_event_kind, map_ml_signal_to_event_kind,
+        build_blocked_url_signal, build_domain_observations, core_action_from_domain_action,
+        decide_action_with_domain_overrides, detection_enabled_for_threat,
+        domain_action_reason_marker, domain_conversation_type, domain_risk_profile_for_mode,
+        domain_signal_confidence, domain_signal_threat_type, domain_threat_priority,
+        event_kind_from_domain, is_domain_threat, is_link_family_threat, is_propaganda_threat,
+        map_domain_threat_to_event_kind, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
         map_rule_or_threat_to_event_kind, map_threat_to_event_kind, merge_domain_output_effects,
-        parse_domain_threat_type, parse_threat_type_label, should_skip_domain_match,
-        should_skip_domain_rule_override, threat_priority_for_sort,
+        parse_domain_threat_type, parse_threat_type_label, should_skip_pattern_match,
+        should_skip_pattern_rule_override, threat_priority_for_sort,
     };
     use crate::context::events::EventKind;
     use crate::ids::{ConversationId, SenderId};
     use crate::types::{Action, ContentType, ConversationType, ProtectionLevel, ThreatType};
     use crate::{AuraConfig, AuraDomainRuntime, DomainMode, MessageInput};
-    use aura_domain::{DomainAction, DomainOutput, DomainSignal};
+    use aura_domain::{DomainAction, DomainEventKind, DomainOutput, DomainSignal};
     use aura_patterns::BlockedUrlMatch;
     use std::collections::HashSet;
 
     #[test]
-    fn military_rule_mapping_works() {
+    fn typed_domain_event_bridge_is_name_agnostic() {
         assert_eq!(
-            map_domain_rule_to_event_kind("military_phishing_diia_001"),
-            Some(EventKind::MilitaryPhishing)
+            event_kind_from_domain(DomainEventKind::MilitaryPhishing),
+            EventKind::MilitaryPhishing
         );
         assert_eq!(
-            map_domain_rule_to_event_kind("opsec_coordinates_uk_001"),
-            Some(EventKind::CoordinateMention)
+            event_kind_from_domain(DomainEventKind::CoordinateMention),
+            EventKind::CoordinateMention
         );
         assert_eq!(
-            map_domain_rule_to_event_kind("propaganda_domain_state_001"),
-            Some(EventKind::SuspiciousSource)
+            event_kind_from_domain(DomainEventKind::SecrecyRequest),
+            EventKind::SecrecyRequest
         );
         assert_eq!(
-            map_domain_rule_to_event_kind("grooming_secrecy_boundary_001"),
-            Some(EventKind::SecrecyRequest)
+            event_kind_from_domain(DomainEventKind::ScreenshotThreat),
+            EventKind::ScreenshotThreat
         );
-        assert_eq!(
-            map_domain_rule_to_event_kind("selfharm_acute_002"),
-            Some(EventKind::SuicidalIdeation)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("selfharm_acute_001"),
-            Some(EventKind::Hopelessness)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("platform_switch_teen_001"),
-            Some(EventKind::PlatformSwitch)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("manipulation_gaslighting_001"),
-            Some(EventKind::Gaslighting)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("coercion_suicide_001"),
-            Some(EventKind::SuicideCoercion)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("kids.manipulation.image_sextortion"),
-            Some(EventKind::ScreenshotThreat)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("kids.memory.grooming_progression"),
-            Some(EventKind::SecrecyRequest)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("kids.memory.sender_risk_accumulation"),
-            Some(EventKind::EmotionalBlackmail)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("kids.memory.new_sender_fast_escalation"),
-            Some(EventKind::EmotionalBlackmail)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("kids.memory.cross_conversation_repeat_offender"),
-            Some(EventKind::EmotionalBlackmail)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("kids.memory.victim_vulnerability_targeting"),
-            Some(EventKind::SuicidalIdeation)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("kids.memory.bullying_cascade_selfharm"),
-            Some(EventKind::SuicidalIdeation)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("identity_erosion_001"),
-            Some(EventKind::IdentityErosion)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("bullying_pattern_003"),
-            Some(EventKind::Exclusion)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("doxxing_001"),
-            Some(EventKind::DoxxingAttempt)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("hate_001"),
-            Some(EventKind::HateSpeech)
-        );
-        assert_eq!(
-            map_domain_rule_to_event_kind("pii_001"),
-            Some(EventKind::PiiSelfDisclosure)
-        );
+    }
+
+    #[test]
+    fn unrouted_domain_signal_does_not_gain_an_event_from_text_fields() {
+        let output = DomainOutput {
+            signals: vec![DomainSignal {
+                threat_key: "opaque_signal".to_string(),
+                reason_code: "opaque.reason".to_string(),
+                score: 0.9,
+                threat_type: Some("grooming".to_string()),
+                ..DomainSignal::default()
+            }],
+            action: None,
+            routes: Vec::new(),
+        };
+
+        let observations = build_domain_observations(Some(&output), None);
+
+        assert_eq!(observations.len(), 1);
+        assert!(observations[0].signal.is_some());
+        assert!(observations[0].event_hint.is_none());
     }
 
     #[test]
@@ -1212,10 +929,6 @@ mod tests {
         assert_eq!(
             map_domain_threat_to_event_kind(ThreatType::CoordinateLeak),
             Some(EventKind::CoordinateMention)
-        );
-        assert_eq!(
-            map_domain_signal_to_event_kind(ThreatType::Manipulation),
-            Some(EventKind::GuiltTripping)
         );
         assert_eq!(
             map_threat_to_event_kind(ThreatType::Grooming),
@@ -1269,8 +982,8 @@ mod tests {
             "domain.action.block"
         );
 
-        let domain_output = DomainOutput {
-            signals: vec![DomainSignal {
+        let domain_output = DomainOutput::routed(
+            vec![DomainSignal {
                 threat_key: "grooming.secrecy".to_string(),
                 reason_code: "kids.grooming.secrecy".to_string(),
                 score: 0.91,
@@ -1279,13 +992,18 @@ mod tests {
                 action: None,
                 threat_type: Some("grooming".to_string()),
             }],
-            action: None,
-        };
-        let signals = build_domain_detection_signals(Some(&domain_output));
-        assert_eq!(signals.len(), 1);
-        assert_eq!(signals[0].threat_type, ThreatType::Grooming);
-        let observations = build_domain_observations(signals, Some(42));
+            None,
+            |_| Some(DomainEventKind::SecrecyRequest),
+        );
+        let observations = build_domain_observations(Some(&domain_output), Some(42));
         assert_eq!(observations.len(), 1);
+        assert_eq!(
+            observations[0]
+                .signal
+                .as_ref()
+                .map(|signal| signal.threat_type),
+            Some(ThreatType::Grooming)
+        );
         assert_eq!(
             observations[0]
                 .event_hint
@@ -1324,7 +1042,7 @@ mod tests {
     #[test]
     fn military_subtype_mapping_works() {
         assert_eq!(
-            map_domain_threat_subtype(
+            map_pattern_threat_subtype(
                 "military_phishing_diia_001",
                 ThreatType::MilitarySocialEng,
                 None,
@@ -1332,7 +1050,7 @@ mod tests {
             Some("phishing_diia".to_string())
         );
         assert_eq!(
-            map_domain_threat_subtype(
+            map_pattern_threat_subtype(
                 "opsec_coordinates_ukraine_dd_001",
                 ThreatType::CoordinateLeak,
                 None,
@@ -1340,7 +1058,7 @@ mod tests {
             Some("ukraine_dd".to_string())
         );
         assert_eq!(
-            map_domain_threat_subtype(
+            map_pattern_threat_subtype(
                 "psyops_surrender_001",
                 ThreatType::Psyops,
                 Some("Скажи Волга"),
@@ -1348,20 +1066,20 @@ mod tests {
             Some("surrender_volga".to_string())
         );
         assert_eq!(
-            map_domain_threat_subtype("propaganda_domain_state_001", ThreatType::Propaganda, None),
+            map_pattern_threat_subtype("propaganda_domain_state_001", ThreatType::Propaganda, None),
             Some("state_media".to_string())
         );
     }
 
     #[test]
     fn skips_generic_coordinate_rule_outside_ukraine() {
-        assert!(should_skip_domain_match(
+        assert!(should_skip_pattern_match(
             "55.7558, 37.6173",
             ThreatType::CoordinateLeak,
             "opsec_coordinates_001",
             Some("55.7558, 37.6173"),
         ));
-        assert!(!should_skip_domain_match(
+        assert!(!should_skip_pattern_match(
             "48.8566, 30.3522",
             ThreatType::CoordinateLeak,
             "opsec_coordinates_001",
@@ -1373,7 +1091,7 @@ mod tests {
     fn suppresses_generic_coordinate_when_domain_specific_rule_present() {
         let mut matched_rule_ids = HashSet::new();
         matched_rule_ids.insert("opsec_coordinates_ukraine_dd_001".to_string());
-        assert!(should_skip_domain_rule_override(
+        assert!(should_skip_pattern_rule_override(
             "opsec_coordinates_001",
             &matched_rule_ids
         ));

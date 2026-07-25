@@ -59,7 +59,7 @@ pub fn run_kids_pipeline_with_memory(
         action = promote_action_to_warn(action);
     }
 
-    DomainOutput { signals, action }
+    DomainOutput::routed(signals, action, crate::routing::event_kind_for_signal)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -152,7 +152,10 @@ fn global_kids_memory() -> &'static KidsPipelineMemory {
 }
 
 fn next_activity(memory_store: &KidsPipelineMemory) -> u64 {
-    memory_store.activity_counter.fetch_add(1, Ordering::Relaxed) + 1
+    memory_store
+        .activity_counter
+        .fetch_add(1, Ordering::Relaxed)
+        + 1
 }
 
 fn conversation_memory(
@@ -812,10 +815,12 @@ fn export_emission_checkpoints(
 ) -> Vec<ExportedEmissionCheckpoint> {
     let mut checkpoints: Vec<_> = last_emitted
         .iter()
-        .map(|(reason_code, emitted_at_index)| ExportedEmissionCheckpoint {
-            reason_code: reason_code.clone(),
-            emitted_at_index: *emitted_at_index,
-        })
+        .map(
+            |(reason_code, emitted_at_index)| ExportedEmissionCheckpoint {
+                reason_code: reason_code.clone(),
+                emitted_at_index: *emitted_at_index,
+            },
+        )
         .collect();
     checkpoints.sort_by(|left, right| left.reason_code.cmp(&right.reason_code));
     checkpoints
@@ -1035,9 +1040,7 @@ fn bounded_emission_checkpoints(
 ) -> HashMap<String, u64> {
     checkpoints
         .iter()
-        .filter(|checkpoint| {
-            allowed_reason_codes.contains(&checkpoint.reason_code.as_str())
-        })
+        .filter(|checkpoint| allowed_reason_codes.contains(&checkpoint.reason_code.as_str()))
         .map(|checkpoint| {
             (
                 checkpoint.reason_code.clone(),
@@ -1260,6 +1263,7 @@ mod tests {
             }
         }
         assert!(grooming_hits >= 2);
+        assert!(output.has_complete_routing());
     }
 
     #[test]
@@ -2124,12 +2128,10 @@ mod tests {
                 emitted_at_index: 16,
             });
         let mut sender = exported_sender("sender_exact", 23, 902);
-        sender
-            .last_emitted
-            .push(super::ExportedEmissionCheckpoint {
-                reason_code: "cross_conversation_repeat_offender".to_string(),
-                emitted_at_index: 22,
-            });
+        sender.last_emitted.push(super::ExportedEmissionCheckpoint {
+            reason_code: "cross_conversation_repeat_offender".to_string(),
+            emitted_at_index: 22,
+        });
         let state = super::ExportedKidsMemoryState {
             schema_version: super::KIDS_MEMORY_STATE_VERSION,
             conversations: vec![conversation],

@@ -14,6 +14,7 @@ const GROUP_PILE_ON_WINDOW_MS: u64 = 6 * 60 * 60 * 1000;
 use super::coercion::CoercionDetector;
 use super::contact::{ContactProfiler, ContactProfilerWireState, DEFAULT_MAX_CONTACT_PROFILES};
 use super::events::{ContextEvent, EventKind};
+use super::interpretation::ConfirmedEvent;
 use crate::types::AnalysisMode;
 
 use super::propaganda::PropagandaDetector;
@@ -221,22 +222,17 @@ impl ConversationTimeline {
     }
 
     /// Merge events from another timeline, deduplicating by content signature.
-    /// Uses (timestamp_ms, sender_id, kind) as the dedup key — this handles both:
+    /// The signature uses fields preserved by the public persisted-state wire,
+    /// excluding the process-local event ID and derived context frame. It handles:
     /// - Same-tracker re-import (same event_ids)
     /// - Cross-tracker merge (different trackers may assign overlapping event_ids)
     pub fn merge_from(&mut self, other: ConversationTimeline) {
-        let mut existing: HashSet<(u64, SenderId, EventKind)> = HashSet::with_capacity(self.len());
-        for e in self.visible_events() {
-            existing.insert((e.timestamp_ms, e.sender_id.clone(), e.kind.clone()));
-        }
-
         for event in other.events.into_iter().skip(other.start_idx) {
-            let key = (
-                event.timestamp_ms,
-                event.sender_id.clone(),
-                event.kind.clone(),
-            );
-            if existing.insert(key) {
+            if !self
+                .visible_events()
+                .iter()
+                .any(|existing| same_logical_event(existing, &event))
+            {
                 self.events.push(event);
             }
         }
@@ -245,7 +241,8 @@ impl ConversationTimeline {
             self.events.drain(0..self.start_idx);
             self.start_idx = 0;
         }
-        self.events.sort_by_key(|e| e.timestamp_ms);
+        self.events
+            .sort_by_key(|event| (event.timestamp_ms, event.event_id));
 
         if self.max_events == 0 {
             self.events.clear();
@@ -272,6 +269,16 @@ impl ConversationTimeline {
             self.start_idx = 0;
         }
     }
+}
+
+fn same_logical_event(left: &ContextEvent, right: &ContextEvent) -> bool {
+    left.timestamp_ms == right.timestamp_ms
+        && left.sender_id == right.sender_id
+        && left.conversation_id == right.conversation_id
+        && left.kind == right.kind
+        && left.confidence.to_bits() == right.confidence.to_bits()
+        && left.subtype == right.subtype
+        && left.content_hash == right.content_hash
 }
 
 impl ConversationTimelineState {
@@ -385,9 +392,21 @@ impl ConversationTracker {
         }
     }
 
-    /// Records a single event, runs all detectors, and returns any generated signals.
-    pub fn record_event(&mut self, event: ContextEvent) -> Vec<DetectionSignal> {
-        let (conversation_id, sender_id, now_ms) = self.append_event(event);
+    /// Records one interpreter-confirmed event and returns generated signals.
+    ///
+    /// Raw detector events cannot cross this boundary:
+    ///
+    /// ```compile_fail
+    /// use aura_core::context::{ContextEvent, EventKind};
+    /// use aura_core::context::tracker::{ConversationTracker, TrackerConfig};
+    ///
+    /// let mut tracker = ConversationTracker::new(TrackerConfig::default());
+    /// let raw_event =
+    ///     ContextEvent::new(1_000, "sender", "conversation", EventKind::Insult, 0.9);
+    /// tracker.record_event(raw_event);
+    /// ```
+    pub fn record_event(&mut self, event: impl Into<ConfirmedEvent>) -> Vec<DetectionSignal> {
+        let (conversation_id, sender_id, now_ms) = self.append_event(event.into());
         self.analyze_sender_window(&conversation_id, &sender_id, now_ms)
     }
 
@@ -516,7 +535,8 @@ impl ConversationTracker {
         signals
     }
 
-    fn append_event(&mut self, event: ContextEvent) -> (ConversationId, SenderId, u64) {
+    fn append_event(&mut self, event: ConfirmedEvent) -> (ConversationId, SenderId, u64) {
+        let event = event.into_event();
         let conversation_id = event.conversation_id.clone();
         let sender_id = event.sender_id.clone();
         let now_ms = event.timestamp_ms;
@@ -549,11 +569,14 @@ impl ConversationTracker {
         (conversation_id, sender_id, now_ms)
     }
 
-    /// Records a batch of events sequentially and returns all accumulated signals.
-    pub fn record_events(&mut self, events: Vec<ContextEvent>) -> Vec<DetectionSignal> {
+    /// Records interpreter-confirmed events and returns all accumulated signals.
+    pub fn record_events<E>(&mut self, events: impl IntoIterator<Item = E>) -> Vec<DetectionSignal>
+    where
+        E: Into<ConfirmedEvent>,
+    {
         let mut latest_by_sender: HashMap<(ConversationId, SenderId), u64> = HashMap::new();
         for event in events {
-            let (conversation_id, sender_id, now_ms) = self.append_event(event);
+            let (conversation_id, sender_id, now_ms) = self.append_event(event.into());
             let key = (conversation_id, sender_id);
             let entry = latest_by_sender.entry(key).or_insert(now_ms);
             if now_ms > *entry {
@@ -1355,6 +1378,29 @@ mod tests {
     }
 
     #[test]
+    fn timeline_merge_preserves_distinct_same_kind_events_at_same_timestamp() {
+        let mut left = ConversationTimeline::new("conv_1".into(), 10);
+        let mut generic = make_event("conv_1", "sender", EventKind::SecrecyRequest, 1_000);
+        generic.confidence = 0.7;
+        left.push(generic);
+
+        let mut right = ConversationTimeline::new("conv_1".into(), 10);
+        let mut classified = make_event("conv_1", "sender", EventKind::SecrecyRequest, 1_000);
+        classified.confidence = 0.78;
+        classified.subtype = Some("grooming_secrecy".to_string());
+        right.push(classified);
+
+        left.merge_from(right);
+
+        let events = left.all_events();
+        assert_eq!(events.len(), 2);
+        assert!(events.iter().any(|event| event.subtype.is_none()));
+        assert!(events
+            .iter()
+            .any(|event| event.subtype.as_deref() == Some("grooming_secrecy")));
+    }
+
+    #[test]
     fn separate_conversations_tracked_independently() {
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
 
@@ -1445,7 +1491,10 @@ mod tests {
         tracker.import_wire_state(state).unwrap();
 
         assert_eq!(
-            (tracker.conversation_ids().len(), tracker.timeline("conv_0").is_none()),
+            (
+                tracker.conversation_ids().len(),
+                tracker.timeline("conv_0").is_none()
+            ),
             (2, true)
         );
     }

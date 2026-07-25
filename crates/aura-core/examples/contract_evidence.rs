@@ -1,17 +1,23 @@
+use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 
-use aura_core::context::tracker::TRACKER_STATE_VERSION;
+use aura_core::context::{
+    builtin_context_rule_pack_evidence, tracker::TRACKER_STATE_VERSION, ContextRulePackEvidence,
+};
 use chrono::Utc;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 const PROTO_RELATIVE_PATH: &str = "proto/aura/messenger/v1/messenger.proto";
 const FFI_HEADER_RELATIVE_PATH: &str = "include/aura_ffi.h";
+const FFI_EXPORT_ALLOWLIST_RELATIVE_PATH: &str = "include/aura_ffi.exports";
 const FFI_SMOKE_SOURCE_RELATIVE_PATH: &str = "ci/ffi_header_smoke.c";
 const FFI_SOURCE_RELATIVE_PATH: &str = "crates/aura-agent-ffi/src/lib.rs";
+const FFI_LIFECYCLE_SOURCE_RELATIVE_PATH: &str = "crates/aura-agent-ffi/src/lifecycle.rs";
+const FFI_BUFFER_SOURCE_RELATIVE_PATH: &str = "crates/aura-agent-ffi/src/lifecycle/buffers.rs";
 
 struct CliArgs {
     output: Option<PathBuf>,
@@ -28,6 +34,7 @@ struct ContractEvidenceReport {
     runtime_release_version: String,
     wire: WireContractEvidence,
     persisted_state: PersistedStateEvidence,
+    context_rule_packs: ContextRulePackEvidence,
     abi: AbiContractEvidence,
     files: Vec<FileDigestEvidence>,
 }
@@ -50,7 +57,9 @@ struct PersistedStateEvidence {
 #[derive(Serialize)]
 struct AbiContractEvidence {
     header_path: String,
+    export_allowlist_path: String,
     source_path: String,
+    implementation_source_paths: Vec<String>,
     smoke_source_path: String,
     exported_functions: Vec<String>,
     aura_buffer_layout: AuraBufferLayoutEvidence,
@@ -145,22 +154,42 @@ fn build_contract_evidence() -> Result<ContractEvidenceReport, String> {
     let workspace_root = workspace_root()?;
     let proto_path = workspace_root.join(PROTO_RELATIVE_PATH);
     let ffi_header_path = workspace_root.join(FFI_HEADER_RELATIVE_PATH);
+    let ffi_export_allowlist_path = workspace_root.join(FFI_EXPORT_ALLOWLIST_RELATIVE_PATH);
     let ffi_smoke_source_path = workspace_root.join(FFI_SMOKE_SOURCE_RELATIVE_PATH);
     let ffi_source_path = workspace_root.join(FFI_SOURCE_RELATIVE_PATH);
+    let ffi_lifecycle_source_path = workspace_root.join(FFI_LIFECYCLE_SOURCE_RELATIVE_PATH);
+    let ffi_buffer_source_path = workspace_root.join(FFI_BUFFER_SOURCE_RELATIVE_PATH);
 
     let proto_contents = fs::read_to_string(&proto_path)
         .map_err(|error| format!("read {}: {error}", proto_path.display()))?;
     let ffi_header_contents = fs::read_to_string(&ffi_header_path)
         .map_err(|error| format!("read {}: {error}", ffi_header_path.display()))?;
+    let ffi_export_allowlist_contents = fs::read_to_string(&ffi_export_allowlist_path)
+        .map_err(|error| format!("read {}: {error}", ffi_export_allowlist_path.display()))?;
     let ffi_smoke_source_bytes = fs::read(&ffi_smoke_source_path)
         .map_err(|error| format!("read {}: {error}", ffi_smoke_source_path.display()))?;
     let ffi_source_contents = fs::read_to_string(&ffi_source_path)
         .map_err(|error| format!("read {}: {error}", ffi_source_path.display()))?;
+    let ffi_lifecycle_source_contents = fs::read_to_string(&ffi_lifecycle_source_path)
+        .map_err(|error| format!("read {}: {error}", ffi_lifecycle_source_path.display()))?;
+    let ffi_buffer_source_bytes = fs::read(&ffi_buffer_source_path)
+        .map_err(|error| format!("read {}: {error}", ffi_buffer_source_path.display()))?;
 
     let proto_package = parse_proto_package(&proto_contents)?;
     let wire_major_version = parse_wire_major_version(&proto_package)?;
     let exported_functions = parse_exported_functions(&ffi_header_contents)?;
-    let request_limits_bytes = parse_request_limits(&ffi_source_contents)?;
+    let export_allowlist = parse_export_allowlist(&ffi_export_allowlist_contents)?;
+    if exported_functions.iter().collect::<BTreeSet<_>>()
+        != export_allowlist.iter().collect::<BTreeSet<_>>()
+    {
+        return Err(format!(
+            "FFI header exports differ from {}",
+            FFI_EXPORT_ALLOWLIST_RELATIVE_PATH
+        ));
+    }
+    let request_limits_bytes = parse_request_limits(&ffi_lifecycle_source_contents)?;
+    let context_rule_packs = builtin_context_rule_pack_evidence()
+        .map_err(|error| format!("validate bundled context rule packs: {error}"))?;
 
     Ok(ContractEvidenceReport {
         generated_at_utc: Utc::now().to_rfc3339(),
@@ -176,9 +205,15 @@ fn build_contract_evidence() -> Result<ContractEvidenceReport, String> {
             schema_field_name: "schema_version".to_string(),
             schema_field_number: 1,
         },
+        context_rule_packs,
         abi: AbiContractEvidence {
             header_path: FFI_HEADER_RELATIVE_PATH.to_string(),
+            export_allowlist_path: FFI_EXPORT_ALLOWLIST_RELATIVE_PATH.to_string(),
             source_path: FFI_SOURCE_RELATIVE_PATH.to_string(),
+            implementation_source_paths: vec![
+                FFI_LIFECYCLE_SOURCE_RELATIVE_PATH.to_string(),
+                FFI_BUFFER_SOURCE_RELATIVE_PATH.to_string(),
+            ],
             smoke_source_path: FFI_SMOKE_SOURCE_RELATIVE_PATH.to_string(),
             exported_functions,
             aura_buffer_layout: AuraBufferLayoutEvidence {
@@ -194,6 +229,15 @@ fn build_contract_evidence() -> Result<ContractEvidenceReport, String> {
             file_digest(FFI_HEADER_RELATIVE_PATH, ffi_header_contents.as_bytes()),
             file_digest(FFI_SMOKE_SOURCE_RELATIVE_PATH, &ffi_smoke_source_bytes),
             file_digest(FFI_SOURCE_RELATIVE_PATH, ffi_source_contents.as_bytes()),
+            file_digest(
+                FFI_LIFECYCLE_SOURCE_RELATIVE_PATH,
+                ffi_lifecycle_source_contents.as_bytes(),
+            ),
+            file_digest(FFI_BUFFER_SOURCE_RELATIVE_PATH, &ffi_buffer_source_bytes),
+            file_digest(
+                FFI_EXPORT_ALLOWLIST_RELATIVE_PATH,
+                ffi_export_allowlist_contents.as_bytes(),
+            ),
         ],
     })
 }
@@ -267,16 +311,36 @@ fn parse_exported_functions(header: &str) -> Result<Vec<String>, String> {
     Ok(functions)
 }
 
+fn parse_export_allowlist(contents: &str) -> Result<Vec<String>, String> {
+    let functions = contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if functions.is_empty() {
+        return Err("FFI export allowlist is empty".to_string());
+    }
+    if functions.iter().collect::<BTreeSet<_>>().len() != functions.len() {
+        return Err("FFI export allowlist contains duplicates".to_string());
+    }
+    if functions
+        .iter()
+        .any(|function| !function.starts_with("aura_"))
+    {
+        return Err("FFI export allowlist contains a non-Aura symbol".to_string());
+    }
+    Ok(functions)
+}
+
 fn parse_request_limits(source: &str) -> Result<Vec<RequestLimitEvidence>, String> {
     let tracked_limits = [
         ("MAX_CONFIG_REQUEST_BYTES", "config"),
-        ("MAX_MESSAGE_REQUEST_BYTES", "message"),
-        (
-            "MAX_ANALYZE_CONTEXT_REQUEST_BYTES",
-            "analyze_context request",
-        ),
-        ("MAX_BATCH_REQUEST_BYTES", "batch analyze request"),
         ("MAX_IMPORT_CONTEXT_REQUEST_BYTES", "import_context request"),
+        (
+            "MAX_CANONICAL_SAFETY_REQUEST_BYTES",
+            "canonical safety request",
+        ),
         ("MAX_SMALL_CONTROL_REQUEST_BYTES", "small control request"),
     ];
 
@@ -342,4 +406,43 @@ fn sha256_hex(bytes: &[u8]) -> String {
         output.push_str(&format!("{byte:02x}"));
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_limits_are_read_from_decomposed_ffi_lifecycle_source() {
+        let source = include_str!("../../aura-agent-ffi/src/lifecycle.rs");
+
+        let limits = parse_request_limits(source).expect("FFI request limits should parse");
+
+        assert_eq!(
+            limits
+                .iter()
+                .map(|limit| (limit.constant_name.as_str(), limit.max_bytes))
+                .collect::<Vec<_>>(),
+            vec![
+                ("MAX_CONFIG_REQUEST_BYTES", 64 * 1024),
+                ("MAX_IMPORT_CONTEXT_REQUEST_BYTES", 4 * 1024 * 1024),
+                ("MAX_CANONICAL_SAFETY_REQUEST_BYTES", 1024 * 1024),
+                ("MAX_SMALL_CONTROL_REQUEST_BYTES", 16 * 1024),
+            ]
+        );
+    }
+
+    #[test]
+    fn ffi_export_allowlist_matches_public_header() {
+        let header = include_str!("../../../include/aura_ffi.h");
+        let allowlist = include_str!("../../../include/aura_ffi.exports");
+
+        let exported = parse_exported_functions(header).expect("header exports should parse");
+        let allowed = parse_export_allowlist(allowlist).expect("allowlist should parse");
+
+        assert_eq!(
+            exported.into_iter().collect::<BTreeSet<_>>(),
+            allowed.into_iter().collect::<BTreeSet<_>>()
+        );
+    }
 }

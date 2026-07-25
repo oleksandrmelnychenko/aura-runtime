@@ -429,15 +429,19 @@ mod tests {
     }
 
     #[test]
-    fn safe_context_suppresses_guardian_and_review_surfaces() {
+    fn typed_safe_context_wins_over_risky_diagnostic_markers() {
         let mut result = sample_result();
-        let context_markers = vec![
-            "context.filter.applied".to_string(),
-            "context.speech_act.quote".to_string(),
-            "context.stance.oppose".to_string(),
+        result.context_summary = AnalysisContextSummary {
+            speech_act: ContextSpeechAct::Quote,
+            stance: ContextStance::Oppose,
+            filter_applied: true,
+            ..AnalysisContextSummary::default()
+        };
+        result.context_markers = vec![
+            "context.speech_act.solicit".to_string(),
+            "context.stance.ambiguous".to_string(),
+            "context.relationship.new_contact".to_string(),
         ];
-        result.context_summary = AnalysisContextSummary::from_markers(&context_markers);
-        result.context_markers = Vec::new();
 
         let surface = build_product_decision_surface(&result, ProductRolloutMode::GuardianEnabled);
 
@@ -453,16 +457,13 @@ mod tests {
     }
 
     #[test]
-    fn risky_context_markers_keep_guardian_and_review_surfaces() {
+    fn typed_risky_context_wins_over_safe_diagnostic_markers() {
         let mut result = sample_result();
-        let context_markers = vec![
+        result.context_markers = vec![
             "context.filter.applied".to_string(),
             "context.speech_act.quote".to_string(),
             "context.stance.oppose".to_string(),
-            "context.relationship.new_contact".to_string(),
         ];
-        result.context_summary = AnalysisContextSummary::from_markers(&context_markers);
-        result.context_markers = Vec::new();
 
         let surface = build_product_decision_surface(&result, ProductRolloutMode::GuardianEnabled);
 

@@ -66,7 +66,7 @@ Current weak spots already visible in slice outputs:
 - multilingual `ru` ECE is materially weaker than `en` and `uk`
 - realistic `trusted_adult` and `group_peer` slices have high ECE
 - external curated slices are still too thin to act as hard release blockers
-- social-context `child_stranger_direct` and `school_group_social_pressure`
+- social-context `child_stranger_direct` and `peer_banter_boundary`
   are materially harder than the overall suite
 
 ## Target End State For Phase 2

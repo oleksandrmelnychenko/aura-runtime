@@ -1,6 +1,6 @@
 # Verification Commands
 
-Date: 2026-03-25
+Date: 2026-07-24
 
 Single place for the most used verification commands during release and pilot work.
 
@@ -13,6 +13,7 @@ just verify-onnx
 just kids-memory-health
 just kids-preprod-dry-run
 just kids-memory-health-strict
+just refactor-baseline-gate
 ```
 
 ## Core Release Gates
@@ -21,6 +22,18 @@ just kids-memory-health-strict
 cargo run --quiet --example release_report -p aura-core -- --require-pass
 cargo run --quiet --example pilot_regression -p aura-core -- --require-pass
 ```
+
+## AURA Core Refactor Differential Gate
+
+```bash
+just refactor-baseline-gate
+```
+
+This captures current contract, release, pilot, lifecycle, and 10k performance
+evidence, then compares it with
+`crates/aura-core/data/refactor_baseline_v1.json`. Unapproved differences,
+stale approvals, and performance envelope violations fail the command. See
+`docs/refactor-baseline.md` for the exact approval contract.
 
 ## Focused Gate Smoke Tests
 
@@ -110,6 +123,37 @@ tiers using repeat multipliers over the dense two-year lifecycle fixture. Use
 limits with `AURA_PERF_10K_MAX_SECONDS`, `AURA_PERF_50K_MAX_SECONDS`, and
 `AURA_PERF_100K_MAX_SECONDS`.
 
+## Apple Artifact Provenance
+
+Build and verify a local release-profile artifact without overwriting
+`dist/apple`:
+
+```bash
+just apple-artifact-build-local
+```
+
+The local artifact is marked `shippable=false` whenever reviewable source is
+dirty. For a clean reviewed checkout, build and verify the shippable artifact:
+
+```bash
+just apple-artifact-build-release
+```
+
+Verify an already packaged clean artifact independently:
+
+```bash
+python3 ci/apple_artifact.py verify \
+  --root . \
+  --dist-dir dist/apple \
+  --output artifacts/apple-release-verification.json \
+  --require-clean-source
+```
+
+The verifier checks source revision/digest, runtime/wire/state/FFI versions,
+Cargo feature identity, three XCFramework slices, Mach-O architectures,
+embedded headers, trust keyring, descriptor identities, binary hashes, and the
+exact Aura export allowlist.
+
 ## Full Workspace Validation
 
 ```bash
@@ -152,7 +196,7 @@ cargo run --example pilot_gate -p aura-core -- \
 Build a compact daily snapshot for `kids.memory.*` incidents from existing artifacts:
 
 ```bash
-python ci/kids_memory_health_snapshot.py \
+python3 ci/kids_memory_health_snapshot.py \
   --input artifacts/pilot-regression-report.json \
   --input artifacts/pilot-shadow-run-a.json \
   --input artifacts/pilot-shadow-run-b.json \
@@ -162,7 +206,7 @@ python ci/kids_memory_health_snapshot.py \
 Fail the command when not all mandatory `kids.memory.*` reasons are observed:
 
 ```bash
-python ci/kids_memory_health_snapshot.py \
+python3 ci/kids_memory_health_snapshot.py \
   --input artifacts/pilot-regression-report.json \
   --input artifacts/pilot-shadow-run-a.json \
   --input artifacts/pilot-shadow-run-b.json \
@@ -187,7 +231,7 @@ Reference strict readiness contracts:
 Build strict pre-prod readiness matrix from policy/corpus + memory-health:
 
 ```bash
-python ci/kids_preprod_dry_run_matrix.py \
+python3 ci/kids_preprod_dry_run_matrix.py \
   --policy-expectations crates/aura-core/data/action_policy_expectations.json \
   --realistic-cases crates/aura-core/data/realistic_chat_cases.json \
   --kids-memory-health artifacts/kids-memory-health.json \

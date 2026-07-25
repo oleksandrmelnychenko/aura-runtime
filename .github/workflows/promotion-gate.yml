@@ -30,6 +30,11 @@ env:
   AURA_KIDS_PREPROD_DRY_RUN_PATH: artifacts/kids-preprod-dry-run-matrix.json
   AURA_COMMUNITY_SURFACE_REPORT_PATH: artifacts/community-surface-report.json
   AURA_WORLD_LIFECYCLE_REPORT_PATH: artifacts/world-lifecycle-suite-report.json
+  AURA_WORLD_PERFORMANCE_REPORT_PATH: artifacts/performance/world-performance-summary.json
+  AURA_REFACTOR_BASELINE_PATH: crates/aura-core/data/refactor_baseline_v1.json
+  AURA_REFACTOR_CANDIDATE_PATH: artifacts/refactor-candidate.json
+  AURA_REFACTOR_DIFF_REPORT_PATH: artifacts/refactor-diff-report.json
+  AURA_REFACTOR_APPROVALS_PATH: docs/refactor-diff-approvals.json
   AURA_PILOT_GATE_REPORT_PATH: artifacts/pilot-gate-report.json
   AURA_PILOT_REVIEW_SIGNOFFS_PATH: docs/pilot-review-signoffs.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
@@ -48,7 +53,7 @@ jobs:
     - name: Lint Domain Lexicons
       run: python3 ci/lint_lexicons.py
     - name: Run CI Helper Tests
-      run: python3 -m unittest ci.test_generate_evidence_manifest
+      run: python3 -m unittest ci.test_apple_artifact ci.test_generate_evidence_manifest ci.test_refactor_baseline ci.test_world_performance_gate
     - name: Resolve Promotion Target
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -74,6 +79,10 @@ jobs:
           --output "$AURA_WORLD_LIFECYCLE_REPORT_PATH" \
           --redact-text \
           --require-clean
+    - name: Run 10k World Performance Gate
+      env:
+        AURA_PERF_TIERS: 10k
+      run: python3 ci/world_performance_gate.py
     - name: Run FFI State Sync Soak
       run: python3 ci/run_ffi_soak.py --output "$AURA_FFI_SOAK_EVIDENCE_PATH" --iterations 5 --label promotion-${AURA_PROMOTION_TARGET}
     - name: Generate Release Report
@@ -171,6 +180,28 @@ jobs:
             encoding="utf-8",
         )
         PY
+    - name: Run AURA Core Refactor Differential Gate
+      if: ${{ always() }}
+      run: |
+        python3 ci/refactor_baseline.py snapshot \
+          --output "$AURA_REFACTOR_CANDIDATE_PATH" \
+          --baseline-id "promotion-${AURA_PROMOTION_TARGET}-${GITHUB_SHA}" \
+          --contract-evidence "$AURA_CONTRACT_EVIDENCE_PATH" \
+          --release-report "$AURA_RELEASE_REPORT_PATH" \
+          --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          --world-lifecycle-report "$AURA_WORLD_LIFECYCLE_REPORT_PATH" \
+          --world-performance-report "$AURA_WORLD_PERFORMANCE_REPORT_PATH"
+
+        APPROVAL_ARGS=()
+        if [ -f "$AURA_REFACTOR_APPROVALS_PATH" ]; then
+          APPROVAL_ARGS=(--approvals "$AURA_REFACTOR_APPROVALS_PATH")
+        fi
+        python3 ci/refactor_baseline.py compare \
+          --baseline "$AURA_REFACTOR_BASELINE_PATH" \
+          --candidate "$AURA_REFACTOR_CANDIDATE_PATH" \
+          --output "$AURA_REFACTOR_DIFF_REPORT_PATH" \
+          "${APPROVAL_ARGS[@]}" \
+          --require-pass
     - name: Generate Evidence Manifest
       if: ${{ always() }}
       run: |
@@ -197,6 +228,8 @@ jobs:
           $KIDS_PREPROD_ARGS \
           --community-surface-report "$AURA_COMMUNITY_SURFACE_REPORT_PATH" \
           --world-lifecycle-report "$AURA_WORLD_LIFECYCLE_REPORT_PATH" \
+          --world-performance-report "$AURA_WORLD_PERFORMANCE_REPORT_PATH" \
+          --refactor-diff-report "$AURA_REFACTOR_DIFF_REPORT_PATH" \
           --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
     - name: Summarize Promotion Gate
       if: ${{ always() }}
@@ -268,6 +301,11 @@ jobs:
             summary.write(f"- world_lifecycle_worlds: `{summary_data.get('world_lifecycle_total_worlds', 'missing')}`\n")
             summary.write(f"- world_lifecycle_total_events: `{summary_data.get('world_lifecycle_total_events', 'missing')}`\n")
             summary.write(f"- world_lifecycle_findings: `{summary_data.get('world_lifecycle_finding_count', 'missing')}`\n")
+            summary.write(f"- world_performance: `{summary_data.get('world_performance_status', 'missing')}`\n")
+            summary.write(f"- world_performance_tiers: `{summary_data.get('world_performance_tier_count', 'missing')}`\n")
+            summary.write(f"- refactor_diff: `{summary_data.get('refactor_diff_status', 'missing')}`\n")
+            summary.write(f"- refactor_changes: `{summary_data.get('refactor_diff_change_count', 'missing')}`\n")
+            summary.write(f"- refactor_regressions: `{summary_data.get('refactor_diff_regression_count', 'missing')}`\n")
             summary.write(f"- ffi_header_smoke: `{summary_data['ffi_smoke_status']}`\n")
             summary.write(f"- ffi_state_sync_soak: `{summary_data['ffi_soak_status']}`\n")
             summary.write(f"- ffi_state_sync_iterations: `{summary_data['ffi_soak_iterations']}`\n")
@@ -297,7 +335,10 @@ jobs:
           ${{ env.AURA_KIDS_PREPROD_DRY_RUN_PATH }}
           ${{ env.AURA_COMMUNITY_SURFACE_REPORT_PATH }}
           ${{ env.AURA_WORLD_LIFECYCLE_REPORT_PATH }}
+          ${{ env.AURA_WORLD_PERFORMANCE_REPORT_PATH }}
           ${{ env.AURA_PILOT_GATE_REPORT_PATH }}
+          ${{ env.AURA_REFACTOR_CANDIDATE_PATH }}
+          ${{ env.AURA_REFACTOR_DIFF_REPORT_PATH }}
           ${{ env.AURA_FFI_SMOKE_EVIDENCE_PATH }}
           ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}
           ${{ env.AURA_EVIDENCE_MANIFEST_PATH }}

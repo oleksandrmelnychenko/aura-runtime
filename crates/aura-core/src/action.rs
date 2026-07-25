@@ -580,6 +580,11 @@ pub fn should_soften_policy_for_context_summary(
     threat_type != ThreatType::None && context_summary.should_soften_policy()
 }
 
+/// Compatibility adapter for callers that still provide marker-only context.
+///
+/// New integrations should carry [`AnalysisContextSummary`] and call
+/// [`should_soften_policy_for_context_summary`] so marker conflicts cannot
+/// affect policy.
 pub fn should_soften_policy_for_context(
     threat_type: ThreatType,
     context_markers: &[String],
@@ -605,6 +610,9 @@ pub fn soften_recommendation_for_context_summary(
     recommendation.ui_actions.dedup();
 }
 
+/// Compatibility adapter for callers that still provide marker-only context.
+///
+/// Internal policy paths use [`soften_recommendation_for_context_summary`].
 pub fn soften_recommendation_for_context(
     recommendation: &mut ActionRecommendation,
     threat_type: ThreatType,
@@ -872,7 +880,10 @@ impl ActionThresholds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{InferenceSummary, LatentStateEvidence, UncertaintyLevel};
+    use crate::types::{
+        ContextRelationshipSummary, ContextSpeechAct, ContextStance, InferenceSummary,
+        LatentStateEvidence, UncertaintyLevel,
+    };
 
     #[test]
     fn clean_message_is_allowed() {
@@ -1245,15 +1256,13 @@ mod tests {
         assert_eq!(rec.parent_alert, AlertPriority::High);
         assert!(rec.ui_actions.contains(&UiAction::EscalateToGuardian));
 
-        soften_recommendation_for_context(
-            &mut rec,
-            ThreatType::Grooming,
-            &[
-                "context.filter.applied".to_string(),
-                "context.speech_act.quote".to_string(),
-                "context.stance.oppose".to_string(),
-            ],
-        );
+        let context_summary = AnalysisContextSummary {
+            speech_act: ContextSpeechAct::Quote,
+            stance: ContextStance::Oppose,
+            filter_applied: true,
+            ..AnalysisContextSummary::default()
+        };
+        soften_recommendation_for_context_summary(&mut rec, ThreatType::Grooming, &context_summary);
 
         assert_eq!(rec.parent_alert, AlertPriority::None);
         assert!(!rec.ui_actions.contains(&UiAction::EscalateToGuardian));
@@ -1263,11 +1272,12 @@ mod tests {
     #[test]
     fn typed_safe_context_softens_guardian_recommendation() {
         let (_, mut rec) = decide_action_v2(ThreatType::Grooming, 0.7, ProtectionLevel::High);
-        let context_summary = crate::types::AnalysisContextSummary::from_markers(&[
-            "context.filter.applied".to_string(),
-            "context.speech_act.quote".to_string(),
-            "context.stance.oppose".to_string(),
-        ]);
+        let context_summary = AnalysisContextSummary {
+            speech_act: ContextSpeechAct::Quote,
+            stance: ContextStance::Oppose,
+            filter_applied: true,
+            ..AnalysisContextSummary::default()
+        };
 
         soften_recommendation_for_context_summary(&mut rec, ThreatType::Grooming, &context_summary);
 
@@ -1279,16 +1289,17 @@ mod tests {
     fn risky_context_does_not_soften_guardian_recommendation() {
         let (_, mut rec) = decide_action_v2(ThreatType::Grooming, 0.7, ProtectionLevel::High);
 
-        soften_recommendation_for_context(
-            &mut rec,
-            ThreatType::Grooming,
-            &[
-                "context.filter.applied".to_string(),
-                "context.speech_act.quote".to_string(),
-                "context.stance.oppose".to_string(),
-                "context.relationship.new_contact".to_string(),
-            ],
-        );
+        let context_summary = AnalysisContextSummary {
+            speech_act: ContextSpeechAct::Quote,
+            stance: ContextStance::Oppose,
+            relationship: ContextRelationshipSummary {
+                is_new_contact: true,
+                ..ContextRelationshipSummary::default()
+            },
+            filter_applied: true,
+            ..AnalysisContextSummary::default()
+        };
+        soften_recommendation_for_context_summary(&mut rec, ThreatType::Grooming, &context_summary);
 
         assert_eq!(rec.parent_alert, AlertPriority::High);
         assert!(rec.ui_actions.contains(&UiAction::EscalateToGuardian));

@@ -2,6 +2,7 @@ pub mod detectors;
 mod lexicon;
 pub mod pipeline;
 pub mod policy;
+mod routing;
 
 use aura_domain::{DomainInput, DomainModule, DomainModuleId, DomainOutput};
 
@@ -45,12 +46,7 @@ impl KidsModule {
         conversation_id: &str,
         verdict: pipeline::GuardianVerdict,
     ) {
-        pipeline::apply_guardian_feedback_to(
-            &self.memory,
-            sender_id,
-            conversation_id,
-            verdict,
-        );
+        pipeline::apply_guardian_feedback_to(&self.memory, sender_id, conversation_id, verdict);
     }
 }
 

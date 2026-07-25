@@ -1,6 +1,6 @@
 # Proto and ABI Stability
 
-Status: synchronized with current wire and state schema on March 26, 2026.
+Status: synchronized with current wire and state schema on July 24, 2026.
 
 ## Purpose
 
@@ -30,7 +30,7 @@ Public C header:
 
 Implementation crate:
 
-- [`crates/aura-ffi`](../crates/aura-ffi)
+- [`crates/aura-agent-ffi`](../crates/aura-agent-ffi)
 
 ### Persisted Context State
 
@@ -56,7 +56,7 @@ As of the current release-hardening track:
 
 - wire package: `aura.messenger.v1`
 - wire major version: `1`
-- persisted state schema version: `2`
+- persisted state schema version: `3`
 - compatibility fixtures pinned for `AnalysisResult`, `TrackerState`, and
   `BatchAnalyzeResponse`
 - contract evidence emitted by `contract_evidence`
@@ -201,9 +201,8 @@ evidence manifest so automation does not need to discover each JSON file ad hoc.
 Current contract evidence also records the active request-size limits:
 
 - config request: `65536` bytes
-- message and analyze-context request: `1048576` bytes
-- batch analyze request: `4194304` bytes
 - import-context request: `4194304` bytes
+- canonical safety request: `1048576` bytes
 - small control request: `16384` bytes
 
 These limits are part of the boundary contract and must be reviewed before

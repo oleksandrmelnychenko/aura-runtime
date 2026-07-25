@@ -48,6 +48,22 @@ The repository now contains dedicated crates for this model:
 
 - `crates/aura-core/src/domain_runtime.rs`
 
+### Structural Runtime Owners
+
+- `crates/aura-core/src/analyzer.rs` — stable public façade
+- `crates/aura-core/src/analyzer/orchestrator.rs` — runtime orchestration
+- `crates/aura-core/src/analyzer/orchestrator/stages.rs` — interpretation and
+  memory stage sequencing
+- `crates/aura-core/src/analyzer/orchestrator/stages/observations.rs` —
+  observation collectors and bounded normalization helpers
+- `crates/aura-core/src/analyzer/orchestrator/inference.rs` — inference and
+  result-building helpers
+- `crates/aura-core/src/context/contact.rs` — stable contact-memory façade
+- `crates/aura-core/src/context/contact/relationship/model.rs` — exported
+  contact and trajectory model
+- `crates/aura-core/src/context/contact/relationship/state.rs` — bounded
+  profiler state and import/export lifecycle
+
 ## Migration Map (Logical Ownership)
 
 - Kids detectors: from `crates/aura-core/src/context/*` into
@@ -118,4 +134,8 @@ The repository now contains dedicated crates for this model:
 - Hooks now promote low-severity actions to `warn` when escalation threshold is reached
 - CI now runs `ci/lint_lexicons.py` for semantic checks and duplicate detection
 - Production packs no longer include synthetic `probe` rules
-- Full detector logic migration and parity validation: in progress
+- Domain outputs carry typed signal-to-event routes owned by `aura-kids` and
+  `aura-military`; core no longer derives domain events from rule-name prefixes
+- Legacy shared Layer 1 rule routing and military subtype compatibility are
+  owned by `aura-patterns`, without adding a dependency on domain crates
+- Full detector logic migration and differential parity validation: complete

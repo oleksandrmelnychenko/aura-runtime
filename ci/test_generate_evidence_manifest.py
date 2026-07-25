@@ -64,6 +64,94 @@ class WorldLifecycleStatusTests(unittest.TestCase):
         )
 
 
+class RefactorEvidenceStatusTests(unittest.TestCase):
+    def test_world_performance_accepts_clean_tier(self):
+        payload = {
+            "schema_version": "aura_world_performance_gate.v1",
+            "status": "pass",
+            "failures": [],
+            "tiers": [{"tier": "10k", "status": "pass"}],
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.world_performance_status(payload),
+            "pass",
+        )
+
+    def test_world_performance_rejects_empty_tiers(self):
+        payload = {
+            "schema_version": "aura_world_performance_gate.v1",
+            "status": "pass",
+            "failures": [],
+            "tiers": [],
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.world_performance_status(payload),
+            "invalid_summary",
+        )
+
+    def test_refactor_diff_rejects_regression(self):
+        payload = {
+            "schema_version": "aura.refactor_diff.v1",
+            "status": "fail",
+            "summary": {
+                "regression": 1,
+                "invalid_approval_count": 0,
+            },
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.refactor_diff_status(payload),
+            "regression",
+        )
+
+    def test_refactor_diff_accepts_approved_changes(self):
+        payload = {
+            "schema_version": "aura.refactor_diff.v1",
+            "status": "pass",
+            "summary": {
+                "regression": 0,
+                "invalid_approval_count": 0,
+                "structural_only": 2,
+                "approved_safety_improvement": 1,
+            },
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.refactor_diff_status(payload),
+            "pass",
+        )
+
+    def test_apple_artifact_accepts_clean_verified_slices(self):
+        payload = {
+            "schema_version": "aura.apple_artifact_verification.v1",
+            "status": "pass",
+            "shippable": True,
+            "source_tree_dirty": False,
+            "slices": [{}, {}, {}],
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.apple_artifact_status(payload),
+            "pass",
+        )
+
+    def test_apple_artifact_rejects_dirty_local_build(self):
+        payload = {
+            "schema_version": "aura.apple_artifact_verification.v1",
+            "status": "pass",
+            "shippable": False,
+            "source_tree_dirty": True,
+            "slices": [{}, {}, {}],
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.apple_artifact_status(payload),
+            "non_shippable",
+        )
+
+
 class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
     def test_manifest_records_world_lifecycle_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -75,6 +163,8 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 "dataset": root / "dataset.json",
                 "audit": root / "audit.json",
                 "world_lifecycle": root / "world-lifecycle.json",
+                "world_performance": root / "world-performance.json",
+                "refactor_diff": root / "refactor-diff.json",
                 "manifest": root / "manifest.json",
             }
             write_json(
@@ -105,6 +195,39 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 },
             )
             write_json(paths["world_lifecycle"], world_lifecycle_payload())
+            write_json(
+                paths["world_performance"],
+                {
+                    "schema_version": "aura_world_performance_gate.v1",
+                    "status": "pass",
+                    "failures": [],
+                    "tiers": [
+                        {
+                            "tier": "10k",
+                            "status": "pass",
+                            "total_events": 12000,
+                            "timing": {
+                                "elapsed_seconds": 10.0,
+                                "max_rss_mb": 100.0,
+                            },
+                        }
+                    ],
+                },
+            )
+            write_json(
+                paths["refactor_diff"],
+                {
+                    "schema_version": "aura.refactor_diff.v1",
+                    "status": "pass",
+                    "summary": {
+                        "change_count": 0,
+                        "regression": 0,
+                        "invalid_approval_count": 0,
+                        "structural_only": 0,
+                        "approved_safety_improvement": 0,
+                    },
+                },
+            )
 
             argv = [
                 "generate_evidence_manifest.py",
@@ -124,6 +247,10 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["audit"].as_posix(),
                 "--world-lifecycle-report",
                 paths["world_lifecycle"].as_posix(),
+                "--world-performance-report",
+                paths["world_performance"].as_posix(),
+                "--refactor-diff-report",
+                paths["refactor_diff"].as_posix(),
             ]
             with patch.object(sys, "argv", argv):
                 self.assertEqual(generate_evidence_manifest.main(), 0)
@@ -133,6 +260,8 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
             self.assertEqual(manifest["summary"]["world_lifecycle_status"], "pass")
             self.assertEqual(manifest["summary"]["world_lifecycle_total_worlds"], 2)
             self.assertEqual(manifest["summary"]["world_lifecycle_finding_count"], 0)
+            self.assertEqual(manifest["summary"]["world_performance_status"], "pass")
+            self.assertEqual(manifest["summary"]["refactor_diff_status"], "pass")
             self.assertEqual(
                 manifest["artifacts"]["world_lifecycle_report"]["observed_status"],
                 "pass",

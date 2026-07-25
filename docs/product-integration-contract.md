@@ -65,8 +65,8 @@ Client rule:
 
 For Swift/iOS, the intended path is generated `SwiftProtobuf` models from:
 
-- [messenger.proto](/c:/Users/123/ecliptix-aura/proto/aura/messenger/v1/messenger.proto)
-- [pilot.proto](/c:/Users/123/ecliptix-aura/proto/aura/messenger/v1/pilot.proto)
+- [messenger.proto](../proto/aura/messenger/v1/messenger.proto)
+- [pilot.proto](../proto/aura/messenger/v1/pilot.proto)
 
 ## Product Surface Model
 
@@ -197,8 +197,8 @@ Clients must not:
 
 That logic already exists in:
 
-- [product.rs](/c:/Users/123/ecliptix-aura/crates/aura-core/src/product.rs)
-- [action.rs](/c:/Users/123/ecliptix-aura/crates/aura-core/src/action.rs)
+- [product.rs](../crates/aura-core/src/product.rs)
+- [action.rs](../crates/aura-core/src/action.rs)
 
 ## Recommended Client Mapping
 

@@ -29,7 +29,7 @@ Schema:
 Run after generating `artifacts/kids-memory-health.json`:
 
 ```bash
-python ci/kids_preprod_dry_run_matrix.py \
+python3 ci/kids_preprod_dry_run_matrix.py \
   --policy-expectations crates/aura-core/data/action_policy_expectations.json \
   --realistic-cases crates/aura-core/data/realistic_chat_cases.json \
   --kids-memory-health artifacts/kids-memory-health.json \

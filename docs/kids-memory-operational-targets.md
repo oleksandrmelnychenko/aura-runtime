@@ -53,7 +53,7 @@ Escalation policy:
 Local strict snapshot:
 
 ```bash
-python ci/kids_memory_health_snapshot.py \
+python3 ci/kids_memory_health_snapshot.py \
   --input artifacts/pilot-regression-report.json \
   --input artifacts/pilot-shadow-run-a.json \
   --input artifacts/pilot-shadow-run-b.json \
@@ -70,7 +70,7 @@ gh workflow run kids-memory-health.yml -f require_mandatory_reasons=true
 Pre-prod dry-run matrix:
 
 ```bash
-python ci/kids_preprod_dry_run_matrix.py \
+python3 ci/kids_preprod_dry_run_matrix.py \
   --policy-expectations crates/aura-core/data/action_policy_expectations.json \
   --realistic-cases crates/aura-core/data/realistic_chat_cases.json \
   --kids-memory-health artifacts/kids-memory-health.json \

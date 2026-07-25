@@ -182,7 +182,7 @@ impl AuditRecord {
             primary_score: result.score,
             top_threat_scores: top_threat_scores(result),
             reason_codes: result.reason_codes.clone(),
-            context_markers: context_markers(result),
+            context_markers: result.compatibility_context_markers(),
             ui_actions: ui_actions(recommendation),
             parent_alert: parent_alert(recommendation),
             follow_ups: follow_ups(recommendation),
@@ -215,21 +215,6 @@ fn top_threat_scores(result: &AnalysisResult) -> Vec<AuditThreatScore> {
     scores.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
     scores.truncate(3);
     scores
-}
-
-fn context_markers(result: &AnalysisResult) -> Vec<String> {
-    if !result.context_markers.is_empty() {
-        return result.context_markers.clone();
-    }
-
-    let mut markers = Vec::new();
-    for code in &result.reason_codes {
-        if !code.starts_with("context.") || markers.iter().any(|existing| existing == code) {
-            continue;
-        }
-        markers.push(code.clone());
-    }
-    markers
 }
 
 fn ui_actions(recommendation: Option<&ActionRecommendation>) -> Vec<UiAction> {

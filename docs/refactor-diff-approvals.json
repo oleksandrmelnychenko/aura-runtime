@@ -1,0 +1,491 @@
+{
+  "schema_version": "aura.refactor_diff_approvals.v1",
+  "approvals": [
+    {
+      "path": "/contracts/contract_evidence/files/3/bytes",
+      "classification": "structural_only",
+      "baseline": 148887,
+      "candidate": 320,
+      "reason": "Stage 5 replaces the monolithic FFI crate root with a documented façade and private lifecycle modules. The public header, exported symbol allowlist, request limits, AuraBuffer layout, protobuf contract, and observed runtime behavior are unchanged; lifecycle and buffer implementation sources are now tracked separately below."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/3/sha256",
+      "classification": "structural_only",
+      "baseline": "d052640d7edcc859572bd3472cc92b2ed575d55c1383e87e86b828a7ed39bb98",
+      "candidate": "2b6be45c91e8eda39236cc15b42f6130ed0d83709857425d09183d39127fe1a6",
+      "reason": "Digest companion to the reviewed FFI façade extraction; contract evidence still reports the identical C ABI allowlist, AuraBuffer layout, request caps, protobuf fixtures, and state version."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/implementation_source_paths",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": [
+        "crates/aura-agent-ffi/src/lifecycle.rs",
+        "crates/aura-agent-ffi/src/lifecycle/buffers.rs"
+      ],
+      "reason": "Makes the decomposed FFI contract ownership explicit in release evidence: the façade remains the stable Rust entry point, lifecycle owns exported C functions and request caps, and buffers owns the repr(C) response buffer."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/4",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 50906,
+        "path": "crates/aura-agent-ffi/src/lifecycle.rs",
+        "sha256": "5d95f0b5289ee988f57953750512b08742b4809c14c3ab31527aed58c8a77175"
+      },
+      "reason": "Adds deterministic digest coverage for the lifecycle owner created by the structural FFI decomposition. Export names, request caps, protobuf schema and behavior remain unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/5",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 1719,
+        "path": "crates/aura-agent-ffi/src/lifecycle/buffers.rs",
+        "sha256": "44ae5c90f956d01668ff0c46237fd10ab74d3d108ce5bb59c8b0577a75186777"
+      },
+      "reason": "Adds deterministic digest coverage for the extracted AuraBuffer implementation; the C header layout evidence and ownership tests remain identical."
+    },
+    {
+      "path": "/contracts/contract_evidence/context_rule_packs",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "interpretation": {
+          "policy_version": "aura.context.interpretation.v1",
+          "rule_count": 8,
+          "sha256": "0a20901ea19ff7bc9fa90df7d89ecef90c6d5203aa37d9439ae4873f84737aea"
+        },
+        "memory": {
+          "policy_version": "aura.context.memory.v1",
+          "rule_count": 9,
+          "sha256": "eafaa69104c4f09b605c51d5f45e32e79f954a87687ee54661b6b06e672ee6aa"
+        },
+        "policy": {
+          "policy_version": "aura.context.policy.v1",
+          "rule_count": 5,
+          "sha256": "bce92a561de52d204849f55859dcb390690a15f2858a0996ddf907d4afdb864e"
+        },
+        "schema_version": 1
+      },
+      "reason": "Adds deterministic release evidence for the three bundled, schema-versioned context rule packs. The packs encode the previously baseline-confirmed interpretation, memory, and relationship-policy exceptions; full differential behavior, social-context cohorts, and world replay remain unchanged."
+    },
+    {
+      "path": "/fixture_inputs/crates~1aura-core~1data~1context_interpretation_rules.json",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 3589,
+        "sha256": "36b957126036d2b60b02c53721f329772086a52dee0de15d8504a5e668a69b2c"
+      },
+      "reason": "Adds the reviewable source JSON for eight interpretation rules migrated from the existing hardcoded baseline. Safe/risky context boundaries and output behavior are unchanged."
+    },
+    {
+      "path": "/fixture_inputs/crates~1aura-core~1data~1context_memory_rules.json",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 4679,
+        "sha256": "fe5a3d175d9fca89bfb55767d56255bbc8eb52751da03cfb34532e02bb49bbc2"
+      },
+      "reason": "Adds the reviewable source JSON for nine memory-eligibility rules migrated from the existing hardcoded baseline. Tracker persistence and realistic simulation behavior are unchanged."
+    },
+    {
+      "path": "/fixture_inputs/crates~1aura-core~1data~1context_policy_rules.json",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 1667,
+        "sha256": "08e3fcdd1a8729b56422d77c36a80492e61b3a92c102e77a49690055f2fe95c0"
+      },
+      "reason": "Adds the reviewable source JSON for five relationship-policy calibration rules migrated from the existing hardcoded baseline. The pack cannot create product actions directly, and policy outputs remain unchanged."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.106402464,
+      "candidate": 0.11926046,
+      "reason": "Stage 6 expands the mandatory boundary corpus with canonical hate/counterspeech and multi-turn OPSEC cases. The harder corpus slightly shifts aggregate calibration while all release gates pass, positive detection improves, and false positives decrease; see artifacts/refactor/release-report.json."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/0/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.120409854,
+      "candidate": 0.1177733,
+      "reason": "Stage 6 corpus expansion increases bullying evidence and improves its Brier score; all per-threat gates pass in artifacts/refactor/release-report.json."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/0/count",
+      "classification": "approved_safety_improvement",
+      "baseline": 60,
+      "candidate": 116,
+      "reason": "Stage 6 mandatory boundary coverage adds governed bullying calibration examples; all per-threat gates pass in artifacts/refactor/release-report.json."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/0/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.14062606,
+      "candidate": 0.1325221,
+      "reason": "Stage 6 corpus expansion increases bullying evidence and improves its calibration error; all per-threat gates pass in artifacts/refactor/release-report.json."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/10",
+      "classification": "approved_safety_improvement",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "brier_score": 0.0004000004,
+        "count": 12,
+        "expected_calibration_error": 0.010000005,
+        "threat_type": "CoordinateLeak"
+      },
+      "reason": "Adding HateSpeech to the governed threat breakdown shifts the stable ordered output and exposes the existing CoordinateLeak metrics at index 10; all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/7/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.30388147,
+      "candidate": 0.1980585,
+      "reason": "Stage 6 adds canonical hate/counterspeech coverage and materially improves the HateSpeech Brier score; the strict hate slice passes."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/7/count",
+      "classification": "approved_safety_improvement",
+      "baseline": 27,
+      "candidate": 125,
+      "reason": "Stage 6 adds the canonical hate/counterspeech pack, increasing governed HateSpeech calibration evidence; the strict hate slice passes."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/7/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.32,
+      "candidate": 0.23513608,
+      "reason": "Stage 6 adds canonical hate/counterspeech coverage and improves HateSpeech calibration error; the strict hate slice passes."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/7/threat_type",
+      "classification": "approved_safety_improvement",
+      "baseline": "Propaganda",
+      "candidate": "HateSpeech",
+      "reason": "The new governed HateSpeech evidence inserts its threat summary before Propaganda in the stable ordered output; the added slice passes all gates."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/8/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.0,
+      "candidate": 0.17093332,
+      "reason": "The new HateSpeech summary shifts the existing Propaganda summary to index 8; this is the reviewed Propaganda value and all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/8/count",
+      "classification": "approved_safety_improvement",
+      "baseline": 3,
+      "candidate": 48,
+      "reason": "Stage 6 cohort expansion adds governed propaganda examples and shifts its summary to index 8; all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/8/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.0,
+      "candidate": 0.18,
+      "reason": "The new HateSpeech summary shifts the reviewed Propaganda calibration summary to index 8; all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/8/threat_type",
+      "classification": "approved_safety_improvement",
+      "baseline": "OpsecViolation",
+      "candidate": "Propaganda",
+      "reason": "The new governed HateSpeech threat summary shifts Propaganda to index 8 and OPSEC to index 9; runtime threat contracts are unchanged."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/9/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.0008000008,
+      "candidate": 0.0,
+      "reason": "Stage 6 multi-turn OPSEC coverage shifts OPSEC to index 9 and improves its Brier score to zero; all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/9/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.02000001,
+      "candidate": 0.0,
+      "reason": "Stage 6 multi-turn OPSEC coverage shifts OPSEC to index 9 and improves its calibration error to zero; all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/by_threat/9/threat_type",
+      "classification": "approved_safety_improvement",
+      "baseline": "CoordinateLeak",
+      "candidate": "OpsecViolation",
+      "reason": "The new governed HateSpeech summary shifts OPSEC to index 9 and CoordinateLeak to index 10; runtime threat contracts are unchanged."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/calibration_count",
+      "classification": "approved_safety_improvement",
+      "baseline": 469,
+      "candidate": 680,
+      "reason": "Stage 6 adds 211 governed calibration observations across mandatory boundary cohorts; release, restart, contamination, and determinism gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.10863908,
+      "candidate": 0.115205884,
+      "reason": "The harder Stage 6 hate/counterspeech and multi-turn corpus slightly shifts aggregate ECE but remains well inside the release threshold; detection and false-positive rates improve."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/negative_false_positive_rate",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.051282052,
+      "candidate": 0.039215688,
+      "reason": "Stage 6 counterfactual safe-boundary coverage reduces the measured negative false-positive rate while all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/negative_scenarios",
+      "classification": "approved_safety_improvement",
+      "baseline": 39,
+      "candidate": 51,
+      "reason": "Stage 6 adds 12 governed safe counterfactual scenarios, including counterspeech and OPSEC warnings, without increasing false positives."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/onset_cases",
+      "classification": "approved_safety_improvement",
+      "baseline": 62,
+      "candidate": 92,
+      "reason": "Stage 6 adds 30 governed multi-turn onset cases for mandatory hate/counterspeech and boundary coverage; all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/positive_detection_rate",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.9677419,
+      "candidate": 0.9782609,
+      "reason": "Stage 6 expands the harder boundary corpus while improving positive detection from 96.77% to 97.83%."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/positive_scenarios",
+      "classification": "approved_safety_improvement",
+      "baseline": 62,
+      "candidate": 92,
+      "reason": "Stage 6 adds 30 governed risky boundary scenarios, including canonical hate cases, and preserves passing detection gates."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation/pre_onset_detection_rate",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.58064514,
+      "candidate": 0.4347826,
+      "reason": "The expanded Stage 6 corpus includes harder late-onset counterfactual trajectories. Early detection remains above the release threshold while overall positive detection improves and false positives decrease."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation_gates/checks/0/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.106402464,
+      "candidate": 0.11926046,
+      "reason": "Companion gate observation for the reviewed Stage 6 aggregate Brier shift; max_brier_score still passes with substantial margin."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation_gates/checks/1/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.10863908,
+      "candidate": 0.115205884,
+      "reason": "Companion gate observation for the reviewed Stage 6 aggregate ECE shift; max_expected_calibration_error still passes with substantial margin."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation_gates/checks/14/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 60.0,
+      "candidate": 116.0,
+      "reason": "Companion gate observation for the reviewed increase in governed bullying calibration evidence."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation_gates/checks/15/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.120409854,
+      "candidate": 0.1177733,
+      "reason": "Companion gate observation for the reviewed improvement in bullying Brier score."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation_gates/checks/16/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.14062606,
+      "candidate": 0.1325221,
+      "reason": "Companion gate observation for the reviewed improvement in bullying calibration error."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation_gates/checks/2/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.9677419,
+      "candidate": 0.9782609,
+      "reason": "Companion gate observation for the reviewed positive-detection improvement on the expanded Stage 6 corpus."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation_gates/checks/3/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.051282052,
+      "candidate": 0.039215688,
+      "reason": "Companion gate observation for the reviewed false-positive reduction on Stage 6 safe counterfactuals."
+    },
+    {
+      "path": "/behavior/release/suites/6/evaluation_gates/checks/4/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.58064514,
+      "candidate": 0.4347826,
+      "reason": "Companion gate observation for harder late-onset Stage 6 trajectories; the early-detection gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/1/slice_id",
+      "classification": "structural_only",
+      "baseline": "trusted_adult_authority_boundary",
+      "candidate": "trusted_adult_logistics_boundary",
+      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. Scenario behavior and runtime contracts are unchanged."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/3/slice_id",
+      "classification": "structural_only",
+      "baseline": "school_group_social_pressure",
+      "candidate": "peer_banter_boundary",
+      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. Scenario behavior and runtime contracts are unchanged."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/4/slice_id",
+      "classification": "structural_only",
+      "baseline": "selfharm_disclosure_support_boundary",
+      "candidate": "selfharm_support_boundary",
+      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. Scenario behavior and runtime contracts are unchanged."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/9/slice_id",
+      "classification": "structural_only",
+      "baseline": "military_opsec_warning_boundary",
+      "candidate": "opsec_warning_boundary",
+      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. The multi-turn evidence changes are approved separately."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/10",
+      "classification": "approved_safety_improvement",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "evaluation": {
+          "brier_score": 0.15442786,
+          "calibration_count": 202,
+          "expected_calibration_error": 0.17983669,
+          "negative_false_positive_rate": 0.0,
+          "negative_scenarios": 12,
+          "onset_cases": 30,
+          "positive_detection_rate": 1.0,
+          "positive_scenarios": 30,
+          "pre_onset_detection_rate": 0.13333334
+        },
+        "group": "cohort",
+        "policy": {},
+        "slice_id": "hate_counter_speech_boundary",
+        "status": "pass",
+        "support": {
+          "calibration_examples": 202,
+          "missing_release_blocking": [],
+          "negative_scenarios": 12,
+          "onset_cases": 30,
+          "positive_scenarios": 30,
+          "release_blocking_ready": true,
+          "reportable": true
+        },
+        "support_enforcement": "report_only"
+      },
+      "reason": "Stage 6 adds the mandatory hate_counter_speech_boundary backed by the canonical hate/counterspeech pack. It passes with 30 positive and 12 negative scenarios, 100% detection, 0% negative false positives, and strict calibration gates."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/9/evaluation/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.00053333386,
+      "candidate": 0.00026666693,
+      "reason": "Stage 6 makes the OPSEC warning boundary explicitly multi-turn and improves its Brier score while all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/9/evaluation/calibration_count",
+      "classification": "approved_safety_improvement",
+      "baseline": 9,
+      "candidate": 18,
+      "reason": "Stage 6 doubles governed OPSEC boundary calibration evidence with risky and safe multi-turn trajectories."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/9/evaluation/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.013333341,
+      "candidate": 0.0066666706,
+      "reason": "Stage 6 makes the OPSEC warning boundary explicitly multi-turn and improves its calibration error while all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/9/support/calibration_examples",
+      "classification": "approved_safety_improvement",
+      "baseline": 9,
+      "candidate": 18,
+      "reason": "Stage 6 doubles the reportable support for the mandatory OPSEC warning boundary."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/9/support/missing_release_blocking/0/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 9,
+      "candidate": 18,
+      "reason": "Stage 6 raises OPSEC calibration support above the release-blocking evidence minimum."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/9/support/reportable",
+      "classification": "approved_safety_improvement",
+      "baseline": false,
+      "candidate": true,
+      "reason": "The added multi-turn evidence makes the mandatory OPSEC warning boundary independently reportable."
+    },
+    {
+      "path": "/fixture_inputs/crates~1aura-core~1data~1social_context_cohorts.json/bytes",
+      "classification": "approved_safety_improvement",
+      "baseline": 11795,
+      "candidate": 14686,
+      "reason": "Stage 6 expands the governed cohort fixture with explicit risky/safe counterfactual pairs, canonical hate/counterspeech coverage, mandatory cohort IDs, and multi-turn boundary metadata."
+    },
+    {
+      "path": "/fixture_inputs/crates~1aura-core~1data~1social_context_cohorts.json/sha256",
+      "classification": "approved_safety_improvement",
+      "baseline": "6c25862d5928de200b32de510bd7378eb3e6cecc1b9e1d8096b0be06ae1e92cb",
+      "candidate": "ddc287361fc30f13be769c9f8649d02ba61c0f5e29fba4cdb0aa2e4854f33c6f",
+      "reason": "Digest companion to the reviewed Stage 6 social-context cohort expansion; release, restart, contamination, determinism, lifecycle, FFI, client, and performance gates pass."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/export_allowlist_path",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": "include/aura_ffi.exports",
+      "reason": "Stage 7 makes the existing reviewed C ABI export set machine-readable so the Apple build and independent verifier share an exact allowlist. Header parsing tests prove the function set is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/6",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 603,
+        "path": "include/aura_ffi.exports",
+        "sha256": "f3c60f367acd3a17e5d768a4ca69cf494e1c3820d42104ce4985a8f7ae795f1a"
+      },
+      "reason": "Adds deterministic contract-evidence coverage for the machine-readable Apple/C ABI allowlist. All 22 entries match aura_ffi.h and every packaged archive exports exactly that set."
+    }
+  ]
+}
