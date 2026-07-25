@@ -70,7 +70,10 @@ AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH="$(
 export AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH
 export AURA_EXECUTION_POLICY_TRUST_KEYRING_SHA256
 AURA_EXECUTION_POLICY_TRUST_KEYRING_SHA256="$(shasum -a 256 "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH" | awk '{print $1}')"
-cp "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH" "$DIST_DIR/execution-policy-trust-keyring.json"
+PACKAGED_TRUST_KEYRING_PATH="$DIST_DIR/execution-policy-trust-keyring.json"
+if [[ "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH" != "$PACKAGED_TRUST_KEYRING_PATH" ]]; then
+  cp "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH" "$PACKAGED_TRUST_KEYRING_PATH"
+fi
 
 identity_args=(
   run
@@ -303,7 +306,7 @@ IOS_LIBRARY_SHA256="$(shasum -a 256 "$DIST_DIR/AuraAgentFFI.xcframework/ios-arm6
 SIMULATOR_LIBRARY_SHA256="$(shasum -a 256 "$DIST_DIR/AuraAgentFFI.xcframework/ios-arm64_x86_64-simulator/libaura_agent_ffi_ios_sim.a" | awk '{print $1}')"
 MACCATALYST_LIBRARY_SHA256="$(shasum -a 256 "$DIST_DIR/AuraAgentFFI.xcframework/ios-arm64_x86_64-maccatalyst/libaura_agent_ffi_maccatalyst.a" | awk '{print $1}')"
 FINAL_TRUST_KEYRING_SHA256="$(shasum -a 256 "$AURA_EXECUTION_POLICY_TRUST_KEYRING_PATH" | awk '{print $1}')"
-PACKAGED_TRUST_KEYRING_SHA256="$(shasum -a 256 "$DIST_DIR/execution-policy-trust-keyring.json" | awk '{print $1}')"
+PACKAGED_TRUST_KEYRING_SHA256="$(shasum -a 256 "$PACKAGED_TRUST_KEYRING_PATH" | awk '{print $1}')"
 if [[ "$FINAL_TRUST_KEYRING_SHA256" != "$AURA_EXECUTION_POLICY_TRUST_KEYRING_SHA256" \
   || "$PACKAGED_TRUST_KEYRING_SHA256" != "$AURA_EXECUTION_POLICY_TRUST_KEYRING_SHA256" ]]; then
   echo "Execution-policy trust keyring changed while the release artifact was built." >&2
