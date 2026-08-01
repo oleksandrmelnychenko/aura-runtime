@@ -38,6 +38,13 @@
 - When replicas contain the same logical event, a contextualized v3 event now
   upgrades its v2 default frame without duplicating history, independent of
   import order.
+- Unified account-level protection semantics. Adult accounts may still disable
+  protection, while child and teen accounts remain protected by every detector
+  even if an invalid configuration is constructed inside Rust.
+- FFI initialization and runtime configuration updates now reject disabled
+  minor protection and a Military domain on a minor account before mutating
+  runtime state. Minor accounts always resolve to the Kids domain; matrix and
+  rollback regressions cover account type, enablement, level, and domain.
 
 ## Unreleased — Canonical Apple ABI
 

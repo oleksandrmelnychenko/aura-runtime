@@ -58,6 +58,18 @@ pub enum CulturalContext {
 }
 
 impl AuraConfig {
+    /// Returns whether protection is active after applying account-type policy.
+    ///
+    /// Adult account holders may disable protection explicitly. Protection for
+    /// child and teen accounts remains active even if an untrusted caller
+    /// constructs an invalid configuration without using [`Self::validate`].
+    pub fn protection_enabled(&self) -> bool {
+        match self.account_type {
+            AccountType::Adult => self.enabled && self.protection_level != ProtectionLevel::Off,
+            AccountType::Teen | AccountType::Child => true,
+        }
+    }
+
     /// Returns the effective protection level after applying account-type policy overrides.
     pub fn effective_protection_level(&self) -> ProtectionLevel {
         match self.account_type {
@@ -67,7 +79,7 @@ impl AuraConfig {
                 other => other,
             },
             AccountType::Adult => {
-                if self.enabled {
+                if self.protection_enabled() {
                     self.protection_level
                 } else {
                     ProtectionLevel::Off
@@ -86,12 +98,9 @@ impl AuraConfig {
 
     /// Returns the effective account-level domain mode.
     pub fn effective_domain_mode(&self) -> DomainMode {
-        match self.domain_mode {
-            DomainMode::None => match self.account_type {
-                AccountType::Child | AccountType::Teen => DomainMode::Kids,
-                AccountType::Adult => DomainMode::None,
-            },
-            other => other,
+        match self.account_type {
+            AccountType::Child | AccountType::Teen => DomainMode::Kids,
+            AccountType::Adult => self.domain_mode,
         }
     }
 
@@ -123,46 +132,56 @@ impl AuraConfig {
 
     /// Returns `true` if grooming detection is active under the current configuration.
     pub fn grooming_detection_enabled(&self) -> bool {
-        self.enabled
+        self.protection_enabled()
             && self.is_kids_module()
             && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Returns `true` if self-harm detection is active under the current configuration.
     pub fn self_harm_detection_enabled(&self) -> bool {
-        self.enabled
+        self.protection_enabled()
             && self.is_kids_module()
             && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Returns `true` if bullying detection is active under the current configuration.
     pub fn bullying_detection_enabled(&self) -> bool {
-        self.enabled
+        self.protection_enabled()
             && self.is_kids_module()
             && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Returns `true` if anti-propaganda detection is active (always on in Core).
     pub fn propaganda_detection_enabled(&self) -> bool {
-        self.enabled && self.effective_protection_level() != ProtectionLevel::Off
+        self.protection_enabled() && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Returns `true` if OPSEC violation detection is active (Military module only).
     pub fn opsec_detection_enabled(&self) -> bool {
-        self.enabled
+        self.protection_enabled()
             && self.is_military_module()
             && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Returns `true` if psyops detection is active (Military module only).
     pub fn psyops_detection_enabled(&self) -> bool {
-        self.enabled
+        self.protection_enabled()
             && self.is_military_module()
             && self.effective_protection_level() != ProtectionLevel::Off
     }
 
     /// Validates the configuration and returns an error if any field is out of range.
     pub fn validate(&self) -> Result<(), crate::error::AuraError> {
+        if !self.can_disable() && !self.enabled {
+            return Err(crate::error::AuraError::InvalidConfig(
+                "minor protection cannot be disabled".to_string(),
+            ));
+        }
+        if !self.can_disable() && self.domain_mode == DomainMode::Military {
+            return Err(crate::error::AuraError::InvalidConfig(
+                "minor accounts require the Kids domain".to_string(),
+            ));
+        }
         if self.ttl_days == 0 || self.ttl_days > 365 {
             return Err(crate::error::AuraError::InvalidConfig(format!(
                 "ttl_days must be 1..=365, got {}",
@@ -219,7 +238,7 @@ impl Default for AuraConfig {
 mod tests {
     use super::AuraConfig;
     use crate::product::ProductRolloutMode;
-    use crate::types::{AccountType, AuraDomainModule, DomainMode};
+    use crate::types::{AccountType, AuraDomainModule, DomainMode, ProtectionLevel};
 
     #[test]
     fn default_product_rollout_is_shadow() {
@@ -253,6 +272,77 @@ mod tests {
             config.effective_domain_module(),
             Some(AuraDomainModule::Kids)
         );
+    }
+
+    #[test]
+    fn minor_configuration_matrix_is_fail_closed() {
+        let account_types = [AccountType::Child, AccountType::Teen];
+        let enabled_values = [false, true];
+        let protection_levels = [
+            ProtectionLevel::Off,
+            ProtectionLevel::Low,
+            ProtectionLevel::Medium,
+            ProtectionLevel::High,
+        ];
+        let domain_modes = [DomainMode::None, DomainMode::Kids, DomainMode::Military];
+
+        for account_type in account_types {
+            for enabled in enabled_values {
+                for protection_level in protection_levels {
+                    for domain_mode in domain_modes {
+                        let config = AuraConfig {
+                            account_type,
+                            enabled,
+                            protection_level,
+                            domain_mode,
+                            ..AuraConfig::default()
+                        };
+
+                        assert_ne!(
+                            config.effective_protection_level(),
+                            ProtectionLevel::Off,
+                            "minor protection must remain active for {config:?}"
+                        );
+                        assert_eq!(
+                            config.effective_domain_mode(),
+                            DomainMode::Kids,
+                            "minor accounts must remain in the Kids domain for {config:?}"
+                        );
+                        assert!(config.grooming_detection_enabled(), "{config:?}");
+                        assert!(config.self_harm_detection_enabled(), "{config:?}");
+                        assert!(config.bullying_detection_enabled(), "{config:?}");
+                        assert!(config.propaganda_detection_enabled(), "{config:?}");
+
+                        let should_validate = enabled && domain_mode != DomainMode::Military;
+                        assert_eq!(
+                            config.validate().is_ok(),
+                            should_validate,
+                            "unexpected minor validation result for {config:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn adult_disable_semantics_remain_explicit() {
+        for protection_level in [
+            ProtectionLevel::Off,
+            ProtectionLevel::Low,
+            ProtectionLevel::Medium,
+            ProtectionLevel::High,
+        ] {
+            let disabled = AuraConfig {
+                account_type: AccountType::Adult,
+                enabled: false,
+                protection_level,
+                ..AuraConfig::default()
+            };
+            assert_eq!(disabled.effective_protection_level(), ProtectionLevel::Off);
+            assert!(disabled.validate().is_ok());
+            assert!(!disabled.propaganda_detection_enabled());
+        }
     }
 
     #[test]

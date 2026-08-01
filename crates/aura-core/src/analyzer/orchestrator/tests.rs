@@ -464,7 +464,9 @@ fn update_config_refreshes_runtime_components() {
         timezone_offset_minutes: 180,
         ..AuraConfig::default()
     };
-    analyzer.update_config(updated_config, &db);
+    analyzer
+        .update_config(updated_config, &db)
+        .expect("valid config update");
 
     let child_events = analyzer
         .signal_enricher
@@ -489,6 +491,50 @@ fn update_config_refreshes_runtime_components() {
         analyzer.context_tracker.config().analysis_window_ms,
         7 * 24 * 60 * 60 * 1000
     );
+}
+
+#[test]
+fn invalid_minor_update_is_rejected_before_runtime_mutation() {
+    let db = test_db();
+    let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+    let invalid_config = AuraConfig {
+        account_type: AccountType::Child,
+        enabled: false,
+        language: "en".to_string(),
+        ttl_days: 7,
+        ..AuraConfig::default()
+    };
+
+    let error = analyzer
+        .update_config(invalid_config, &db)
+        .expect_err("disabled child config must be rejected");
+
+    assert!(error
+        .to_string()
+        .contains("minor protection cannot be disabled"));
+    assert_eq!(analyzer.config.account_type, AccountType::Adult);
+    assert_eq!(analyzer.config.language, "uk");
+    assert_eq!(analyzer.config.ttl_days, 30);
+    assert_eq!(analyzer.effective_domain_mode(), DomainMode::None);
+}
+
+#[test]
+fn try_new_rejects_invalid_minor_configuration() {
+    let db = test_db();
+    let invalid_config = AuraConfig {
+        account_type: AccountType::Teen,
+        domain_mode: DomainMode::Military,
+        ..AuraConfig::default()
+    };
+
+    let error = match Analyzer::try_new(invalid_config, &db) {
+        Ok(_) => panic!("Military domain must not replace the Kids domain"),
+        Err(error) => error,
+    };
+
+    assert!(error
+        .to_string()
+        .contains("minor accounts require the Kids domain"));
 }
 
 #[test]
@@ -1804,13 +1850,15 @@ fn propaganda_dehumanization_uses_subtype_policy_for_blocking() {
 fn military_update_enables_phishing_context_and_subtypes() {
     let db = PatternDatabase::default_mvp();
     let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
-    analyzer.update_config(
-        AuraConfig {
-            domain_mode: DomainMode::Military,
-            ..AuraConfig::default()
-        },
-        &db,
-    );
+    analyzer
+        .update_config(
+            AuraConfig {
+                domain_mode: DomainMode::Military,
+                ..AuraConfig::default()
+            },
+            &db,
+        )
+        .expect("valid military config update");
 
     let r = analyzer.analyze_with_context(&default_input("https://diia-gov.app/login"), 1000);
 

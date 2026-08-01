@@ -120,10 +120,23 @@ pub struct AgentRuntime {
 }
 
 impl AgentRuntime {
-    pub fn new(config: AuraConfig, pattern_db: &PatternDatabase) -> Self {
-        Self {
-            analyzer: Analyzer::new(config, pattern_db),
+    /// Creates a runtime after validating configuration and bundled rule packs.
+    pub fn try_new(config: AuraConfig, pattern_db: &PatternDatabase) -> Result<Self, AuraError> {
+        Ok(Self {
+            analyzer: Analyzer::try_new(config, pattern_db)?,
             safety_cases: SafetyCaseRuntime::default(),
+        })
+    }
+
+    /// Creates a runtime with a configuration that must be valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if configuration or bundled context rule-pack validation fails.
+    pub fn new(config: AuraConfig, pattern_db: &PatternDatabase) -> Self {
+        match Self::try_new(config, pattern_db) {
+            Ok(runtime) => runtime,
+            Err(error) => panic!("AURA agent runtime initialization failed: {error}"),
         }
     }
 
@@ -359,9 +372,14 @@ impl AgentRuntime {
         self.analyzer.mark_contact_trusted(sender_id);
     }
 
-    pub fn update_config(&mut self, config: AuraConfig, pattern_db: &PatternDatabase) {
+    pub fn update_config(
+        &mut self,
+        config: AuraConfig,
+        pattern_db: &PatternDatabase,
+    ) -> Result<(), AuraError> {
+        self.analyzer.update_config(config, pattern_db)?;
         self.safety_cases.deactivate_execution_policies();
-        self.analyzer.update_config(config, pattern_db);
+        Ok(())
     }
 
     pub fn reload_patterns(&mut self, pattern_db: &PatternDatabase) {

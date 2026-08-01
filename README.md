@@ -328,7 +328,12 @@ Account-level domain selection now uses `AuraConfig.domain_mode`:
 
 Runtime rules at the FFI boundary:
 
-- `domain_mode` is the only effective selector.
+- Adult accounts use `domain_mode` as the effective selector.
+- Child and teen accounts always resolve to `DOMAIN_MODE_KIDS`; a configured
+  `DOMAIN_MODE_MILITARY` is rejected.
+- Child and teen protection cannot be disabled. `enabled=false` is rejected at
+  initialization, while Rust-side effective getters remain fail closed if an
+  invalid configuration is constructed without validation.
 - `DOMAIN_MODE_UNSPECIFIED` is rejected; the host must choose an explicit mode.
 - `active_module` has been removed from the protobuf config contract.
 

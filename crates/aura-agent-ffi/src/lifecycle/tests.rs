@@ -208,6 +208,50 @@ fn unspecified_product_rollout_is_rejected() {
     assert!(error.contains("product_rollout_mode must be explicit"));
 }
 
+#[test]
+fn minor_disabled_config_is_rejected_at_ffi_boundary() {
+    unsafe {
+        for account_type in [proto::AccountType::Child, proto::AccountType::Teen] {
+            let config = proto_config(account_type, false);
+            let bytes = encode_proto(&config);
+            let handle = aura_init(bytes.as_ptr(), bytes.len());
+            if !handle.is_null() {
+                aura_free(handle);
+                panic!("disabled {account_type:?} config must be rejected");
+            }
+            assert!(last_error_string().contains("minor protection cannot be disabled"));
+        }
+    }
+}
+
+#[test]
+fn minor_military_domain_is_rejected_at_ffi_boundary() {
+    unsafe {
+        for account_type in [proto::AccountType::Child, proto::AccountType::Teen] {
+            let mut config = proto_config(account_type, true);
+            config.domain_mode = proto::DomainMode::Military as i32;
+            let bytes = encode_proto(&config);
+            let handle = aura_init(bytes.as_ptr(), bytes.len());
+            if !handle.is_null() {
+                aura_free(handle);
+                panic!("Military domain must not replace Kids for {account_type:?}");
+            }
+            assert!(last_error_string().contains("minor accounts require the Kids domain"));
+        }
+    }
+}
+
+#[test]
+fn adult_disabled_config_still_initializes() {
+    unsafe {
+        let config = proto_config(proto::AccountType::Adult, false);
+        let bytes = encode_proto(&config);
+        let handle = aura_init(bytes.as_ptr(), bytes.len());
+        assert!(!handle.is_null(), "adult accounts may disable protection");
+        aura_free(handle);
+    }
+}
+
 fn proto_message(text: &str, sender_id: &str, conversation_id: &str) -> proto::MessageInput {
     proto::MessageInput {
         content_type: proto::ContentType::Text as i32,

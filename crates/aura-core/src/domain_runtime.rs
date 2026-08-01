@@ -408,7 +408,7 @@ pub fn detection_enabled_for_threat(config: &AuraConfig, threat_type: ThreatType
             | ThreatType::Manipulation
             | ThreatType::HateSpeech
             | ThreatType::Doxxing
-            | ThreatType::PiiLeakage => config.enabled,
+            | ThreatType::PiiLeakage => config.protection_enabled(),
             ThreatType::None => false,
             ThreatType::Propaganda
             | ThreatType::OpsecViolation
@@ -871,6 +871,7 @@ mod tests {
         parse_domain_threat_type, parse_threat_type_label, should_skip_pattern_match,
         should_skip_pattern_rule_override, threat_priority_for_sort,
     };
+
     use crate::context::events::EventKind;
     use crate::ids::{ConversationId, SenderId};
     use crate::types::{Action, ContentType, ConversationType, ProtectionLevel, ThreatType};
@@ -878,6 +879,33 @@ mod tests {
     use aura_domain::{DomainAction, DomainEventKind, DomainOutput, DomainSignal};
     use aura_patterns::BlockedUrlMatch;
     use std::collections::HashSet;
+
+    #[test]
+    fn invalid_disabled_minor_config_remains_fail_closed() {
+        let config = AuraConfig {
+            account_type: crate::types::AccountType::Child,
+            enabled: false,
+            ..AuraConfig::default()
+        };
+
+        for threat_type in [
+            ThreatType::Threat,
+            ThreatType::Phishing,
+            ThreatType::Explicit,
+            ThreatType::Spam,
+            ThreatType::Nsfw,
+            ThreatType::Scam,
+            ThreatType::Manipulation,
+            ThreatType::HateSpeech,
+            ThreatType::Doxxing,
+            ThreatType::PiiLeakage,
+        ] {
+            assert!(
+                detection_enabled_for_threat(&config, threat_type),
+                "{threat_type:?} must remain active for an invalid disabled minor config"
+            );
+        }
+    }
 
     #[test]
     fn typed_domain_event_bridge_is_name_agnostic() {

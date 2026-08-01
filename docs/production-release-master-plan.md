@@ -93,7 +93,7 @@ Relay повинен бути технічно вимкнений у профі�
 | `REL-005` | закрито | guardian feedback очищав неправильний обсяг пам'яті й кодував `Block` вигаданими діалогами | точна ізольована семантика account/sender/conversation та версійований стан блокування |
 | `REL-006` | закрито | порожні FFI IDs ставали спільним `unknown` | неправильні live та persisted sender/conversation IDs відхиляються до зміни стану |
 | `REL-007` | закрито | `aura_last_error` міг повертати помилку іншого потоку | суто thread-local канал із багатопотоковим regression test |
-| `REL-008` | відкрито | `enabled=false` суперечить недозволеному вимкненню для minor | єдина валідована конфігураційна семантика |
+| `REL-008` | закрито | `enabled=false` суперечив недозволеному вимкненню для minor | child/teen завжди мають активний захист і Kids domain; суперечливий init/update відхиляється до мутації |
 | `REL-009` | відкрито | iOS ще не приймає manifest v5/descriptor v3 | точний pin і Swift contract tests |
 | `REL-010` | відкрито | чотири людські signoff залишаються pending | реальні підписані рішення |
 
@@ -215,8 +215,13 @@ Relay повинен бути технічно вимкнений у профі�
    - C header фіксує same-thread requirement;
    - barrier-based concurrency regression доводить відсутність cross-thread
      leakage.
-5. Уніфікувати minor configuration: protection для child/teen не може бути
-   частково вимкнений суперечливою комбінацією полів.
+5. ✅ Уніфіковано minor configuration:
+   - protection для child/teen не вимикається жодною комбінацією внутрішніх
+     полів;
+   - `enabled=false` і Military domain для minor відхиляються до init/update;
+   - child/teen завжди отримують Kids domain, а adult disable semantics
+     залишаються явними;
+   - матричні, FFI та no-partial-mutation regressions фіксують контракт.
 6. Виправити Relay observation pairing, навіть якщо Relay залишається вимкненим.
 
 Обов'язкові докази:
@@ -641,7 +646,8 @@ evidence є інфраструктурою докторського дослід
    не може бути мовчки замінений built-in rules.
 5. ✅ `REL-004` state v2 -> v3 migration — legacy import, v3 context
    persistence, golden fixtures і безпечна відмова future version.
-6. `REL-008` minor configuration invariant.
+6. ✅ `REL-008` minor configuration invariant — єдина fail-closed семантика
+   для config, Analyzer, AgentRuntime і FFI.
 7. ADR та реалізація `REL-002` local product decision API.
 8. iOS integration harness та `REL-009` exact Apple pin.
 9. Повний RC gate і реальні `REL-010` signoffs.

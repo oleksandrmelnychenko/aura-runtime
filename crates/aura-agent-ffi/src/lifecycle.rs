@@ -73,7 +73,8 @@ fn build_instance(config: DecodedConfig) -> Result<*mut c_void, String> {
         .map_err(|e| format!("config validation failed: {e}"))?;
 
     let pattern_db = load_pattern_db(&config.aura_config)?;
-    let analyzer = AgentRuntime::new(config.aura_config, &pattern_db);
+    let analyzer = AgentRuntime::try_new(config.aura_config, &pattern_db)
+        .map_err(|e| format!("runtime initialization failed: {e}"))?;
     let instance = Box::new(Mutex::new(AuraInstance { analyzer }));
     Ok(Box::into_raw(instance) as *mut c_void)
 }

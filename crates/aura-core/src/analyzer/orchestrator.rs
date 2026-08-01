@@ -177,6 +177,7 @@ impl Analyzer {
         config: AuraConfig,
         pattern_db: &PatternDatabase,
     ) -> Result<Self, crate::error::AuraError> {
+        config.validate()?;
         let default_pattern_language = config.language.clone();
         let pattern_matcher = PatternMatcher::from_database(pattern_db, &default_pattern_language);
         let supported_pattern_languages = collect_supported_pattern_languages(pattern_db);
@@ -767,7 +768,14 @@ impl Analyzer {
     }
 
     /// Replaces the analyzer configuration and rebuilds pattern matchers and ML pipeline.
-    pub fn update_config(&mut self, config: AuraConfig, pattern_db: &PatternDatabase) {
+    ///
+    /// Validation happens before any runtime state is mutated.
+    pub fn update_config(
+        &mut self,
+        config: AuraConfig,
+        pattern_db: &PatternDatabase,
+    ) -> Result<(), crate::error::AuraError> {
+        config.validate()?;
         let tracker_config = Self::tracker_config(&config);
         let signal_enricher = Self::signal_enricher(&config);
         let ml_pipeline = MlPipeline::new(Self::ml_config(&config));
@@ -783,6 +791,7 @@ impl Analyzer {
         self.ml_pipeline = ml_pipeline;
         self.domain_runtime = AuraDomainRuntime::new();
         self.config = config;
+        Ok(())
     }
 
     /// Reloads pattern matchers and URL checker from an updated pattern database.
