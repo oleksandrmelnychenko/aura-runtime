@@ -13,6 +13,12 @@ let package = Package(
             targets: ["AuraAgent", "AuraAgentFFI"]
         )
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/apple/swift-protobuf.git",
+            exact: "1.38.1"
+        )
+    ],
     targets: [
         .binaryTarget(
             name: "AuraAgentFFI",
@@ -20,7 +26,10 @@ let package = Package(
         ),
         .target(
             name: "AuraAgent",
-            dependencies: ["AuraAgentFFI"],
+            dependencies: [
+                "AuraAgentFFI",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+            ],
             path: "swift/Sources/AuraAgent"
         ),
     ]

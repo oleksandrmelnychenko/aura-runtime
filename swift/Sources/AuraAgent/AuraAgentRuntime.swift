@@ -1,4 +1,5 @@
 import Foundation
+import SwiftProtobuf
 
 public final class AuraAgentRuntime: @unchecked Sendable {
     private let handle: UnsafeMutableRawPointer
@@ -34,6 +35,35 @@ public final class AuraAgentRuntime: @unchecked Sendable {
             try Self.withBytePointer(requestBytes) { ptr, count in
                 native_aura_agent_analyze_canonical_safety(handle, ptr, count, out)
             }
+        }
+    }
+
+    /// Returns a typed local product decision produced by the same exactly-once
+    /// stateful path as canonical Safety Case ingestion. Clients must durably
+    /// commit the response and native state before applying UI or guardian
+    /// effects.
+    public func analyzeLocalDecision(
+        _ request: Aura_Messenger_V1_LocalDecisionAnalyzeRequest
+    ) throws -> Aura_Messenger_V1_LocalDecisionAnalyzeResponse {
+        let requestBytes: Data
+        do {
+            requestBytes = try request.serializedData()
+        } catch {
+            throw AuraAgentError.invalidInput("failed to encode local decision request: \(error)")
+        }
+        let responseBytes = try withOutputBuffer { out in
+            try Self.withBytePointer(requestBytes) { ptr, count in
+                native_aura_agent_analyze_local_decision(handle, ptr, count, out)
+            }
+        }
+        do {
+            return try Aura_Messenger_V1_LocalDecisionAnalyzeResponse(
+                serializedBytes: responseBytes
+            )
+        } catch {
+            throw AuraAgentError.invalidResponse(
+                "failed to decode local decision response: \(error)"
+            )
         }
     }
 

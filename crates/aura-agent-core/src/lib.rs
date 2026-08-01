@@ -114,6 +114,30 @@ pub enum CanonicalSafetyAnalysisOutcome {
     },
 }
 
+/// Exactly-once output that exposes a product decision only for a committed
+/// first analysis attempt.
+#[derive(Debug, Clone)]
+pub enum CanonicalLocalDecisionAnalysisOutcome {
+    /// This source revision was analyzed for the first time.
+    Processed {
+        /// The local result is present only when case projection and the
+        /// supplied persistence postcondition both succeeded.
+        local_result: Option<Box<AnalysisResult>>,
+        /// Case projection result for the first processing attempt.
+        safety_case: Result<SafetyCaseIngestOutcome, SafetyCaseRuntimeError>,
+    },
+    /// The source revision was already processed, so analysis was skipped.
+    DuplicateIgnored {
+        /// Content-free receipt from the first processing attempt.
+        receipt: SafetyCaseSourceReceipt,
+    },
+    /// A newer edit was already processed, so analysis was skipped.
+    StaleIgnored {
+        /// Highest processed revision for the canonical source event.
+        latest_revision: u32,
+    },
+}
+
 pub struct AgentRuntime {
     analyzer: Analyzer,
     safety_cases: SafetyCaseRuntime,
@@ -180,14 +204,47 @@ impl AgentRuntime {
     where
         F: FnOnce(&Self) -> Result<(), SafetyCaseRuntimeError>,
     {
+        let outcome = self.analyze_local_decision_with_canonical_safety_case_guarded(
+            input,
+            identity,
+            |runtime, _| persistence_guard(runtime),
+        )?;
+        Ok(match outcome {
+            CanonicalLocalDecisionAnalysisOutcome::Processed { safety_case, .. } => {
+                CanonicalSafetyAnalysisOutcome::Processed { safety_case }
+            }
+            CanonicalLocalDecisionAnalysisOutcome::DuplicateIgnored { receipt } => {
+                CanonicalSafetyAnalysisOutcome::DuplicateIgnored { receipt }
+            }
+            CanonicalLocalDecisionAnalysisOutcome::StaleIgnored { latest_revision } => {
+                CanonicalSafetyAnalysisOutcome::StaleIgnored { latest_revision }
+            }
+        })
+    }
+
+    /// Canonically analyzes one event and exposes a product result only after
+    /// case projection and the supplied persistence postcondition succeed.
+    ///
+    /// Duplicate and stale revisions never invoke the analyzer. Projection or
+    /// persistence failures restore conversation and KIDS context before a
+    /// durable rejected receipt is recorded.
+    pub fn analyze_local_decision_with_canonical_safety_case_guarded<F>(
+        &mut self,
+        input: &MessageInput,
+        identity: &SafetyCaseIngestIdentity,
+        persistence_guard: F,
+    ) -> Result<CanonicalLocalDecisionAnalysisOutcome, SafetyCaseRuntimeError>
+    where
+        F: FnOnce(&Self, &AnalysisResult) -> Result<(), SafetyCaseRuntimeError>,
+    {
         self.safety_cases
             .require_active_execution_policy(identity.account_key(), identity.observed_at_ms())?;
         match self.safety_cases.preflight_source(identity)? {
             SafetyCaseSourcePreflight::Duplicate(receipt) => {
-                return Ok(CanonicalSafetyAnalysisOutcome::DuplicateIgnored { receipt });
+                return Ok(CanonicalLocalDecisionAnalysisOutcome::DuplicateIgnored { receipt });
             }
             SafetyCaseSourcePreflight::Stale { latest_revision } => {
-                return Ok(CanonicalSafetyAnalysisOutcome::StaleIgnored { latest_revision });
+                return Ok(CanonicalLocalDecisionAnalysisOutcome::StaleIgnored { latest_revision });
             }
             SafetyCaseSourcePreflight::Ready => {}
         }
@@ -198,7 +255,7 @@ impl AgentRuntime {
         let timestamp_ms = identity.observed_at_ms();
         let local_result = self.analyzer.analyze_with_context(input, timestamp_ms);
         let safety_case = self.safety_cases.ingest_analysis(identity, &local_result);
-        if let Err(persistence_error) = persistence_guard(self) {
+        if safety_case.is_err() {
             self.analyzer.reset_runtime_state();
             self.safety_cases = safety_case_snapshot;
             let context_restored = self.analyzer.import_context_state(context_snapshot).is_ok();
@@ -207,11 +264,29 @@ impl AgentRuntime {
             if !context_restored || !kids_restored {
                 return Err(SafetyCaseRuntimeError::CanonicalContextRollbackFailed);
             }
-            return Ok(CanonicalSafetyAnalysisOutcome::Processed {
+            return Ok(CanonicalLocalDecisionAnalysisOutcome::Processed {
+                local_result: None,
+                safety_case,
+            });
+        }
+        if let Err(persistence_error) = persistence_guard(self, &local_result) {
+            self.analyzer.reset_runtime_state();
+            self.safety_cases = safety_case_snapshot;
+            let context_restored = self.analyzer.import_context_state(context_snapshot).is_ok();
+            let kids_restored = self.analyzer.import_kids_memory_state(&kids_snapshot);
+            self.safety_cases.remember_rejected_source(identity)?;
+            if !context_restored || !kids_restored {
+                return Err(SafetyCaseRuntimeError::CanonicalContextRollbackFailed);
+            }
+            return Ok(CanonicalLocalDecisionAnalysisOutcome::Processed {
+                local_result: None,
                 safety_case: Err(persistence_error),
             });
         }
-        Ok(CanonicalSafetyAnalysisOutcome::Processed { safety_case })
+        Ok(CanonicalLocalDecisionAnalysisOutcome::Processed {
+            local_result: Some(Box::new(local_result)),
+            safety_case,
+        })
     }
 
     /// Returns this runtime's instance-local safety-case state.
@@ -392,6 +467,58 @@ mod tests {
     use super::*;
     use aura_core::{ContentType, ConversationType};
 
+    fn test_execution_policy() -> NativeExecutionPolicy {
+        let policy_wire_digest = [1; 32];
+        let runtime_capabilities_digest = [2; 32];
+        let model_manifest_digest = [3; 32];
+        let execution_policy_trust_keyring_digest = [4; 32];
+        NativeExecutionPolicy {
+            account_key: "account".to_string(),
+            protected_account_id: [5; 16],
+            authority_lineage_id: "test-authority".to_string(),
+            issuer_key_id: "test-issuer".to_string(),
+            policy_epoch: 1,
+            revoked_through_policy_epoch: 0,
+            state: NativeExecutionPolicyState::Enabled,
+            execution_mode: NativeExecutionMode::ShadowCases,
+            policy_wire_digest,
+            signed_policy_digest: [6; 32],
+            runtime_capabilities_digest,
+            model_manifest_digest,
+            execution_policy_trust_keyring_digest,
+            valid_from_ms: 1,
+            valid_until_ms: 1_000_000,
+            maximum_case_observations: 128,
+            maximum_case_reason_codes: 16,
+            guardian_policy: Some(GuardianExecutionPolicy {
+                authority_lineage_id: "test-authority".to_string(),
+                policy_epoch: 1,
+                policy_version: "test-v1".to_string(),
+                policy_assertion_digest: policy_wire_digest,
+                runtime_capabilities_digest,
+                model_manifest_digest,
+                execution_policy_trust_keyring_digest,
+                valid_from_ms: 1,
+                valid_until_ms: 1_000_000,
+                execution_mode: GuardianExecutionMode::ShadowCases,
+                rules: Vec::new(),
+            }),
+            active_for_runtime: false,
+        }
+    }
+
+    fn test_identity() -> SafetyCaseIngestIdentity {
+        SafetyCaseIngestIdentity::new(
+            SafetyAccountKey::new("account").expect("account key"),
+            SafetyCaseSubjectKey::new("subject").expect("subject key"),
+            ConversationEventKey::new("conversation").expect("conversation key"),
+            SourceEventId::new("event").expect("event id"),
+            1,
+            1_000,
+            1_000,
+        )
+    }
+
     fn make_child_input(text: &str, sender_id: &str, conversation_id: &str) -> MessageInput {
         MessageInput {
             content_type: ContentType::Text,
@@ -457,5 +584,74 @@ mod tests {
             "imported kids memory should affect post-restore analysis, got {:?}",
             result.reason_codes
         );
+    }
+
+    #[test]
+    fn canonical_local_decision_rolls_back_before_exposing_failed_attempt() {
+        let pattern_db = PatternDatabase::default_mvp();
+        let mut runtime = AgentRuntime::new(child_kids_config(), &pattern_db);
+        let identity = test_identity();
+        runtime
+            .safety_cases_mut()
+            .apply_execution_policy(identity.account_key(), test_execution_policy())
+            .expect("test policy must apply");
+        let input = make_child_input(
+            "don't tell your parents, it's our secret",
+            "sender",
+            "conversation",
+        );
+        assert!(runtime.export_context_state().timelines.is_empty());
+        assert!(runtime.export_kids_memory_state().conversations.is_empty());
+
+        let first = runtime
+            .analyze_local_decision_with_canonical_safety_case_guarded(&input, &identity, |_, _| {
+                Err(SafetyCaseRuntimeError::StateSerialization(
+                    "simulated host commit failure".to_string(),
+                ))
+            })
+            .expect("failed commit must return a rejected canonical outcome");
+
+        match first {
+            CanonicalLocalDecisionAnalysisOutcome::Processed {
+                local_result,
+                safety_case,
+            } => {
+                assert!(local_result.is_none());
+                assert!(matches!(
+                    safety_case,
+                    Err(SafetyCaseRuntimeError::StateSerialization(_))
+                ));
+            }
+            _ => panic!("first attempt must be processed exactly once"),
+        }
+        assert!(runtime.export_context_state().timelines.is_empty());
+        assert!(runtime
+            .export_context_state()
+            .contact_profiler
+            .profiles
+            .is_empty());
+        assert!(runtime.export_kids_memory_state().conversations.is_empty());
+        assert!(runtime.export_kids_memory_state().senders.is_empty());
+        assert!(matches!(
+            runtime
+                .safety_cases()
+                .preflight_source(&identity)
+                .expect("rejected receipt preflight"),
+            SafetyCaseSourcePreflight::Duplicate(SafetyCaseSourceReceipt::Rejected)
+        ));
+
+        let duplicate = runtime
+            .analyze_local_decision_with_canonical_safety_case_guarded(&input, &identity, |_, _| {
+                Ok(())
+            })
+            .expect("duplicate must be returned without analysis");
+        assert!(matches!(
+            duplicate,
+            CanonicalLocalDecisionAnalysisOutcome::DuplicateIgnored {
+                receipt: SafetyCaseSourceReceipt::Rejected
+            }
+        ));
+        assert!(runtime.export_context_state().timelines.is_empty());
+        assert!(runtime.export_kids_memory_state().conversations.is_empty());
     }
 }

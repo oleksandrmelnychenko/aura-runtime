@@ -87,7 +87,7 @@ Relay повинен бути технічно вимкнений у профі�
 | Код | Стан | Проблема | Необхідний результат |
 | --- | --- | --- | --- |
 | `REL-001` | закрито | після rate limit повертався чистий `Allow` | Analyzer більше не має внутрішнього пропуску; кожне прийняте повідомлення проходить повний pipeline |
-| `REL-002` | відкрито | Apple API не повертає негайний product decision | один типізований локальний decision API |
+| `REL-002` | source реалізовано; приймання відкрито | Apple API не повертав негайний product decision | типізований локальний decision API реалізовано; потрібні artifact pin та фактичний iOS/UI gate |
 | `REL-003` | закрито | помилка заданого pattern pack приховано вмикала вбудовані правила | заданий шлях завантажується повністю або блокує init зі стабільною причиною; відсутній шлях явно обирає built-in pack |
 | `REL-004` | закрито | persisted state v2 відхилявся, а v3 wire втрачав контекстну рамку події | детермінована v2 -> v3 міграція, повний v3 context wire і byte-pinned v2/v3 golden fixtures |
 | `REL-005` | закрито | guardian feedback очищав неправильний обсяг пам'яті й кодував `Block` вигаданими діалогами | точна ізольована семантика account/sender/conversation та версійований стан блокування |
@@ -123,10 +123,10 @@ Relay повинен бути технічно вимкнений у профі�
 ### 5.1 Рекомендована межа Apple API
 
 Канонічний Safety Case lifecycle залишається вузьким. Для негайної дії
-додається окрема additive ABI-функція з protobuf-запитом і protobuf-відповіддю,
-умовно `aura_analyze_local_decision`.
+реалізовано окрему additive ABI-функцію `aura_analyze_local_decision` з
+protobuf-запитом і protobuf-відповіддю.
 
-Вона повинна:
+Вона:
 
 - запускати той самий stateful Agent pipeline, що використовується в product;
 - приймати стабільні `message_id`, `sender_id`, `conversation_id`, timestamp і
@@ -138,8 +138,10 @@ Relay повинен бути технічно вимкнений у профі�
 - не повертати довільний JSON;
 - не відновлювати весь вилучений legacy API.
 
-До реалізації затверджується короткий ADR із таблицею: власник поля, джерело,
-момент фіксації, повторний виклик, помилка збереження, відновлення після restart.
+Контракт фіксує
+[`ADR 0001`](./adr/0001-canonical-local-decision-api.md): власника стану,
+момент фіксації, повторний виклик, помилку збереження та відновлення після
+restart.
 
 ### 5.2 Профілі виконання
 
@@ -648,7 +650,8 @@ evidence є інфраструктурою докторського дослід
    persistence, golden fixtures і безпечна відмова future version.
 6. ✅ `REL-008` minor configuration invariant — єдина fail-closed семантика
    для config, Analyzer, AgentRuntime і FFI.
-7. ADR та реалізація `REL-002` local product decision API.
+7. ◐ ADR і source-реалізація `REL-002` local product decision API завершені;
+   artifact pin та фактичний iOS/UI gate залишаються відкритими.
 8. iOS integration harness та `REL-009` exact Apple pin.
 9. Повний RC gate і реальні `REL-010` signoffs.
 10. Controlled local-only KIDS pilot.

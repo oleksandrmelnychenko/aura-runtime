@@ -609,6 +609,14 @@ pub fn domain_action_reason_marker(action: DomainAction) -> &'static str {
     }
 }
 
+fn domain_signal_reason_code(signal: &aura_domain::DomainSignal) -> String {
+    if signal.reason_code.is_empty() {
+        format!("domain.{}", signal.threat_key)
+    } else {
+        format!("domain.{}", signal.reason_code)
+    }
+}
+
 pub fn push_domain_reason_codes(reason_codes: &mut Vec<String>, domain_output: &DomainOutput) {
     for signal in &domain_output.signals {
         let reason_code = &signal.reason_code;
@@ -628,6 +636,39 @@ pub fn push_domain_reason_codes(reason_codes: &mut Vec<String>, domain_output: &
     }
 }
 
+fn push_active_domain_reason_codes(
+    reason_codes: &mut Vec<String>,
+    domain_output: &DomainOutput,
+    active_signals: &[DetectionSignal],
+) -> bool {
+    let mut found_active_signal = false;
+    for signal in &domain_output.signals {
+        let active_reason = domain_signal_reason_code(signal);
+        if !active_signals
+            .iter()
+            .any(|active| active.reason_code == active_reason)
+        {
+            continue;
+        }
+        found_active_signal = true;
+        let reason_code = &signal.reason_code;
+        if !reason_code.is_empty() {
+            let reason_code = format!("domain.{reason_code}");
+            if !reason_codes.contains(&reason_code) {
+                reason_codes.push(reason_code);
+            }
+        }
+        let threat_key = &signal.threat_key;
+        if !threat_key.is_empty() {
+            let marker = format!("domain.threat.{threat_key}");
+            if !reason_codes.contains(&marker) {
+                reason_codes.push(marker);
+            }
+        }
+    }
+    found_active_signal
+}
+
 pub fn merge_domain_output_effects(
     reason_codes: &mut Vec<String>,
     current_action: Action,
@@ -638,7 +679,31 @@ pub fn merge_domain_output_effects(
     };
 
     push_domain_reason_codes(reason_codes, domain_output);
+    merge_domain_action(reason_codes, current_action, domain_output)
+}
 
+pub(crate) fn merge_active_domain_output_effects(
+    reason_codes: &mut Vec<String>,
+    current_action: Action,
+    domain_output: Option<&DomainOutput>,
+    active_signals: &[DetectionSignal],
+) -> Action {
+    let Some(domain_output) = domain_output else {
+        return current_action;
+    };
+
+    if !push_active_domain_reason_codes(reason_codes, domain_output, active_signals) {
+        return current_action;
+    }
+
+    merge_domain_action(reason_codes, current_action, domain_output)
+}
+
+fn merge_domain_action(
+    reason_codes: &mut Vec<String>,
+    current_action: Action,
+    domain_output: &DomainOutput,
+) -> Action {
     let Some(action) = domain_output.action else {
         return current_action;
     };
@@ -670,11 +735,7 @@ pub fn build_domain_observations(
             continue;
         }
 
-        let reason = if domain_signal.reason_code.is_empty() {
-            format!("domain.{}", domain_signal.threat_key)
-        } else {
-            format!("domain.{}", domain_signal.reason_code)
-        };
+        let reason = domain_signal_reason_code(domain_signal);
         let confidence =
             domain_signal_confidence(domain_signal.severity.as_deref(), domain_signal.score);
         let signal = DetectionSignal::context(

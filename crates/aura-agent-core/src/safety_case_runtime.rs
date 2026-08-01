@@ -494,6 +494,16 @@ pub enum SafetyCaseRuntimeError {
         /// Space required before analysis for a durable rejected receipt.
         required_reserve: usize,
     },
+    /// A canonical response could not fit its bounded native transport.
+    #[error(
+        "canonical response byte budget of {maximum} is exhausted: encoded response requires {current} bytes"
+    )]
+    CanonicalResponseByteBudgetExceeded {
+        /// Maximum response size accepted by the native boundary.
+        maximum: usize,
+        /// Encoded bytes required by the candidate response.
+        current: usize,
+    },
     /// A persistence-guard rollback could not restore an exported snapshot.
     #[error("canonical analyzer context rollback failed")]
     CanonicalContextRollbackFailed,

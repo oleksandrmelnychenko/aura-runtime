@@ -105,6 +105,10 @@ pub(super) fn canonical_safety_response_to_proto(
                 response.disposition = proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
                 response.ignored_reason = Some("persistence_byte_budget_exceeded".to_string());
             }
+            Err(SafetyCaseRuntimeError::CanonicalResponseByteBudgetExceeded { .. }) => {
+                response.disposition = proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
+                response.ignored_reason = Some("response_byte_budget_exceeded".to_string());
+            }
             Err(_) => {
                 response.disposition = proto::CanonicalSafetyDisposition::ProcessedRejected as i32;
                 response.ignored_reason = Some("projection_rejected".to_string());
@@ -146,6 +150,367 @@ pub(super) fn canonical_safety_response_to_proto(
     }
 
     Ok(response)
+}
+
+pub(super) fn local_decision_response_to_proto(
+    outcome: CanonicalLocalDecisionAnalysisOutcome,
+    runtime: &AgentRuntime,
+) -> Result<proto::LocalDecisionAnalyzeResponse, String> {
+    let decision = match &outcome {
+        CanonicalLocalDecisionAnalysisOutcome::Processed {
+            local_result: Some(result),
+            safety_case: Ok(_),
+        } => Some(local_decision_to_proto(result, runtime)),
+        CanonicalLocalDecisionAnalysisOutcome::Processed { .. }
+        | CanonicalLocalDecisionAnalysisOutcome::DuplicateIgnored { .. }
+        | CanonicalLocalDecisionAnalysisOutcome::StaleIgnored { .. } => None,
+    };
+    let canonical_outcome = match outcome {
+        CanonicalLocalDecisionAnalysisOutcome::Processed { safety_case, .. } => {
+            CanonicalSafetyAnalysisOutcome::Processed { safety_case }
+        }
+        CanonicalLocalDecisionAnalysisOutcome::DuplicateIgnored { receipt } => {
+            CanonicalSafetyAnalysisOutcome::DuplicateIgnored { receipt }
+        }
+        CanonicalLocalDecisionAnalysisOutcome::StaleIgnored { latest_revision } => {
+            CanonicalSafetyAnalysisOutcome::StaleIgnored { latest_revision }
+        }
+    };
+    let receipt = canonical_safety_response_to_proto(canonical_outcome, runtime)?;
+    Ok(proto::LocalDecisionAnalyzeResponse {
+        disposition: receipt.disposition,
+        decision,
+        ignored_reason: receipt.ignored_reason,
+        case_id: receipt.case_id,
+        case_revision: receipt.case_revision,
+        case_status: receipt.case_status,
+        latest_revision: receipt.latest_revision,
+        runtime_state_schema_version: receipt.runtime_state_schema_version,
+        case_generation: receipt.case_generation,
+    })
+}
+
+pub(super) fn local_decision_to_proto(
+    result: &aura_agent_core::AnalysisResult,
+    runtime: &AgentRuntime,
+) -> proto::LocalDecision {
+    let capabilities = runtime.runtime_capabilities();
+    let degraded = capabilities.backend == RuntimeBackend::RulesFallback;
+    proto::LocalDecision {
+        product_surface: Some(product_decision_surface_to_proto(
+            &build_product_decision_surface(result, runtime.product_rollout_mode()),
+        )),
+        recommended_action: result
+            .recommended_action
+            .as_ref()
+            .map(action_recommendation_to_proto),
+        reason_codes: result.reason_codes.clone(),
+        inference: Some(inference_summary_to_proto(&result.inference)),
+        runtime_backend: proto_runtime_backend(capabilities.backend) as i32,
+        degraded,
+    }
+}
+
+fn product_decision_surface_to_proto(
+    surface: &aura_agent_core::ProductDecisionSurface,
+) -> proto::ProductDecisionSurface {
+    proto::ProductDecisionSurface {
+        schema_version: surface.schema_version.clone(),
+        rollout_mode: proto_product_rollout_mode(surface.rollout_mode) as i32,
+        threat_type: proto_threat_type(surface.threat_type) as i32,
+        action: proto_action(surface.action) as i32,
+        score: surface.score,
+        child: Some(product_child_surface_to_proto(&surface.child)),
+        guardian: Some(product_guardian_surface_to_proto(&surface.guardian)),
+        review: Some(product_review_surface_to_proto(&surface.review)),
+        uncertainty_disposition: proto_product_uncertainty_disposition(
+            surface.uncertainty_disposition,
+        ) as i32,
+    }
+}
+
+fn product_child_surface_to_proto(
+    surface: &aura_agent_core::ProductChildSurface,
+) -> proto::ProductChildSurface {
+    proto::ProductChildSurface {
+        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
+        visible: surface.visible,
+        intervention: proto_product_child_intervention(surface.intervention) as i32,
+        ui_actions: surface
+            .ui_actions
+            .iter()
+            .map(|action| proto_ui_action(*action) as i32)
+            .collect(),
+        reason_codes: surface.reason_codes.clone(),
+    }
+}
+
+fn product_guardian_surface_to_proto(
+    surface: &aura_agent_core::ProductGuardianSurface,
+) -> proto::ProductGuardianSurface {
+    proto::ProductGuardianSurface {
+        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
+        notify: surface.notify,
+        priority: proto_alert_priority(surface.priority) as i32,
+        follow_ups: surface
+            .follow_ups
+            .iter()
+            .map(|action| proto_follow_up_action(*action) as i32)
+            .collect(),
+        reason_codes: surface.reason_codes.clone(),
+    }
+}
+
+fn product_review_surface_to_proto(
+    surface: &aura_agent_core::ProductReviewSurface,
+) -> proto::ProductReviewSurface {
+    proto::ProductReviewSurface {
+        delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
+        open_review: surface.open_review,
+        urgency: proto_product_review_urgency(surface.urgency) as i32,
+        reason_codes: surface.reason_codes.clone(),
+        latent_states: surface
+            .latent_states
+            .iter()
+            .map(|kind| proto_latent_state_kind(*kind) as i32)
+            .collect(),
+    }
+}
+
+fn action_recommendation_to_proto(
+    recommendation: &aura_agent_core::ActionRecommendation,
+) -> proto::ActionRecommendation {
+    proto::ActionRecommendation {
+        parent_alert: proto_alert_priority(recommendation.parent_alert) as i32,
+        follow_ups: recommendation
+            .follow_ups
+            .iter()
+            .map(|action| proto_follow_up_action(*action) as i32)
+            .collect(),
+        crisis_resources: recommendation.crisis_resources,
+        ui_actions: recommendation
+            .ui_actions
+            .iter()
+            .map(|action| proto_ui_action(*action) as i32)
+            .collect(),
+        reason_codes: recommendation.reason_codes.clone(),
+    }
+}
+
+fn inference_summary_to_proto(
+    summary: &aura_agent_core::InferenceSummary,
+) -> proto::InferenceSummary {
+    proto::InferenceSummary {
+        uncertainty: proto_uncertainty_level(summary.uncertainty) as i32,
+        risk_horizon: proto_risk_horizon(summary.risk_horizon) as i32,
+        escalation_likelihood_24h: summary.escalation_likelihood_24h,
+        protective_factor_strength: summary.protective_factor_strength,
+        latent_states: summary
+            .latent_states
+            .iter()
+            .map(latent_state_evidence_to_proto)
+            .collect(),
+    }
+}
+
+fn latent_state_evidence_to_proto(
+    evidence: &aura_agent_core::LatentStateEvidence,
+) -> proto::LatentStateEvidence {
+    proto::LatentStateEvidence {
+        kind: proto_latent_state_kind(evidence.kind) as i32,
+        score: evidence.score,
+        reason_codes: evidence.reason_codes.clone(),
+    }
+}
+
+fn proto_runtime_backend(value: RuntimeBackend) -> proto::RuntimeBackend {
+    match value {
+        RuntimeBackend::RulesFallback => proto::RuntimeBackend::RulesFallback,
+        RuntimeBackend::Onnx => proto::RuntimeBackend::Onnx,
+    }
+}
+
+fn proto_threat_type(value: aura_agent_core::ThreatType) -> proto::ThreatType {
+    match value {
+        aura_agent_core::ThreatType::None => proto::ThreatType::None,
+        aura_agent_core::ThreatType::Bullying => proto::ThreatType::Bullying,
+        aura_agent_core::ThreatType::Grooming => proto::ThreatType::Grooming,
+        aura_agent_core::ThreatType::Explicit => proto::ThreatType::Explicit,
+        aura_agent_core::ThreatType::Threat => proto::ThreatType::Threat,
+        aura_agent_core::ThreatType::SelfHarm => proto::ThreatType::SelfHarm,
+        aura_agent_core::ThreatType::Spam => proto::ThreatType::Spam,
+        aura_agent_core::ThreatType::Scam => proto::ThreatType::Scam,
+        aura_agent_core::ThreatType::Phishing => proto::ThreatType::Phishing,
+        aura_agent_core::ThreatType::Manipulation => proto::ThreatType::Manipulation,
+        aura_agent_core::ThreatType::Nsfw => proto::ThreatType::Nsfw,
+        aura_agent_core::ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
+        aura_agent_core::ThreatType::Doxxing => proto::ThreatType::Doxxing,
+        aura_agent_core::ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
+        aura_agent_core::ThreatType::Propaganda => proto::ThreatType::Propaganda,
+        aura_agent_core::ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
+        aura_agent_core::ThreatType::Psyops => proto::ThreatType::Psyops,
+        aura_agent_core::ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
+        aura_agent_core::ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
+    }
+}
+
+fn proto_action(value: aura_agent_core::Action) -> proto::Action {
+    match value {
+        aura_agent_core::Action::Allow => proto::Action::Allow,
+        aura_agent_core::Action::Mark => proto::Action::Mark,
+        aura_agent_core::Action::Blur => proto::Action::Blur,
+        aura_agent_core::Action::Warn => proto::Action::Warn,
+        aura_agent_core::Action::Block => proto::Action::Block,
+    }
+}
+
+fn proto_alert_priority(value: aura_agent_core::AlertPriority) -> proto::AlertPriority {
+    match value {
+        aura_agent_core::AlertPriority::None => proto::AlertPriority::None,
+        aura_agent_core::AlertPriority::Low => proto::AlertPriority::Low,
+        aura_agent_core::AlertPriority::Medium => proto::AlertPriority::Medium,
+        aura_agent_core::AlertPriority::High => proto::AlertPriority::High,
+        aura_agent_core::AlertPriority::Urgent => proto::AlertPriority::Urgent,
+    }
+}
+
+fn proto_follow_up_action(value: aura_agent_core::FollowUpAction) -> proto::FollowUpAction {
+    match value {
+        aura_agent_core::FollowUpAction::MonitorConversation => {
+            proto::FollowUpAction::MonitorConversation
+        }
+        aura_agent_core::FollowUpAction::BlockSuggested => proto::FollowUpAction::BlockSuggested,
+        aura_agent_core::FollowUpAction::ReviewContactProfile => {
+            proto::FollowUpAction::ReviewContactProfile
+        }
+        aura_agent_core::FollowUpAction::ReportToAuthorities => {
+            proto::FollowUpAction::ReportToAuthorities
+        }
+    }
+}
+
+fn proto_product_rollout_mode(
+    value: aura_agent_core::ProductRolloutMode,
+) -> proto::ProductRolloutMode {
+    match value {
+        aura_agent_core::ProductRolloutMode::Shadow => proto::ProductRolloutMode::Shadow,
+        aura_agent_core::ProductRolloutMode::StagingPilot => {
+            proto::ProductRolloutMode::StagingPilot
+        }
+        aura_agent_core::ProductRolloutMode::GuardianEnabled => {
+            proto::ProductRolloutMode::GuardianEnabled
+        }
+    }
+}
+
+fn proto_product_delivery_mode(
+    value: aura_agent_core::ProductDeliveryMode,
+) -> proto::ProductDeliveryMode {
+    match value {
+        aura_agent_core::ProductDeliveryMode::Suppress => proto::ProductDeliveryMode::Suppress,
+        aura_agent_core::ProductDeliveryMode::MirrorOnly => proto::ProductDeliveryMode::MirrorOnly,
+        aura_agent_core::ProductDeliveryMode::Apply => proto::ProductDeliveryMode::Apply,
+    }
+}
+
+fn proto_product_child_intervention(
+    value: aura_agent_core::ProductChildIntervention,
+) -> proto::ProductChildIntervention {
+    match value {
+        aura_agent_core::ProductChildIntervention::None => proto::ProductChildIntervention::None,
+        aura_agent_core::ProductChildIntervention::Mark => proto::ProductChildIntervention::Mark,
+        aura_agent_core::ProductChildIntervention::Blur => proto::ProductChildIntervention::Blur,
+        aura_agent_core::ProductChildIntervention::Warn => proto::ProductChildIntervention::Warn,
+        aura_agent_core::ProductChildIntervention::Block => proto::ProductChildIntervention::Block,
+    }
+}
+
+fn proto_product_review_urgency(
+    value: aura_agent_core::ProductReviewUrgency,
+) -> proto::ProductReviewUrgency {
+    match value {
+        aura_agent_core::ProductReviewUrgency::None => proto::ProductReviewUrgency::None,
+        aura_agent_core::ProductReviewUrgency::Standard => proto::ProductReviewUrgency::Standard,
+        aura_agent_core::ProductReviewUrgency::High => proto::ProductReviewUrgency::High,
+        aura_agent_core::ProductReviewUrgency::Urgent => proto::ProductReviewUrgency::Urgent,
+    }
+}
+
+fn proto_product_uncertainty_disposition(
+    value: aura_agent_core::ProductUncertaintyDisposition,
+) -> proto::ProductUncertaintyDisposition {
+    match value {
+        aura_agent_core::ProductUncertaintyDisposition::Normal => {
+            proto::ProductUncertaintyDisposition::Normal
+        }
+        aura_agent_core::ProductUncertaintyDisposition::MirrorOnly => {
+            proto::ProductUncertaintyDisposition::MirrorOnly
+        }
+        aura_agent_core::ProductUncertaintyDisposition::RequireReview => {
+            proto::ProductUncertaintyDisposition::RequireReview
+        }
+        aura_agent_core::ProductUncertaintyDisposition::GuardianPriority => {
+            proto::ProductUncertaintyDisposition::GuardianPriority
+        }
+    }
+}
+
+fn proto_ui_action(value: aura_agent_core::UiAction) -> proto::UiAction {
+    match value {
+        aura_agent_core::UiAction::WarnBeforeSend => proto::UiAction::WarnBeforeSend,
+        aura_agent_core::UiAction::WarnBeforeDisplay => proto::UiAction::WarnBeforeDisplay,
+        aura_agent_core::UiAction::BlurUntilTap => proto::UiAction::BlurUntilTap,
+        aura_agent_core::UiAction::ConfirmBeforeOpenLink => proto::UiAction::ConfirmBeforeOpenLink,
+        aura_agent_core::UiAction::SuggestBlockContact => proto::UiAction::SuggestBlockContact,
+        aura_agent_core::UiAction::SuggestReport => proto::UiAction::SuggestReport,
+        aura_agent_core::UiAction::RestrictUnknownContact => {
+            proto::UiAction::RestrictUnknownContact
+        }
+        aura_agent_core::UiAction::SlowDownConversation => proto::UiAction::SlowDownConversation,
+        aura_agent_core::UiAction::ShowCrisisSupport => proto::UiAction::ShowCrisisSupport,
+        aura_agent_core::UiAction::EscalateToGuardian => proto::UiAction::EscalateToGuardian,
+    }
+}
+
+fn proto_uncertainty_level(value: aura_agent_core::UncertaintyLevel) -> proto::UncertaintyLevel {
+    match value {
+        aura_agent_core::UncertaintyLevel::Low => proto::UncertaintyLevel::Low,
+        aura_agent_core::UncertaintyLevel::Medium => proto::UncertaintyLevel::Medium,
+        aura_agent_core::UncertaintyLevel::High => proto::UncertaintyLevel::High,
+    }
+}
+
+fn proto_risk_horizon(value: aura_agent_core::RiskHorizon) -> proto::RiskHorizon {
+    match value {
+        aura_agent_core::RiskHorizon::Unknown => proto::RiskHorizon::Unknown,
+        aura_agent_core::RiskHorizon::Immediate => proto::RiskHorizon::Immediate,
+        aura_agent_core::RiskHorizon::ShortTerm => proto::RiskHorizon::ShortTerm,
+        aura_agent_core::RiskHorizon::Sustained => proto::RiskHorizon::Sustained,
+    }
+}
+
+fn proto_latent_state_kind(value: aura_agent_core::LatentStateKind) -> proto::LatentStateKind {
+    match value {
+        aura_agent_core::LatentStateKind::DependencyBuilding => {
+            proto::LatentStateKind::DependencyBuilding
+        }
+        aura_agent_core::LatentStateKind::IsolationPressure => {
+            proto::LatentStateKind::IsolationPressure
+        }
+        aura_agent_core::LatentStateKind::CoerciveControl => {
+            proto::LatentStateKind::CoerciveControl
+        }
+        aura_agent_core::LatentStateKind::Humiliation => proto::LatentStateKind::Humiliation,
+        aura_agent_core::LatentStateKind::CrisisVulnerability => {
+            proto::LatentStateKind::CrisisVulnerability
+        }
+        aura_agent_core::LatentStateKind::ProtectiveSupport => {
+            proto::LatentStateKind::ProtectiveSupport
+        }
+        aura_agent_core::LatentStateKind::GroupEscalation => {
+            proto::LatentStateKind::GroupEscalation
+        }
+    }
 }
 
 pub(super) fn canonical_persistence_state_lengths(
@@ -753,4 +1118,123 @@ pub(super) fn guardian_report_suppression_request_from_proto(
         request.suppressed_at_ms,
         reason_code,
     ))
+}
+
+#[cfg(test)]
+mod local_decision_mapping_tests {
+    use super::*;
+
+    #[test]
+    fn every_product_ui_action_has_an_exact_wire_value() {
+        let mappings = [
+            (
+                aura_agent_core::UiAction::WarnBeforeSend,
+                proto::UiAction::WarnBeforeSend,
+            ),
+            (
+                aura_agent_core::UiAction::WarnBeforeDisplay,
+                proto::UiAction::WarnBeforeDisplay,
+            ),
+            (
+                aura_agent_core::UiAction::BlurUntilTap,
+                proto::UiAction::BlurUntilTap,
+            ),
+            (
+                aura_agent_core::UiAction::ConfirmBeforeOpenLink,
+                proto::UiAction::ConfirmBeforeOpenLink,
+            ),
+            (
+                aura_agent_core::UiAction::SuggestBlockContact,
+                proto::UiAction::SuggestBlockContact,
+            ),
+            (
+                aura_agent_core::UiAction::SuggestReport,
+                proto::UiAction::SuggestReport,
+            ),
+            (
+                aura_agent_core::UiAction::RestrictUnknownContact,
+                proto::UiAction::RestrictUnknownContact,
+            ),
+            (
+                aura_agent_core::UiAction::SlowDownConversation,
+                proto::UiAction::SlowDownConversation,
+            ),
+            (
+                aura_agent_core::UiAction::ShowCrisisSupport,
+                proto::UiAction::ShowCrisisSupport,
+            ),
+            (
+                aura_agent_core::UiAction::EscalateToGuardian,
+                proto::UiAction::EscalateToGuardian,
+            ),
+        ];
+
+        for (core, wire) in mappings {
+            assert_eq!(proto_ui_action(core), wire);
+        }
+    }
+
+    #[test]
+    fn every_product_policy_enum_has_an_exact_wire_value() {
+        for (core, wire) in [
+            (
+                aura_agent_core::ProductDeliveryMode::Suppress,
+                proto::ProductDeliveryMode::Suppress,
+            ),
+            (
+                aura_agent_core::ProductDeliveryMode::MirrorOnly,
+                proto::ProductDeliveryMode::MirrorOnly,
+            ),
+            (
+                aura_agent_core::ProductDeliveryMode::Apply,
+                proto::ProductDeliveryMode::Apply,
+            ),
+        ] {
+            assert_eq!(proto_product_delivery_mode(core), wire);
+        }
+        for (core, wire) in [
+            (
+                aura_agent_core::ProductChildIntervention::None,
+                proto::ProductChildIntervention::None,
+            ),
+            (
+                aura_agent_core::ProductChildIntervention::Mark,
+                proto::ProductChildIntervention::Mark,
+            ),
+            (
+                aura_agent_core::ProductChildIntervention::Blur,
+                proto::ProductChildIntervention::Blur,
+            ),
+            (
+                aura_agent_core::ProductChildIntervention::Warn,
+                proto::ProductChildIntervention::Warn,
+            ),
+            (
+                aura_agent_core::ProductChildIntervention::Block,
+                proto::ProductChildIntervention::Block,
+            ),
+        ] {
+            assert_eq!(proto_product_child_intervention(core), wire);
+        }
+        for (core, wire) in [
+            (
+                aura_agent_core::FollowUpAction::MonitorConversation,
+                proto::FollowUpAction::MonitorConversation,
+            ),
+            (
+                aura_agent_core::FollowUpAction::BlockSuggested,
+                proto::FollowUpAction::BlockSuggested,
+            ),
+            (
+                aura_agent_core::FollowUpAction::ReviewContactProfile,
+                proto::FollowUpAction::ReviewContactProfile,
+            ),
+            (
+                aura_agent_core::FollowUpAction::ReportToAuthorities,
+                proto::FollowUpAction::ReportToAuthorities,
+            ),
+        ] {
+            assert_eq!(proto_follow_up_action(core), wire);
+        }
+    }
 }

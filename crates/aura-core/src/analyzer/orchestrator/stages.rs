@@ -73,10 +73,11 @@ impl Analyzer {
             &relationship_metadata_context.context_markers,
         );
         result.context_summary = interpretation_context;
-        result.action = merge_domain_output_effects(
+        result.action = merge_active_domain_output_effects(
             &mut result.reason_codes,
             result.action,
             domain_output.as_ref(),
+            &result.signals,
         );
         append_reason_codes(&mut result.reason_codes, &interpretation_reason_codes);
         append_reason_codes(
@@ -297,10 +298,11 @@ impl Analyzer {
                 &result.inference,
             );
         }
-        result.action = merge_domain_output_effects(
+        result.action = merge_active_domain_output_effects(
             &mut result.reason_codes,
             result.action,
             domain_output.as_ref(),
+            &result.signals,
         );
         append_reason_codes(&mut result.reason_codes, &interpretation_reason_codes);
         append_reason_codes(

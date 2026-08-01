@@ -432,6 +432,37 @@ unsafe fn analyze_canonical(
     decode_buffer(out)
 }
 
+unsafe fn analyze_local_decision(
+    handle: *mut c_void,
+    message: proto::MessageInput,
+    event_id: &str,
+    revision: u32,
+    timestamp_ms: u64,
+) -> proto::LocalDecisionAnalyzeResponse {
+    let conversation_key = message.conversation_id.clone();
+    let request = proto::LocalDecisionAnalyzeRequest {
+        message: Some(message),
+        identity: Some(proto::CanonicalSafetyEventIdentity {
+            account_key: "account".to_string(),
+            subject_key: "subject".to_string(),
+            conversation_key,
+            event_id: event_id.to_string(),
+            revision,
+            occurred_at_ms: timestamp_ms,
+            observed_at_ms: timestamp_ms,
+        }),
+    };
+    let bytes = encode_proto(&request);
+    let mut out = AuraBuffer::empty();
+    let succeeded = aura_analyze_local_decision(handle, bytes.as_ptr(), bytes.len(), &mut out);
+    assert!(
+        succeeded,
+        "local decision analysis failed: {}",
+        last_error_string()
+    );
+    decode_buffer(out)
+}
+
 unsafe fn export_context(handle: *mut c_void) -> proto::ExportContextResponse {
     let mut out = AuraBuffer::empty();
     assert!(aura_export_context(handle, &mut out));
@@ -445,6 +476,31 @@ unsafe fn import_context_state(handle: *mut c_void, state: proto::TrackerState) 
     // Imported policy heads are intentionally inactive until this process
     // freshly applies the exact policy wire again.
     apply_test_execution_policy(handle);
+}
+
+unsafe fn export_safety_case_state(handle: *mut c_void) -> Vec<u8> {
+    let account_key = b"account";
+    let mut out = AuraBuffer::empty();
+    assert!(aura_export_safety_case_state(
+        handle,
+        account_key.as_ptr(),
+        account_key.len(),
+        &mut out,
+    ));
+    let bytes = std::slice::from_raw_parts(out.ptr, out.len).to_vec();
+    aura_free_buffer(out);
+    bytes
+}
+
+unsafe fn import_safety_case_state(handle: *mut c_void, state: &[u8]) {
+    let account_key = b"account";
+    assert!(aura_import_safety_case_state(
+        handle,
+        account_key.as_ptr(),
+        account_key.len(),
+        state.as_ptr(),
+        state.len(),
+    ));
 }
 
 fn oversized_request_bytes(limit: usize) -> Vec<u8> {
@@ -946,6 +1002,230 @@ fn canonical_analysis_is_exactly_once() {
                 | proto::CanonicalSafetyDisposition::DuplicateApplied
                 | proto::CanonicalSafetyDisposition::DuplicateRejected
         ));
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn local_decision_returns_typed_product_projection_exactly_once() {
+    unsafe {
+        let mut config = proto_config(proto::AccountType::Child, true);
+        config.product_rollout_mode = proto::ProductRolloutMode::GuardianEnabled as i32;
+        let handle = init_canonical_handle(config);
+        let message = proto_message(
+            "don't tell your parents, it's our secret",
+            "sender",
+            "conversation",
+        );
+
+        let first = analyze_local_decision(handle, message.clone(), "local-event", 1, 1_000);
+        assert!(matches!(
+            proto::CanonicalSafetyDisposition::try_from(first.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::ProcessedIgnored
+                | proto::CanonicalSafetyDisposition::ProcessedReduced
+        ));
+        let decision = first
+            .decision
+            .expect("successful first attempt must return a typed decision");
+        assert!(decision.product_surface.is_some());
+        assert!(decision.recommended_action.is_some());
+        assert!(decision.inference.is_some());
+        assert!(!decision.reason_codes.is_empty());
+        assert_eq!(
+            proto::RuntimeBackend::try_from(decision.runtime_backend).unwrap(),
+            proto::RuntimeBackend::RulesFallback
+        );
+        assert!(decision.degraded);
+
+        let context_after_first = export_context(handle);
+        let duplicate = analyze_local_decision(handle, message, "local-event", 1, 1_000);
+        assert!(matches!(
+            proto::CanonicalSafetyDisposition::try_from(duplicate.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::DuplicateIgnored
+                | proto::CanonicalSafetyDisposition::DuplicateApplied
+                | proto::CanonicalSafetyDisposition::DuplicateRejected
+        ));
+        assert!(duplicate.decision.is_none());
+        assert_eq!(export_context(handle), context_after_first);
+
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn local_decision_restart_replays_receipt_without_double_analysis() {
+    unsafe {
+        let config = proto_config(proto::AccountType::Child, true);
+        let source = init_canonical_handle(config.clone());
+        let message = proto_message(
+            "don't tell your parents, it's our secret",
+            "sender",
+            "conversation",
+        );
+        let first = analyze_local_decision(source, message.clone(), "restart-event", 1, 1_000);
+        let durable_response = first.encode_to_vec();
+        assert!(first.decision.is_some());
+        let context = export_context(source)
+            .state
+            .expect("local decision must export context");
+        let safety_state = export_safety_case_state(source);
+
+        let restored = init_handle(config);
+        import_safety_case_state(restored, &safety_state);
+        import_context_state(restored, context.clone());
+
+        let duplicate = analyze_local_decision(restored, message, "restart-event", 1, 1_000);
+        assert!(matches!(
+            proto::CanonicalSafetyDisposition::try_from(duplicate.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::DuplicateIgnored
+                | proto::CanonicalSafetyDisposition::DuplicateApplied
+                | proto::CanonicalSafetyDisposition::DuplicateRejected
+        ));
+        assert!(duplicate.decision.is_none());
+        assert_eq!(export_context(restored).state, Some(context));
+        assert!(
+            proto::LocalDecisionAnalyzeResponse::decode(durable_response.as_slice())
+                .expect("durable response must remain decodable")
+                .decision
+                .is_some()
+        );
+
+        aura_free(source);
+        aura_free(restored);
+    }
+}
+
+#[test]
+fn local_decision_and_canonical_api_share_source_ledger() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let message = proto_message(
+            "don't tell your parents, it's our secret",
+            "sender",
+            "conversation",
+        );
+        let first = analyze_local_decision(handle, message.clone(), "shared-event", 2, 2_000);
+        assert!(first.decision.is_some());
+        let context_after_first = export_context(handle);
+
+        let canonical_duplicate =
+            analyze_canonical(handle, message.clone(), "shared-event", 2, 2_000);
+        assert!(matches!(
+            proto::CanonicalSafetyDisposition::try_from(canonical_duplicate.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::DuplicateIgnored
+                | proto::CanonicalSafetyDisposition::DuplicateApplied
+                | proto::CanonicalSafetyDisposition::DuplicateRejected
+        ));
+        assert_eq!(export_context(handle), context_after_first);
+
+        let stale = analyze_local_decision(handle, message, "shared-event", 1, 2_000);
+        assert_eq!(
+            proto::CanonicalSafetyDisposition::try_from(stale.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::StaleIgnored
+        );
+        assert_eq!(stale.latest_revision, Some(2));
+        assert!(stale.decision.is_none());
+        assert_eq!(export_context(handle), context_after_first);
+
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn local_decision_preserves_supportive_self_harm_boundary() {
+    unsafe {
+        let mut config = proto_config(proto::AccountType::Child, true);
+        config.product_rollout_mode = proto::ProductRolloutMode::GuardianEnabled as i32;
+        let handle = init_canonical_handle(config);
+        let response = analyze_local_decision(
+            handle,
+            proto_message(
+                "My friend said there is no reason to live. I'm here with you, let's tell your parents together and get help tonight.",
+                "supportive-peer",
+                "supportive-conversation",
+            ),
+            "supportive-event",
+            1,
+            1_000,
+        );
+        let decision = response.decision.expect("safe first attempt decision");
+        let decision_debug = format!("{decision:?}");
+        let product = decision.product_surface.expect("product surface");
+        assert_eq!(
+            proto::ThreatType::try_from(product.threat_type).unwrap(),
+            proto::ThreatType::None,
+            "{decision_debug}"
+        );
+        assert_eq!(
+            proto::Action::try_from(product.action).unwrap(),
+            proto::Action::Allow,
+            "{decision_debug}"
+        );
+        let child = product.child.expect("child surface");
+        assert!(!child.visible);
+        assert_eq!(
+            proto::ProductChildIntervention::try_from(child.intervention).unwrap(),
+            proto::ProductChildIntervention::None
+        );
+        assert!(!product.guardian.expect("guardian surface").notify);
+
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn invalid_local_decision_request_does_not_mutate_context() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let before = export_context(handle);
+        let request = proto::LocalDecisionAnalyzeRequest {
+            message: Some(proto_message("hello", "sender", "conversation")),
+            identity: Some(proto::CanonicalSafetyEventIdentity {
+                account_key: "account".to_string(),
+                subject_key: "subject".to_string(),
+                conversation_key: "different-conversation".to_string(),
+                event_id: "invalid-event".to_string(),
+                revision: 1,
+                occurred_at_ms: 1_000,
+                observed_at_ms: 1_000,
+            }),
+        };
+        let bytes = encode_proto(&request);
+        let mut out = AuraBuffer::empty();
+
+        assert!(!aura_analyze_local_decision(
+            handle,
+            bytes.as_ptr(),
+            bytes.len(),
+            &mut out,
+        ));
+        assert!(out.ptr.is_null());
+        assert!(last_error_string()
+            .contains("canonical conversation key does not match message conversation id"));
+        assert_eq!(export_context(handle), before);
+
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn oversized_local_decision_request_is_rejected_before_mutation() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let before = export_context(handle);
+        let request = oversized_request_bytes(MAX_LOCAL_DECISION_REQUEST_BYTES);
+        let mut out = AuraBuffer::empty();
+
+        assert!(!aura_analyze_local_decision(
+            handle,
+            request.as_ptr(),
+            request.len(),
+            &mut out,
+        ));
+        assert!(out.ptr.is_null());
+        assert!(last_error_string().contains("local decision request exceeds"));
+        assert_eq!(export_context(handle), before);
+
         aura_free(handle);
     }
 }

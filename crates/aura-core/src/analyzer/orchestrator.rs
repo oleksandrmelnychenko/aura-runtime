@@ -26,7 +26,7 @@ use crate::domain_runtime::{
     build_blocked_url_signal, build_domain_observations,
     confidence_from_score as score_to_confidence, decide_action_with_domain_overrides,
     detection_enabled_for_threat, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
-    map_rule_or_threat_to_event_kind, merge_domain_output_effects, parse_threat_type_label,
+    map_rule_or_threat_to_event_kind, merge_active_domain_output_effects, parse_threat_type_label,
     should_skip_pattern_match, should_skip_pattern_rule_override, threat_priority_for_sort,
     AuraDomainRuntime,
 };

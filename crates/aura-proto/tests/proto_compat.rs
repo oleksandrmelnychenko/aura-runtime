@@ -68,6 +68,40 @@ fn analysis_result_default_values() {
 }
 
 #[test]
+fn local_decision_response_round_trip_preserves_typed_contract() {
+    let original = proto::LocalDecisionAnalyzeResponse {
+        disposition: proto::CanonicalSafetyDisposition::ProcessedReduced as i32,
+        decision: Some(proto::LocalDecision {
+            product_surface: None,
+            recommended_action: None,
+            reason_codes: vec!["pattern.grooming.secrecy".to_string()],
+            inference: None,
+            runtime_backend: proto::RuntimeBackend::RulesFallback as i32,
+            degraded: true,
+        }),
+        ignored_reason: None,
+        case_id: Some("case-token".to_string()),
+        case_revision: Some(3),
+        case_status: proto::SafetyCaseLifecycleStatus::Open as i32,
+        latest_revision: None,
+        runtime_state_schema_version: "aura.safety_case_runtime.v5".to_string(),
+        case_generation: Some(0),
+    };
+
+    let bytes = original.encode_to_vec();
+    let decoded = proto::LocalDecisionAnalyzeResponse::decode(bytes.as_slice())
+        .expect("decode local decision response");
+
+    assert_eq!(decoded, original);
+    let decision = decoded.decision.expect("typed decision");
+    assert_eq!(
+        proto::RuntimeBackend::try_from(decision.runtime_backend).unwrap(),
+        proto::RuntimeBackend::RulesFallback
+    );
+    assert!(decision.degraded);
+}
+
+#[test]
 fn message_input_relationship_metadata_round_trip() {
     let original = proto::MessageInput {
         content_type: proto::ContentType::Text as i32,

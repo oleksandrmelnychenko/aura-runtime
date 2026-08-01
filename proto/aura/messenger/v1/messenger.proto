@@ -788,6 +788,43 @@ message CanonicalSafetyAnalyzeResponse {
   optional uint64 case_generation = 10;
 }
 
+// Product-facing canonical request. It intentionally mirrors the identity
+// fields of CanonicalSafetyAnalyzeRequest while using a distinct message type
+// so clients cannot accidentally decode the wrong response contract.
+message LocalDecisionAnalyzeRequest {
+  MessageInput message = 1;
+  CanonicalSafetyEventIdentity identity = 2;
+}
+
+// Compact, content-free projection that a client may persist and apply. Raw
+// message text, analyzer explanations, individual signals, and contact IDs are
+// deliberately excluded from this boundary.
+message LocalDecision {
+  ProductDecisionSurface product_surface = 1;
+  ActionRecommendation recommended_action = 2;
+  repeated string reason_codes = 3;
+  InferenceSummary inference = 4;
+  RuntimeBackend runtime_backend = 5;
+  bool degraded = 6;
+}
+
+// Exactly-once local product decision plus the same Safety Case receipt used
+// by the canonical lifecycle API. `decision` is present only for a successful
+// first attempt. Duplicate and stale calls are content-free and must resolve
+// the already persisted decision by canonical source identity.
+message LocalDecisionAnalyzeResponse {
+  CanonicalSafetyDisposition disposition = 1;
+  LocalDecision decision = 2;
+  optional string ignored_reason = 3;
+  optional string case_id = 4;
+  optional uint64 case_revision = 5;
+  SafetyCaseLifecycleStatus case_status = 6;
+  optional uint32 latest_revision = 7;
+  reserved 8;
+  string runtime_state_schema_version = 9;
+  optional uint64 case_generation = 10;
+}
+
 // Account-scoped lifecycle mutation allowed at the native boundary.
 enum SafetyCaseLifecycleCommandType {
   SAFETY_CASE_LIFECYCLE_COMMAND_TYPE_UNSPECIFIED = 0;

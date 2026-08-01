@@ -3,31 +3,65 @@
 This document is the stable product-facing contract for messenger clients that
 integrate AURA Core through protobuf and FFI.
 
-Status: synchronized with runtime payload behavior on March 26, 2026.
+Status: synchronized with runtime payload behavior on August 1, 2026.
 
 The rule is strict:
 
-- clients should consume `AnalysisResult.product_surface` first
-- clients may use `threat_type`, `reason_codes`, and `inference` for richer UI
+- Apple clients consume `LocalDecision.product_surface` first
+- Rust clients consume the product projection built from `AnalysisResult`
+- clients may use `reason_codes` and `inference` for richer internal routing
 - clients should not rebuild child/guardian/review policy from raw scores
 
 ## Wire Surface
 
-The canonical integration payload is:
+The canonical Apple request is `LocalDecisionAnalyzeRequest`:
 
-- `AnalysisResult`
-- `AnalysisResult.product_surface`
-- `AnalysisResult.recommended_action`
-- `AnalysisResult.inference`
-- `AnalysisResult.reason_codes`
-- `AnalysisResult.signals[].threat_subtype`
-- `AnalysisResult.kids_memory`
+- `message`: the bounded message input
+- `identity`: stable account, subject, conversation, event, revision, and
+  timestamp identity
+
+The response is `LocalDecisionAnalyzeResponse`. It carries the canonical source
+disposition and, only for a successful first processing attempt, one
+`LocalDecision` containing:
+
+- `product_surface`
+- `recommended_action`
+- `reason_codes`
+- `inference`
+- `runtime_backend`
+- `degraded`
+
+It deliberately excludes raw message text, explanations, individual detection
+signals, contact identifiers, and arbitrary JSON. Duplicate and stale
+responses never contain `decision`.
+
+Rust-internal integrations may additionally inspect `AnalysisResult`, including
+`signals[].threat_subtype` and `kids_memory`; these fields do not cross the
+Apple ABI.
+
+## Exactly-Once Client Rule
+
+The local decision and canonical Safety Case API share one native source
+ledger. For each stable source identity and revision:
+
+1. call `analyzeLocalDecision` once;
+2. atomically persist its response, exported context, and encrypted
+   account-scoped Safety Case state before applying any UI or guardian effect;
+3. on duplicate or stale disposition, do not reconstruct policy and do not
+   reapply effects; resolve the already persisted response by source identity;
+4. if host persistence fails, apply nothing, destroy the uncommitted runtime,
+   restore the last durable native state in a fresh runtime, reapply the signed
+   execution policy, and retry the same identity.
+
+The full ownership and retry table is in
+[ADR 0001](./adr/0001-canonical-local-decision-api.md).
 
 ## Threat Subtype Guidance
 
-`threat_subtype` is a fine-grained signal hint for UI routing, analyst context,
-and telemetry segmentation. It is additive context and does not replace primary
-policy fields like `product_surface`, `recommended_action`, or `threat_type`.
+`threat_subtype` is a Rust-internal fine-grained signal hint for analyst
+context and governed evaluation segmentation. It is additive context and does
+not replace primary policy fields like `product_surface`,
+`recommended_action`, or `threat_type`.
 
 Current important military/propaganda examples include:
 
@@ -42,14 +76,16 @@ Current important military/propaganda examples include:
   `family_targeting`, `regional_division`, `fake_ceasefire`, `demoralization`
 - heuristic URL examples: `doppelganger`, `homoglyph`, `heuristic`
 
-Client rule:
+Rust integration rule:
 
 - treat unknown/new subtype values as non-breaking additive values and fall back
   to threat-type-level handling.
 
 ## KIDS Memory Explainability Guidance
 
-`AnalysisResult.kids_memory` is an additive helper for strict KIDS integrations.
+`AnalysisResult.kids_memory` is a Rust-internal additive helper for strict KIDS
+integrations. Apple clients consume the already reduced product surface and do
+not receive this structure.
 
 Fields:
 
@@ -57,16 +93,20 @@ Fields:
 - `mandatory_guardian_escalation`: whether any reason belongs to the mandatory
   guardian-escalation set
 
-Client rule:
+Rust integration rule:
 
 - do not recompute this from raw reason codes when the field is present
 - treat missing `kids_memory` as "no KIDS memory reasons observed"
 - treat unknown/new `kids.memory.*` strings as non-breaking additive values
 
-For Swift/iOS, the intended path is generated `SwiftProtobuf` models from:
+For Swift/iOS, the repository ships generated `SwiftProtobuf` models for the
+Apple boundary from
+[messenger.proto](../proto/aura/messenger/v1/messenger.proto).
 
-- [messenger.proto](../proto/aura/messenger/v1/messenger.proto)
-- [pilot.proto](../proto/aura/messenger/v1/pilot.proto)
+The typed entry point is
+`AuraAgentRuntime.analyzeLocalDecision(_:)`. SwiftProtobuf is pinned exactly in
+`Package.swift` and `Package.resolved`; updating either the schema or generator
+requires regenerating and reviewing the checked-in Swift source.
 
 ## Product Surface Model
 
@@ -208,6 +248,6 @@ Use this priority order:
 2. `recommended_action`
 3. `inference`
 4. `reason_codes`
-5. raw `threat_type` / `score`
+5. copied `threat_type` / `score` within `product_surface`
 
 This keeps product behavior aligned with the runtime and reduces client drift.

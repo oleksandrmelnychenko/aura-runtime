@@ -14,6 +14,7 @@ static void use_exports(void) {
     (void)aura_attest_runtime_artifacts(handle, bytes, len, &buf);
     (void)aura_apply_execution_policy(handle, bytes, len, &buf);
     (void)aura_analyze_canonical_safety(handle, bytes, len, &buf);
+    (void)aura_analyze_local_decision(handle, bytes, len, &buf);
     (void)aura_apply_safety_case_lifecycle(handle, bytes, len, &buf);
     (void)aura_activate_safety_case_successor(handle, bytes, len, &buf);
     (void)aura_remove_safety_case_account(handle, bytes, len, &buf);

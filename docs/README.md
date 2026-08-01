@@ -3,7 +3,7 @@
 This folder holds the planning and operating documents that turn AURA Core from
 an evaluation-heavy prototype into a production-grade safety runtime.
 
-Status: synchronized with runtime and policy behavior on July 25, 2026.
+Status: synchronized with runtime and policy behavior on August 1, 2026.
 
 ## Active Operating Set
 
@@ -11,6 +11,7 @@ Status: synchronized with runtime and policy behavior on July 25, 2026.
 - [AURA Core Refactor Completion Plan](./aura-core-refactor-completion-plan.md)
 - [AURA Core Research Evidence Roadmap](./research-evidence-roadmap.md)
 - [Apple Artifact Integration Contract](./apple-artifact-integration.md)
+- [Canonical Local Decision ADR](./adr/0001-canonical-local-decision-api.md)
 - [AURA Core Refactor Baseline](./refactor-baseline.md)
 - [Phase 2 Production Roadmap](./phase-2-production-roadmap.md)
 - [Phase 3 Pilot Readiness Roadmap](./phase-3-pilot-readiness-roadmap.md)
@@ -69,8 +70,8 @@ Status: synchronized with runtime and policy behavior on July 25, 2026.
   release-hardening track and what remains for the next phase.
 - Use the Phase 3 roadmap when planning pilot-readiness work, shadow mode,
   product integration, or simulation-to-regression promotion.
-- Use the product integration contract when building Swift/iOS, Android, or
-  desktop clients on top of `AnalysisResult.product_surface`.
+- Use the product integration contract when building Swift/iOS clients on the
+  typed local-decision protobuf or Rust/desktop clients on `AnalysisResult`.
 - Use the pilot operations doc when preparing signoffs, running pilot gates,
   or defining rollback actions for a staged rollout.
 - Use the release criteria as the source of truth for gating and CI status.

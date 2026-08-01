@@ -2,6 +2,13 @@
 
 Status: Stage 7 migration contract, July 25, 2026.
 
+The source ABI now includes the additive typed
+`aura_analyze_local_decision` symbol and generated Swift protobuf models. The
+checked-in XCFramework predates that source change; rebuilding, verifying, and
+pinning it is deliberately deferred to `REL-009`. A client must not assume the
+new symbol exists until the exact artifact manifest and binary have passed the
+sequence below.
+
 ## Current Boundary
 
 The Rust repository emits:

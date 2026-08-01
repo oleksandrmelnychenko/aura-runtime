@@ -27,6 +27,9 @@ bool aura_apply_execution_policy(void *handle, const uint8_t *request_ptr, size_
 /// Analyze protobuf CanonicalSafetyAnalyzeRequest exactly once. Writes protobuf CanonicalSafetyAnalyzeResponse into out.
 bool aura_analyze_canonical_safety(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 
+/// Analyze protobuf LocalDecisionAnalyzeRequest exactly once. Writes typed LocalDecisionAnalyzeResponse into out.
+bool aura_analyze_local_decision(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
+
 /// Apply protobuf SafetyCaseLifecycleCommandRequest. Writes protobuf SafetyCaseLifecycleCommandResponse into out.
 bool aura_apply_safety_case_lifecycle(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 

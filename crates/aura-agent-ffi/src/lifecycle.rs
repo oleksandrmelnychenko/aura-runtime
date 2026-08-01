@@ -25,13 +25,14 @@ use aura_agent_core::context::tracker::{
 };
 use aura_agent_core::AgentRuntime;
 use aura_agent_core::{
-    config::CulturalContext, AuraConfig, CanonicalSafetyAnalysisOutcome, Confidence,
+    build_product_decision_surface, config::CulturalContext, AuraConfig,
+    CanonicalLocalDecisionAnalysisOutcome, CanonicalSafetyAnalysisOutcome, Confidence,
     ConversationEventKey, ExportedSafetyCaseRuntimeState, GuardianDeliveryClass, GuardianReport,
     GuardianReportKey, GuardianReportObservationVolumeBand, GuardianReportTrigger, MessageInput,
-    RelationshipTrustSource, SafetyAccountKey, SafetyCase, SafetyCaseCommand, SafetyCaseDecision,
-    SafetyCaseGeneration, SafetyCaseId, SafetyCaseIgnoredReason, SafetyCaseIngestIdentity,
-    SafetyCaseIngestOutcome, SafetyCaseRuntimeError, SafetyCaseSeverity, SafetyCaseSourcePreflight,
-    SafetyCaseSourceReceipt, SafetyCaseStatus, SafetyCaseSubjectKey,
+    RelationshipTrustSource, RuntimeBackend, SafetyAccountKey, SafetyCase, SafetyCaseCommand,
+    SafetyCaseDecision, SafetyCaseGeneration, SafetyCaseId, SafetyCaseIgnoredReason,
+    SafetyCaseIngestIdentity, SafetyCaseIngestOutcome, SafetyCaseRuntimeError, SafetyCaseSeverity,
+    SafetyCaseSourcePreflight, SafetyCaseSourceReceipt, SafetyCaseStatus, SafetyCaseSubjectKey,
     SafetyCaseSuccessorActivationDisposition, SafetyCaseSuccessorActivationOutcome,
     SafetyReasonCode, SenderRelationship, SourceEventId, ThreatType,
     SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES, SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
@@ -46,6 +47,9 @@ use crate::execution_policy;
 const MAX_CONFIG_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_IMPORT_CONTEXT_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 const MAX_CANONICAL_SAFETY_REQUEST_BYTES: usize = 1024 * 1024;
+const MAX_LOCAL_DECISION_REQUEST_BYTES: usize = 1024 * 1024;
+const MAX_LOCAL_DECISION_RESPONSE_BYTES: usize = 256 * 1024;
+const LOCAL_DECISION_RESPONSE_METADATA_RESERVE_BYTES: usize = 4 * 1024;
 // Matches the host store's release limits for the two native-owned payloads.
 // Guardian outbox and envelope overhead have separate host-owned budgets.
 const MAX_CANONICAL_CONTEXT_STATE_BYTES: usize = 4 * 1024 * 1024;
@@ -320,6 +324,119 @@ pub unsafe extern "C" fn aura_analyze_canonical_safety(
                 })
                 .map_err(|error| error.to_string())?;
             let response = canonical_safety_response_to_proto(outcome, &instance.analyzer)?;
+            write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Analyzes one canonical source revision and returns its immediate typed
+/// product decision together with the canonical Safety Case receipt.
+///
+/// Only a successful first attempt contains `LocalDecision`. Duplicate and
+/// stale responses are content-free and do not invoke the analyzer again.
+#[no_mangle]
+pub unsafe extern "C" fn aura_analyze_local_decision(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+    out: *mut AuraBuffer,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+
+        if let Err(error) = prepare_output(out) {
+            set_last_error(error);
+            return false;
+        }
+
+        let request: proto::LocalDecisionAnalyzeRequest = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "local decision request",
+            MAX_LOCAL_DECISION_REQUEST_BYTES,
+        ) {
+            Ok(request) => request,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let Some(message) = request.message else {
+            set_last_error("missing message in local decision request");
+            return false;
+        };
+        let Some(identity) = request.identity else {
+            set_last_error("missing identity in local decision request");
+            return false;
+        };
+        let input = match message_input_from_proto(message) {
+            Ok(input) => input,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let identity = match canonical_safety_identity_from_proto(identity, &input) {
+            Ok(identity) => identity,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+
+        match with_instance(handle, |instance| {
+            instance
+                .analyzer
+                .safety_cases()
+                .require_active_execution_policy(identity.account_key(), identity.observed_at_ms())
+                .map_err(|error| error.to_string())?;
+            if matches!(
+                instance
+                    .analyzer
+                    .safety_cases()
+                    .preflight_source(&identity)
+                    .map_err(|error| error.to_string())?,
+                SafetyCaseSourcePreflight::Ready
+            ) {
+                ensure_canonical_persistence_within_budget(
+                    &instance.analyzer,
+                    identity.account_key(),
+                )
+                .map_err(|error| error.to_string())?;
+            }
+            let account_key = identity.account_key().clone();
+            let outcome = instance
+                .analyzer
+                .analyze_local_decision_with_canonical_safety_case_guarded(
+                    &input,
+                    &identity,
+                    |runtime, result| {
+                        ensure_canonical_persistence_within_budget(runtime, &account_key)?;
+                        let decision_bytes = local_decision_to_proto(result, runtime).encoded_len();
+                        let current = decision_bytes
+                            .saturating_add(LOCAL_DECISION_RESPONSE_METADATA_RESERVE_BYTES);
+                        if current > MAX_LOCAL_DECISION_RESPONSE_BYTES {
+                            return Err(
+                                SafetyCaseRuntimeError::CanonicalResponseByteBudgetExceeded {
+                                    maximum: MAX_LOCAL_DECISION_RESPONSE_BYTES,
+                                    current,
+                                },
+                            );
+                        }
+                        Ok(())
+                    },
+                )
+                .map_err(|error| error.to_string())?;
+            let response = local_decision_response_to_proto(outcome, &instance.analyzer)?;
+            if response.encoded_len() > MAX_LOCAL_DECISION_RESPONSE_BYTES {
+                return Err("local decision response exceeded its guarded byte budget".to_string());
+            }
             write_proto_message(out, &response)
         }) {
             Ok(()) => true,

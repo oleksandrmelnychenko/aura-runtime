@@ -35,6 +35,14 @@ internal func native_aura_agent_analyze_canonical_safety(
     _ out: UnsafeMutablePointer<NativeAuraAgentBuffer>?
 ) -> Bool
 
+@_silgen_name("aura_analyze_local_decision")
+internal func native_aura_agent_analyze_local_decision(
+    _ handle: UnsafeMutableRawPointer?,
+    _ requestPtr: UnsafePointer<UInt8>?,
+    _ requestLen: Int,
+    _ out: UnsafeMutablePointer<NativeAuraAgentBuffer>?
+) -> Bool
+
 @_silgen_name("aura_apply_safety_case_lifecycle")
 internal func native_aura_agent_apply_safety_case_lifecycle(
     _ handle: UnsafeMutableRawPointer?,

@@ -10,6 +10,7 @@ Single place for the most used verification commands during release and pilot wo
 just verify
 just verify-full
 just verify-onnx
+just swift-proto-check
 just kids-memory-health
 just kids-preprod-dry-run
 just kids-memory-health-strict
@@ -124,6 +125,17 @@ limits with `AURA_PERF_10K_MAX_SECONDS`, `AURA_PERF_50K_MAX_SECONDS`, and
 `AURA_PERF_100K_MAX_SECONDS`.
 
 ## Apple Artifact Provenance
+
+Before building the Swift package or Apple artifact, verify that the checked-in
+typed protobuf source matches `messenger.proto` and the exactly pinned
+`protoc-gen-swift` 1.38.1 generator:
+
+```bash
+just swift-proto-check
+```
+
+Regenerate it after an intentional schema change with
+`just swift-proto-generate`.
 
 Build and verify a local release-profile artifact without overwriting
 `dist/apple`:

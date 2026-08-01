@@ -2146,6 +2146,36 @@ fn supportive_selfharm_response_is_filtered_before_tracker() {
 }
 
 #[test]
+fn supportive_selfharm_response_cannot_retain_filtered_kids_domain_action() {
+    let db = PatternDatabase::default_mvp();
+    let mut analyzer = Analyzer::new(child_config(), &db);
+    let input = child_input(
+        "My friend said there is no reason to live. I'm here with you, let's tell your parents together and get help tonight.",
+        "supportive-peer",
+        "supportive-conversation",
+    );
+    let result = analyzer.analyze_with_context(&input, 1000);
+
+    assert_eq!(result.threat_type, ThreatType::None, "{result:?}");
+    assert_eq!(result.action, Action::Allow, "{result:?}");
+    assert_eq!(result.score, 0.0, "{result:?}");
+    assert!(
+        !result
+            .reason_codes
+            .iter()
+            .any(|code| code.starts_with("domain.kids.selfharm")),
+        "{result:?}"
+    );
+    assert!(
+        !result
+            .reason_codes
+            .iter()
+            .any(|code| code == "domain.action.warn"),
+        "{result:?}"
+    );
+}
+
+#[test]
 fn supportive_bystander_rescue_filters_late_night_minor_contact() {
     let db = PatternDatabase::default_mvp();
     let mut analyzer = Analyzer::new(AuraConfig::default(), &db);

@@ -295,10 +295,13 @@ Public header: `include/aura_ffi.h`
   the next export; v3 preserves the complete event interpretation frame, while
   unsupported versions are rejected before tracker mutation
 
-The Apple/C boundary exposes only the canonical Safety Case lifecycle:
+The Apple/C boundary exposes the canonical Safety Case lifecycle and one
+product-facing local decision operation:
 
 - `aura_agent_init`
+- `aura_apply_execution_policy`
 - `aura_analyze_canonical_safety`
+- `aura_analyze_local_decision`
 - `aura_apply_safety_case_lifecycle`
 - `aura_activate_safety_case_successor`
 - `aura_remove_safety_case_account`
@@ -312,11 +315,17 @@ The Apple/C boundary exposes only the canonical Safety Case lifecycle:
 - `aura_free_buffer`
 - `aura_free_string`
 
-Per-message analysis, batch/shadow utilities, live config/pattern mutation, and
-contact/profile convenience APIs remain Rust-side concerns and are not part of
-the Apple ABI. Context export/import uses native protobuf tracker/contact state
-end-to-end; Safety Case state is separately exported as bounded, content-free
-JSON for host encryption.
+The exact symbol list, including guardian-report lifecycle operations, is
+maintained in `include/aura_ffi.exports`. `aura_analyze_local_decision` returns
+only a compact typed projection plus the canonical source receipt; it does not
+restore the former general-purpose analysis API. Duplicate and stale calls are
+content-free and never analyze the source revision again.
+
+Batch/shadow utilities, live config/pattern mutation, raw signals,
+explanations, and contact/profile convenience APIs remain Rust-side concerns
+and are not part of the Apple ABI. Context export/import uses native protobuf
+tracker/contact state end-to-end; Safety Case state is separately exported as
+bounded, content-free JSON for host encryption.
 
 ### Domain Mode Migration (Config Compatibility)
 

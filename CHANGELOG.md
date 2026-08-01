@@ -45,6 +45,9 @@
   minor protection and a Military domain on a minor account before mutating
   runtime state. Minor accounts always resolve to the Kids domain; matrix and
   rollback regressions cover account type, enablement, level, and domain.
+- Prevented a filtered domain signal from restoring its pre-interpretation
+  action or reason codes. In particular, a supportive third-party self-harm
+  response now remains a clean `Allow` through the KIDS product projection.
 
 ## Unreleased — Canonical Apple ABI
 
@@ -60,6 +63,16 @@
   and runtime state schema.
 - Made the Apple archive release script fail on both known legacy symbols and
   any unexpected `aura_` symbol outside the canonical allowlist.
+- Added the single typed `aura_analyze_local_decision` operation. It uses the
+  canonical source ledger and stateful pipeline, returns a decision only on a
+  successful first attempt, and leaves duplicate or stale responses
+  content-free.
+- Added additive protobuf request/response types, exhaustive Rust-to-wire
+  product mappings, bounded request/response envelopes, generated
+  SwiftProtobuf models, and a typed Swift wrapper.
+- Added rollback, duplicate, stale-edit, cross-API, malformed-request,
+  restart-replay, and supportive self-harm boundary regressions for the new
+  path.
 
 ## Unreleased — Rust Best-Practices Pass
 
