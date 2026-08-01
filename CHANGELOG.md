@@ -73,6 +73,9 @@
 - Added rollback, duplicate, stale-edit, cross-API, malformed-request,
   restart-replay, and supportive self-harm boundary regressions for the new
   path.
+- Canonicalized the generated XCFramework `AvailableLibraries` order before
+  hashing. Repeated same-revision builds now keep `Info.plist` and the release
+  manifest byte-identical when the binaries are unchanged.
 
 ## Unreleased — Rust Best-Practices Pass
 

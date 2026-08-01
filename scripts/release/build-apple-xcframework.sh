@@ -283,6 +283,38 @@ xcodebuild -create-xcframework \
   -library "$MACABI_LIB" -headers "$INCLUDE_DIR" \
   -output "$DIST_DIR/AuraAgentFFI.xcframework"
 
+# xcodebuild does not guarantee the order of AvailableLibraries, which makes
+# Info.plist and the release manifest drift even when every binary is
+# byte-identical. Canonicalize the generated plist before hashing it.
+python3 - "$DIST_DIR/AuraAgentFFI.xcframework/Info.plist" <<'PY'
+import os
+import plistlib
+import sys
+from pathlib import Path
+
+plist_path = Path(sys.argv[1])
+with plist_path.open("rb") as source:
+    document = plistlib.load(source)
+
+libraries = document.get("AvailableLibraries")
+if not isinstance(libraries, list) or not libraries:
+    raise SystemExit("XCFramework Info.plist has no AvailableLibraries array")
+if any(not isinstance(item, dict) for item in libraries):
+    raise SystemExit("XCFramework AvailableLibraries contains a non-dictionary item")
+
+identifiers = [item.get("LibraryIdentifier") for item in libraries]
+if any(not isinstance(identifier, str) or not identifier for identifier in identifiers):
+    raise SystemExit("XCFramework library is missing LibraryIdentifier")
+if len(set(identifiers)) != len(identifiers):
+    raise SystemExit("XCFramework contains duplicate LibraryIdentifier values")
+
+libraries.sort(key=lambda item: item["LibraryIdentifier"])
+temporary_path = plist_path.with_suffix(".plist.tmp")
+with temporary_path.open("wb") as output:
+    plistlib.dump(document, output, fmt=plistlib.FMT_XML, sort_keys=True)
+os.replace(temporary_path, plist_path)
+PY
+
 # The Swift wrapper links by symbol name and does not import this C module.
 # Removing nested module maps avoids ProcessXCFramework collisions with other
 # local binary packages that also ship module.modulemap.
