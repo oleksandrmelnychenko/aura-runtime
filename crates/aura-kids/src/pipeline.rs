@@ -103,9 +103,11 @@ const MAX_TRACKED_CONVERSATIONS: usize = 2000;
 const MAX_TRACKED_SENDERS: usize = 4000;
 const MAX_CONVERSATION_MEMORY_WINDOW: usize = 18;
 const SENDER_RISK_CONVERSATION_WINDOW: usize = 12;
+const GUARDIAN_BLOCK_RISK_SCORE: f32 = 5.0;
 
 /// Current nested schema version for persisted kids-domain memory.
-pub const KIDS_MEMORY_STATE_VERSION: u32 = 1;
+pub const KIDS_MEMORY_STATE_VERSION: u32 = 2;
+const LEGACY_KIDS_MEMORY_STATE_VERSION: u32 = 1;
 
 const CONVERSATION_EMISSION_KEYS: &[&str] = &[
     "grooming_progression",
@@ -168,6 +170,7 @@ fn conversation_memory(
 struct SenderRiskMemory {
     event_index: u64,
     recent_high_risk_conversations: VecDeque<String>,
+    guardian_blocked: bool,
     /// Monotonic counter updated on every event — used for LRU eviction.
     last_activity_index: u64,
     last_emitted: HashMap<String, u64>,
@@ -513,13 +516,19 @@ fn apply_cross_conversation_sender_amplifier(
         || current.has_manipulation
         || current.has_blackmail_or_sextortion
         || (current.has_bullying && current.has_self_harm);
-    if !sender_has_high_risk {
-        return;
-    }
-
     let Ok(mut guard) = sender_memory(memory_store).lock() else {
         return;
     };
+    if !sender_has_high_risk {
+        if guard
+            .get(sender_id)
+            .is_some_and(|memory| memory.guardian_blocked)
+        {
+            push_guardian_blocked_signal(signals);
+        }
+        return;
+    }
+
     trim_sender_memory_if_needed(&mut guard, sender_id);
     let memory = guard
         .entry(sender_id.to_string())
@@ -565,6 +574,21 @@ fn apply_cross_conversation_sender_amplifier(
             action: Some(DomainAction::Warn),
         });
     }
+    if memory.guardian_blocked {
+        push_guardian_blocked_signal(signals);
+    }
+}
+
+fn push_guardian_blocked_signal(signals: &mut Vec<DomainSignal>) {
+    signals.push(DomainSignal {
+        threat_key: "kids_memory_guardian_blocked_sender".to_string(),
+        reason_code: "kids.memory.guardian_blocked_sender".to_string(),
+        score: 1.0,
+        threat_type: Some("guardian_block".to_string()),
+        severity: Some("critical".to_string()),
+        priority: Some(100),
+        action: Some(DomainAction::Block),
+    });
 }
 
 /// Evict the least-recently-active conversation (by `last_activity_index`),
@@ -781,6 +805,8 @@ pub struct ExportedSenderMemory {
     pub sender_id: String,
     pub event_index: u64,
     pub recent_high_risk_conversations: Vec<String>,
+    /// Whether a guardian explicitly blocked this sender.
+    pub guardian_blocked: bool,
     pub last_activity_index: u64,
     pub last_emitted: Vec<ExportedEmissionCheckpoint>,
 }
@@ -866,6 +892,7 @@ pub fn export_kids_memory_from(memory_store: &KidsPipelineMemory) -> ExportedKid
                     .iter()
                     .cloned()
                     .collect(),
+                guardian_blocked: memory.guardian_blocked,
                 last_activity_index: memory.last_activity_index,
                 last_emitted: export_emission_checkpoints(&memory.last_emitted),
             });
@@ -885,7 +912,7 @@ pub fn import_kids_memory_into(
     memory_store: &KidsPipelineMemory,
     state: &ExportedKidsMemoryState,
 ) -> bool {
-    if state.schema_version != KIDS_MEMORY_STATE_VERSION {
+    if !is_supported_kids_memory_state_version(state.schema_version) {
         return false;
     }
 
@@ -911,6 +938,14 @@ pub fn import_kids_memory_into(
         .activity_counter
         .fetch_max(max_activity_index, Ordering::Relaxed);
     true
+}
+
+/// Returns whether the runtime can import a nested kids-memory schema version.
+pub fn is_supported_kids_memory_state_version(schema_version: u32) -> bool {
+    matches!(
+        schema_version,
+        LEGACY_KIDS_MEMORY_STATE_VERSION | KIDS_MEMORY_STATE_VERSION
+    )
 }
 
 /// Import kids memory state (replaces current in-process state).
@@ -998,13 +1033,28 @@ fn bounded_sender_memory(state: &ExportedKidsMemoryState) -> HashMap<String, Sen
         if sender.sender_id.is_empty() || result.contains_key(&sender.sender_id) {
             continue;
         }
+        let migrate_legacy_block = state.schema_version == LEGACY_KIDS_MEMORY_STATE_VERSION;
+        let guardian_blocked = sender.guardian_blocked
+            || (migrate_legacy_block
+                && sender
+                    .recent_high_risk_conversations
+                    .iter()
+                    .any(|conversation_id| {
+                        is_legacy_guardian_block_marker(&sender.sender_id, conversation_id)
+                    }));
         result.insert(
             sender.sender_id.clone(),
             SenderRiskMemory {
                 event_index: sender.event_index,
                 recent_high_risk_conversations: bounded_recent_conversations(
                     &sender.recent_high_risk_conversations,
+                    if migrate_legacy_block {
+                        Some(sender.sender_id.as_str())
+                    } else {
+                        None
+                    },
                 ),
+                guardian_blocked,
                 last_activity_index: sender.last_activity_index,
                 last_emitted: bounded_emission_checkpoints(
                     &sender.last_emitted,
@@ -1017,11 +1067,19 @@ fn bounded_sender_memory(state: &ExportedKidsMemoryState) -> HashMap<String, Sen
     result
 }
 
-fn bounded_recent_conversations(conversations: &[String]) -> VecDeque<String> {
+fn bounded_recent_conversations(
+    conversations: &[String],
+    legacy_blocked_sender_id: Option<&str>,
+) -> VecDeque<String> {
     let mut seen = HashSet::with_capacity(SENDER_RISK_CONVERSATION_WINDOW);
     let mut newest_first = Vec::with_capacity(SENDER_RISK_CONVERSATION_WINDOW);
     for conversation_id in conversations.iter().rev() {
-        if conversation_id.is_empty() || !seen.insert(conversation_id.as_str()) {
+        let is_legacy_block_marker = legacy_blocked_sender_id
+            .is_some_and(|sender_id| is_legacy_guardian_block_marker(sender_id, conversation_id));
+        if conversation_id.is_empty()
+            || is_legacy_block_marker
+            || !seen.insert(conversation_id.as_str())
+        {
             continue;
         }
         newest_first.push(conversation_id.clone());
@@ -1031,6 +1089,10 @@ fn bounded_recent_conversations(conversations: &[String]) -> VecDeque<String> {
     }
     newest_first.reverse();
     newest_first.into()
+}
+
+fn is_legacy_guardian_block_marker(sender_id: &str, conversation_id: &str) -> bool {
+    (0..5).any(|index| conversation_id == format!("guardian_block_{sender_id}_{index}"))
 }
 
 fn bounded_emission_checkpoints(
@@ -1118,7 +1180,11 @@ pub fn sender_cross_risk_score_from(memory_store: &KidsPipelineMemory, sender_id
     let Some(memory) = guard.get(sender_id) else {
         return 0.0;
     };
-    memory.recent_high_risk_conversations.len() as f32
+    if memory.guardian_blocked {
+        GUARDIAN_BLOCK_RISK_SCORE
+    } else {
+        memory.recent_high_risk_conversations.len() as f32
+    }
 }
 
 /// Query the sender risk score across conversations in process-global memory.
@@ -1141,10 +1207,11 @@ pub enum GuardianVerdict {
 /// Process guardian feedback for a sender/conversation pair.
 ///
 /// Adjusts internal memory state based on the guardian's verdict:
-/// - `Trusted`: clears all risk memory for the sender
+/// - `Trusted`: clears the sender's cross-conversation state and removes that
+///   sender's evidence from every conversation
 /// - `Block`: marks sender as maximum risk across all conversations
 /// - `Monitor`: no memory change (app-layer behavior)
-/// - `FalsePositive`: removes risk entries for this conversation
+/// - `FalsePositive`: removes only this sender's evidence for this conversation
 pub fn apply_guardian_feedback_to(
     memory_store: &KidsPipelineMemory,
     sender_id: &str,
@@ -1153,38 +1220,31 @@ pub fn apply_guardian_feedback_to(
 ) {
     match verdict {
         GuardianVerdict::Trusted => {
-            if let Ok(mut guard) = sender_memory(memory_store).lock() {
-                guard.remove(sender_id);
+            // Keep the same lock order as clear/import so feedback cannot deadlock
+            // with another operation that needs both memory maps.
+            let Ok(mut conversations) = conversation_memory(memory_store).lock() else {
+                return;
+            };
+            let Ok(mut senders) = sender_memory(memory_store).lock() else {
+                return;
+            };
+
+            for memory in conversations.values_mut() {
+                memory
+                    .entries
+                    .retain(|(entry_sender, _)| entry_sender.as_deref() != Some(sender_id));
             }
-            if let Ok(mut guard) = conversation_memory(memory_store).lock() {
-                if let Some(memory) = guard.get_mut(conversation_id) {
-                    memory
-                        .entries
-                        .retain(|(s, _)| s.as_deref() != Some(sender_id));
-                }
-            }
+            conversations.retain(|_, memory| !memory.entries.is_empty());
+            senders.remove(sender_id);
         }
         GuardianVerdict::Block => {
             if let Ok(mut guard) = sender_memory(memory_store).lock() {
+                trim_sender_memory_if_needed(&mut guard, sender_id);
                 let memory = guard
                     .entry(sender_id.to_string())
                     .or_insert_with(SenderRiskMemory::default);
-                // Inject high-risk markers across multiple synthetic conversations
-                // so repeat-offender logic fires immediately on any future message.
-                for idx in 0..5 {
-                    let fake_conv = format!("guardian_block_{sender_id}_{idx}");
-                    if !memory
-                        .recent_high_risk_conversations
-                        .iter()
-                        .any(|c| c == &fake_conv)
-                    {
-                        memory.recent_high_risk_conversations.push_back(fake_conv);
-                    }
-                }
-                while memory.recent_high_risk_conversations.len() > SENDER_RISK_CONVERSATION_WINDOW
-                {
-                    memory.recent_high_risk_conversations.pop_front();
-                }
+                memory.guardian_blocked = true;
+                memory.last_activity_index = next_activity(memory_store);
             }
         }
         GuardianVerdict::Monitor => {
@@ -1192,8 +1252,35 @@ pub fn apply_guardian_feedback_to(
             // AURA continues normal detection with existing thresholds.
         }
         GuardianVerdict::FalsePositive => {
-            if let Ok(mut guard) = conversation_memory(memory_store).lock() {
-                guard.remove(conversation_id);
+            let Ok(mut conversations) = conversation_memory(memory_store).lock() else {
+                return;
+            };
+            let Ok(mut senders) = sender_memory(memory_store).lock() else {
+                return;
+            };
+
+            let remove_conversation = if let Some(memory) = conversations.get_mut(conversation_id) {
+                memory
+                    .entries
+                    .retain(|(entry_sender, _)| entry_sender.as_deref() != Some(sender_id));
+                memory.entries.is_empty()
+            } else {
+                false
+            };
+            if remove_conversation {
+                conversations.remove(conversation_id);
+            }
+
+            let remove_sender = if let Some(memory) = senders.get_mut(sender_id) {
+                memory
+                    .recent_high_risk_conversations
+                    .retain(|tracked_conversation| tracked_conversation != conversation_id);
+                memory.recent_high_risk_conversations.is_empty() && !memory.guardian_blocked
+            } else {
+                false
+            };
+            if remove_sender {
+                senders.remove(sender_id);
             }
         }
     }
@@ -2082,6 +2169,7 @@ mod tests {
             sender_id: sender_id.into(),
             event_index,
             recent_high_risk_conversations: Vec::new(),
+            guardian_blocked: false,
             last_activity_index,
             last_emitted: Vec::new(),
         }
@@ -2128,6 +2216,7 @@ mod tests {
                 emitted_at_index: 16,
             });
         let mut sender = exported_sender("sender_exact", 23, 902);
+        sender.guardian_blocked = true;
         sender.last_emitted.push(super::ExportedEmissionCheckpoint {
             reason_code: "cross_conversation_repeat_offender".to_string(),
             emitted_at_index: 22,
@@ -2147,6 +2236,7 @@ mod tests {
             exported.senders[0].event_index,
             exported.senders[0].last_activity_index,
             exported.senders[0].last_emitted.clone(),
+            exported.senders[0].guardian_blocked,
         );
         let expected = (
             17,
@@ -2161,9 +2251,39 @@ mod tests {
                 reason_code: "cross_conversation_repeat_offender".to_string(),
                 emitted_at_index: 22,
             }],
+            true,
         );
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn legacy_guardian_block_markers_migrate_to_explicit_state() {
+        let memory = super::KidsPipelineMemory::new();
+        let mut sender = exported_sender("legacy_blocked", 5, 77);
+        sender.recent_high_risk_conversations = vec![
+            "real_conversation".to_string(),
+            "guardian_block_legacy_blocked_0".to_string(),
+            "guardian_block_legacy_blocked_1".to_string(),
+            "guardian_block_legacy_blocked_2".to_string(),
+            "guardian_block_legacy_blocked_3".to_string(),
+            "guardian_block_legacy_blocked_4".to_string(),
+        ];
+        let legacy = super::ExportedKidsMemoryState {
+            schema_version: super::LEGACY_KIDS_MEMORY_STATE_VERSION,
+            conversations: Vec::new(),
+            senders: vec![sender],
+        };
+
+        assert!(super::import_kids_memory_into(&memory, &legacy));
+        let exported = super::export_kids_memory_from(&memory);
+
+        assert_eq!(exported.schema_version, super::KIDS_MEMORY_STATE_VERSION);
+        assert!(exported.senders[0].guardian_blocked);
+        assert_eq!(
+            exported.senders[0].recent_high_risk_conversations,
+            vec!["real_conversation".to_string()]
+        );
     }
 
     #[test]

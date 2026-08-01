@@ -197,6 +197,7 @@ pub(super) fn kids_memory_state_to_proto(
                         emitted_at_index: checkpoint.emitted_at_index,
                     })
                     .collect(),
+                guardian_blocked: sender.guardian_blocked,
             })
             .collect(),
     }
@@ -206,11 +207,12 @@ pub(super) fn kids_memory_state_from_proto(
     state: &proto::KidsMemoryState,
 ) -> Result<aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState, String> {
     use aura_agent_core::aura_kids::pipeline::{
-        ExportedConversationMemory, ExportedEmissionCheckpoint, ExportedKidsMemoryState,
-        ExportedMessageSnapshot, ExportedSenderMemory, KIDS_MEMORY_STATE_VERSION,
+        is_supported_kids_memory_state_version, ExportedConversationMemory,
+        ExportedEmissionCheckpoint, ExportedKidsMemoryState, ExportedMessageSnapshot,
+        ExportedSenderMemory, KIDS_MEMORY_STATE_VERSION,
     };
 
-    if state.schema_version != KIDS_MEMORY_STATE_VERSION {
+    if !is_supported_kids_memory_state_version(state.schema_version) {
         return Err(format!(
             "incompatible kids memory state version: found {}, supported {}",
             state.schema_version, KIDS_MEMORY_STATE_VERSION
@@ -218,7 +220,9 @@ pub(super) fn kids_memory_state_from_proto(
     }
 
     Ok(ExportedKidsMemoryState {
-        schema_version: KIDS_MEMORY_STATE_VERSION,
+        // Preserve the source version so the kids runtime can apply its
+        // version-specific migration before normalizing on the next export.
+        schema_version: state.schema_version,
         conversations: state
             .conversations
             .iter()
@@ -277,6 +281,7 @@ pub(super) fn kids_memory_state_from_proto(
                         })
                         .collect(),
                     recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
+                    guardian_blocked: sender.guardian_blocked,
                 })
             })
             .collect::<Result<Vec<_>, String>>()?,

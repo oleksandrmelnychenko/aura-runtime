@@ -9,6 +9,15 @@
   before the safety boundary.
 - Added a regression proving that an explicit threat in the 61st message from
   one sender is still detected and produces at least a warning.
+- Corrected guardian-feedback scope in KIDS memory: `Trusted` now removes one
+  sender from every conversation, while `FalsePositive` removes only the
+  specified sender/conversation pair and preserves unrelated evidence.
+- Replaced synthetic conversation IDs used by `Block` with an explicit,
+  persisted `guardian_blocked` state and a typed blocking signal on subsequent
+  messages. Kids-memory schema v2 can migrate legacy v1 block markers.
+- Standardized the conversation-before-sender lock order for feedback that
+  updates both memory maps, and added regression, scope-matrix, persistence,
+  protobuf, and legacy-migration coverage.
 
 ## Unreleased — Canonical Apple ABI
 

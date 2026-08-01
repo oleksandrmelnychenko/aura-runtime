@@ -1284,6 +1284,8 @@ message KidsSenderMemoryState {
   optional uint64 last_activity_index = 4;
   // Per-reason emission checkpoints used to preserve alert cooldowns.
   repeated KidsEmissionCheckpoint last_emitted = 5;
+  // Explicit guardian block state; replaces legacy synthetic conversation IDs.
+  bool guardian_blocked = 6;
 }
 
 // Monotonic checkpoint for one kids-memory alert family.

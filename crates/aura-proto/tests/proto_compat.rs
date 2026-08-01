@@ -198,6 +198,7 @@ fn tracker_state_with_kids_memory_round_trip() {
                 "conv_kids_1".to_string(),
                 "conv_kids_2".to_string(),
             ],
+            guardian_blocked: true,
             last_activity_index: Some(4),
             last_emitted: Vec::new(),
         }],
@@ -287,6 +288,7 @@ fn tracker_state_with_kids_memory_round_trip() {
     assert_eq!(km.senders[0].sender_id, "sender_a");
     assert_eq!(km.senders[0].event_index, 4);
     assert_eq!(km.senders[0].recent_high_risk_conversations.len(), 2);
+    assert!(km.senders[0].guardian_blocked);
 }
 
 #[test]

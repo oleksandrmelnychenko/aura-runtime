@@ -296,6 +296,7 @@ fn kids_memory_proto_conversion_preserves_exact_persistence_fields() {
             sender_id: "sender_exact".to_string(),
             event_index: 13,
             recent_high_risk_conversations: vec!["conv_exact".to_string()],
+            guardian_blocked: true,
             last_activity_index: 102,
             last_emitted: vec![ExportedEmissionCheckpoint {
                 reason_code: "cross_conversation_repeat_offender".to_string(),
@@ -314,6 +315,7 @@ fn kids_memory_proto_conversion_preserves_exact_persistence_fields() {
             restored.conversations[0].last_emitted.clone(),
             restored.senders[0].last_activity_index,
             restored.senders[0].last_emitted.clone(),
+            restored.senders[0].guardian_blocked,
         ),
         (
             KIDS_MEMORY_STATE_VERSION,
@@ -327,7 +329,46 @@ fn kids_memory_proto_conversion_preserves_exact_persistence_fields() {
                 reason_code: "cross_conversation_repeat_offender".to_string(),
                 emitted_at_index: 12,
             }],
+            true,
         )
+    );
+}
+
+#[test]
+fn legacy_kids_guardian_block_state_migrates_through_proto_boundary() {
+    let legacy = proto::KidsMemoryState {
+        conversations: Vec::new(),
+        senders: vec![proto::KidsSenderMemoryState {
+            sender_id: "legacy_blocked".to_string(),
+            event_index: 5,
+            recent_high_risk_conversations: vec![
+                "real_conversation".to_string(),
+                "guardian_block_legacy_blocked_0".to_string(),
+                "guardian_block_legacy_blocked_1".to_string(),
+                "guardian_block_legacy_blocked_2".to_string(),
+                "guardian_block_legacy_blocked_3".to_string(),
+                "guardian_block_legacy_blocked_4".to_string(),
+            ],
+            last_activity_index: Some(9),
+            last_emitted: Vec::new(),
+            guardian_blocked: false,
+        }],
+        schema_version: 1,
+    };
+
+    let converted = kids_memory_state_from_proto(&legacy).expect("legacy kids state conversion");
+    let module = aura_agent_core::aura_kids::KidsModule::new();
+    assert!(module.import_memory(&converted));
+    let migrated = module.export_memory();
+
+    assert_eq!(
+        migrated.schema_version,
+        aura_agent_core::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION
+    );
+    assert!(migrated.senders[0].guardian_blocked);
+    assert_eq!(
+        migrated.senders[0].recent_high_risk_conversations,
+        vec!["real_conversation".to_string()]
     );
 }
 
@@ -345,6 +386,7 @@ fn kids_memory_rejects_noncurrent_schema_and_missing_activity_indices() {
             sender_id: "sender".to_string(),
             event_index: 42,
             recent_high_risk_conversations: Vec::new(),
+            guardian_blocked: false,
             last_activity_index: None,
             last_emitted: Vec::new(),
         }],
