@@ -1146,6 +1146,49 @@ message ConversationSummaryResponse {
   repeated ConversationSummaryItem conversations = 2;
 }
 
+enum EventSpeechAct {
+  EVENT_SPEECH_ACT_UNSPECIFIED = 0;
+  EVENT_SPEECH_ACT_ASSERT = 1;
+  EVENT_SPEECH_ACT_ASK = 2;
+  EVENT_SPEECH_ACT_QUOTE = 3;
+  EVENT_SPEECH_ACT_REPORT = 4;
+  EVENT_SPEECH_ACT_COUNTER = 5;
+  EVENT_SPEECH_ACT_SUPPORT = 6;
+  EVENT_SPEECH_ACT_SOLICIT = 7;
+}
+
+enum EventStance {
+  EVENT_STANCE_UNSPECIFIED = 0;
+  EVENT_STANCE_ENDORSE = 1;
+  EVENT_STANCE_OPPOSE = 2;
+  EVENT_STANCE_NEUTRAL = 3;
+  EVENT_STANCE_AMBIGUOUS = 4;
+}
+
+enum EventDirectionality {
+  EVENT_DIRECTIONALITY_UNSPECIFIED = 0;
+  EVENT_DIRECTIONALITY_DIRECTED_AT_USER = 1;
+  EVENT_DIRECTIONALITY_SELF_REFERENTIAL = 2;
+  EVENT_DIRECTIONALITY_THIRD_PARTY = 3;
+  EVENT_DIRECTIONALITY_BROADCAST = 4;
+}
+
+// Interpretation metadata added in TrackerState schema v3. A missing frame in
+// schema v2 migrates to the all-unspecified legacy frame.
+message EventContextFrame {
+  EventSpeechAct speech_act = 1;
+  EventStance stance = 2;
+  EventDirectionality directionality = 3;
+  bool new_contact = 4;
+  bool trusted_contact = 5;
+  bool one_sided = 6;
+  bool repeated_by_sender = 7;
+  bool escalating = 8;
+  bool cross_conversation = 9;
+  bool bursty = 10;
+  float confidence = 11;
+}
+
 message ContextEvent {
   uint64 event_id = 1;
   uint64 timestamp_ms = 2;
@@ -1155,6 +1198,7 @@ message ContextEvent {
   float confidence = 6;
   string subtype = 7;
   optional uint64 content_hash = 8;
+  EventContextFrame context = 9;
 }
 
 message ConversationTimelineState {

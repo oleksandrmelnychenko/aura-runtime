@@ -355,6 +355,7 @@ pub(super) fn context_event_to_proto(event: &CoreContextEvent) -> proto::Context
         confidence: event.confidence,
         subtype: event.subtype.clone().unwrap_or_default(),
         content_hash: event.content_hash,
+        context: Some(event_context_frame_to_proto(event.context)),
     }
 }
 
@@ -380,7 +381,100 @@ pub(super) fn context_event_from_proto(
             Some(event.subtype)
         },
         content_hash: event.content_hash,
-        context: CoreEventContextFrame::default(),
+        context: event
+            .context
+            .map(event_context_frame_from_proto)
+            .transpose()?
+            .unwrap_or_default(),
+    })
+}
+
+pub(super) fn event_context_frame_to_proto(
+    context: CoreEventContextFrame,
+) -> proto::EventContextFrame {
+    proto::EventContextFrame {
+        speech_act: match context.speech_act {
+            CoreEventSpeechAct::Unknown => proto::EventSpeechAct::Unspecified,
+            CoreEventSpeechAct::Assert => proto::EventSpeechAct::Assert,
+            CoreEventSpeechAct::Ask => proto::EventSpeechAct::Ask,
+            CoreEventSpeechAct::Quote => proto::EventSpeechAct::Quote,
+            CoreEventSpeechAct::Report => proto::EventSpeechAct::Report,
+            CoreEventSpeechAct::Counter => proto::EventSpeechAct::Counter,
+            CoreEventSpeechAct::Support => proto::EventSpeechAct::Support,
+            CoreEventSpeechAct::Solicit => proto::EventSpeechAct::Solicit,
+        } as i32,
+        stance: match context.stance {
+            CoreEventStance::Unknown => proto::EventStance::Unspecified,
+            CoreEventStance::Endorse => proto::EventStance::Endorse,
+            CoreEventStance::Oppose => proto::EventStance::Oppose,
+            CoreEventStance::Neutral => proto::EventStance::Neutral,
+            CoreEventStance::Ambiguous => proto::EventStance::Ambiguous,
+        } as i32,
+        directionality: match context.directionality {
+            CoreEventDirectionality::Unknown => proto::EventDirectionality::Unspecified,
+            CoreEventDirectionality::DirectedAtUser => proto::EventDirectionality::DirectedAtUser,
+            CoreEventDirectionality::SelfReferential => proto::EventDirectionality::SelfReferential,
+            CoreEventDirectionality::ThirdParty => proto::EventDirectionality::ThirdParty,
+            CoreEventDirectionality::Broadcast => proto::EventDirectionality::Broadcast,
+        } as i32,
+        new_contact: context.new_contact,
+        trusted_contact: context.trusted_contact,
+        one_sided: context.one_sided,
+        repeated_by_sender: context.repeated_by_sender,
+        escalating: context.escalating,
+        cross_conversation: context.cross_conversation,
+        bursty: context.bursty,
+        confidence: context.confidence,
+    }
+}
+
+pub(super) fn event_context_frame_from_proto(
+    context: proto::EventContextFrame,
+) -> Result<CoreEventContextFrame, String> {
+    if !context.confidence.is_finite() || !(0.0..=1.0).contains(&context.confidence) {
+        return Err("event context confidence must be finite and within 0..=1".to_string());
+    }
+
+    Ok(CoreEventContextFrame {
+        speech_act: match proto::EventSpeechAct::try_from(context.speech_act) {
+            Ok(proto::EventSpeechAct::Unspecified) => CoreEventSpeechAct::Unknown,
+            Ok(proto::EventSpeechAct::Assert) => CoreEventSpeechAct::Assert,
+            Ok(proto::EventSpeechAct::Ask) => CoreEventSpeechAct::Ask,
+            Ok(proto::EventSpeechAct::Quote) => CoreEventSpeechAct::Quote,
+            Ok(proto::EventSpeechAct::Report) => CoreEventSpeechAct::Report,
+            Ok(proto::EventSpeechAct::Counter) => CoreEventSpeechAct::Counter,
+            Ok(proto::EventSpeechAct::Support) => CoreEventSpeechAct::Support,
+            Ok(proto::EventSpeechAct::Solicit) => CoreEventSpeechAct::Solicit,
+            Err(_) => return Err("event context has unknown speech_act".to_string()),
+        },
+        stance: match proto::EventStance::try_from(context.stance) {
+            Ok(proto::EventStance::Unspecified) => CoreEventStance::Unknown,
+            Ok(proto::EventStance::Endorse) => CoreEventStance::Endorse,
+            Ok(proto::EventStance::Oppose) => CoreEventStance::Oppose,
+            Ok(proto::EventStance::Neutral) => CoreEventStance::Neutral,
+            Ok(proto::EventStance::Ambiguous) => CoreEventStance::Ambiguous,
+            Err(_) => return Err("event context has unknown stance".to_string()),
+        },
+        directionality: match proto::EventDirectionality::try_from(context.directionality) {
+            Ok(proto::EventDirectionality::Unspecified) => CoreEventDirectionality::Unknown,
+            Ok(proto::EventDirectionality::DirectedAtUser) => {
+                CoreEventDirectionality::DirectedAtUser
+            }
+            Ok(proto::EventDirectionality::SelfReferential) => {
+                CoreEventDirectionality::SelfReferential
+            }
+            Ok(proto::EventDirectionality::ThirdParty) => CoreEventDirectionality::ThirdParty,
+            Ok(proto::EventDirectionality::Broadcast) => CoreEventDirectionality::Broadcast,
+            Err(_) => return Err("event context has unknown directionality".to_string()),
+        },
+        new_contact: context.new_contact,
+        trusted_contact: context.trusted_contact,
+        one_sided: context.one_sided,
+        repeated_by_sender: context.repeated_by_sender,
+        escalating: context.escalating,
+        cross_conversation: context.cross_conversation,
+        bursty: context.bursty,
+        confidence: context.confidence,
     })
 }
 

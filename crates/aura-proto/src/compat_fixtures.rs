@@ -143,7 +143,7 @@ pub fn analysis_result_fixture() -> proto::AnalysisResult {
     }
 }
 
-pub fn tracker_state_fixture() -> proto::TrackerState {
+pub fn tracker_state_v2_fixture() -> proto::TrackerState {
     let weekly_snapshot = proto::BehavioralSnapshotState {
         period_start_ms: 1_710_000_000_000,
         period_end_ms: 1_710_086_400_000,
@@ -184,6 +184,7 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
                     confidence: 0.87,
                     subtype: String::new(),
                     content_hash: None,
+                    context: None,
                 },
                 proto::ContextEvent {
                     event_id: 2,
@@ -194,6 +195,7 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
                     confidence: 0.96,
                     subtype: String::new(),
                     content_hash: None,
+                    context: None,
                 },
             ],
         }],
@@ -253,6 +255,38 @@ pub fn tracker_state_fixture() -> proto::TrackerState {
         }),
         kids_memory: None,
     }
+}
+
+pub fn tracker_state_fixture() -> proto::TrackerState {
+    let mut state = tracker_state_v2_fixture();
+    state.schema_version = 3;
+    state.timelines[0].events[0].context = Some(proto::EventContextFrame {
+        speech_act: proto::EventSpeechAct::Assert as i32,
+        stance: proto::EventStance::Endorse as i32,
+        directionality: proto::EventDirectionality::DirectedAtUser as i32,
+        new_contact: true,
+        trusted_contact: false,
+        one_sided: false,
+        repeated_by_sender: false,
+        escalating: false,
+        cross_conversation: false,
+        bursty: false,
+        confidence: 0.82,
+    });
+    state.timelines[0].events[1].context = Some(proto::EventContextFrame {
+        speech_act: proto::EventSpeechAct::Ask as i32,
+        stance: proto::EventStance::Ambiguous as i32,
+        directionality: proto::EventDirectionality::DirectedAtUser as i32,
+        new_contact: false,
+        trusted_contact: false,
+        one_sided: true,
+        repeated_by_sender: true,
+        escalating: true,
+        cross_conversation: false,
+        bursty: true,
+        confidence: 0.94,
+    });
+    state
 }
 
 pub fn batch_analyze_response_fixture() -> proto::BatchAnalyzeResponse {

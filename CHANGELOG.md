@@ -29,6 +29,15 @@
   absent or invalid `patterns_path` now rejects initialization with the stable
   `PATTERN_PACK_LOAD_FAILED` reason instead of silently running built-in rules;
   omitting the path remains the explicit way to select the built-in pack.
+- Added an explicit persisted tracker-state v2 to v3 migration. Legacy events
+  receive the conservative all-unspecified context frame and are re-exported
+  as v3, while unsupported future versions fail before tracker mutation.
+- Persisted the full v3 event interpretation frame in protobuf (speech act,
+  stance, directionality, temporal/contact flags, and confidence), with
+  byte-pinned v2 and v3 golden fixtures and end-to-end FFI round-trip coverage.
+- When replicas contain the same logical event, a contextualized v3 event now
+  upgrades its v2 default frame without duplicating history, independent of
+  import order.
 
 ## Unreleased — Canonical Apple ABI
 

@@ -586,6 +586,146 @@ fn persisted_context_rejects_invalid_nested_sender_and_conversation_ids() {
 }
 
 #[test]
+fn v2_tracker_golden_fixture_imports_and_reexports_as_v3() {
+    const TRACKER_STATE_V2_GOLDEN: &[u8] =
+        include_bytes!("../../../aura-proto/tests/fixtures/tracker_state.pb");
+
+    unsafe {
+        let legacy = proto::TrackerState::decode(TRACKER_STATE_V2_GOLDEN)
+            .expect("decode v2 tracker golden fixture");
+        assert_eq!(legacy.schema_version, 2);
+        assert_eq!(legacy.timelines.len(), 1);
+        assert_eq!(legacy.contact_profiler.as_ref().unwrap().profiles.len(), 1);
+
+        let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+        let request = proto::ImportContextRequest {
+            state: Some(legacy),
+        };
+        let bytes = encode_proto(&request);
+        let imported = aura_import_context(handle, bytes.as_ptr(), bytes.len());
+
+        assert!(
+            imported,
+            "v2 golden fixture must migrate: {}",
+            if imported {
+                String::new()
+            } else {
+                last_error_string()
+            }
+        );
+        let migrated = export_context(handle)
+            .state
+            .expect("migrated tracker state");
+        assert_eq!(migrated.schema_version, 3);
+        assert_eq!(migrated.timelines.len(), 1);
+        assert_eq!(migrated.timelines[0].conversation_id, "conv_fixture_1");
+        assert_eq!(migrated.timelines[0].events.len(), 2);
+        assert!(migrated.timelines[0]
+            .events
+            .iter()
+            .all(|event| event.context.as_ref() == Some(&proto::EventContextFrame::default())));
+        let profile = &migrated.contact_profiler.unwrap().profiles[0];
+        assert_eq!(profile.sender_id, "mentor_42");
+        assert_eq!(profile.total_messages, 5);
+        assert_eq!(profile.grooming_event_count, 3);
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn v3_tracker_context_golden_fixture_roundtrips_without_semantic_loss() {
+    const TRACKER_STATE_V3_GOLDEN: &[u8] =
+        include_bytes!("../../../aura-proto/tests/fixtures/tracker_state_v3.pb");
+
+    unsafe {
+        let expected = proto::TrackerState::decode(TRACKER_STATE_V3_GOLDEN)
+            .expect("decode v3 tracker golden fixture");
+        assert_eq!(expected.schema_version, 3);
+        assert!(expected.timelines[0]
+            .events
+            .iter()
+            .all(|event| event.context.is_some()));
+
+        let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+        let request = proto::ImportContextRequest {
+            state: Some(expected.clone()),
+        };
+        let bytes = encode_proto(&request);
+        assert!(aura_import_context(handle, bytes.as_ptr(), bytes.len()));
+
+        let restored = export_context(handle).state.expect("restored v3 state");
+        assert_eq!(restored.schema_version, 3);
+        assert_eq!(restored.timelines, expected.timelines);
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn rejected_context_imports_do_not_mutate_existing_ffi_state() {
+    const TRACKER_STATE_V3_GOLDEN: &[u8] =
+        include_bytes!("../../../aura-proto/tests/fixtures/tracker_state_v3.pb");
+
+    unsafe {
+        let initial = proto::TrackerState::decode(TRACKER_STATE_V3_GOLDEN)
+            .expect("decode v3 tracker golden fixture");
+        let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+        let initial_request = proto::ImportContextRequest {
+            state: Some(initial),
+        };
+        let initial_bytes = encode_proto(&initial_request);
+        assert!(aura_import_context(
+            handle,
+            initial_bytes.as_ptr(),
+            initial_bytes.len(),
+        ));
+        let before = export_context(handle).state.expect("initial state");
+
+        let corrupt = [0x0a, 0x05, 0x08];
+        assert!(!aura_import_context(
+            handle,
+            corrupt.as_ptr(),
+            corrupt.len(),
+        ));
+        assert!(last_error_string().contains("invalid protobuf in import_context request"));
+        assert_eq!(export_context(handle).state.as_ref(), Some(&before));
+
+        let mut future = before.clone();
+        future.schema_version = 999;
+        let future_request = proto::ImportContextRequest {
+            state: Some(future),
+        };
+        let future_bytes = encode_proto(&future_request);
+        assert!(!aura_import_context(
+            handle,
+            future_bytes.as_ptr(),
+            future_bytes.len(),
+        ));
+        assert!(last_error_string().contains("incompatible state version"));
+        assert_eq!(export_context(handle).state.as_ref(), Some(&before));
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn event_context_rejects_unknown_enums_and_nonfinite_confidence() {
+    let unknown_speech_act = proto::EventContextFrame {
+        speech_act: i32::MAX,
+        ..proto::EventContextFrame::default()
+    };
+    let invalid_confidence = proto::EventContextFrame {
+        confidence: f32::NAN,
+        ..proto::EventContextFrame::default()
+    };
+
+    assert!(event_context_frame_from_proto(unknown_speech_act)
+        .expect_err("unknown speech act must fail")
+        .contains("unknown speech_act"));
+    assert!(event_context_frame_from_proto(invalid_confidence)
+        .expect_err("NaN confidence must fail")
+        .contains("finite and within 0..=1"));
+}
+
+#[test]
 fn persisted_kids_memory_rejects_invalid_nested_ids() {
     let valid_conversation = proto::KidsConversationMemoryState {
         conversation_id: "conversation".to_string(),

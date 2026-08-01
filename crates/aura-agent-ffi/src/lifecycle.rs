@@ -16,7 +16,8 @@ use aura_agent_core::context::contact::{
 };
 use aura_agent_core::context::events::{
     ContextEvent as CoreContextEvent, EventContextFrame as CoreEventContextFrame,
-    EventKind as CoreEventKind,
+    EventDirectionality as CoreEventDirectionality, EventKind as CoreEventKind,
+    EventSpeechAct as CoreEventSpeechAct, EventStance as CoreEventStance,
 };
 use aura_agent_core::context::tracker::{
     ConversationTimelineState as CoreConversationTimelineState,

@@ -8,6 +8,7 @@ use crate::types::{Confidence, ConversationType, DetectionSignal, SignalFamily, 
 
 /// Current schema version for serialized tracker state.
 pub const TRACKER_STATE_VERSION: u32 = 3;
+const LEGACY_TRACKER_STATE_VERSION: u32 = 2;
 
 const GROUP_PILE_ON_WINDOW_MS: u64 = 6 * 60 * 60 * 1000;
 
@@ -223,16 +224,24 @@ impl ConversationTimeline {
 
     /// Merge events from another timeline, deduplicating by content signature.
     /// The signature uses fields preserved by the public persisted-state wire,
-    /// excluding the process-local event ID and derived context frame. It handles:
+    /// excluding the process-local event ID and derived context frame. A v3
+    /// contextualized event upgrades the default frame of its v2 counterpart.
+    /// It handles:
     /// - Same-tracker re-import (same event_ids)
     /// - Cross-tracker merge (different trackers may assign overlapping event_ids)
     pub fn merge_from(&mut self, other: ConversationTimeline) {
         for event in other.events.into_iter().skip(other.start_idx) {
-            if !self
+            if let Some(existing) = self
                 .visible_events()
                 .iter()
-                .any(|existing| same_logical_event(existing, &event))
+                .position(|existing| same_logical_event(existing, &event))
+                .map(|index| self.start_idx + index)
+                .and_then(|index| self.events.get_mut(index))
             {
+                if !existing.context.is_meaningful() && event.context.is_meaningful() {
+                    existing.context = event.context;
+                }
+            } else {
                 self.events.push(event);
             }
         }
@@ -634,12 +643,7 @@ impl ConversationTracker {
 
     /// Imports a previously exported wire state, merging timelines and contact profiles.
     pub fn import_wire_state(&mut self, state: TrackerWireState) -> Result<(), AuraError> {
-        if state.schema_version != TRACKER_STATE_VERSION {
-            return Err(AuraError::IncompatibleStateVersion {
-                found: state.schema_version,
-                supported: TRACKER_STATE_VERSION,
-            });
-        }
+        let state = migrate_wire_state_to_current(state)?;
 
         let mut max_imported_id = 0_u64;
         for incoming in state.timelines {
@@ -725,6 +729,25 @@ impl ConversationTracker {
                         | EventKind::DefenseOfVictim
                 )
         })
+    }
+}
+
+fn migrate_wire_state_to_current(
+    mut state: TrackerWireState,
+) -> Result<TrackerWireState, AuraError> {
+    match state.schema_version {
+        TRACKER_STATE_VERSION => Ok(state),
+        LEGACY_TRACKER_STATE_VERSION => {
+            // V2 had no persisted EventContextFrame. Its protobuf decoder
+            // materializes the missing frame as `Default`, whose non-meaningful
+            // semantics intentionally preserve legacy event interpretation.
+            state.schema_version = TRACKER_STATE_VERSION;
+            Ok(state)
+        }
+        found => Err(AuraError::IncompatibleStateVersion {
+            found,
+            supported: TRACKER_STATE_VERSION,
+        }),
     }
 }
 
@@ -1401,6 +1424,43 @@ mod tests {
     }
 
     #[test]
+    fn timeline_merge_upgrades_v2_default_context_without_duplicating_event() {
+        let mut legacy = ConversationTimeline::new("conv_1".into(), 10);
+        legacy.push(make_event(
+            "conv_1",
+            "sender",
+            EventKind::SecrecyRequest,
+            1_000,
+        ));
+
+        let mut contextualized = ConversationTimeline::new("conv_1".into(), 10);
+        let mut event = make_event("conv_1", "sender", EventKind::SecrecyRequest, 1_000);
+        event.context.speech_act = crate::context::events::EventSpeechAct::Ask;
+        event.context.directionality = crate::context::events::EventDirectionality::DirectedAtUser;
+        event.context.confidence = 0.9;
+        contextualized.push(event.clone());
+
+        legacy.merge_from(contextualized);
+
+        assert_eq!(legacy.all_events().len(), 1);
+        assert_eq!(legacy.all_events()[0].context, event.context);
+
+        let mut contextualized_first = ConversationTimeline::new("conv_1".into(), 10);
+        contextualized_first.push(event.clone());
+        let mut legacy_second = ConversationTimeline::new("conv_1".into(), 10);
+        legacy_second.push(make_event(
+            "conv_1",
+            "sender",
+            EventKind::SecrecyRequest,
+            1_000,
+        ));
+        contextualized_first.merge_from(legacy_second);
+
+        assert_eq!(contextualized_first.all_events().len(), 1);
+        assert_eq!(contextualized_first.all_events()[0].context, event.context);
+    }
+
+    #[test]
     fn separate_conversations_tracked_independently() {
         let mut tracker = ConversationTracker::new(TrackerConfig::default());
 
@@ -1509,15 +1569,30 @@ mod tests {
     }
 
     #[test]
-    fn state_import_mismatched_version_fails() {
+    fn state_import_unsupported_version_fails() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(make_event(
+            "local_conv",
+            "local_sender",
+            EventKind::NormalConversation,
+            1_000,
+        ));
         let state = TrackerWireState {
             schema_version: 999,
-            timelines: Vec::new(),
+            timelines: vec![ConversationTimelineState {
+                conversation_id: ConversationId::from("future_conv"),
+                conversation_type: ConversationType::Direct,
+                events: vec![make_event(
+                    "future_conv",
+                    "future_sender",
+                    EventKind::Insult,
+                    2_000,
+                )],
+            }],
             contact_profiler: ContactProfilerWireState {
                 profiles: Vec::new(),
             },
         };
-        let mut tracker = ConversationTracker::new(TrackerConfig::default());
         let result = tracker.import_wire_state(state);
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -1525,16 +1600,33 @@ mod tests {
             err.to_string().contains("incompatible state version"),
             "Error should mention incompatible version: {err}"
         );
+        assert!(tracker.timeline("local_conv").is_some());
+        assert!(tracker.timeline("future_conv").is_none());
+    }
 
-        let older_state = TrackerWireState {
-            schema_version: TRACKER_STATE_VERSION.saturating_sub(1),
-            timelines: Vec::new(),
-            contact_profiler: ContactProfilerWireState {
-                profiles: Vec::new(),
-            },
-        };
-        let result = tracker.import_wire_state(older_state);
-        assert!(result.is_err());
+    #[test]
+    fn state_import_migrates_v2_and_exports_v3() {
+        let mut source = ConversationTracker::new(TrackerConfig::default());
+        source.record_event(make_event(
+            "legacy_conv",
+            "legacy_sender",
+            EventKind::Flattery,
+            1_000,
+        ));
+        let mut legacy_state = source.export_wire_state();
+        legacy_state.schema_version = 2;
+
+        let mut restored = ConversationTracker::new(TrackerConfig::default());
+        restored
+            .import_wire_state(legacy_state)
+            .expect("v2 state must migrate");
+
+        let migrated = restored.export_wire_state();
+        assert_eq!(migrated.schema_version, TRACKER_STATE_VERSION);
+        assert_eq!(migrated.timelines.len(), 1);
+        assert_eq!(migrated.timelines[0].conversation_id.0, "legacy_conv");
+        assert_eq!(migrated.timelines[0].events.len(), 1);
+        assert_eq!(migrated.timelines[0].events[0].sender_id.0, "legacy_sender");
     }
 
     #[test]

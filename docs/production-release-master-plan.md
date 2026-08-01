@@ -89,7 +89,7 @@ Relay повинен бути технічно вимкнений у профі�
 | `REL-001` | закрито | після rate limit повертався чистий `Allow` | Analyzer більше не має внутрішнього пропуску; кожне прийняте повідомлення проходить повний pipeline |
 | `REL-002` | відкрито | Apple API не повертає негайний product decision | один типізований локальний decision API |
 | `REL-003` | закрито | помилка заданого pattern pack приховано вмикала вбудовані правила | заданий шлях завантажується повністю або блокує init зі стабільною причиною; відсутній шлях явно обирає built-in pack |
-| `REL-004` | відкрито | немає міграції persisted state v2 -> v3 | перевірена міграція і golden fixtures |
+| `REL-004` | закрито | persisted state v2 відхилявся, а v3 wire втрачав контекстну рамку події | детермінована v2 -> v3 міграція, повний v3 context wire і byte-pinned v2/v3 golden fixtures |
 | `REL-005` | закрито | guardian feedback очищав неправильний обсяг пам'яті й кодував `Block` вигаданими діалогами | точна ізольована семантика account/sender/conversation та версійований стан блокування |
 | `REL-006` | закрито | порожні FFI IDs ставали спільним `unknown` | неправильні live та persisted sender/conversation IDs відхиляються до зміни стану |
 | `REL-007` | закрито | `aura_last_error` міг повертати помилку іншого потоку | суто thread-local канал із багатопотоковим regression test |
@@ -262,8 +262,10 @@ configuration; `REL-003` і `ML-004` закриті.
 
 Завдання:
 
-- реалізувати v2 -> v3 migration або документовану двокрокову міграцію;
-- створити golden fixtures для останньої production state version;
+- ✅ реалізовано v2 -> v3 migration: відсутній у v2 контекст отримує
+  консервативний legacy-default, наступний export нормалізується до v3;
+- ✅ збережено незмінний byte-pinned v2 fixture і додано v3 golden fixture з
+  повною event interpretation frame;
 - зробити імпорт транзакційним: validate -> migrate -> bound -> commit;
 - створювати зашифровану резервну копію стану перед першою міграцією;
 - визначити поведінку downgrade і multi-device conflict;
@@ -637,7 +639,8 @@ evidence є інфраструктурою докторського дослід
    перевірка imported state та суто thread-local `aura_last_error`.
 4. ✅ `REL-003` pattern/config fail semantics — заданий зовнішній pack більше
    не може бути мовчки замінений built-in rules.
-5. `REL-004` state v2 -> v3 migration.
+5. ✅ `REL-004` state v2 -> v3 migration — legacy import, v3 context
+   persistence, golden fixtures і безпечна відмова future version.
 6. `REL-008` minor configuration invariant.
 7. ADR та реалізація `REL-002` local product decision API.
 8. iOS integration harness та `REL-009` exact Apple pin.

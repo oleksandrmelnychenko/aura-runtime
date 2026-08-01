@@ -57,8 +57,8 @@ As of the current release-hardening track:
 - wire package: `aura.messenger.v1`
 - wire major version: `1`
 - persisted state schema version: `3`
-- compatibility fixtures pinned for `AnalysisResult`, `TrackerState`, and
-  `BatchAnalyzeResponse`
+- compatibility fixtures pinned for `AnalysisResult`, tracker state v2 and v3,
+  and `BatchAnalyzeResponse`
 - contract evidence emitted by `contract_evidence`
 - C header smoke compile enforced in CI and promotion workflows
 - FFI request-size caps emitted as machine-readable evidence
@@ -71,6 +71,8 @@ Notable additive fields currently in active use:
 - `ShadowModeDecision.kids_memory`
 - `ShadowModeSummary.kids_memory_reason_counts`
 - `ContextEvent.content_hash`
+- `ContextEvent.context` with the v3 speech-act, stance, directionality, and
+  contextual confidence/flag frame
 - expanded propaganda state fields under `ContactProfileState` and
   `BehavioralSnapshotState.propaganda_count`
 
@@ -137,6 +139,14 @@ Rules:
 - removed or repurposed state fields require explicit migration handling
 - import behavior for older schema versions must be documented and tested
 - import of unsupported future schema versions must fail safely and clearly
+
+The supported tracker migration is v2 to v3. A v2 event has no persisted
+`EventContextFrame`; import materializes the all-unspecified frame, whose
+non-meaningful semantics preserve the legacy interpretation path. The next
+export normalizes the state to v3. Current v3 frames are persisted losslessly.
+Schema v1 and unknown future versions are rejected before tracker mutation.
+The byte-pinned `tracker_state.pb` v2 fixture is retained unchanged beside the
+current `tracker_state_v3.pb` fixture.
 
 Context corruption is a production incident, not a normal edge case.
 

@@ -291,6 +291,9 @@ Public header: `include/aura_ffi.h`
 - `patterns_path = None` explicitly selects the built-in pattern pack; when a
   path is supplied, a missing or invalid pack fails initialization with
   `PATTERN_PACK_LOAD_FAILED` and is never silently replaced
+- Persisted context schema v2 is migrated to v3 on import and normalized on
+  the next export; v3 preserves the complete event interpretation frame, while
+  unsupported versions are rejected before tracker mutation
 
 The Apple/C boundary exposes only the canonical Safety Case lifecycle:
 

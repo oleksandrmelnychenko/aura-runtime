@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use aura_proto::compat_fixtures::{
     analysis_result_fixture, batch_analyze_response_fixture, tracker_state_fixture,
+    tracker_state_v2_fixture,
 };
 use prost::Message;
 
@@ -20,6 +21,11 @@ fn main() {
     write_fixture(
         &output_dir,
         "tracker_state.pb",
+        tracker_state_v2_fixture().encode_to_vec(),
+    );
+    write_fixture(
+        &output_dir,
+        "tracker_state_v3.pb",
         tracker_state_fixture().encode_to_vec(),
     );
     write_fixture(

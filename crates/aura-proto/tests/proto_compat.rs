@@ -219,6 +219,7 @@ fn tracker_state_with_kids_memory_round_trip() {
                 confidence: 0.87,
                 subtype: String::new(),
                 content_hash: None,
+                context: None,
             }],
         }],
         contact_profiler: Some(proto::ContactProfilerState {
