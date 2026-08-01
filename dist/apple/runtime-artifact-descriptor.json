@@ -1,8 +1,8 @@
 {
   "schema_version": 3,
-  "source_revision": "7feb825daad1cc98bc0f39c3cea0b0678bff3c18",
+  "source_revision": "d47af3396fb3a1bd321b07943f88b3d7a9678bdd",
   "source_tree_dirty": false,
-  "source_tree_sha256": "e775dbdd99b7916bda42baa65bdcb09ee7ad733f084db388dd12c84149c38b0c",
+  "source_tree_sha256": "c24d96214ebf6fd22c17ebbbcfcf69070547997d6ed8a5dcb58482c28cf6b894",
   "shippable": true,
   "cargo_profile": "release",
   "cargo_features": [],
@@ -11,7 +11,7 @@
   "wire_major_version": 1,
   "state_schema_version": 3,
   "ffi_contract_version": 1,
-  "aura_ffi_header_sha256": "bf55ff30f5a35407b3e595ecc3d56c8b8e8901a149bc9912219246316e4bcf86",
+  "aura_ffi_header_sha256": "ac943d6f03375be6c181b16d2fc3b003fe50eacea4c577e7a0df2e32d713c9f6",
   "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
   "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
   "execution_policy_trust_keyring_sha256": "9339c0165962cfeb66a677bcf47de5318f5655ad24e3e006e2d1e40aa8164152"

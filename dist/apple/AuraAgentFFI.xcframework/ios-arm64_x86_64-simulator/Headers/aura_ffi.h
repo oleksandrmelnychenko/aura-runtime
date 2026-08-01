@@ -27,6 +27,9 @@ bool aura_apply_execution_policy(void *handle, const uint8_t *request_ptr, size_
 /// Analyze protobuf CanonicalSafetyAnalyzeRequest exactly once. Writes protobuf CanonicalSafetyAnalyzeResponse into out.
 bool aura_analyze_canonical_safety(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 
+/// Analyze protobuf LocalDecisionAnalyzeRequest exactly once. Writes typed LocalDecisionAnalyzeResponse into out.
+bool aura_analyze_local_decision(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
+
 /// Apply protobuf SafetyCaseLifecycleCommandRequest. Writes protobuf SafetyCaseLifecycleCommandResponse into out.
 bool aura_apply_safety_case_lifecycle(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 
@@ -71,7 +74,8 @@ bool aura_import_safety_case_state(void *handle, const uint8_t *account_key_ptr,
 /// aura-protected-protocol's `aura_version` when co-linked.
 const char *aura_agent_version(void);
 
-/// Returns the last error message, or NULL if no error occurred.
+/// Returns the calling thread's last error message, or NULL if none occurred.
+/// Must be called on the same thread as the failed FFI operation.
 /// Caller must free with aura_free_string.
 char *aura_last_error(void);
 
