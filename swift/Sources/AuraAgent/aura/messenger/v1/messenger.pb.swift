@@ -25,7 +25,7 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-public nonisolated enum Aura_Messenger_V1_ProtectionLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeProtectionLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case off // = 1
@@ -61,7 +61,7 @@ public nonisolated enum Aura_Messenger_V1_ProtectionLevel: SwiftProtobuf.Enum, S
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ProtectionLevel] = [
+  public static let allCases: [AuraAgentNativeProtectionLevel] = [
     .unspecified,
     .off,
     .low,
@@ -71,7 +71,7 @@ public nonisolated enum Aura_Messenger_V1_ProtectionLevel: SwiftProtobuf.Enum, S
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AccountType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAccountType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case adult // = 1
@@ -104,7 +104,7 @@ public nonisolated enum Aura_Messenger_V1_AccountType: SwiftProtobuf.Enum, Swift
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AccountType] = [
+  public static let allCases: [AuraAgentNativeAccountType] = [
     .unspecified,
     .adult,
     .teen,
@@ -113,7 +113,7 @@ public nonisolated enum Aura_Messenger_V1_AccountType: SwiftProtobuf.Enum, Swift
 
 }
 
-public nonisolated enum Aura_Messenger_V1_DomainMode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeDomainMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
 
@@ -152,7 +152,7 @@ public nonisolated enum Aura_Messenger_V1_DomainMode: SwiftProtobuf.Enum, Swift.
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_DomainMode] = [
+  public static let allCases: [AuraAgentNativeDomainMode] = [
     .unspecified,
     .none,
     .kids,
@@ -161,7 +161,7 @@ public nonisolated enum Aura_Messenger_V1_DomainMode: SwiftProtobuf.Enum, Swift.
 
 }
 
-public nonisolated enum Aura_Messenger_V1_CulturalContextKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeCulturalContextKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case ukrainian // = 1
@@ -197,7 +197,7 @@ public nonisolated enum Aura_Messenger_V1_CulturalContextKind: SwiftProtobuf.Enu
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_CulturalContextKind] = [
+  public static let allCases: [AuraAgentNativeCulturalContextKind] = [
     .unspecified,
     .ukrainian,
     .russian,
@@ -207,7 +207,7 @@ public nonisolated enum Aura_Messenger_V1_CulturalContextKind: SwiftProtobuf.Enu
 
 }
 
-public nonisolated enum Aura_Messenger_V1_ThreatType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeThreatType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case none // = 1
@@ -288,7 +288,7 @@ public nonisolated enum Aura_Messenger_V1_ThreatType: SwiftProtobuf.Enum, Swift.
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ThreatType] = [
+  public static let allCases: [AuraAgentNativeThreatType] = [
     .unspecified,
     .none,
     .bullying,
@@ -313,7 +313,7 @@ public nonisolated enum Aura_Messenger_V1_ThreatType: SwiftProtobuf.Enum, Swift.
 
 }
 
-public nonisolated enum Aura_Messenger_V1_Confidence: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeConfidence: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case low // = 1
@@ -346,7 +346,7 @@ public nonisolated enum Aura_Messenger_V1_Confidence: SwiftProtobuf.Enum, Swift.
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_Confidence] = [
+  public static let allCases: [AuraAgentNativeConfidence] = [
     .unspecified,
     .low,
     .medium,
@@ -355,7 +355,7 @@ public nonisolated enum Aura_Messenger_V1_Confidence: SwiftProtobuf.Enum, Swift.
 
 }
 
-public nonisolated enum Aura_Messenger_V1_Action: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAction: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case allow // = 1
@@ -394,7 +394,7 @@ public nonisolated enum Aura_Messenger_V1_Action: SwiftProtobuf.Enum, Swift.Case
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_Action] = [
+  public static let allCases: [AuraAgentNativeAction] = [
     .unspecified,
     .allow,
     .mark,
@@ -405,7 +405,7 @@ public nonisolated enum Aura_Messenger_V1_Action: SwiftProtobuf.Enum, Swift.Case
 
 }
 
-public nonisolated enum Aura_Messenger_V1_DetectionLayer: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeDetectionLayer: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case patternMatching // = 1
@@ -441,7 +441,7 @@ public nonisolated enum Aura_Messenger_V1_DetectionLayer: SwiftProtobuf.Enum, Sw
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_DetectionLayer] = [
+  public static let allCases: [AuraAgentNativeDetectionLayer] = [
     .unspecified,
     .patternMatching,
     .mlClassification,
@@ -451,7 +451,7 @@ public nonisolated enum Aura_Messenger_V1_DetectionLayer: SwiftProtobuf.Enum, Sw
 
 }
 
-public nonisolated enum Aura_Messenger_V1_SignalFamily: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeSignalFamily: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case content // = 1
@@ -487,7 +487,7 @@ public nonisolated enum Aura_Messenger_V1_SignalFamily: SwiftProtobuf.Enum, Swif
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_SignalFamily] = [
+  public static let allCases: [AuraAgentNativeSignalFamily] = [
     .unspecified,
     .content,
     .conversation,
@@ -497,7 +497,7 @@ public nonisolated enum Aura_Messenger_V1_SignalFamily: SwiftProtobuf.Enum, Swif
 
 }
 
-public nonisolated enum Aura_Messenger_V1_UiAction: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeUiAction: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case warnBeforeSend // = 1
@@ -551,7 +551,7 @@ public nonisolated enum Aura_Messenger_V1_UiAction: SwiftProtobuf.Enum, Swift.Ca
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_UiAction] = [
+  public static let allCases: [AuraAgentNativeUiAction] = [
     .unspecified,
     .warnBeforeSend,
     .warnBeforeDisplay,
@@ -567,7 +567,7 @@ public nonisolated enum Aura_Messenger_V1_UiAction: SwiftProtobuf.Enum, Swift.Ca
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AlertPriority: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAlertPriority: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case none // = 1
@@ -606,7 +606,7 @@ public nonisolated enum Aura_Messenger_V1_AlertPriority: SwiftProtobuf.Enum, Swi
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AlertPriority] = [
+  public static let allCases: [AuraAgentNativeAlertPriority] = [
     .unspecified,
     .none,
     .low,
@@ -617,7 +617,7 @@ public nonisolated enum Aura_Messenger_V1_AlertPriority: SwiftProtobuf.Enum, Swi
 
 }
 
-public nonisolated enum Aura_Messenger_V1_FollowUpAction: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeFollowUpAction: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case monitorConversation // = 1
@@ -653,7 +653,7 @@ public nonisolated enum Aura_Messenger_V1_FollowUpAction: SwiftProtobuf.Enum, Sw
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_FollowUpAction] = [
+  public static let allCases: [AuraAgentNativeFollowUpAction] = [
     .unspecified,
     .monitorConversation,
     .blockSuggested,
@@ -663,7 +663,7 @@ public nonisolated enum Aura_Messenger_V1_FollowUpAction: SwiftProtobuf.Enum, Sw
 
 }
 
-public nonisolated enum Aura_Messenger_V1_ProductRolloutMode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeProductRolloutMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case shadow // = 1
@@ -696,7 +696,7 @@ public nonisolated enum Aura_Messenger_V1_ProductRolloutMode: SwiftProtobuf.Enum
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ProductRolloutMode] = [
+  public static let allCases: [AuraAgentNativeProductRolloutMode] = [
     .unspecified,
     .shadow,
     .stagingPilot,
@@ -705,7 +705,7 @@ public nonisolated enum Aura_Messenger_V1_ProductRolloutMode: SwiftProtobuf.Enum
 
 }
 
-public nonisolated enum Aura_Messenger_V1_ProductDeliveryMode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeProductDeliveryMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case suppress // = 1
@@ -738,7 +738,7 @@ public nonisolated enum Aura_Messenger_V1_ProductDeliveryMode: SwiftProtobuf.Enu
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ProductDeliveryMode] = [
+  public static let allCases: [AuraAgentNativeProductDeliveryMode] = [
     .unspecified,
     .suppress,
     .mirrorOnly,
@@ -747,7 +747,7 @@ public nonisolated enum Aura_Messenger_V1_ProductDeliveryMode: SwiftProtobuf.Enu
 
 }
 
-public nonisolated enum Aura_Messenger_V1_ProductChildIntervention: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeProductChildIntervention: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case none // = 1
@@ -786,7 +786,7 @@ public nonisolated enum Aura_Messenger_V1_ProductChildIntervention: SwiftProtobu
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ProductChildIntervention] = [
+  public static let allCases: [AuraAgentNativeProductChildIntervention] = [
     .unspecified,
     .none,
     .mark,
@@ -797,7 +797,7 @@ public nonisolated enum Aura_Messenger_V1_ProductChildIntervention: SwiftProtobu
 
 }
 
-public nonisolated enum Aura_Messenger_V1_ProductReviewUrgency: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeProductReviewUrgency: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case none // = 1
@@ -833,7 +833,7 @@ public nonisolated enum Aura_Messenger_V1_ProductReviewUrgency: SwiftProtobuf.En
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ProductReviewUrgency] = [
+  public static let allCases: [AuraAgentNativeProductReviewUrgency] = [
     .unspecified,
     .none,
     .standard,
@@ -843,7 +843,7 @@ public nonisolated enum Aura_Messenger_V1_ProductReviewUrgency: SwiftProtobuf.En
 
 }
 
-public nonisolated enum Aura_Messenger_V1_ProductUncertaintyDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeProductUncertaintyDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case normal // = 1
@@ -879,7 +879,7 @@ public nonisolated enum Aura_Messenger_V1_ProductUncertaintyDisposition: SwiftPr
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ProductUncertaintyDisposition] = [
+  public static let allCases: [AuraAgentNativeProductUncertaintyDisposition] = [
     .unspecified,
     .normal,
     .mirrorOnly,
@@ -889,7 +889,7 @@ public nonisolated enum Aura_Messenger_V1_ProductUncertaintyDisposition: SwiftPr
 
 }
 
-public nonisolated enum Aura_Messenger_V1_CircleTier: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeCircleTier: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case inner // = 1
@@ -925,7 +925,7 @@ public nonisolated enum Aura_Messenger_V1_CircleTier: SwiftProtobuf.Enum, Swift.
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_CircleTier] = [
+  public static let allCases: [AuraAgentNativeCircleTier] = [
     .unspecified,
     .inner,
     .regular,
@@ -935,7 +935,7 @@ public nonisolated enum Aura_Messenger_V1_CircleTier: SwiftProtobuf.Enum, Swift.
 
 }
 
-public nonisolated enum Aura_Messenger_V1_BehavioralTrend: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeBehavioralTrend: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case stable // = 1
@@ -974,7 +974,7 @@ public nonisolated enum Aura_Messenger_V1_BehavioralTrend: SwiftProtobuf.Enum, S
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_BehavioralTrend] = [
+  public static let allCases: [AuraAgentNativeBehavioralTrend] = [
     .unspecified,
     .stable,
     .improving,
@@ -985,7 +985,7 @@ public nonisolated enum Aura_Messenger_V1_BehavioralTrend: SwiftProtobuf.Enum, S
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AgeSource: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAgeSource: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case userReported // = 1
@@ -1018,7 +1018,7 @@ public nonisolated enum Aura_Messenger_V1_AgeSource: SwiftProtobuf.Enum, Swift.C
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AgeSource] = [
+  public static let allCases: [AuraAgentNativeAgeSource] = [
     .unspecified,
     .userReported,
     .parentVerified,
@@ -1027,7 +1027,7 @@ public nonisolated enum Aura_Messenger_V1_AgeSource: SwiftProtobuf.Enum, Swift.C
 
 }
 
-public nonisolated enum Aura_Messenger_V1_UncertaintyLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeUncertaintyLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case low // = 1
@@ -1060,7 +1060,7 @@ public nonisolated enum Aura_Messenger_V1_UncertaintyLevel: SwiftProtobuf.Enum, 
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_UncertaintyLevel] = [
+  public static let allCases: [AuraAgentNativeUncertaintyLevel] = [
     .unspecified,
     .low,
     .medium,
@@ -1069,7 +1069,7 @@ public nonisolated enum Aura_Messenger_V1_UncertaintyLevel: SwiftProtobuf.Enum, 
 
 }
 
-public nonisolated enum Aura_Messenger_V1_RiskHorizon: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeRiskHorizon: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case unknown // = 1
@@ -1105,7 +1105,7 @@ public nonisolated enum Aura_Messenger_V1_RiskHorizon: SwiftProtobuf.Enum, Swift
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_RiskHorizon] = [
+  public static let allCases: [AuraAgentNativeRiskHorizon] = [
     .unspecified,
     .unknown,
     .immediate,
@@ -1115,7 +1115,7 @@ public nonisolated enum Aura_Messenger_V1_RiskHorizon: SwiftProtobuf.Enum, Swift
 
 }
 
-public nonisolated enum Aura_Messenger_V1_LatentStateKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeLatentStateKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case dependencyBuilding // = 1
@@ -1160,7 +1160,7 @@ public nonisolated enum Aura_Messenger_V1_LatentStateKind: SwiftProtobuf.Enum, S
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_LatentStateKind] = [
+  public static let allCases: [AuraAgentNativeLatentStateKind] = [
     .unspecified,
     .dependencyBuilding,
     .isolationPressure,
@@ -1173,7 +1173,7 @@ public nonisolated enum Aura_Messenger_V1_LatentStateKind: SwiftProtobuf.Enum, S
 
 }
 
-public nonisolated enum Aura_Messenger_V1_ConversationType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeConversationType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case direct // = 1
@@ -1203,7 +1203,7 @@ public nonisolated enum Aura_Messenger_V1_ConversationType: SwiftProtobuf.Enum, 
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ConversationType] = [
+  public static let allCases: [AuraAgentNativeConversationType] = [
     .unspecified,
     .direct,
     .group,
@@ -1211,7 +1211,7 @@ public nonisolated enum Aura_Messenger_V1_ConversationType: SwiftProtobuf.Enum, 
 
 }
 
-public nonisolated enum Aura_Messenger_V1_SenderRelationship: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeSenderRelationship: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case unknown // = 1
@@ -1271,7 +1271,7 @@ public nonisolated enum Aura_Messenger_V1_SenderRelationship: SwiftProtobuf.Enum
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_SenderRelationship] = [
+  public static let allCases: [AuraAgentNativeSenderRelationship] = [
     .unspecified,
     .unknown,
     .parent,
@@ -1289,7 +1289,7 @@ public nonisolated enum Aura_Messenger_V1_SenderRelationship: SwiftProtobuf.Enum
 
 }
 
-public nonisolated enum Aura_Messenger_V1_RelationshipTrustSource: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeRelationshipTrustSource: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case unknown // = 1
@@ -1340,7 +1340,7 @@ public nonisolated enum Aura_Messenger_V1_RelationshipTrustSource: SwiftProtobuf
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_RelationshipTrustSource] = [
+  public static let allCases: [AuraAgentNativeRelationshipTrustSource] = [
     .unspecified,
     .unknown,
     .userVerified,
@@ -1355,7 +1355,7 @@ public nonisolated enum Aura_Messenger_V1_RelationshipTrustSource: SwiftProtobuf
 
 }
 
-public nonisolated enum Aura_Messenger_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case text // = 1
@@ -1394,7 +1394,7 @@ public nonisolated enum Aura_Messenger_V1_ContentType: SwiftProtobuf.Enum, Swift
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_ContentType] = [
+  public static let allCases: [AuraAgentNativeContentType] = [
     .unspecified,
     .text,
     .image,
@@ -1405,7 +1405,7 @@ public nonisolated enum Aura_Messenger_V1_ContentType: SwiftProtobuf.Enum, Swift
 
 }
 
-public nonisolated enum Aura_Messenger_V1_EventKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeEventKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case flattery // = 1
@@ -1597,7 +1597,7 @@ public nonisolated enum Aura_Messenger_V1_EventKind: SwiftProtobuf.Enum, Swift.C
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_EventKind] = [
+  public static let allCases: [AuraAgentNativeEventKind] = [
     .unspecified,
     .flattery,
     .giftOffer,
@@ -1660,7 +1660,7 @@ public nonisolated enum Aura_Messenger_V1_EventKind: SwiftProtobuf.Enum, Swift.C
 }
 
 /// The inference implementation that is actually active in this runtime.
-public nonisolated enum Aura_Messenger_V1_RuntimeBackend: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeRuntimeBackend: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case rulesFallback // = 1
@@ -1690,7 +1690,7 @@ public nonisolated enum Aura_Messenger_V1_RuntimeBackend: SwiftProtobuf.Enum, Sw
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_RuntimeBackend] = [
+  public static let allCases: [AuraAgentNativeRuntimeBackend] = [
     .unspecified,
     .rulesFallback,
     .onnx,
@@ -1699,7 +1699,7 @@ public nonisolated enum Aura_Messenger_V1_RuntimeBackend: SwiftProtobuf.Enum, Sw
 }
 
 /// Input modalities implemented by this runtime build.
-public nonisolated enum Aura_Messenger_V1_RuntimeModality: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeRuntimeModality: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case text // = 1
@@ -1729,7 +1729,7 @@ public nonisolated enum Aura_Messenger_V1_RuntimeModality: SwiftProtobuf.Enum, S
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_RuntimeModality] = [
+  public static let allCases: [AuraAgentNativeRuntimeModality] = [
     .unspecified,
     .text,
     .url,
@@ -1737,7 +1737,7 @@ public nonisolated enum Aura_Messenger_V1_RuntimeModality: SwiftProtobuf.Enum, S
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionPolicySignatureAlgorithm: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionPolicySignatureAlgorithm: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case ed25519 // = 1
@@ -1764,14 +1764,14 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionPolicySignatureAlgorithm:
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionPolicySignatureAlgorithm] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionPolicySignatureAlgorithm] = [
     .unspecified,
     .ed25519,
   ]
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionPolicyState: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionPolicyState: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case enabled // = 1
@@ -1801,7 +1801,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionPolicyState: SwiftProtobu
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionPolicyState] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionPolicyState] = [
     .unspecified,
     .enabled,
     .disabled,
@@ -1809,7 +1809,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionPolicyState: SwiftProtobu
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionMode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case off // = 1
@@ -1842,7 +1842,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionMode: SwiftProtobuf.Enum,
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionMode] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionMode] = [
     .unspecified,
     .off,
     .shadowCases,
@@ -1851,7 +1851,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionMode: SwiftProtobuf.Enum,
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionAccountProfile: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionAccountProfile: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case adult // = 1
@@ -1884,7 +1884,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionAccountProfile: SwiftProt
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionAccountProfile] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionAccountProfile] = [
     .unspecified,
     .adult,
     .teen,
@@ -1893,7 +1893,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionAccountProfile: SwiftProt
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionDomainMode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionDomainMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case none // = 1
@@ -1923,7 +1923,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionDomainMode: SwiftProtobuf
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionDomainMode] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionDomainMode] = [
     .unspecified,
     .none,
     .kids,
@@ -1931,7 +1931,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionDomainMode: SwiftProtobuf
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionRiskFamily: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionRiskFamily: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case bullying // = 1
@@ -2009,7 +2009,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionRiskFamily: SwiftProtobuf
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionRiskFamily] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionRiskFamily] = [
     .unspecified,
     .bullying,
     .grooming,
@@ -2033,7 +2033,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionRiskFamily: SwiftProtobuf
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionCaseTrigger: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionCaseTrigger: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case caseOpened // = 1
@@ -2069,7 +2069,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionCaseTrigger: SwiftProtobu
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionCaseTrigger] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionCaseTrigger] = [
     .unspecified,
     .caseOpened,
     .caseEscalated,
@@ -2079,7 +2079,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionCaseTrigger: SwiftProtobu
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionCaseStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionCaseStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case observing // = 1
@@ -2121,7 +2121,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionCaseStatus: SwiftProtobuf
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionCaseStatus] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionCaseStatus] = [
     .unspecified,
     .observing,
     .open,
@@ -2133,7 +2133,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionCaseStatus: SwiftProtobuf
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionSeverity: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionSeverity: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case informational // = 1
@@ -2169,7 +2169,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionSeverity: SwiftProtobuf.E
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionSeverity] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionSeverity] = [
     .unspecified,
     .informational,
     .elevated,
@@ -2179,7 +2179,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionSeverity: SwiftProtobuf.E
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionConfidence: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionConfidence: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case low // = 1
@@ -2212,7 +2212,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionConfidence: SwiftProtobuf
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionConfidence] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionConfidence] = [
     .unspecified,
     .low,
     .medium,
@@ -2221,7 +2221,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionConfidence: SwiftProtobuf
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionDeliveryClass: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionDeliveryClass: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case none // = 1
@@ -2254,7 +2254,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionDeliveryClass: SwiftProto
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionDeliveryClass] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionDeliveryClass] = [
     .unspecified,
     .none,
     .needsAttention,
@@ -2263,7 +2263,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionDeliveryClass: SwiftProto
 
 }
 
-public nonisolated enum Aura_Messenger_V1_AuraExecutionPolicyApplyDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeAuraExecutionPolicyApplyDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case applied // = 1
@@ -2293,7 +2293,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionPolicyApplyDisposition: S
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_AuraExecutionPolicyApplyDisposition] = [
+  public static let allCases: [AuraAgentNativeAuraExecutionPolicyApplyDisposition] = [
     .unspecified,
     .applied,
     .unchanged,
@@ -2301,7 +2301,7 @@ public nonisolated enum Aura_Messenger_V1_AuraExecutionPolicyApplyDisposition: S
 
 }
 
-public nonisolated enum Aura_Messenger_V1_SafetyCaseLifecycleStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeSafetyCaseLifecycleStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case observing // = 1
@@ -2343,7 +2343,7 @@ public nonisolated enum Aura_Messenger_V1_SafetyCaseLifecycleStatus: SwiftProtob
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_SafetyCaseLifecycleStatus] = [
+  public static let allCases: [AuraAgentNativeSafetyCaseLifecycleStatus] = [
     .unspecified,
     .observing,
     .open,
@@ -2355,7 +2355,7 @@ public nonisolated enum Aura_Messenger_V1_SafetyCaseLifecycleStatus: SwiftProtob
 
 }
 
-public nonisolated enum Aura_Messenger_V1_CanonicalSafetyDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeCanonicalSafetyDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case processedIgnored // = 1
@@ -2403,7 +2403,7 @@ public nonisolated enum Aura_Messenger_V1_CanonicalSafetyDisposition: SwiftProto
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_CanonicalSafetyDisposition] = [
+  public static let allCases: [AuraAgentNativeCanonicalSafetyDisposition] = [
     .unspecified,
     .processedIgnored,
     .processedReduced,
@@ -2417,7 +2417,7 @@ public nonisolated enum Aura_Messenger_V1_CanonicalSafetyDisposition: SwiftProto
 }
 
 /// Account-scoped lifecycle mutation allowed at the native boundary.
-public nonisolated enum Aura_Messenger_V1_SafetyCaseLifecycleCommandType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeSafetyCaseLifecycleCommandType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case resolve // = 1
@@ -2447,7 +2447,7 @@ public nonisolated enum Aura_Messenger_V1_SafetyCaseLifecycleCommandType: SwiftP
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_SafetyCaseLifecycleCommandType] = [
+  public static let allCases: [AuraAgentNativeSafetyCaseLifecycleCommandType] = [
     .unspecified,
     .resolve,
     .dismiss,
@@ -2455,7 +2455,7 @@ public nonisolated enum Aura_Messenger_V1_SafetyCaseLifecycleCommandType: SwiftP
 
 }
 
-public nonisolated enum Aura_Messenger_V1_SafetyCaseSuccessorActivationDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeSafetyCaseSuccessorActivationDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case activated // = 1
@@ -2485,7 +2485,7 @@ public nonisolated enum Aura_Messenger_V1_SafetyCaseSuccessorActivationDispositi
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_SafetyCaseSuccessorActivationDisposition] = [
+  public static let allCases: [AuraAgentNativeSafetyCaseSuccessorActivationDisposition] = [
     .unspecified,
     .activated,
     .alreadyActivated,
@@ -2496,7 +2496,7 @@ public nonisolated enum Aura_Messenger_V1_SafetyCaseSuccessorActivationDispositi
 /// Read-only, content-free projection of the report retained by the native
 /// Safety Case reducer. The host must not synthesize these fields from a
 /// message-level detector response.
-public nonisolated enum Aura_Messenger_V1_GuardianReportDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeGuardianReportDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case notRequired // = 1
@@ -2529,7 +2529,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportDisposition: SwiftProtob
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_GuardianReportDisposition] = [
+  public static let allCases: [AuraAgentNativeGuardianReportDisposition] = [
     .unspecified,
     .notRequired,
     .pending,
@@ -2538,7 +2538,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportDisposition: SwiftProtob
 
 }
 
-public nonisolated enum Aura_Messenger_V1_GuardianReportTrigger: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeGuardianReportTrigger: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case caseOpened // = 1
@@ -2574,7 +2574,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportTrigger: SwiftProtobuf.E
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_GuardianReportTrigger] = [
+  public static let allCases: [AuraAgentNativeGuardianReportTrigger] = [
     .unspecified,
     .caseOpened,
     .caseEscalated,
@@ -2584,7 +2584,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportTrigger: SwiftProtobuf.E
 
 }
 
-public nonisolated enum Aura_Messenger_V1_SafetyCaseSeverity: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeSafetyCaseSeverity: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case informational // = 1
@@ -2620,7 +2620,7 @@ public nonisolated enum Aura_Messenger_V1_SafetyCaseSeverity: SwiftProtobuf.Enum
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_SafetyCaseSeverity] = [
+  public static let allCases: [AuraAgentNativeSafetyCaseSeverity] = [
     .unspecified,
     .informational,
     .elevated,
@@ -2630,7 +2630,7 @@ public nonisolated enum Aura_Messenger_V1_SafetyCaseSeverity: SwiftProtobuf.Enum
 
 }
 
-public nonisolated enum Aura_Messenger_V1_GuardianReportRiskFamily: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeGuardianReportRiskFamily: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case bullying // = 1
@@ -2708,7 +2708,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportRiskFamily: SwiftProtobu
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_GuardianReportRiskFamily] = [
+  public static let allCases: [AuraAgentNativeGuardianReportRiskFamily] = [
     .unspecified,
     .bullying,
     .grooming,
@@ -2732,7 +2732,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportRiskFamily: SwiftProtobu
 
 }
 
-public nonisolated enum Aura_Messenger_V1_GuardianReportObservationVolumeBand: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeGuardianReportObservationVolumeBand: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case isolated // = 1
@@ -2765,7 +2765,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportObservationVolumeBand: S
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_GuardianReportObservationVolumeBand] = [
+  public static let allCases: [AuraAgentNativeGuardianReportObservationVolumeBand] = [
     .unspecified,
     .isolated,
     .repeated,
@@ -2774,7 +2774,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportObservationVolumeBand: S
 
 }
 
-public nonisolated enum Aura_Messenger_V1_GuardianReportDeliveryClass: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeGuardianReportDeliveryClass: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case none // = 1
@@ -2807,7 +2807,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportDeliveryClass: SwiftProt
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_GuardianReportDeliveryClass] = [
+  public static let allCases: [AuraAgentNativeGuardianReportDeliveryClass] = [
     .unspecified,
     .none,
     .needsAttention,
@@ -2816,7 +2816,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportDeliveryClass: SwiftProt
 
 }
 
-public nonisolated enum Aura_Messenger_V1_GuardianReportPreparationDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeGuardianReportPreparationDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case prepared // = 1
@@ -2846,7 +2846,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportPreparationDisposition: 
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_GuardianReportPreparationDisposition] = [
+  public static let allCases: [AuraAgentNativeGuardianReportPreparationDisposition] = [
     .unspecified,
     .prepared,
     .alreadyPrepared,
@@ -2854,7 +2854,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportPreparationDisposition: 
 
 }
 
-public nonisolated enum Aura_Messenger_V1_GuardianReportSuppressionDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeGuardianReportSuppressionDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case suppressed // = 1
@@ -2884,7 +2884,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportSuppressionDisposition: 
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_GuardianReportSuppressionDisposition] = [
+  public static let allCases: [AuraAgentNativeGuardianReportSuppressionDisposition] = [
     .unspecified,
     .suppressed,
     .alreadySuppressed,
@@ -2892,7 +2892,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportSuppressionDisposition: 
 
 }
 
-public nonisolated enum Aura_Messenger_V1_GuardianReportAcknowledgementDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeGuardianReportAcknowledgementDisposition: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case acknowledged // = 1
@@ -2922,7 +2922,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportAcknowledgementDispositi
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_GuardianReportAcknowledgementDisposition] = [
+  public static let allCases: [AuraAgentNativeGuardianReportAcknowledgementDisposition] = [
     .unspecified,
     .acknowledged,
     .alreadyAcknowledged,
@@ -2930,7 +2930,7 @@ public nonisolated enum Aura_Messenger_V1_GuardianReportAcknowledgementDispositi
 
 }
 
-public nonisolated enum Aura_Messenger_V1_EventSpeechAct: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeEventSpeechAct: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case assert // = 1
@@ -2975,7 +2975,7 @@ public nonisolated enum Aura_Messenger_V1_EventSpeechAct: SwiftProtobuf.Enum, Sw
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_EventSpeechAct] = [
+  public static let allCases: [AuraAgentNativeEventSpeechAct] = [
     .unspecified,
     .assert,
     .ask,
@@ -2988,7 +2988,7 @@ public nonisolated enum Aura_Messenger_V1_EventSpeechAct: SwiftProtobuf.Enum, Sw
 
 }
 
-public nonisolated enum Aura_Messenger_V1_EventStance: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeEventStance: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case endorse // = 1
@@ -3024,7 +3024,7 @@ public nonisolated enum Aura_Messenger_V1_EventStance: SwiftProtobuf.Enum, Swift
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_EventStance] = [
+  public static let allCases: [AuraAgentNativeEventStance] = [
     .unspecified,
     .endorse,
     .oppose,
@@ -3034,7 +3034,7 @@ public nonisolated enum Aura_Messenger_V1_EventStance: SwiftProtobuf.Enum, Swift
 
 }
 
-public nonisolated enum Aura_Messenger_V1_EventDirectionality: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum AuraAgentNativeEventDirectionality: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case directedAtUser // = 1
@@ -3070,7 +3070,7 @@ public nonisolated enum Aura_Messenger_V1_EventDirectionality: SwiftProtobuf.Enu
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Aura_Messenger_V1_EventDirectionality] = [
+  public static let allCases: [AuraAgentNativeEventDirectionality] = [
     .unspecified,
     .directedAtUser,
     .selfReferential,
@@ -3080,12 +3080,12 @@ public nonisolated enum Aura_Messenger_V1_EventDirectionality: SwiftProtobuf.Enu
 
 }
 
-public nonisolated struct Aura_Messenger_V1_CulturalContext: Sendable {
+public nonisolated struct AuraAgentNativeCulturalContext: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var kind: Aura_Messenger_V1_CulturalContextKind = .unspecified
+  public var kind: AuraAgentNativeCulturalContextKind = .unspecified
 
   public var customValue: String {
     get {_customValue ?? String()}
@@ -3103,19 +3103,19 @@ public nonisolated struct Aura_Messenger_V1_CulturalContext: Sendable {
   fileprivate var _customValue: String? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_AuraConfig: Sendable {
+public nonisolated struct AuraAgentNativeAuraConfig: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var protectionLevel: Aura_Messenger_V1_ProtectionLevel = .unspecified
+  public var protectionLevel: AuraAgentNativeProtectionLevel = .unspecified
 
-  public var accountType: Aura_Messenger_V1_AccountType = .unspecified
+  public var accountType: AuraAgentNativeAccountType = .unspecified
 
   public var language: String = String()
 
-  public var culturalContext: Aura_Messenger_V1_CulturalContext {
-    get {_culturalContext ?? Aura_Messenger_V1_CulturalContext()}
+  public var culturalContext: AuraAgentNativeCulturalContext {
+    get {_culturalContext ?? AuraAgentNativeCulturalContext()}
     set {_culturalContext = newValue}
   }
   /// Returns true if `culturalContext` has been explicitly set.
@@ -3157,23 +3157,23 @@ public nonisolated struct Aura_Messenger_V1_AuraConfig: Sendable {
   public var timezoneOffsetMinutes: Int32 = 0
 
   /// Account-level domain mode and the only effective domain selector.
-  public var domainMode: Aura_Messenger_V1_DomainMode = .unspecified
+  public var domainMode: AuraAgentNativeDomainMode = .unspecified
 
   /// Product delivery rollout. Callers must set an explicit nonzero mode.
-  public var productRolloutMode: Aura_Messenger_V1_ProductRolloutMode = .unspecified
+  public var productRolloutMode: AuraAgentNativeProductRolloutMode = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _culturalContext: Aura_Messenger_V1_CulturalContext? = nil
+  fileprivate var _culturalContext: AuraAgentNativeCulturalContext? = nil
   fileprivate var _patternsPath: String? = nil
   fileprivate var _modelsPath: String? = nil
   fileprivate var _accountHolderAge: UInt32? = nil
 }
 
 /// Identity of an inference model that was successfully loaded.
-public nonisolated struct Aura_Messenger_V1_RuntimeModelIdentity: Sendable {
+public nonisolated struct AuraAgentNativeRuntimeModelIdentity: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3200,7 +3200,7 @@ public nonisolated struct Aura_Messenger_V1_RuntimeModelIdentity: Sendable {
 }
 
 /// Read-only, versioned description of the initialized runtime.
-public nonisolated struct Aura_Messenger_V1_RuntimeCapabilities: Sendable {
+public nonisolated struct AuraAgentNativeRuntimeCapabilities: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3209,11 +3209,11 @@ public nonisolated struct Aura_Messenger_V1_RuntimeCapabilities: Sendable {
 
   public var runtimeVersion: String = String()
 
-  public var backend: Aura_Messenger_V1_RuntimeBackend = .unspecified
+  public var backend: AuraAgentNativeRuntimeBackend = .unspecified
 
-  public var supportedModalities: [Aura_Messenger_V1_RuntimeModality] = []
+  public var supportedModalities: [AuraAgentNativeRuntimeModality] = []
 
-  public var models: [Aura_Messenger_V1_RuntimeModelIdentity] = []
+  public var models: [AuraAgentNativeRuntimeModelIdentity] = []
 
   public var policySchemaVersion: String = String()
 
@@ -3221,7 +3221,7 @@ public nonisolated struct Aura_Messenger_V1_RuntimeCapabilities: Sendable {
 
   public var stateSchemaVersion: UInt32 = 0
 
-  public var productRolloutMode: Aura_Messenger_V1_ProductRolloutMode = .unspecified
+  public var productRolloutMode: AuraAgentNativeProductRolloutMode = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3232,7 +3232,7 @@ public nonisolated struct Aura_Messenger_V1_RuntimeCapabilities: Sendable {
 /// capability and model-manifest digests are computed by native code from the
 /// artifacts actually active in this handle; the release descriptor digest is
 /// embedded before compilation and tied to the post-build Apple manifest.
-public nonisolated struct Aura_Messenger_V1_RuntimeArtifactAttestationRequest: Sendable {
+public nonisolated struct AuraAgentNativeRuntimeArtifactAttestationRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3246,7 +3246,7 @@ public nonisolated struct Aura_Messenger_V1_RuntimeArtifactAttestationRequest: S
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_RuntimeArtifactAttestationResponse: Sendable {
+public nonisolated struct AuraAgentNativeRuntimeArtifactAttestationResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3276,22 +3276,22 @@ public nonisolated struct Aura_Messenger_V1_RuntimeArtifactAttestationResponse: 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_AuraExecutionRule: Sendable {
+public nonisolated struct AuraAgentNativeAuraExecutionRule: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var ruleID: String = String()
 
-  public var riskFamily: Aura_Messenger_V1_AuraExecutionRiskFamily = .unspecified
+  public var riskFamily: AuraAgentNativeAuraExecutionRiskFamily = .unspecified
 
-  public var trigger: Aura_Messenger_V1_AuraExecutionCaseTrigger = .unspecified
+  public var trigger: AuraAgentNativeAuraExecutionCaseTrigger = .unspecified
 
-  public var requiredCaseStatus: Aura_Messenger_V1_AuraExecutionCaseStatus = .unspecified
+  public var requiredCaseStatus: AuraAgentNativeAuraExecutionCaseStatus = .unspecified
 
-  public var minimumSeverity: Aura_Messenger_V1_AuraExecutionSeverity = .unspecified
+  public var minimumSeverity: AuraAgentNativeAuraExecutionSeverity = .unspecified
 
-  public var minimumConfidence: Aura_Messenger_V1_AuraExecutionConfidence = .unspecified
+  public var minimumConfidence: AuraAgentNativeAuraExecutionConfidence = .unspecified
 
   public var minimumObservationCount: UInt32 = 0
 
@@ -3307,7 +3307,7 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionRule: Sendable {
 
   public var allowedReportReasonCodes: [String] = []
 
-  public var deliveryClass: Aura_Messenger_V1_AuraExecutionDeliveryClass = .unspecified
+  public var deliveryClass: AuraAgentNativeAuraExecutionDeliveryClass = .unspecified
 
   public var ruleDigest: Data = Data()
 
@@ -3319,7 +3319,7 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionRule: Sendable {
 /// Wire-compatible copy of the server-signed execution-policy document. The
 /// FFI rejects non-canonical protobuf bytes and verifies the Ed25519 signature
 /// against the exact compile-time execution-policy trust keyring.
-public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyDocument: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeAuraExecutionPolicyDocument: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3329,7 +3329,7 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyDocument: @unchec
     set {_uniqueStorage()._schemaVersion = newValue}
   }
 
-  public var signatureAlgorithm: Aura_Messenger_V1_AuraExecutionPolicySignatureAlgorithm {
+  public var signatureAlgorithm: AuraAgentNativeAuraExecutionPolicySignatureAlgorithm {
     get {_storage._signatureAlgorithm}
     set {_uniqueStorage()._signatureAlgorithm = newValue}
   }
@@ -3359,7 +3359,7 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyDocument: @unchec
     set {_uniqueStorage()._revokedThroughPolicyEpoch = newValue}
   }
 
-  public var state: Aura_Messenger_V1_AuraExecutionPolicyState {
+  public var state: AuraAgentNativeAuraExecutionPolicyState {
     get {_storage._state}
     set {_uniqueStorage()._state = newValue}
   }
@@ -3384,12 +3384,12 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyDocument: @unchec
     set {_uniqueStorage()._safetyProfileAssertionDigest = newValue}
   }
 
-  public var accountProfile: Aura_Messenger_V1_AuraExecutionAccountProfile {
+  public var accountProfile: AuraAgentNativeAuraExecutionAccountProfile {
     get {_storage._accountProfile}
     set {_uniqueStorage()._accountProfile = newValue}
   }
 
-  public var executionMode: Aura_Messenger_V1_AuraExecutionMode {
+  public var executionMode: AuraAgentNativeAuraExecutionMode {
     get {_storage._executionMode}
     set {_uniqueStorage()._executionMode = newValue}
   }
@@ -3399,7 +3399,7 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyDocument: @unchec
     set {_uniqueStorage()._languageTags = newValue}
   }
 
-  public var domainMode: Aura_Messenger_V1_AuraExecutionDomainMode {
+  public var domainMode: AuraAgentNativeAuraExecutionDomainMode {
     get {_storage._domainMode}
     set {_uniqueStorage()._domainMode = newValue}
   }
@@ -3444,7 +3444,7 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyDocument: @unchec
     set {_uniqueStorage()._maxCaseReasonCodes = newValue}
   }
 
-  public var rules: [Aura_Messenger_V1_AuraExecutionRule] {
+  public var rules: [AuraAgentNativeAuraExecutionRule] {
     get {_storage._rules}
     set {_uniqueStorage()._rules = newValue}
   }
@@ -3491,7 +3491,7 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyDocument: @unchec
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyApplyRequest: Sendable {
+public nonisolated struct AuraAgentNativeAuraExecutionPolicyApplyRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3515,14 +3515,14 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyApplyRequest: Sen
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyApplicationReceipt: Sendable {
+public nonisolated struct AuraAgentNativeAuraExecutionPolicyApplicationReceipt: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var schemaVersion: UInt32 = 0
 
-  public var disposition: Aura_Messenger_V1_AuraExecutionPolicyApplyDisposition = .unspecified
+  public var disposition: AuraAgentNativeAuraExecutionPolicyApplyDisposition = .unspecified
 
   public var accountKey: String = String()
 
@@ -3532,9 +3532,9 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyApplicationReceip
 
   public var policyWireDigest: Data = Data()
 
-  public var state: Aura_Messenger_V1_AuraExecutionPolicyState = .unspecified
+  public var state: AuraAgentNativeAuraExecutionPolicyState = .unspecified
 
-  public var executionMode: Aura_Messenger_V1_AuraExecutionMode = .unspecified
+  public var executionMode: AuraAgentNativeAuraExecutionMode = .unspecified
 
   public var runtimeCapabilitiesDigest: Data = Data()
 
@@ -3557,12 +3557,12 @@ public nonisolated struct Aura_Messenger_V1_AuraExecutionPolicyApplicationReceip
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_MessageInput: Sendable {
+public nonisolated struct AuraAgentNativeMessageInput: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var contentType: Aura_Messenger_V1_ContentType = .unspecified
+  public var contentType: AuraAgentNativeContentType = .unspecified
 
   public var text: String {
     get {_text ?? String()}
@@ -3595,7 +3595,7 @@ public nonisolated struct Aura_Messenger_V1_MessageInput: Sendable {
   /// Clears the value of `language`. Subsequent reads from it will return its default value.
   public mutating func clearLanguage() {self._language = nil}
 
-  public var conversationType: Aura_Messenger_V1_ConversationType = .unspecified
+  public var conversationType: AuraAgentNativeConversationType = .unspecified
 
   public var memberCount: UInt32 {
     get {_memberCount ?? 0}
@@ -3607,10 +3607,10 @@ public nonisolated struct Aura_Messenger_V1_MessageInput: Sendable {
   public mutating func clearMemberCount() {self._memberCount = nil}
 
   /// Coarse, privacy-preserving sender relationship category.
-  public var senderRelationship: Aura_Messenger_V1_SenderRelationship = .unspecified
+  public var senderRelationship: AuraAgentNativeSenderRelationship = .unspecified
 
   /// Source used to derive sender_relationship. Self-declared data is not trust.
-  public var relationshipTrustSource: Aura_Messenger_V1_RelationshipTrustSource = .unspecified
+  public var relationshipTrustSource: AuraAgentNativeRelationshipTrustSource = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3622,13 +3622,13 @@ public nonisolated struct Aura_Messenger_V1_MessageInput: Sendable {
   fileprivate var _memberCount: UInt32? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_AnalyzeContextRequest: Sendable {
+public nonisolated struct AuraAgentNativeAnalyzeContextRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var message: Aura_Messenger_V1_MessageInput {
-    get {_message ?? Aura_Messenger_V1_MessageInput()}
+  public var message: AuraAgentNativeMessageInput {
+    get {_message ?? AuraAgentNativeMessageInput()}
     set {_message = newValue}
   }
   /// Returns true if `message` has been explicitly set.
@@ -3642,15 +3642,15 @@ public nonisolated struct Aura_Messenger_V1_AnalyzeContextRequest: Sendable {
 
   public init() {}
 
-  fileprivate var _message: Aura_Messenger_V1_MessageInput? = nil
+  fileprivate var _message: AuraAgentNativeMessageInput? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_ThreatScore: Sendable {
+public nonisolated struct AuraAgentNativeThreatScore: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var threatType: Aura_Messenger_V1_ThreatType = .unspecified
+  public var threatType: AuraAgentNativeThreatType = .unspecified
 
   public var score: Float = 0
 
@@ -3659,20 +3659,20 @@ public nonisolated struct Aura_Messenger_V1_ThreatScore: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_DetectionSignal: Sendable {
+public nonisolated struct AuraAgentNativeDetectionSignal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var threatType: Aura_Messenger_V1_ThreatType = .unspecified
+  public var threatType: AuraAgentNativeThreatType = .unspecified
 
   public var score: Float = 0
 
-  public var confidence: Aura_Messenger_V1_Confidence = .unspecified
+  public var confidence: AuraAgentNativeConfidence = .unspecified
 
-  public var layer: Aura_Messenger_V1_DetectionLayer = .unspecified
+  public var layer: AuraAgentNativeDetectionLayer = .unspecified
 
-  public var family: Aura_Messenger_V1_SignalFamily = .unspecified
+  public var family: AuraAgentNativeSignalFamily = .unspecified
 
   public var reasonCode: String = String()
 
@@ -3686,7 +3686,7 @@ public nonisolated struct Aura_Messenger_V1_DetectionSignal: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_RiskBreakdown: Sendable {
+public nonisolated struct AuraAgentNativeRiskBreakdown: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3704,7 +3704,7 @@ public nonisolated struct Aura_Messenger_V1_RiskBreakdown: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ContactSnapshot: Sendable {
+public nonisolated struct AuraAgentNativeContactSnapshot: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3715,9 +3715,9 @@ public nonisolated struct Aura_Messenger_V1_ContactSnapshot: Sendable {
 
   public var trustLevel: Float = 0
 
-  public var circleTier: Aura_Messenger_V1_CircleTier = .unspecified
+  public var circleTier: AuraAgentNativeCircleTier = .unspecified
 
-  public var trend: Aura_Messenger_V1_BehavioralTrend = .unspecified
+  public var trend: AuraAgentNativeBehavioralTrend = .unspecified
 
   public var isTrusted: Bool = false
 
@@ -3734,18 +3734,18 @@ public nonisolated struct Aura_Messenger_V1_ContactSnapshot: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ActionRecommendation: Sendable {
+public nonisolated struct AuraAgentNativeActionRecommendation: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var parentAlert: Aura_Messenger_V1_AlertPriority = .unspecified
+  public var parentAlert: AuraAgentNativeAlertPriority = .unspecified
 
-  public var followUps: [Aura_Messenger_V1_FollowUpAction] = []
+  public var followUps: [AuraAgentNativeFollowUpAction] = []
 
   public var crisisResources: Bool = false
 
-  public var uiActions: [Aura_Messenger_V1_UiAction] = []
+  public var uiActions: [AuraAgentNativeUiAction] = []
 
   public var reasonCodes: [String] = []
 
@@ -3754,12 +3754,12 @@ public nonisolated struct Aura_Messenger_V1_ActionRecommendation: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_LatentStateEvidence: Sendable {
+public nonisolated struct AuraAgentNativeLatentStateEvidence: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var kind: Aura_Messenger_V1_LatentStateKind = .unspecified
+  public var kind: AuraAgentNativeLatentStateKind = .unspecified
 
   public var score: Float = 0
 
@@ -3770,27 +3770,27 @@ public nonisolated struct Aura_Messenger_V1_LatentStateEvidence: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_InferenceSummary: Sendable {
+public nonisolated struct AuraAgentNativeInferenceSummary: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var uncertainty: Aura_Messenger_V1_UncertaintyLevel = .unspecified
+  public var uncertainty: AuraAgentNativeUncertaintyLevel = .unspecified
 
-  public var riskHorizon: Aura_Messenger_V1_RiskHorizon = .unspecified
+  public var riskHorizon: AuraAgentNativeRiskHorizon = .unspecified
 
   public var escalationLikelihood24H: Float = 0
 
   public var protectiveFactorStrength: Float = 0
 
-  public var latentStates: [Aura_Messenger_V1_LatentStateEvidence] = []
+  public var latentStates: [AuraAgentNativeLatentStateEvidence] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_KidsMemoryExplainability: Sendable {
+public nonisolated struct AuraAgentNativeKidsMemoryExplainability: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3817,18 +3817,18 @@ public nonisolated struct Aura_Messenger_V1_KidsMemoryExplainability: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ProductChildSurface: Sendable {
+public nonisolated struct AuraAgentNativeProductChildSurface: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var deliveryMode: Aura_Messenger_V1_ProductDeliveryMode = .unspecified
+  public var deliveryMode: AuraAgentNativeProductDeliveryMode = .unspecified
 
   public var visible: Bool = false
 
-  public var intervention: Aura_Messenger_V1_ProductChildIntervention = .unspecified
+  public var intervention: AuraAgentNativeProductChildIntervention = .unspecified
 
-  public var uiActions: [Aura_Messenger_V1_UiAction] = []
+  public var uiActions: [AuraAgentNativeUiAction] = []
 
   public var reasonCodes: [String] = []
 
@@ -3837,18 +3837,18 @@ public nonisolated struct Aura_Messenger_V1_ProductChildSurface: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ProductGuardianSurface: Sendable {
+public nonisolated struct AuraAgentNativeProductGuardianSurface: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var deliveryMode: Aura_Messenger_V1_ProductDeliveryMode = .unspecified
+  public var deliveryMode: AuraAgentNativeProductDeliveryMode = .unspecified
 
   public var notify: Bool = false
 
-  public var priority: Aura_Messenger_V1_AlertPriority = .unspecified
+  public var priority: AuraAgentNativeAlertPriority = .unspecified
 
-  public var followUps: [Aura_Messenger_V1_FollowUpAction] = []
+  public var followUps: [AuraAgentNativeFollowUpAction] = []
 
   public var reasonCodes: [String] = []
 
@@ -3857,27 +3857,27 @@ public nonisolated struct Aura_Messenger_V1_ProductGuardianSurface: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ProductReviewSurface: Sendable {
+public nonisolated struct AuraAgentNativeProductReviewSurface: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var deliveryMode: Aura_Messenger_V1_ProductDeliveryMode = .unspecified
+  public var deliveryMode: AuraAgentNativeProductDeliveryMode = .unspecified
 
   public var openReview: Bool = false
 
-  public var urgency: Aura_Messenger_V1_ProductReviewUrgency = .unspecified
+  public var urgency: AuraAgentNativeProductReviewUrgency = .unspecified
 
   public var reasonCodes: [String] = []
 
-  public var latentStates: [Aura_Messenger_V1_LatentStateKind] = []
+  public var latentStates: [AuraAgentNativeLatentStateKind] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ProductDecisionSurface: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeProductDecisionSurface: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -3887,17 +3887,17 @@ public nonisolated struct Aura_Messenger_V1_ProductDecisionSurface: @unchecked S
     set {_uniqueStorage()._schemaVersion = newValue}
   }
 
-  public var rolloutMode: Aura_Messenger_V1_ProductRolloutMode {
+  public var rolloutMode: AuraAgentNativeProductRolloutMode {
     get {_storage._rolloutMode}
     set {_uniqueStorage()._rolloutMode = newValue}
   }
 
-  public var threatType: Aura_Messenger_V1_ThreatType {
+  public var threatType: AuraAgentNativeThreatType {
     get {_storage._threatType}
     set {_uniqueStorage()._threatType = newValue}
   }
 
-  public var action: Aura_Messenger_V1_Action {
+  public var action: AuraAgentNativeAction {
     get {_storage._action}
     set {_uniqueStorage()._action = newValue}
   }
@@ -3907,8 +3907,8 @@ public nonisolated struct Aura_Messenger_V1_ProductDecisionSurface: @unchecked S
     set {_uniqueStorage()._score = newValue}
   }
 
-  public var child: Aura_Messenger_V1_ProductChildSurface {
-    get {_storage._child ?? Aura_Messenger_V1_ProductChildSurface()}
+  public var child: AuraAgentNativeProductChildSurface {
+    get {_storage._child ?? AuraAgentNativeProductChildSurface()}
     set {_uniqueStorage()._child = newValue}
   }
   /// Returns true if `child` has been explicitly set.
@@ -3916,8 +3916,8 @@ public nonisolated struct Aura_Messenger_V1_ProductDecisionSurface: @unchecked S
   /// Clears the value of `child`. Subsequent reads from it will return its default value.
   public mutating func clearChild() {_uniqueStorage()._child = nil}
 
-  public var guardian: Aura_Messenger_V1_ProductGuardianSurface {
-    get {_storage._guardian ?? Aura_Messenger_V1_ProductGuardianSurface()}
+  public var guardian: AuraAgentNativeProductGuardianSurface {
+    get {_storage._guardian ?? AuraAgentNativeProductGuardianSurface()}
     set {_uniqueStorage()._guardian = newValue}
   }
   /// Returns true if `guardian` has been explicitly set.
@@ -3925,8 +3925,8 @@ public nonisolated struct Aura_Messenger_V1_ProductDecisionSurface: @unchecked S
   /// Clears the value of `guardian`. Subsequent reads from it will return its default value.
   public mutating func clearGuardian() {_uniqueStorage()._guardian = nil}
 
-  public var review: Aura_Messenger_V1_ProductReviewSurface {
-    get {_storage._review ?? Aura_Messenger_V1_ProductReviewSurface()}
+  public var review: AuraAgentNativeProductReviewSurface {
+    get {_storage._review ?? AuraAgentNativeProductReviewSurface()}
     set {_uniqueStorage()._review = newValue}
   }
   /// Returns true if `review` has been explicitly set.
@@ -3934,7 +3934,7 @@ public nonisolated struct Aura_Messenger_V1_ProductDecisionSurface: @unchecked S
   /// Clears the value of `review`. Subsequent reads from it will return its default value.
   public mutating func clearReview() {_uniqueStorage()._review = nil}
 
-  public var uncertaintyDisposition: Aura_Messenger_V1_ProductUncertaintyDisposition {
+  public var uncertaintyDisposition: AuraAgentNativeProductUncertaintyDisposition {
     get {_storage._uncertaintyDisposition}
     set {_uniqueStorage()._uncertaintyDisposition = newValue}
   }
@@ -3946,22 +3946,22 @@ public nonisolated struct Aura_Messenger_V1_ProductDecisionSurface: @unchecked S
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Aura_Messenger_V1_AnalysisResult: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeAnalysisResult: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var threatType: Aura_Messenger_V1_ThreatType {
+  public var threatType: AuraAgentNativeThreatType {
     get {_storage._threatType}
     set {_uniqueStorage()._threatType = newValue}
   }
 
-  public var confidence: Aura_Messenger_V1_Confidence {
+  public var confidence: AuraAgentNativeConfidence {
     get {_storage._confidence}
     set {_uniqueStorage()._confidence = newValue}
   }
 
-  public var action: Aura_Messenger_V1_Action {
+  public var action: AuraAgentNativeAction {
     get {_storage._action}
     set {_uniqueStorage()._action = newValue}
   }
@@ -3976,18 +3976,18 @@ public nonisolated struct Aura_Messenger_V1_AnalysisResult: @unchecked Sendable 
     set {_uniqueStorage()._explanation = newValue}
   }
 
-  public var detectedThreats: [Aura_Messenger_V1_ThreatScore] {
+  public var detectedThreats: [AuraAgentNativeThreatScore] {
     get {_storage._detectedThreats}
     set {_uniqueStorage()._detectedThreats = newValue}
   }
 
-  public var signals: [Aura_Messenger_V1_DetectionSignal] {
+  public var signals: [AuraAgentNativeDetectionSignal] {
     get {_storage._signals}
     set {_uniqueStorage()._signals = newValue}
   }
 
-  public var recommendedAction: Aura_Messenger_V1_ActionRecommendation {
-    get {_storage._recommendedAction ?? Aura_Messenger_V1_ActionRecommendation()}
+  public var recommendedAction: AuraAgentNativeActionRecommendation {
+    get {_storage._recommendedAction ?? AuraAgentNativeActionRecommendation()}
     set {_uniqueStorage()._recommendedAction = newValue}
   }
   /// Returns true if `recommendedAction` has been explicitly set.
@@ -3995,8 +3995,8 @@ public nonisolated struct Aura_Messenger_V1_AnalysisResult: @unchecked Sendable 
   /// Clears the value of `recommendedAction`. Subsequent reads from it will return its default value.
   public mutating func clearRecommendedAction() {_uniqueStorage()._recommendedAction = nil}
 
-  public var riskBreakdown: Aura_Messenger_V1_RiskBreakdown {
-    get {_storage._riskBreakdown ?? Aura_Messenger_V1_RiskBreakdown()}
+  public var riskBreakdown: AuraAgentNativeRiskBreakdown {
+    get {_storage._riskBreakdown ?? AuraAgentNativeRiskBreakdown()}
     set {_uniqueStorage()._riskBreakdown = newValue}
   }
   /// Returns true if `riskBreakdown` has been explicitly set.
@@ -4004,8 +4004,8 @@ public nonisolated struct Aura_Messenger_V1_AnalysisResult: @unchecked Sendable 
   /// Clears the value of `riskBreakdown`. Subsequent reads from it will return its default value.
   public mutating func clearRiskBreakdown() {_uniqueStorage()._riskBreakdown = nil}
 
-  public var contactSnapshot: Aura_Messenger_V1_ContactSnapshot {
-    get {_storage._contactSnapshot ?? Aura_Messenger_V1_ContactSnapshot()}
+  public var contactSnapshot: AuraAgentNativeContactSnapshot {
+    get {_storage._contactSnapshot ?? AuraAgentNativeContactSnapshot()}
     set {_uniqueStorage()._contactSnapshot = newValue}
   }
   /// Returns true if `contactSnapshot` has been explicitly set.
@@ -4023,8 +4023,8 @@ public nonisolated struct Aura_Messenger_V1_AnalysisResult: @unchecked Sendable 
     set {_uniqueStorage()._analysisTimeUs = newValue}
   }
 
-  public var inference: Aura_Messenger_V1_InferenceSummary {
-    get {_storage._inference ?? Aura_Messenger_V1_InferenceSummary()}
+  public var inference: AuraAgentNativeInferenceSummary {
+    get {_storage._inference ?? AuraAgentNativeInferenceSummary()}
     set {_uniqueStorage()._inference = newValue}
   }
   /// Returns true if `inference` has been explicitly set.
@@ -4032,8 +4032,8 @@ public nonisolated struct Aura_Messenger_V1_AnalysisResult: @unchecked Sendable 
   /// Clears the value of `inference`. Subsequent reads from it will return its default value.
   public mutating func clearInference() {_uniqueStorage()._inference = nil}
 
-  public var productSurface: Aura_Messenger_V1_ProductDecisionSurface {
-    get {_storage._productSurface ?? Aura_Messenger_V1_ProductDecisionSurface()}
+  public var productSurface: AuraAgentNativeProductDecisionSurface {
+    get {_storage._productSurface ?? AuraAgentNativeProductDecisionSurface()}
     set {_uniqueStorage()._productSurface = newValue}
   }
   /// Returns true if `productSurface` has been explicitly set.
@@ -4042,8 +4042,8 @@ public nonisolated struct Aura_Messenger_V1_AnalysisResult: @unchecked Sendable 
   public mutating func clearProductSurface() {_uniqueStorage()._productSurface = nil}
 
   /// Optional explainability helper for KIDS memory escalations.
-  public var kidsMemory: Aura_Messenger_V1_KidsMemoryExplainability {
-    get {_storage._kidsMemory ?? Aura_Messenger_V1_KidsMemoryExplainability()}
+  public var kidsMemory: AuraAgentNativeKidsMemoryExplainability {
+    get {_storage._kidsMemory ?? AuraAgentNativeKidsMemoryExplainability()}
     set {_uniqueStorage()._kidsMemory = newValue}
   }
   /// Returns true if `kidsMemory` has been explicitly set.
@@ -4060,7 +4060,7 @@ public nonisolated struct Aura_Messenger_V1_AnalysisResult: @unchecked Sendable 
 
 /// Host-owned, content-free identity for exactly-once longitudinal ingestion.
 /// None of these opaque keys may be derived from message content or a verdict.
-public nonisolated struct Aura_Messenger_V1_CanonicalSafetyEventIdentity: Sendable {
+public nonisolated struct AuraAgentNativeCanonicalSafetyEventIdentity: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4084,13 +4084,13 @@ public nonisolated struct Aura_Messenger_V1_CanonicalSafetyEventIdentity: Sendab
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_CanonicalSafetyAnalyzeRequest: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeCanonicalSafetyAnalyzeRequest: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var message: Aura_Messenger_V1_MessageInput {
-    get {_storage._message ?? Aura_Messenger_V1_MessageInput()}
+  public var message: AuraAgentNativeMessageInput {
+    get {_storage._message ?? AuraAgentNativeMessageInput()}
     set {_uniqueStorage()._message = newValue}
   }
   /// Returns true if `message` has been explicitly set.
@@ -4098,8 +4098,8 @@ public nonisolated struct Aura_Messenger_V1_CanonicalSafetyAnalyzeRequest: @unch
   /// Clears the value of `message`. Subsequent reads from it will return its default value.
   public mutating func clearMessage() {_uniqueStorage()._message = nil}
 
-  public var identity: Aura_Messenger_V1_CanonicalSafetyEventIdentity {
-    get {_storage._identity ?? Aura_Messenger_V1_CanonicalSafetyEventIdentity()}
+  public var identity: AuraAgentNativeCanonicalSafetyEventIdentity {
+    get {_storage._identity ?? AuraAgentNativeCanonicalSafetyEventIdentity()}
     set {_uniqueStorage()._identity = newValue}
   }
   /// Returns true if `identity` has been explicitly set.
@@ -4114,12 +4114,12 @@ public nonisolated struct Aura_Messenger_V1_CanonicalSafetyAnalyzeRequest: @unch
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Aura_Messenger_V1_CanonicalSafetyAnalyzeResponse: Sendable {
+public nonisolated struct AuraAgentNativeCanonicalSafetyAnalyzeResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var disposition: Aura_Messenger_V1_CanonicalSafetyDisposition = .unspecified
+  public var disposition: AuraAgentNativeCanonicalSafetyDisposition = .unspecified
 
   public var ignoredReason: String {
     get {_ignoredReason ?? String()}
@@ -4148,7 +4148,7 @@ public nonisolated struct Aura_Messenger_V1_CanonicalSafetyAnalyzeResponse: Send
   /// Clears the value of `caseRevision`. Subsequent reads from it will return its default value.
   public mutating func clearCaseRevision() {self._caseRevision = nil}
 
-  public var caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus = .unspecified
+  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
 
   public var latestRevision: UInt32 {
     get {_latestRevision ?? 0}
@@ -4185,13 +4185,13 @@ public nonisolated struct Aura_Messenger_V1_CanonicalSafetyAnalyzeResponse: Send
 /// Product-facing canonical request. It intentionally mirrors the identity
 /// fields of CanonicalSafetyAnalyzeRequest while using a distinct message type
 /// so clients cannot accidentally decode the wrong response contract.
-public nonisolated struct Aura_Messenger_V1_LocalDecisionAnalyzeRequest: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeLocalDecisionAnalyzeRequest: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var message: Aura_Messenger_V1_MessageInput {
-    get {_storage._message ?? Aura_Messenger_V1_MessageInput()}
+  public var message: AuraAgentNativeMessageInput {
+    get {_storage._message ?? AuraAgentNativeMessageInput()}
     set {_uniqueStorage()._message = newValue}
   }
   /// Returns true if `message` has been explicitly set.
@@ -4199,8 +4199,8 @@ public nonisolated struct Aura_Messenger_V1_LocalDecisionAnalyzeRequest: @unchec
   /// Clears the value of `message`. Subsequent reads from it will return its default value.
   public mutating func clearMessage() {_uniqueStorage()._message = nil}
 
-  public var identity: Aura_Messenger_V1_CanonicalSafetyEventIdentity {
-    get {_storage._identity ?? Aura_Messenger_V1_CanonicalSafetyEventIdentity()}
+  public var identity: AuraAgentNativeCanonicalSafetyEventIdentity {
+    get {_storage._identity ?? AuraAgentNativeCanonicalSafetyEventIdentity()}
     set {_uniqueStorage()._identity = newValue}
   }
   /// Returns true if `identity` has been explicitly set.
@@ -4218,13 +4218,13 @@ public nonisolated struct Aura_Messenger_V1_LocalDecisionAnalyzeRequest: @unchec
 /// Compact, content-free projection that a client may persist and apply. Raw
 /// message text, analyzer explanations, individual signals, and contact IDs are
 /// deliberately excluded from this boundary.
-public nonisolated struct Aura_Messenger_V1_LocalDecision: Sendable {
+public nonisolated struct AuraAgentNativeLocalDecision: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var productSurface: Aura_Messenger_V1_ProductDecisionSurface {
-    get {_productSurface ?? Aura_Messenger_V1_ProductDecisionSurface()}
+  public var productSurface: AuraAgentNativeProductDecisionSurface {
+    get {_productSurface ?? AuraAgentNativeProductDecisionSurface()}
     set {_productSurface = newValue}
   }
   /// Returns true if `productSurface` has been explicitly set.
@@ -4232,8 +4232,8 @@ public nonisolated struct Aura_Messenger_V1_LocalDecision: Sendable {
   /// Clears the value of `productSurface`. Subsequent reads from it will return its default value.
   public mutating func clearProductSurface() {self._productSurface = nil}
 
-  public var recommendedAction: Aura_Messenger_V1_ActionRecommendation {
-    get {_recommendedAction ?? Aura_Messenger_V1_ActionRecommendation()}
+  public var recommendedAction: AuraAgentNativeActionRecommendation {
+    get {_recommendedAction ?? AuraAgentNativeActionRecommendation()}
     set {_recommendedAction = newValue}
   }
   /// Returns true if `recommendedAction` has been explicitly set.
@@ -4243,8 +4243,8 @@ public nonisolated struct Aura_Messenger_V1_LocalDecision: Sendable {
 
   public var reasonCodes: [String] = []
 
-  public var inference: Aura_Messenger_V1_InferenceSummary {
-    get {_inference ?? Aura_Messenger_V1_InferenceSummary()}
+  public var inference: AuraAgentNativeInferenceSummary {
+    get {_inference ?? AuraAgentNativeInferenceSummary()}
     set {_inference = newValue}
   }
   /// Returns true if `inference` has been explicitly set.
@@ -4252,7 +4252,7 @@ public nonisolated struct Aura_Messenger_V1_LocalDecision: Sendable {
   /// Clears the value of `inference`. Subsequent reads from it will return its default value.
   public mutating func clearInference() {self._inference = nil}
 
-  public var runtimeBackend: Aura_Messenger_V1_RuntimeBackend = .unspecified
+  public var runtimeBackend: AuraAgentNativeRuntimeBackend = .unspecified
 
   public var degraded: Bool = false
 
@@ -4260,27 +4260,27 @@ public nonisolated struct Aura_Messenger_V1_LocalDecision: Sendable {
 
   public init() {}
 
-  fileprivate var _productSurface: Aura_Messenger_V1_ProductDecisionSurface? = nil
-  fileprivate var _recommendedAction: Aura_Messenger_V1_ActionRecommendation? = nil
-  fileprivate var _inference: Aura_Messenger_V1_InferenceSummary? = nil
+  fileprivate var _productSurface: AuraAgentNativeProductDecisionSurface? = nil
+  fileprivate var _recommendedAction: AuraAgentNativeActionRecommendation? = nil
+  fileprivate var _inference: AuraAgentNativeInferenceSummary? = nil
 }
 
 /// Exactly-once local product decision plus the same Safety Case receipt used
 /// by the canonical lifecycle API. `decision` is present only for a successful
 /// first attempt. Duplicate and stale calls are content-free and must resolve
 /// the already persisted decision by canonical source identity.
-public nonisolated struct Aura_Messenger_V1_LocalDecisionAnalyzeResponse: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeLocalDecisionAnalyzeResponse: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var disposition: Aura_Messenger_V1_CanonicalSafetyDisposition {
+  public var disposition: AuraAgentNativeCanonicalSafetyDisposition {
     get {_storage._disposition}
     set {_uniqueStorage()._disposition = newValue}
   }
 
-  public var decision: Aura_Messenger_V1_LocalDecision {
-    get {_storage._decision ?? Aura_Messenger_V1_LocalDecision()}
+  public var decision: AuraAgentNativeLocalDecision {
+    get {_storage._decision ?? AuraAgentNativeLocalDecision()}
     set {_uniqueStorage()._decision = newValue}
   }
   /// Returns true if `decision` has been explicitly set.
@@ -4315,7 +4315,7 @@ public nonisolated struct Aura_Messenger_V1_LocalDecisionAnalyzeResponse: @unche
   /// Clears the value of `caseRevision`. Subsequent reads from it will return its default value.
   public mutating func clearCaseRevision() {_uniqueStorage()._caseRevision = nil}
 
-  public var caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus {
+  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus {
     get {_storage._caseStatus}
     set {_uniqueStorage()._caseStatus = newValue}
   }
@@ -4350,7 +4350,7 @@ public nonisolated struct Aura_Messenger_V1_LocalDecisionAnalyzeResponse: @unche
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Aura_Messenger_V1_SafetyCaseLifecycleCommandRequest: Sendable {
+public nonisolated struct AuraAgentNativeSafetyCaseLifecycleCommandRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4359,7 +4359,7 @@ public nonisolated struct Aura_Messenger_V1_SafetyCaseLifecycleCommandRequest: S
 
   public var caseID: String = String()
 
-  public var commandType: Aura_Messenger_V1_SafetyCaseLifecycleCommandType = .unspecified
+  public var commandType: AuraAgentNativeSafetyCaseLifecycleCommandType = .unspecified
 
   public var atMs: UInt64 = 0
 
@@ -4371,7 +4371,7 @@ public nonisolated struct Aura_Messenger_V1_SafetyCaseLifecycleCommandRequest: S
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_SafetyCaseLifecycleCommandResponse: Sendable {
+public nonisolated struct AuraAgentNativeSafetyCaseLifecycleCommandResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4380,7 +4380,7 @@ public nonisolated struct Aura_Messenger_V1_SafetyCaseLifecycleCommandResponse: 
 
   public var caseRevision: UInt64 = 0
 
-  public var caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus = .unspecified
+  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
 
   public var runtimeStateSchemaVersion: String = String()
 
@@ -4401,7 +4401,7 @@ public nonisolated struct Aura_Messenger_V1_SafetyCaseLifecycleCommandResponse: 
 }
 
 /// Explicit host-authorized successor activation. Ingestion never invokes it.
-public nonisolated struct Aura_Messenger_V1_SafetyCaseSuccessorActivationRequest: Sendable {
+public nonisolated struct AuraAgentNativeSafetyCaseSuccessorActivationRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4431,12 +4431,12 @@ public nonisolated struct Aura_Messenger_V1_SafetyCaseSuccessorActivationRequest
   fileprivate var _expectedCaseGeneration: UInt64? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_SafetyCaseSuccessorActivationResponse: Sendable {
+public nonisolated struct AuraAgentNativeSafetyCaseSuccessorActivationResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var disposition: Aura_Messenger_V1_SafetyCaseSuccessorActivationDisposition = .unspecified
+  public var disposition: AuraAgentNativeSafetyCaseSuccessorActivationDisposition = .unspecified
 
   public var predecessorCaseID: String = String()
 
@@ -4455,7 +4455,7 @@ public nonisolated struct Aura_Messenger_V1_SafetyCaseSuccessorActivationRespons
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_SafetyCaseAccountRemovalRequest: Sendable {
+public nonisolated struct AuraAgentNativeSafetyCaseAccountRemovalRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4467,7 +4467,7 @@ public nonisolated struct Aura_Messenger_V1_SafetyCaseAccountRemovalRequest: Sen
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_SafetyCaseAccountRemovalResponse: Sendable {
+public nonisolated struct AuraAgentNativeSafetyCaseAccountRemovalResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4483,7 +4483,7 @@ public nonisolated struct Aura_Messenger_V1_SafetyCaseAccountRemovalResponse: Se
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReport: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeGuardianReport: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4508,7 +4508,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReport: @unchecked Sendable 
     set {_uniqueStorage()._transitionRevision = newValue}
   }
 
-  public var trigger: Aura_Messenger_V1_GuardianReportTrigger {
+  public var trigger: AuraAgentNativeGuardianReportTrigger {
     get {_storage._trigger}
     set {_uniqueStorage()._trigger = newValue}
   }
@@ -4518,22 +4518,22 @@ public nonisolated struct Aura_Messenger_V1_GuardianReport: @unchecked Sendable 
     set {_uniqueStorage()._queuedAtMs = newValue}
   }
 
-  public var riskFamily: Aura_Messenger_V1_GuardianReportRiskFamily {
+  public var riskFamily: AuraAgentNativeGuardianReportRiskFamily {
     get {_storage._riskFamily}
     set {_uniqueStorage()._riskFamily = newValue}
   }
 
-  public var caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus {
+  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus {
     get {_storage._caseStatus}
     set {_uniqueStorage()._caseStatus = newValue}
   }
 
-  public var severity: Aura_Messenger_V1_SafetyCaseSeverity {
+  public var severity: AuraAgentNativeSafetyCaseSeverity {
     get {_storage._severity}
     set {_uniqueStorage()._severity = newValue}
   }
 
-  public var confidenceBand: Aura_Messenger_V1_Confidence {
+  public var confidenceBand: AuraAgentNativeConfidence {
     get {_storage._confidenceBand}
     set {_uniqueStorage()._confidenceBand = newValue}
   }
@@ -4548,7 +4548,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReport: @unchecked Sendable 
     set {_uniqueStorage()._lastObservedAtMs = newValue}
   }
 
-  public var observationVolumeBand: Aura_Messenger_V1_GuardianReportObservationVolumeBand {
+  public var observationVolumeBand: AuraAgentNativeGuardianReportObservationVolumeBand {
     get {_storage._observationVolumeBand}
     set {_uniqueStorage()._observationVolumeBand = newValue}
   }
@@ -4593,7 +4593,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReport: @unchecked Sendable 
     set {_uniqueStorage()._executionRuleDigest = newValue}
   }
 
-  public var deliveryClass: Aura_Messenger_V1_GuardianReportDeliveryClass {
+  public var deliveryClass: AuraAgentNativeGuardianReportDeliveryClass {
     get {_storage._deliveryClass}
     set {_uniqueStorage()._deliveryClass = newValue}
   }
@@ -4620,7 +4620,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReport: @unchecked Sendable 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportSnapshotRequest: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportSnapshotRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4649,12 +4649,12 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportSnapshotRequest: Senda
   fileprivate var _expectedCaseGeneration: UInt64? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportSnapshotResponse: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportSnapshotResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var disposition: Aura_Messenger_V1_GuardianReportDisposition = .unspecified
+  public var disposition: AuraAgentNativeGuardianReportDisposition = .unspecified
 
   public var caseID: String = String()
 
@@ -4662,10 +4662,10 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportSnapshotResponse: Send
 
   public var currentCaseRevision: UInt64 = 0
 
-  public var currentCaseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus = .unspecified
+  public var currentCaseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
 
-  public var report: Aura_Messenger_V1_GuardianReport {
-    get {_report ?? Aura_Messenger_V1_GuardianReport()}
+  public var report: AuraAgentNativeGuardianReport {
+    get {_report ?? AuraAgentNativeGuardianReport()}
     set {_report = newValue}
   }
   /// Returns true if `report` has been explicitly set.
@@ -4673,7 +4673,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportSnapshotResponse: Send
   /// Clears the value of `report`. Subsequent reads from it will return its default value.
   public mutating func clearReport() {self._report = nil}
 
-  public var deferredTrigger: Aura_Messenger_V1_GuardianReportTrigger {
+  public var deferredTrigger: AuraAgentNativeGuardianReportTrigger {
     get {_deferredTrigger ?? .unspecified}
     set {_deferredTrigger = newValue}
   }
@@ -4714,13 +4714,13 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportSnapshotResponse: Send
 
   public init() {}
 
-  fileprivate var _report: Aura_Messenger_V1_GuardianReport? = nil
-  fileprivate var _deferredTrigger: Aura_Messenger_V1_GuardianReportTrigger? = nil
+  fileprivate var _report: AuraAgentNativeGuardianReport? = nil
+  fileprivate var _deferredTrigger: AuraAgentNativeGuardianReportTrigger? = nil
   fileprivate var _deferredEligibleAtMs: UInt64? = nil
   fileprivate var _preparedAtMs: UInt64? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportAccountSnapshotRequest: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportAccountSnapshotRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4732,12 +4732,12 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportAccountSnapshotRequest
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportAccountSnapshotResponse: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportAccountSnapshotResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var snapshots: [Aura_Messenger_V1_GuardianReportSnapshotResponse] = []
+  public var snapshots: [AuraAgentNativeGuardianReportSnapshotResponse] = []
 
   public var runtimeStateSchemaVersion: String = String()
 
@@ -4746,7 +4746,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportAccountSnapshotRespons
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportFlushRequest: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportFlushRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4776,7 +4776,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportFlushRequest: Sendable
   fileprivate var _expectedCaseGeneration: UInt64? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportPreparationRequest: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportPreparationRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4806,12 +4806,12 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportPreparationRequest: Se
   fileprivate var _expectedCaseGeneration: UInt64? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportPreparationResponse: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportPreparationResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var disposition: Aura_Messenger_V1_GuardianReportPreparationDisposition = .unspecified
+  public var disposition: AuraAgentNativeGuardianReportPreparationDisposition = .unspecified
 
   public var caseID: String = String()
 
@@ -4819,7 +4819,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportPreparationResponse: S
 
   public var caseRevision: UInt64 = 0
 
-  public var caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus = .unspecified
+  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
 
   public var reportTransitionRevision: UInt64 = 0
 
@@ -4832,7 +4832,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportPreparationResponse: S
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportSuppressionRequest: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportSuppressionRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4864,12 +4864,12 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportSuppressionRequest: Se
   fileprivate var _expectedCaseGeneration: UInt64? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportSuppressionResponse: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportSuppressionResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var disposition: Aura_Messenger_V1_GuardianReportSuppressionDisposition = .unspecified
+  public var disposition: AuraAgentNativeGuardianReportSuppressionDisposition = .unspecified
 
   public var caseID: String = String()
 
@@ -4877,7 +4877,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportSuppressionResponse: S
 
   public var caseRevision: UInt64 = 0
 
-  public var caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus = .unspecified
+  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
 
   public var reportTransitionRevision: UInt64 = 0
 
@@ -4894,7 +4894,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportSuppressionResponse: S
 
 /// Exact native report-key acknowledgement. `delivered_at_ms` is the maximum
 /// authenticated durable-enqueue timestamp across the complete device fanout.
-public nonisolated struct Aura_Messenger_V1_GuardianReportAcknowledgementRequest: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportAcknowledgementRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4924,12 +4924,12 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportAcknowledgementRequest
   fileprivate var _expectedCaseGeneration: UInt64? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_GuardianReportAcknowledgementResponse: Sendable {
+public nonisolated struct AuraAgentNativeGuardianReportAcknowledgementResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var disposition: Aura_Messenger_V1_GuardianReportAcknowledgementDisposition = .unspecified
+  public var disposition: AuraAgentNativeGuardianReportAcknowledgementDisposition = .unspecified
 
   public var caseID: String = String()
 
@@ -4937,7 +4937,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportAcknowledgementRespons
 
   public var caseRevision: UInt64 = 0
 
-  public var caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus = .unspecified
+  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
 
   public var reportTransitionRevision: UInt64 = 0
 
@@ -4950,7 +4950,7 @@ public nonisolated struct Aura_Messenger_V1_GuardianReportAcknowledgementRespons
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ContactProfileRequest: Sendable {
+public nonisolated struct AuraAgentNativeContactProfileRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4962,7 +4962,7 @@ public nonisolated struct Aura_Messenger_V1_ContactProfileRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ContactProfile: Sendable {
+public nonisolated struct AuraAgentNativeContactProfile: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -4975,9 +4975,9 @@ public nonisolated struct Aura_Messenger_V1_ContactProfile: Sendable {
 
   public var trustLevel: Float = 0
 
-  public var circleTier: Aura_Messenger_V1_CircleTier = .unspecified
+  public var circleTier: AuraAgentNativeCircleTier = .unspecified
 
-  public var trend: Aura_Messenger_V1_BehavioralTrend = .unspecified
+  public var trend: AuraAgentNativeBehavioralTrend = .unspecified
 
   public var firstSeenMs: UInt64 = 0
 
@@ -5004,7 +5004,7 @@ public nonisolated struct Aura_Messenger_V1_ContactProfile: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ContactProfileResponse: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeContactProfileResponse: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5014,8 +5014,8 @@ public nonisolated struct Aura_Messenger_V1_ContactProfileResponse: @unchecked S
     set {_uniqueStorage()._found = newValue}
   }
 
-  public var profile: Aura_Messenger_V1_ContactProfile {
-    get {_storage._profile ?? Aura_Messenger_V1_ContactProfile()}
+  public var profile: AuraAgentNativeContactProfile {
+    get {_storage._profile ?? AuraAgentNativeContactProfile()}
     set {_uniqueStorage()._profile = newValue}
   }
   /// Returns true if `profile` has been explicitly set.
@@ -5030,25 +5030,25 @@ public nonisolated struct Aura_Messenger_V1_ContactProfileResponse: @unchecked S
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Aura_Messenger_V1_ContactsByRiskResponse: Sendable {
+public nonisolated struct AuraAgentNativeContactsByRiskResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var contacts: [Aura_Messenger_V1_ContactProfile] = []
+  public var contacts: [AuraAgentNativeContactProfile] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_BatchAnalyzeItem: Sendable {
+public nonisolated struct AuraAgentNativeBatchAnalyzeItem: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var message: Aura_Messenger_V1_MessageInput {
-    get {_message ?? Aura_Messenger_V1_MessageInput()}
+  public var message: AuraAgentNativeMessageInput {
+    get {_message ?? AuraAgentNativeMessageInput()}
     set {_message = newValue}
   }
   /// Returns true if `message` has been explicitly set.
@@ -5069,35 +5069,35 @@ public nonisolated struct Aura_Messenger_V1_BatchAnalyzeItem: Sendable {
 
   public init() {}
 
-  fileprivate var _message: Aura_Messenger_V1_MessageInput? = nil
+  fileprivate var _message: AuraAgentNativeMessageInput? = nil
   fileprivate var _timestampMs: UInt64? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_BatchAnalyzeRequest: Sendable {
+public nonisolated struct AuraAgentNativeBatchAnalyzeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var items: [Aura_Messenger_V1_BatchAnalyzeItem] = []
+  public var items: [AuraAgentNativeBatchAnalyzeItem] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_BatchAnalyzeResponse: Sendable {
+public nonisolated struct AuraAgentNativeBatchAnalyzeResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var results: [Aura_Messenger_V1_AnalysisResult] = []
+  public var results: [AuraAgentNativeAnalysisResult] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ReloadPatternsRequest: Sendable {
+public nonisolated struct AuraAgentNativeReloadPatternsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5109,7 +5109,7 @@ public nonisolated struct Aura_Messenger_V1_ReloadPatternsRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_MarkContactTrustedRequest: Sendable {
+public nonisolated struct AuraAgentNativeMarkContactTrustedRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5121,7 +5121,7 @@ public nonisolated struct Aura_Messenger_V1_MarkContactTrustedRequest: Sendable 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_StatusResponse: Sendable {
+public nonisolated struct AuraAgentNativeStatusResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5144,13 +5144,13 @@ public nonisolated struct Aura_Messenger_V1_StatusResponse: Sendable {
   fileprivate var _message: String? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_ExportContextResponse: Sendable {
+public nonisolated struct AuraAgentNativeExportContextResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var state: Aura_Messenger_V1_TrackerState {
-    get {_state ?? Aura_Messenger_V1_TrackerState()}
+  public var state: AuraAgentNativeTrackerState {
+    get {_state ?? AuraAgentNativeTrackerState()}
     set {_state = newValue}
   }
   /// Returns true if `state` has been explicitly set.
@@ -5162,16 +5162,16 @@ public nonisolated struct Aura_Messenger_V1_ExportContextResponse: Sendable {
 
   public init() {}
 
-  fileprivate var _state: Aura_Messenger_V1_TrackerState? = nil
+  fileprivate var _state: AuraAgentNativeTrackerState? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_ImportContextRequest: Sendable {
+public nonisolated struct AuraAgentNativeImportContextRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var state: Aura_Messenger_V1_TrackerState {
-    get {_state ?? Aura_Messenger_V1_TrackerState()}
+  public var state: AuraAgentNativeTrackerState {
+    get {_state ?? AuraAgentNativeTrackerState()}
     set {_state = newValue}
   }
   /// Returns true if `state` has been explicitly set.
@@ -5183,10 +5183,10 @@ public nonisolated struct Aura_Messenger_V1_ImportContextRequest: Sendable {
 
   public init() {}
 
-  fileprivate var _state: Aura_Messenger_V1_TrackerState? = nil
+  fileprivate var _state: AuraAgentNativeTrackerState? = nil
 }
 
-public nonisolated struct Aura_Messenger_V1_ConversationSummaryItem: Sendable {
+public nonisolated struct AuraAgentNativeConversationSummaryItem: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5206,14 +5206,14 @@ public nonisolated struct Aura_Messenger_V1_ConversationSummaryItem: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ConversationSummaryResponse: Sendable {
+public nonisolated struct AuraAgentNativeConversationSummaryResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var totalConversations: UInt64 = 0
 
-  public var conversations: [Aura_Messenger_V1_ConversationSummaryItem] = []
+  public var conversations: [AuraAgentNativeConversationSummaryItem] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -5222,16 +5222,16 @@ public nonisolated struct Aura_Messenger_V1_ConversationSummaryResponse: Sendabl
 
 /// Interpretation metadata added in TrackerState schema v3. A missing frame in
 /// schema v2 migrates to the all-unspecified legacy frame.
-public nonisolated struct Aura_Messenger_V1_EventContextFrame: Sendable {
+public nonisolated struct AuraAgentNativeEventContextFrame: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var speechAct: Aura_Messenger_V1_EventSpeechAct = .unspecified
+  public var speechAct: AuraAgentNativeEventSpeechAct = .unspecified
 
-  public var stance: Aura_Messenger_V1_EventStance = .unspecified
+  public var stance: AuraAgentNativeEventStance = .unspecified
 
-  public var directionality: Aura_Messenger_V1_EventDirectionality = .unspecified
+  public var directionality: AuraAgentNativeEventDirectionality = .unspecified
 
   public var newContact: Bool = false
 
@@ -5254,7 +5254,7 @@ public nonisolated struct Aura_Messenger_V1_EventContextFrame: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ContextEvent: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeContextEvent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5279,7 +5279,7 @@ public nonisolated struct Aura_Messenger_V1_ContextEvent: @unchecked Sendable {
     set {_uniqueStorage()._conversationID = newValue}
   }
 
-  public var kind: Aura_Messenger_V1_EventKind {
+  public var kind: AuraAgentNativeEventKind {
     get {_storage._kind}
     set {_uniqueStorage()._kind = newValue}
   }
@@ -5303,8 +5303,8 @@ public nonisolated struct Aura_Messenger_V1_ContextEvent: @unchecked Sendable {
   /// Clears the value of `contentHash`. Subsequent reads from it will return its default value.
   public mutating func clearContentHash() {_uniqueStorage()._contentHash = nil}
 
-  public var context: Aura_Messenger_V1_EventContextFrame {
-    get {_storage._context ?? Aura_Messenger_V1_EventContextFrame()}
+  public var context: AuraAgentNativeEventContextFrame {
+    get {_storage._context ?? AuraAgentNativeEventContextFrame()}
     set {_uniqueStorage()._context = newValue}
   }
   /// Returns true if `context` has been explicitly set.
@@ -5319,23 +5319,23 @@ public nonisolated struct Aura_Messenger_V1_ContextEvent: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Aura_Messenger_V1_ConversationTimelineState: Sendable {
+public nonisolated struct AuraAgentNativeConversationTimelineState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var conversationID: String = String()
 
-  public var conversationType: Aura_Messenger_V1_ConversationType = .unspecified
+  public var conversationType: AuraAgentNativeConversationType = .unspecified
 
-  public var events: [Aura_Messenger_V1_ContextEvent] = []
+  public var events: [AuraAgentNativeContextEvent] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_BehavioralSnapshotState: Sendable {
+public nonisolated struct AuraAgentNativeBehavioralSnapshotState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5365,7 +5365,7 @@ public nonisolated struct Aura_Messenger_V1_BehavioralSnapshotState: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_NarrativeHit: Sendable {
+public nonisolated struct AuraAgentNativeNarrativeHit: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5379,7 +5379,7 @@ public nonisolated struct Aura_Messenger_V1_NarrativeHit: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_NarrativeTimelineEntry: Sendable {
+public nonisolated struct AuraAgentNativeNarrativeTimelineEntry: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5393,7 +5393,7 @@ public nonisolated struct Aura_Messenger_V1_NarrativeTimelineEntry: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_WeeklyPropagandaCount: Sendable {
+public nonisolated struct AuraAgentNativeWeeklyPropagandaCount: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5407,7 +5407,7 @@ public nonisolated struct Aura_Messenger_V1_WeeklyPropagandaCount: Sendable {
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ChildSafetyTrajectoryState: Sendable {
+public nonisolated struct AuraAgentNativeChildSafetyTrajectoryState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5429,7 +5429,7 @@ public nonisolated struct Aura_Messenger_V1_ChildSafetyTrajectoryState: Sendable
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_ContactProfileState: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeContactProfileState: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5513,23 +5513,23 @@ public nonisolated struct Aura_Messenger_V1_ContactProfileState: @unchecked Send
     set {_uniqueStorage()._trustLevel = newValue}
   }
 
-  public var circleTier: Aura_Messenger_V1_CircleTier {
+  public var circleTier: AuraAgentNativeCircleTier {
     get {_storage._circleTier}
     set {_uniqueStorage()._circleTier = newValue}
   }
 
-  public var trend: Aura_Messenger_V1_BehavioralTrend {
+  public var trend: AuraAgentNativeBehavioralTrend {
     get {_storage._trend}
     set {_uniqueStorage()._trend = newValue}
   }
 
-  public var weeklySnapshots: [Aura_Messenger_V1_BehavioralSnapshotState] {
+  public var weeklySnapshots: [AuraAgentNativeBehavioralSnapshotState] {
     get {_storage._weeklySnapshots}
     set {_uniqueStorage()._weeklySnapshots = newValue}
   }
 
-  public var currentSnapshot: Aura_Messenger_V1_BehavioralSnapshotState {
-    get {_storage._currentSnapshot ?? Aura_Messenger_V1_BehavioralSnapshotState()}
+  public var currentSnapshot: AuraAgentNativeBehavioralSnapshotState {
+    get {_storage._currentSnapshot ?? AuraAgentNativeBehavioralSnapshotState()}
     set {_uniqueStorage()._currentSnapshot = newValue}
   }
   /// Returns true if `currentSnapshot` has been explicitly set.
@@ -5552,7 +5552,7 @@ public nonisolated struct Aura_Messenger_V1_ContactProfileState: @unchecked Send
     set {_uniqueStorage()._propagandaSourceCount = newValue}
   }
 
-  public var narrativeHits: [Aura_Messenger_V1_NarrativeHit] {
+  public var narrativeHits: [AuraAgentNativeNarrativeHit] {
     get {_storage._narrativeHits}
     set {_uniqueStorage()._narrativeHits = newValue}
   }
@@ -5592,23 +5592,23 @@ public nonisolated struct Aura_Messenger_V1_ContactProfileState: @unchecked Send
     set {_uniqueStorage()._messageFingerprints = newValue}
   }
 
-  public var narrativeTimeline: [Aura_Messenger_V1_NarrativeTimelineEntry] {
+  public var narrativeTimeline: [AuraAgentNativeNarrativeTimelineEntry] {
     get {_storage._narrativeTimeline}
     set {_uniqueStorage()._narrativeTimeline = newValue}
   }
 
-  public var weeklyPropagandaCounts: [Aura_Messenger_V1_WeeklyPropagandaCount] {
+  public var weeklyPropagandaCounts: [AuraAgentNativeWeeklyPropagandaCount] {
     get {_storage._weeklyPropagandaCounts}
     set {_uniqueStorage()._weeklyPropagandaCounts = newValue}
   }
 
-  public var ageSource: Aura_Messenger_V1_AgeSource {
+  public var ageSource: AuraAgentNativeAgeSource {
     get {_storage._ageSource}
     set {_uniqueStorage()._ageSource = newValue}
   }
 
-  public var childSafety: Aura_Messenger_V1_ChildSafetyTrajectoryState {
-    get {_storage._childSafety ?? Aura_Messenger_V1_ChildSafetyTrajectoryState()}
+  public var childSafety: AuraAgentNativeChildSafetyTrajectoryState {
+    get {_storage._childSafety ?? AuraAgentNativeChildSafetyTrajectoryState()}
     set {_uniqueStorage()._childSafety = newValue}
   }
   /// Returns true if `childSafety` has been explicitly set.
@@ -5623,29 +5623,29 @@ public nonisolated struct Aura_Messenger_V1_ContactProfileState: @unchecked Send
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Aura_Messenger_V1_ContactProfilerState: Sendable {
+public nonisolated struct AuraAgentNativeContactProfilerState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var profiles: [Aura_Messenger_V1_ContactProfileState] = []
+  public var profiles: [AuraAgentNativeContactProfileState] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Aura_Messenger_V1_TrackerState: Sendable {
+public nonisolated struct AuraAgentNativeTrackerState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var schemaVersion: UInt32 = 0
 
-  public var timelines: [Aura_Messenger_V1_ConversationTimelineState] = []
+  public var timelines: [AuraAgentNativeConversationTimelineState] = []
 
-  public var contactProfiler: Aura_Messenger_V1_ContactProfilerState {
-    get {_contactProfiler ?? Aura_Messenger_V1_ContactProfilerState()}
+  public var contactProfiler: AuraAgentNativeContactProfilerState {
+    get {_contactProfiler ?? AuraAgentNativeContactProfilerState()}
     set {_contactProfiler = newValue}
   }
   /// Returns true if `contactProfiler` has been explicitly set.
@@ -5654,8 +5654,8 @@ public nonisolated struct Aura_Messenger_V1_TrackerState: Sendable {
   public mutating func clearContactProfiler() {self._contactProfiler = nil}
 
   /// Kids domain memory state for export/import (conversation + sender tracking).
-  public var kidsMemory: Aura_Messenger_V1_KidsMemoryState {
-    get {_kidsMemory ?? Aura_Messenger_V1_KidsMemoryState()}
+  public var kidsMemory: AuraAgentNativeKidsMemoryState {
+    get {_kidsMemory ?? AuraAgentNativeKidsMemoryState()}
     set {_kidsMemory = newValue}
   }
   /// Returns true if `kidsMemory` has been explicitly set.
@@ -5667,12 +5667,12 @@ public nonisolated struct Aura_Messenger_V1_TrackerState: Sendable {
 
   public init() {}
 
-  fileprivate var _contactProfiler: Aura_Messenger_V1_ContactProfilerState? = nil
-  fileprivate var _kidsMemory: Aura_Messenger_V1_KidsMemoryState? = nil
+  fileprivate var _contactProfiler: AuraAgentNativeContactProfilerState? = nil
+  fileprivate var _kidsMemory: AuraAgentNativeKidsMemoryState? = nil
 }
 
 /// Per-message risk snapshot within kids conversation memory.
-public nonisolated struct Aura_Messenger_V1_KidsMessageRiskSnapshot: Sendable {
+public nonisolated struct AuraAgentNativeKidsMessageRiskSnapshot: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5713,14 +5713,14 @@ public nonisolated struct Aura_Messenger_V1_KidsMessageRiskSnapshot: Sendable {
 }
 
 /// Per-conversation risk memory in kids module.
-public nonisolated struct Aura_Messenger_V1_KidsConversationMemoryState: Sendable {
+public nonisolated struct AuraAgentNativeKidsConversationMemoryState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var conversationID: String = String()
 
-  public var entries: [Aura_Messenger_V1_KidsMessageRiskSnapshot] = []
+  public var entries: [AuraAgentNativeKidsMessageRiskSnapshot] = []
 
   public var messageIndex: UInt64 = 0
 
@@ -5735,7 +5735,7 @@ public nonisolated struct Aura_Messenger_V1_KidsConversationMemoryState: Sendabl
   public mutating func clearLastActivityIndex() {self._lastActivityIndex = nil}
 
   /// Per-reason emission checkpoints used to preserve alert cooldowns.
-  public var lastEmitted: [Aura_Messenger_V1_KidsEmissionCheckpoint] = []
+  public var lastEmitted: [AuraAgentNativeKidsEmissionCheckpoint] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -5745,7 +5745,7 @@ public nonisolated struct Aura_Messenger_V1_KidsConversationMemoryState: Sendabl
 }
 
 /// Per-sender cross-conversation risk memory in kids module.
-public nonisolated struct Aura_Messenger_V1_KidsSenderMemoryState: Sendable {
+public nonisolated struct AuraAgentNativeKidsSenderMemoryState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5767,7 +5767,7 @@ public nonisolated struct Aura_Messenger_V1_KidsSenderMemoryState: Sendable {
   public mutating func clearLastActivityIndex() {self._lastActivityIndex = nil}
 
   /// Per-reason emission checkpoints used to preserve alert cooldowns.
-  public var lastEmitted: [Aura_Messenger_V1_KidsEmissionCheckpoint] = []
+  public var lastEmitted: [AuraAgentNativeKidsEmissionCheckpoint] = []
 
   /// Explicit guardian block state; replaces legacy synthetic conversation IDs.
   public var guardianBlocked: Bool = false
@@ -5780,7 +5780,7 @@ public nonisolated struct Aura_Messenger_V1_KidsSenderMemoryState: Sendable {
 }
 
 /// Monotonic checkpoint for one kids-memory alert family.
-public nonisolated struct Aura_Messenger_V1_KidsEmissionCheckpoint: Sendable {
+public nonisolated struct AuraAgentNativeKidsEmissionCheckpoint: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -5795,14 +5795,14 @@ public nonisolated struct Aura_Messenger_V1_KidsEmissionCheckpoint: Sendable {
 }
 
 /// Full kids memory state for export/import.
-public nonisolated struct Aura_Messenger_V1_KidsMemoryState: Sendable {
+public nonisolated struct AuraAgentNativeKidsMemoryState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var conversations: [Aura_Messenger_V1_KidsConversationMemoryState] = []
+  public var conversations: [AuraAgentNativeKidsConversationMemoryState] = []
 
-  public var senders: [Aura_Messenger_V1_KidsSenderMemoryState] = []
+  public var senders: [AuraAgentNativeKidsSenderMemoryState] = []
 
   /// Must equal the current nested Kids memory schema version.
   public var schemaVersion: UInt32 = 0
@@ -5816,239 +5816,239 @@ public nonisolated struct Aura_Messenger_V1_KidsMemoryState: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "aura.messenger.v1"
 
-nonisolated extension Aura_Messenger_V1_ProtectionLevel: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProtectionLevel: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PROTECTION_LEVEL_UNSPECIFIED\0\u{1}PROTECTION_LEVEL_OFF\0\u{1}PROTECTION_LEVEL_LOW\0\u{1}PROTECTION_LEVEL_MEDIUM\0\u{1}PROTECTION_LEVEL_HIGH\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AccountType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAccountType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ACCOUNT_TYPE_UNSPECIFIED\0\u{1}ACCOUNT_TYPE_ADULT\0\u{1}ACCOUNT_TYPE_TEEN\0\u{1}ACCOUNT_TYPE_CHILD\0")
 }
 
-nonisolated extension Aura_Messenger_V1_DomainMode: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeDomainMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DOMAIN_MODE_UNSPECIFIED\0\u{1}DOMAIN_MODE_NONE\0\u{1}DOMAIN_MODE_KIDS\0\u{1}DOMAIN_MODE_MILITARY\0")
 }
 
-nonisolated extension Aura_Messenger_V1_CulturalContextKind: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeCulturalContextKind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CULTURAL_CONTEXT_KIND_UNSPECIFIED\0\u{1}CULTURAL_CONTEXT_KIND_UKRAINIAN\0\u{1}CULTURAL_CONTEXT_KIND_RUSSIAN\0\u{1}CULTURAL_CONTEXT_KIND_ENGLISH\0\u{1}CULTURAL_CONTEXT_KIND_CUSTOM\0")
 }
 
-nonisolated extension Aura_Messenger_V1_ThreatType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeThreatType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0THREAT_TYPE_UNSPECIFIED\0\u{1}THREAT_TYPE_NONE\0\u{1}THREAT_TYPE_BULLYING\0\u{1}THREAT_TYPE_GROOMING\0\u{1}THREAT_TYPE_EXPLICIT\0\u{1}THREAT_TYPE_THREAT\0\u{1}THREAT_TYPE_SELF_HARM\0\u{1}THREAT_TYPE_SPAM\0\u{1}THREAT_TYPE_SCAM\0\u{1}THREAT_TYPE_PHISHING\0\u{1}THREAT_TYPE_MANIPULATION\0\u{1}THREAT_TYPE_NSFW\0\u{1}THREAT_TYPE_HATE_SPEECH\0\u{1}THREAT_TYPE_DOXXING\0\u{1}THREAT_TYPE_PII_LEAKAGE\0\u{1}THREAT_TYPE_PROPAGANDA\0\u{1}THREAT_TYPE_OPSEC_VIOLATION\0\u{1}THREAT_TYPE_PSYOPS\0\u{1}THREAT_TYPE_MILITARY_SOCIAL_ENG\0\u{1}THREAT_TYPE_COORDINATE_LEAK\0")
 }
 
-nonisolated extension Aura_Messenger_V1_Confidence: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeConfidence: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONFIDENCE_UNSPECIFIED\0\u{1}CONFIDENCE_LOW\0\u{1}CONFIDENCE_MEDIUM\0\u{1}CONFIDENCE_HIGH\0")
 }
 
-nonisolated extension Aura_Messenger_V1_Action: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAction: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ACTION_UNSPECIFIED\0\u{1}ACTION_ALLOW\0\u{1}ACTION_MARK\0\u{1}ACTION_BLUR\0\u{1}ACTION_WARN\0\u{1}ACTION_BLOCK\0")
 }
 
-nonisolated extension Aura_Messenger_V1_DetectionLayer: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeDetectionLayer: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DETECTION_LAYER_UNSPECIFIED\0\u{1}DETECTION_LAYER_PATTERN_MATCHING\0\u{1}DETECTION_LAYER_ML_CLASSIFICATION\0\u{1}DETECTION_LAYER_CONTEXT_ANALYSIS\0\u{1}DETECTION_LAYER_DOMAIN_HEURISTIC\0")
 }
 
-nonisolated extension Aura_Messenger_V1_SignalFamily: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSignalFamily: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SIGNAL_FAMILY_UNSPECIFIED\0\u{1}SIGNAL_FAMILY_CONTENT\0\u{1}SIGNAL_FAMILY_CONVERSATION\0\u{1}SIGNAL_FAMILY_LINK\0\u{1}SIGNAL_FAMILY_ABUSE\0")
 }
 
-nonisolated extension Aura_Messenger_V1_UiAction: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeUiAction: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UI_ACTION_UNSPECIFIED\0\u{1}UI_ACTION_WARN_BEFORE_SEND\0\u{1}UI_ACTION_WARN_BEFORE_DISPLAY\0\u{1}UI_ACTION_BLUR_UNTIL_TAP\0\u{1}UI_ACTION_CONFIRM_BEFORE_OPEN_LINK\0\u{1}UI_ACTION_SUGGEST_BLOCK_CONTACT\0\u{1}UI_ACTION_SUGGEST_REPORT\0\u{1}UI_ACTION_RESTRICT_UNKNOWN_CONTACT\0\u{1}UI_ACTION_SLOW_DOWN_CONVERSATION\0\u{1}UI_ACTION_SHOW_CRISIS_SUPPORT\0\u{1}UI_ACTION_ESCALATE_TO_GUARDIAN\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AlertPriority: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAlertPriority: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ALERT_PRIORITY_UNSPECIFIED\0\u{1}ALERT_PRIORITY_NONE\0\u{1}ALERT_PRIORITY_LOW\0\u{1}ALERT_PRIORITY_MEDIUM\0\u{1}ALERT_PRIORITY_HIGH\0\u{1}ALERT_PRIORITY_URGENT\0")
 }
 
-nonisolated extension Aura_Messenger_V1_FollowUpAction: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeFollowUpAction: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FOLLOW_UP_ACTION_UNSPECIFIED\0\u{1}FOLLOW_UP_ACTION_MONITOR_CONVERSATION\0\u{1}FOLLOW_UP_ACTION_BLOCK_SUGGESTED\0\u{1}FOLLOW_UP_ACTION_REVIEW_CONTACT_PROFILE\0\u{1}FOLLOW_UP_ACTION_REPORT_TO_AUTHORITIES\0")
 }
 
-nonisolated extension Aura_Messenger_V1_ProductRolloutMode: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductRolloutMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRODUCT_ROLLOUT_MODE_UNSPECIFIED\0\u{1}PRODUCT_ROLLOUT_MODE_SHADOW\0\u{1}PRODUCT_ROLLOUT_MODE_STAGING_PILOT\0\u{1}PRODUCT_ROLLOUT_MODE_GUARDIAN_ENABLED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_ProductDeliveryMode: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductDeliveryMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRODUCT_DELIVERY_MODE_UNSPECIFIED\0\u{1}PRODUCT_DELIVERY_MODE_SUPPRESS\0\u{1}PRODUCT_DELIVERY_MODE_MIRROR_ONLY\0\u{1}PRODUCT_DELIVERY_MODE_APPLY\0")
 }
 
-nonisolated extension Aura_Messenger_V1_ProductChildIntervention: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductChildIntervention: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRODUCT_CHILD_INTERVENTION_UNSPECIFIED\0\u{1}PRODUCT_CHILD_INTERVENTION_NONE\0\u{1}PRODUCT_CHILD_INTERVENTION_MARK\0\u{1}PRODUCT_CHILD_INTERVENTION_BLUR\0\u{1}PRODUCT_CHILD_INTERVENTION_WARN\0\u{1}PRODUCT_CHILD_INTERVENTION_BLOCK\0")
 }
 
-nonisolated extension Aura_Messenger_V1_ProductReviewUrgency: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductReviewUrgency: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRODUCT_REVIEW_URGENCY_UNSPECIFIED\0\u{1}PRODUCT_REVIEW_URGENCY_NONE\0\u{1}PRODUCT_REVIEW_URGENCY_STANDARD\0\u{1}PRODUCT_REVIEW_URGENCY_HIGH\0\u{1}PRODUCT_REVIEW_URGENCY_URGENT\0")
 }
 
-nonisolated extension Aura_Messenger_V1_ProductUncertaintyDisposition: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductUncertaintyDisposition: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRODUCT_UNCERTAINTY_DISPOSITION_UNSPECIFIED\0\u{1}PRODUCT_UNCERTAINTY_DISPOSITION_NORMAL\0\u{1}PRODUCT_UNCERTAINTY_DISPOSITION_MIRROR_ONLY\0\u{1}PRODUCT_UNCERTAINTY_DISPOSITION_REQUIRE_REVIEW\0\u{1}PRODUCT_UNCERTAINTY_DISPOSITION_GUARDIAN_PRIORITY\0")
 }
 
-nonisolated extension Aura_Messenger_V1_CircleTier: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeCircleTier: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CIRCLE_TIER_UNSPECIFIED\0\u{1}CIRCLE_TIER_INNER\0\u{1}CIRCLE_TIER_REGULAR\0\u{1}CIRCLE_TIER_OCCASIONAL\0\u{1}CIRCLE_TIER_NEW\0")
 }
 
-nonisolated extension Aura_Messenger_V1_BehavioralTrend: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeBehavioralTrend: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0BEHAVIORAL_TREND_UNSPECIFIED\0\u{1}BEHAVIORAL_TREND_STABLE\0\u{1}BEHAVIORAL_TREND_IMPROVING\0\u{1}BEHAVIORAL_TREND_GRADUAL_WORSENING\0\u{1}BEHAVIORAL_TREND_RAPID_WORSENING\0\u{1}BEHAVIORAL_TREND_ROLE_REVERSAL\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AgeSource: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAgeSource: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AGE_SOURCE_UNSPECIFIED\0\u{1}AGE_SOURCE_USER_REPORTED\0\u{1}AGE_SOURCE_PARENT_VERIFIED\0\u{1}AGE_SOURCE_ML_INFERRED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_UncertaintyLevel: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeUncertaintyLevel: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0UNCERTAINTY_LEVEL_UNSPECIFIED\0\u{1}UNCERTAINTY_LEVEL_LOW\0\u{1}UNCERTAINTY_LEVEL_MEDIUM\0\u{1}UNCERTAINTY_LEVEL_HIGH\0")
 }
 
-nonisolated extension Aura_Messenger_V1_RiskHorizon: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRiskHorizon: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RISK_HORIZON_UNSPECIFIED\0\u{1}RISK_HORIZON_UNKNOWN\0\u{1}RISK_HORIZON_IMMEDIATE\0\u{1}RISK_HORIZON_SHORT_TERM\0\u{1}RISK_HORIZON_SUSTAINED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_LatentStateKind: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeLatentStateKind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0LATENT_STATE_KIND_UNSPECIFIED\0\u{1}LATENT_STATE_KIND_DEPENDENCY_BUILDING\0\u{1}LATENT_STATE_KIND_ISOLATION_PRESSURE\0\u{1}LATENT_STATE_KIND_COERCIVE_CONTROL\0\u{1}LATENT_STATE_KIND_HUMILIATION\0\u{1}LATENT_STATE_KIND_CRISIS_VULNERABILITY\0\u{1}LATENT_STATE_KIND_PROTECTIVE_SUPPORT\0\u{1}LATENT_STATE_KIND_GROUP_ESCALATION\0")
 }
 
-nonisolated extension Aura_Messenger_V1_ConversationType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeConversationType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONVERSATION_TYPE_UNSPECIFIED\0\u{1}CONVERSATION_TYPE_DIRECT\0\u{1}CONVERSATION_TYPE_GROUP\0")
 }
 
-nonisolated extension Aura_Messenger_V1_SenderRelationship: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSenderRelationship: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SENDER_RELATIONSHIP_UNSPECIFIED\0\u{1}SENDER_RELATIONSHIP_UNKNOWN\0\u{1}SENDER_RELATIONSHIP_PARENT\0\u{1}SENDER_RELATIONSHIP_GUARDIAN\0\u{1}SENDER_RELATIONSHIP_FAMILY\0\u{1}SENDER_RELATIONSHIP_SIBLING\0\u{1}SENDER_RELATIONSHIP_PEER\0\u{1}SENDER_RELATIONSHIP_TEACHER\0\u{1}SENDER_RELATIONSHIP_COACH\0\u{1}SENDER_RELATIONSHIP_AUTHORITY\0\u{1}SENDER_RELATIONSHIP_SERVICE\0\u{1}SENDER_RELATIONSHIP_UNKNOWN_ADULT\0\u{1}SENDER_RELATIONSHIP_UNKNOWN_PEER\0")
 }
 
-nonisolated extension Aura_Messenger_V1_RelationshipTrustSource: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRelationshipTrustSource: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RELATIONSHIP_TRUST_SOURCE_UNSPECIFIED\0\u{1}RELATIONSHIP_TRUST_SOURCE_UNKNOWN\0\u{1}RELATIONSHIP_TRUST_SOURCE_USER_VERIFIED\0\u{1}RELATIONSHIP_TRUST_SOURCE_GUARDIAN_VERIFIED\0\u{1}RELATIONSHIP_TRUST_SOURCE_PLATFORM_VERIFIED\0\u{1}RELATIONSHIP_TRUST_SOURCE_ADDRESS_BOOK\0\u{1}RELATIONSHIP_TRUST_SOURCE_SCHOOL_DIRECTORY\0\u{1}RELATIONSHIP_TRUST_SOURCE_SERVER_REPUTATION\0\u{1}RELATIONSHIP_TRUST_SOURCE_LOCAL_HEURISTIC\0\u{1}RELATIONSHIP_TRUST_SOURCE_SELF_DECLARED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContentType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_TEXT\0\u{1}CONTENT_TYPE_IMAGE\0\u{1}CONTENT_TYPE_VOICE\0\u{1}CONTENT_TYPE_VIDEO\0\u{1}CONTENT_TYPE_URL\0")
 }
 
-nonisolated extension Aura_Messenger_V1_EventKind: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeEventKind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0EVENT_KIND_UNSPECIFIED\0\u{1}EVENT_KIND_FLATTERY\0\u{1}EVENT_KIND_GIFT_OFFER\0\u{1}EVENT_KIND_SECRECY_REQUEST\0\u{1}EVENT_KIND_PLATFORM_SWITCH\0\u{1}EVENT_KIND_PERSONAL_INFO_REQUEST\0\u{1}EVENT_KIND_PHOTO_REQUEST\0\u{1}EVENT_KIND_VIDEO_CALL_REQUEST\0\u{1}EVENT_KIND_FINANCIAL_GROOMING\0\u{1}EVENT_KIND_MEETING_REQUEST\0\u{1}EVENT_KIND_SEXUAL_CONTENT\0\u{1}EVENT_KIND_AGE_INAPPROPRIATE\0\u{1}EVENT_KIND_INSULT\0\u{1}EVENT_KIND_DENIGRATION\0\u{1}EVENT_KIND_HARM_ENCOURAGEMENT\0\u{1}EVENT_KIND_PHYSICAL_THREAT\0\u{1}EVENT_KIND_RUMOR_SPREADING\0\u{1}EVENT_KIND_EXCLUSION\0\u{1}EVENT_KIND_MOCKERY\0\u{1}EVENT_KIND_GUILT_TRIPPING\0\u{1}EVENT_KIND_GASLIGHTING\0\u{1}EVENT_KIND_EMOTIONAL_BLACKMAIL\0\u{1}EVENT_KIND_PEER_PRESSURE\0\u{1}EVENT_KIND_LOVE_BOMBING\0\u{1}EVENT_KIND_DARVO\0\u{1}EVENT_KIND_DEVALUATION\0\u{1}EVENT_KIND_SUICIDAL_IDEATION\0\u{1}EVENT_KIND_HOPELESSNESS\0\u{1}EVENT_KIND_FAREWELL_MESSAGE\0\u{1}EVENT_KIND_DOXXING_ATTEMPT\0\u{1}EVENT_KIND_SCREENSHOT_THREAT\0\u{1}EVENT_KIND_HATE_SPEECH\0\u{1}EVENT_KIND_LOCATION_REQUEST\0\u{1}EVENT_KIND_MONEY_OFFER\0\u{1}EVENT_KIND_PII_SELF_DISCLOSURE\0\u{1}EVENT_KIND_CASUAL_MEETING_REQUEST\0\u{1}EVENT_KIND_DARE_CHALLENGE\0\u{1}EVENT_KIND_SUICIDE_COERCION\0\u{1}EVENT_KIND_FALSE_CONSENSUS\0\u{1}EVENT_KIND_DEBT_CREATION\0\u{1}EVENT_KIND_REPUTATION_THREAT\0\u{1}EVENT_KIND_IDENTITY_EROSION\0\u{1}EVENT_KIND_NETWORK_POISONING\0\u{1}EVENT_KIND_FAKE_VULNERABILITY\0\u{1}EVENT_KIND_NORMAL_CONVERSATION\0\u{1}EVENT_KIND_TRUSTED_CONTACT\0\u{1}EVENT_KIND_DEFENSE_OF_VICTIM\0\u{1}EVENT_KIND_PROPAGANDA_NARRATIVE\0\u{1}EVENT_KIND_SUSPICIOUS_SOURCE\0\u{1}EVENT_KIND_POSITION_LEAK\0\u{1}EVENT_KIND_UNIT_INFO_LEAK\0\u{1}EVENT_KIND_EQUIPMENT_LEAK\0\u{1}EVENT_KIND_COORDINATE_MENTION\0\u{1}EVENT_KIND_PSYOPS_PATTERN\0\u{1}EVENT_KIND_INTEL_GATHERING\0\u{1}EVENT_KIND_MILITARY_PHISHING\0\u{1}EVENT_KIND_MILITARY_DISINFO\0")
 }
 
-nonisolated extension Aura_Messenger_V1_RuntimeBackend: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRuntimeBackend: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RUNTIME_BACKEND_UNSPECIFIED\0\u{1}RUNTIME_BACKEND_RULES_FALLBACK\0\u{1}RUNTIME_BACKEND_ONNX\0")
 }
 
-nonisolated extension Aura_Messenger_V1_RuntimeModality: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRuntimeModality: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RUNTIME_MODALITY_UNSPECIFIED\0\u{1}RUNTIME_MODALITY_TEXT\0\u{1}RUNTIME_MODALITY_URL\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionPolicySignatureAlgorithm: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionPolicySignatureAlgorithm: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_POLICY_SIGNATURE_ALGORITHM_UNSPECIFIED\0\u{1}AURA_EXECUTION_POLICY_SIGNATURE_ALGORITHM_ED25519\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyState: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionPolicyState: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_POLICY_STATE_UNSPECIFIED\0\u{1}AURA_EXECUTION_POLICY_STATE_ENABLED\0\u{1}AURA_EXECUTION_POLICY_STATE_DISABLED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionMode: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_MODE_UNSPECIFIED\0\u{1}AURA_EXECUTION_MODE_OFF\0\u{1}AURA_EXECUTION_MODE_SHADOW_CASES\0\u{1}AURA_EXECUTION_MODE_CASE_TRANSITIONS\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionAccountProfile: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionAccountProfile: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_ACCOUNT_PROFILE_UNSPECIFIED\0\u{1}AURA_EXECUTION_ACCOUNT_PROFILE_ADULT\0\u{1}AURA_EXECUTION_ACCOUNT_PROFILE_TEEN\0\u{1}AURA_EXECUTION_ACCOUNT_PROFILE_CHILD\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionDomainMode: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionDomainMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_DOMAIN_MODE_UNSPECIFIED\0\u{1}AURA_EXECUTION_DOMAIN_MODE_NONE\0\u{1}AURA_EXECUTION_DOMAIN_MODE_KIDS\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionRiskFamily: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionRiskFamily: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_RISK_FAMILY_UNSPECIFIED\0\u{1}AURA_EXECUTION_RISK_FAMILY_BULLYING\0\u{1}AURA_EXECUTION_RISK_FAMILY_GROOMING\0\u{1}AURA_EXECUTION_RISK_FAMILY_EXPLICIT\0\u{1}AURA_EXECUTION_RISK_FAMILY_THREAT\0\u{1}AURA_EXECUTION_RISK_FAMILY_SELF_HARM\0\u{1}AURA_EXECUTION_RISK_FAMILY_SPAM\0\u{1}AURA_EXECUTION_RISK_FAMILY_SCAM\0\u{1}AURA_EXECUTION_RISK_FAMILY_PHISHING\0\u{1}AURA_EXECUTION_RISK_FAMILY_MANIPULATION\0\u{1}AURA_EXECUTION_RISK_FAMILY_NSFW\0\u{1}AURA_EXECUTION_RISK_FAMILY_HATE_SPEECH\0\u{1}AURA_EXECUTION_RISK_FAMILY_DOXXING\0\u{1}AURA_EXECUTION_RISK_FAMILY_PII_LEAKAGE\0\u{1}AURA_EXECUTION_RISK_FAMILY_PROPAGANDA\0\u{1}AURA_EXECUTION_RISK_FAMILY_OPSEC_VIOLATION\0\u{1}AURA_EXECUTION_RISK_FAMILY_PSYOPS\0\u{1}AURA_EXECUTION_RISK_FAMILY_MILITARY_SOCIAL_ENG\0\u{1}AURA_EXECUTION_RISK_FAMILY_COORDINATE_LEAK\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionCaseTrigger: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionCaseTrigger: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_CASE_TRIGGER_UNSPECIFIED\0\u{1}AURA_EXECUTION_CASE_TRIGGER_CASE_OPENED\0\u{1}AURA_EXECUTION_CASE_TRIGGER_CASE_ESCALATED\0\u{1}AURA_EXECUTION_CASE_TRIGGER_URGENT_REVIEW\0\u{1}AURA_EXECUTION_CASE_TRIGGER_CASE_RESOLVED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionCaseStatus: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionCaseStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_CASE_STATUS_UNSPECIFIED\0\u{1}AURA_EXECUTION_CASE_STATUS_OBSERVING\0\u{1}AURA_EXECUTION_CASE_STATUS_OPEN\0\u{1}AURA_EXECUTION_CASE_STATUS_ESCALATED\0\u{1}AURA_EXECUTION_CASE_STATUS_URGENT\0\u{1}AURA_EXECUTION_CASE_STATUS_RESOLVED\0\u{1}AURA_EXECUTION_CASE_STATUS_DISMISSED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionSeverity: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionSeverity: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_SEVERITY_UNSPECIFIED\0\u{1}AURA_EXECUTION_SEVERITY_INFORMATIONAL\0\u{1}AURA_EXECUTION_SEVERITY_ELEVATED\0\u{1}AURA_EXECUTION_SEVERITY_HIGH\0\u{1}AURA_EXECUTION_SEVERITY_CRITICAL\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionConfidence: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionConfidence: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_CONFIDENCE_UNSPECIFIED\0\u{1}AURA_EXECUTION_CONFIDENCE_LOW\0\u{1}AURA_EXECUTION_CONFIDENCE_MEDIUM\0\u{1}AURA_EXECUTION_CONFIDENCE_HIGH\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionDeliveryClass: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionDeliveryClass: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_DELIVERY_CLASS_UNSPECIFIED\0\u{1}AURA_EXECUTION_DELIVERY_CLASS_NONE\0\u{1}AURA_EXECUTION_DELIVERY_CLASS_NEEDS_ATTENTION\0\u{1}AURA_EXECUTION_DELIVERY_CLASS_URGENT\0")
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyApplyDisposition: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionPolicyApplyDisposition: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_POLICY_APPLY_DISPOSITION_UNSPECIFIED\0\u{1}AURA_EXECUTION_POLICY_APPLY_DISPOSITION_APPLIED\0\u{1}AURA_EXECUTION_POLICY_APPLY_DISPOSITION_UNCHANGED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseLifecycleStatus: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseLifecycleStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SAFETY_CASE_LIFECYCLE_STATUS_UNSPECIFIED\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_OBSERVING\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_OPEN\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_ESCALATED\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_URGENT\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_RESOLVED\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_DISMISSED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_CanonicalSafetyDisposition: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeCanonicalSafetyDisposition: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CANONICAL_SAFETY_DISPOSITION_UNSPECIFIED\0\u{1}CANONICAL_SAFETY_DISPOSITION_PROCESSED_IGNORED\0\u{1}CANONICAL_SAFETY_DISPOSITION_PROCESSED_REDUCED\0\u{1}CANONICAL_SAFETY_DISPOSITION_PROCESSED_REJECTED\0\u{1}CANONICAL_SAFETY_DISPOSITION_DUPLICATE_IGNORED\0\u{1}CANONICAL_SAFETY_DISPOSITION_DUPLICATE_APPLIED\0\u{1}CANONICAL_SAFETY_DISPOSITION_DUPLICATE_REJECTED\0\u{1}CANONICAL_SAFETY_DISPOSITION_STALE_IGNORED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseLifecycleCommandType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseLifecycleCommandType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SAFETY_CASE_LIFECYCLE_COMMAND_TYPE_UNSPECIFIED\0\u{1}SAFETY_CASE_LIFECYCLE_COMMAND_TYPE_RESOLVE\0\u{1}SAFETY_CASE_LIFECYCLE_COMMAND_TYPE_DISMISS\0")
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseSuccessorActivationDisposition: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseSuccessorActivationDisposition: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SAFETY_CASE_SUCCESSOR_ACTIVATION_DISPOSITION_UNSPECIFIED\0\u{1}SAFETY_CASE_SUCCESSOR_ACTIVATION_DISPOSITION_ACTIVATED\0\u{1}SAFETY_CASE_SUCCESSOR_ACTIVATION_DISPOSITION_ALREADY_ACTIVATED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportDisposition: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportDisposition: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GUARDIAN_REPORT_DISPOSITION_UNSPECIFIED\0\u{1}GUARDIAN_REPORT_DISPOSITION_NOT_REQUIRED\0\u{1}GUARDIAN_REPORT_DISPOSITION_PENDING\0\u{1}GUARDIAN_REPORT_DISPOSITION_DEFERRED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportTrigger: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportTrigger: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GUARDIAN_REPORT_TRIGGER_UNSPECIFIED\0\u{1}GUARDIAN_REPORT_TRIGGER_CASE_OPENED\0\u{1}GUARDIAN_REPORT_TRIGGER_CASE_ESCALATED\0\u{1}GUARDIAN_REPORT_TRIGGER_URGENT_REVIEW\0\u{1}GUARDIAN_REPORT_TRIGGER_CASE_RESOLVED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseSeverity: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseSeverity: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SAFETY_CASE_SEVERITY_UNSPECIFIED\0\u{1}SAFETY_CASE_SEVERITY_INFORMATIONAL\0\u{1}SAFETY_CASE_SEVERITY_ELEVATED\0\u{1}SAFETY_CASE_SEVERITY_HIGH\0\u{1}SAFETY_CASE_SEVERITY_CRITICAL\0")
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportRiskFamily: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportRiskFamily: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GUARDIAN_REPORT_RISK_FAMILY_UNSPECIFIED\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_BULLYING\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_GROOMING\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_EXPLICIT\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_THREAT\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_SELF_HARM\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_SPAM\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_SCAM\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_PHISHING\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_MANIPULATION\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_NSFW\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_HATE_SPEECH\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_DOXXING\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_PII_LEAKAGE\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_PROPAGANDA\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_OPSEC_VIOLATION\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_PSYOPS\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_MILITARY_SOCIAL_ENG\0\u{1}GUARDIAN_REPORT_RISK_FAMILY_COORDINATE_LEAK\0")
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportObservationVolumeBand: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportObservationVolumeBand: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GUARDIAN_REPORT_OBSERVATION_VOLUME_BAND_UNSPECIFIED\0\u{1}GUARDIAN_REPORT_OBSERVATION_VOLUME_BAND_ISOLATED\0\u{1}GUARDIAN_REPORT_OBSERVATION_VOLUME_BAND_REPEATED\0\u{1}GUARDIAN_REPORT_OBSERVATION_VOLUME_BAND_SUSTAINED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportDeliveryClass: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportDeliveryClass: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GUARDIAN_REPORT_DELIVERY_CLASS_UNSPECIFIED\0\u{1}GUARDIAN_REPORT_DELIVERY_CLASS_NONE\0\u{1}GUARDIAN_REPORT_DELIVERY_CLASS_NEEDS_ATTENTION\0\u{1}GUARDIAN_REPORT_DELIVERY_CLASS_URGENT\0")
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportPreparationDisposition: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportPreparationDisposition: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GUARDIAN_REPORT_PREPARATION_DISPOSITION_UNSPECIFIED\0\u{1}GUARDIAN_REPORT_PREPARATION_DISPOSITION_PREPARED\0\u{1}GUARDIAN_REPORT_PREPARATION_DISPOSITION_ALREADY_PREPARED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportSuppressionDisposition: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportSuppressionDisposition: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GUARDIAN_REPORT_SUPPRESSION_DISPOSITION_UNSPECIFIED\0\u{1}GUARDIAN_REPORT_SUPPRESSION_DISPOSITION_SUPPRESSED\0\u{1}GUARDIAN_REPORT_SUPPRESSION_DISPOSITION_ALREADY_SUPPRESSED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportAcknowledgementDisposition: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportAcknowledgementDisposition: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GUARDIAN_REPORT_ACKNOWLEDGEMENT_DISPOSITION_UNSPECIFIED\0\u{1}GUARDIAN_REPORT_ACKNOWLEDGEMENT_DISPOSITION_ACKNOWLEDGED\0\u{1}GUARDIAN_REPORT_ACKNOWLEDGEMENT_DISPOSITION_ALREADY_ACKNOWLEDGED\0")
 }
 
-nonisolated extension Aura_Messenger_V1_EventSpeechAct: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeEventSpeechAct: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0EVENT_SPEECH_ACT_UNSPECIFIED\0\u{1}EVENT_SPEECH_ACT_ASSERT\0\u{1}EVENT_SPEECH_ACT_ASK\0\u{1}EVENT_SPEECH_ACT_QUOTE\0\u{1}EVENT_SPEECH_ACT_REPORT\0\u{1}EVENT_SPEECH_ACT_COUNTER\0\u{1}EVENT_SPEECH_ACT_SUPPORT\0\u{1}EVENT_SPEECH_ACT_SOLICIT\0")
 }
 
-nonisolated extension Aura_Messenger_V1_EventStance: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeEventStance: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0EVENT_STANCE_UNSPECIFIED\0\u{1}EVENT_STANCE_ENDORSE\0\u{1}EVENT_STANCE_OPPOSE\0\u{1}EVENT_STANCE_NEUTRAL\0\u{1}EVENT_STANCE_AMBIGUOUS\0")
 }
 
-nonisolated extension Aura_Messenger_V1_EventDirectionality: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeEventDirectionality: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0EVENT_DIRECTIONALITY_UNSPECIFIED\0\u{1}EVENT_DIRECTIONALITY_DIRECTED_AT_USER\0\u{1}EVENT_DIRECTIONALITY_SELF_REFERENTIAL\0\u{1}EVENT_DIRECTIONALITY_THIRD_PARTY\0\u{1}EVENT_DIRECTIONALITY_BROADCAST\0")
 }
 
-nonisolated extension Aura_Messenger_V1_CulturalContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeCulturalContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CulturalContext"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{3}custom_value\0")
 
@@ -6079,7 +6079,7 @@ nonisolated extension Aura_Messenger_V1_CulturalContext: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_CulturalContext, rhs: Aura_Messenger_V1_CulturalContext) -> Bool {
+  public static func ==(lhs: AuraAgentNativeCulturalContext, rhs: AuraAgentNativeCulturalContext) -> Bool {
     if lhs.kind != rhs.kind {return false}
     if lhs._customValue != rhs._customValue {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -6087,7 +6087,7 @@ nonisolated extension Aura_Messenger_V1_CulturalContext: SwiftProtobuf.Message, 
   }
 }
 
-nonisolated extension Aura_Messenger_V1_AuraConfig: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraConfig: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuraConfig"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protection_level\0\u{3}account_type\0\u{1}language\0\u{3}cultural_context\0\u{1}enabled\0\u{3}patterns_path\0\u{3}models_path\0\u{3}account_holder_age\0\u{3}ttl_days\0\u{3}timezone_offset_minutes\0\u{3}domain_mode\0\u{4}\u{2}product_rollout_mode\0\u{b}relay_policy\0\u{c}\u{c}\u{1}")
 
@@ -6158,7 +6158,7 @@ nonisolated extension Aura_Messenger_V1_AuraConfig: SwiftProtobuf.Message, Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_AuraConfig, rhs: Aura_Messenger_V1_AuraConfig) -> Bool {
+  public static func ==(lhs: AuraAgentNativeAuraConfig, rhs: AuraAgentNativeAuraConfig) -> Bool {
     if lhs.protectionLevel != rhs.protectionLevel {return false}
     if lhs.accountType != rhs.accountType {return false}
     if lhs.language != rhs.language {return false}
@@ -6176,7 +6176,7 @@ nonisolated extension Aura_Messenger_V1_AuraConfig: SwiftProtobuf.Message, Swift
   }
 }
 
-nonisolated extension Aura_Messenger_V1_RuntimeModelIdentity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRuntimeModelIdentity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RuntimeModelIdentity"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}component\0\u{1}identifier\0\u{1}sha256\0")
 
@@ -6211,7 +6211,7 @@ nonisolated extension Aura_Messenger_V1_RuntimeModelIdentity: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_RuntimeModelIdentity, rhs: Aura_Messenger_V1_RuntimeModelIdentity) -> Bool {
+  public static func ==(lhs: AuraAgentNativeRuntimeModelIdentity, rhs: AuraAgentNativeRuntimeModelIdentity) -> Bool {
     if lhs.component != rhs.component {return false}
     if lhs.identifier != rhs.identifier {return false}
     if lhs._sha256 != rhs._sha256 {return false}
@@ -6220,7 +6220,7 @@ nonisolated extension Aura_Messenger_V1_RuntimeModelIdentity: SwiftProtobuf.Mess
   }
 }
 
-nonisolated extension Aura_Messenger_V1_RuntimeCapabilities: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRuntimeCapabilities: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RuntimeCapabilities"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{3}runtime_version\0\u{1}backend\0\u{3}supported_modalities\0\u{1}models\0\u{3}policy_schema_version\0\u{3}product_schema_version\0\u{3}state_schema_version\0\u{3}product_rollout_mode\0")
 
@@ -6275,7 +6275,7 @@ nonisolated extension Aura_Messenger_V1_RuntimeCapabilities: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_RuntimeCapabilities, rhs: Aura_Messenger_V1_RuntimeCapabilities) -> Bool {
+  public static func ==(lhs: AuraAgentNativeRuntimeCapabilities, rhs: AuraAgentNativeRuntimeCapabilities) -> Bool {
     if lhs.schemaVersion != rhs.schemaVersion {return false}
     if lhs.runtimeVersion != rhs.runtimeVersion {return false}
     if lhs.backend != rhs.backend {return false}
@@ -6290,7 +6290,7 @@ nonisolated extension Aura_Messenger_V1_RuntimeCapabilities: SwiftProtobuf.Messa
   }
 }
 
-nonisolated extension Aura_Messenger_V1_RuntimeArtifactAttestationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRuntimeArtifactAttestationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RuntimeArtifactAttestationRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{1}nonce\0")
 
@@ -6317,7 +6317,7 @@ nonisolated extension Aura_Messenger_V1_RuntimeArtifactAttestationRequest: Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_RuntimeArtifactAttestationRequest, rhs: Aura_Messenger_V1_RuntimeArtifactAttestationRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeRuntimeArtifactAttestationRequest, rhs: AuraAgentNativeRuntimeArtifactAttestationRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.nonce != rhs.nonce {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -6325,7 +6325,7 @@ nonisolated extension Aura_Messenger_V1_RuntimeArtifactAttestationRequest: Swift
   }
 }
 
-nonisolated extension Aura_Messenger_V1_RuntimeArtifactAttestationResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRuntimeArtifactAttestationResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RuntimeArtifactAttestationResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{3}account_key\0\u{1}nonce\0\u{3}runtime_capabilities_wire\0\u{3}runtime_capabilities_digest\0\u{3}model_manifest_digest\0\u{3}release_artifact_descriptor_digest\0\u{3}release_attested\0\u{3}runtime_state_schema_version\0\u{3}execution_policy_trust_keyring_digest\0")
 
@@ -6384,7 +6384,7 @@ nonisolated extension Aura_Messenger_V1_RuntimeArtifactAttestationResponse: Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_RuntimeArtifactAttestationResponse, rhs: Aura_Messenger_V1_RuntimeArtifactAttestationResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeRuntimeArtifactAttestationResponse, rhs: AuraAgentNativeRuntimeArtifactAttestationResponse) -> Bool {
     if lhs.schemaVersion != rhs.schemaVersion {return false}
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.nonce != rhs.nonce {return false}
@@ -6400,7 +6400,7 @@ nonisolated extension Aura_Messenger_V1_RuntimeArtifactAttestationResponse: Swif
   }
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionRule: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionRule: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuraExecutionRule"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}rule_id\0\u{3}risk_family\0\u{1}trigger\0\u{3}required_case_status\0\u{3}minimum_severity\0\u{3}minimum_confidence\0\u{3}minimum_observation_count\0\u{3}minimum_peak_risk_bps\0\u{3}cooldown_ms\0\u{3}urgent_bypasses_cooldown\0\u{3}max_report_reason_codes\0\u{3}max_evidence_commitments\0\u{3}allowed_report_reason_codes\0\u{3}delivery_class\0\u{3}rule_digest\0")
 
@@ -6479,7 +6479,7 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionRule: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_AuraExecutionRule, rhs: Aura_Messenger_V1_AuraExecutionRule) -> Bool {
+  public static func ==(lhs: AuraAgentNativeAuraExecutionRule, rhs: AuraAgentNativeAuraExecutionRule) -> Bool {
     if lhs.ruleID != rhs.ruleID {return false}
     if lhs.riskFamily != rhs.riskFamily {return false}
     if lhs.trigger != rhs.trigger {return false}
@@ -6500,27 +6500,27 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionRule: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyDocument: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionPolicyDocument: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuraExecutionPolicyDocument"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{3}signature_algorithm\0\u{3}authority_lineage_id\0\u{3}issuer_key_id\0\u{3}protected_account_id\0\u{3}policy_epoch\0\u{3}revoked_through_policy_epoch\0\u{1}state\0\u{3}policy_version\0\u{3}policy_body_digest\0\u{3}safety_profile_authority_epoch\0\u{3}safety_profile_assertion_digest\0\u{3}account_profile\0\u{3}execution_mode\0\u{3}language_tags\0\u{3}domain_mode\0\u{3}runtime_capabilities_digest\0\u{3}model_manifest_digest\0\u{3}safety_case_policy_schema_version\0\u{3}required_guardian_report_schema_version\0\u{3}required_delivery_operation_schema_version\0\u{3}case_state_ttl_ms\0\u{3}max_case_observations\0\u{3}max_case_reason_codes\0\u{1}rules\0\u{3}rollout_id\0\u{3}cohort_id\0\u{3}issued_at_ms\0\u{3}valid_from_ms\0\u{3}valid_until_ms\0\u{3}policy_updated_at_ms\0\u{1}signature\0")
 
   fileprivate class _StorageClass {
     var _schemaVersion: UInt32 = 0
-    var _signatureAlgorithm: Aura_Messenger_V1_AuraExecutionPolicySignatureAlgorithm = .unspecified
+    var _signatureAlgorithm: AuraAgentNativeAuraExecutionPolicySignatureAlgorithm = .unspecified
     var _authorityLineageID: String = String()
     var _issuerKeyID: String = String()
     var _protectedAccountID: Data = Data()
     var _policyEpoch: UInt64 = 0
     var _revokedThroughPolicyEpoch: UInt64 = 0
-    var _state: Aura_Messenger_V1_AuraExecutionPolicyState = .unspecified
+    var _state: AuraAgentNativeAuraExecutionPolicyState = .unspecified
     var _policyVersion: String = String()
     var _policyBodyDigest: Data = Data()
     var _safetyProfileAuthorityEpoch: UInt64 = 0
     var _safetyProfileAssertionDigest: Data = Data()
-    var _accountProfile: Aura_Messenger_V1_AuraExecutionAccountProfile = .unspecified
-    var _executionMode: Aura_Messenger_V1_AuraExecutionMode = .unspecified
+    var _accountProfile: AuraAgentNativeAuraExecutionAccountProfile = .unspecified
+    var _executionMode: AuraAgentNativeAuraExecutionMode = .unspecified
     var _languageTags: [String] = []
-    var _domainMode: Aura_Messenger_V1_AuraExecutionDomainMode = .unspecified
+    var _domainMode: AuraAgentNativeAuraExecutionDomainMode = .unspecified
     var _runtimeCapabilitiesDigest: Data = Data()
     var _modelManifestDigest: Data = Data()
     var _safetyCasePolicySchemaVersion: UInt32 = 0
@@ -6529,7 +6529,7 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyDocument: SwiftProtob
     var _caseStateTtlMs: UInt64 = 0
     var _maxCaseObservations: UInt32 = 0
     var _maxCaseReasonCodes: UInt32 = 0
-    var _rules: [Aura_Messenger_V1_AuraExecutionRule] = []
+    var _rules: [AuraAgentNativeAuraExecutionRule] = []
     var _rolloutID: String = String()
     var _cohortID: String = String()
     var _issuedAtMs: UInt64 = 0
@@ -6737,7 +6737,7 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyDocument: SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_AuraExecutionPolicyDocument, rhs: Aura_Messenger_V1_AuraExecutionPolicyDocument) -> Bool {
+  public static func ==(lhs: AuraAgentNativeAuraExecutionPolicyDocument, rhs: AuraAgentNativeAuraExecutionPolicyDocument) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -6783,7 +6783,7 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyDocument: SwiftProtob
   }
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyApplyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionPolicyApplyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuraExecutionPolicyApplyRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}policy_wire\0\u{3}expected_policy_wire_digest\0\u{3}expected_runtime_capabilities_digest\0\u{3}expected_model_manifest_digest\0\u{3}authenticated_server_time_unix_ms\0\u{3}expected_execution_policy_trust_keyring_digest\0")
 
@@ -6830,7 +6830,7 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyApplyRequest: SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_AuraExecutionPolicyApplyRequest, rhs: Aura_Messenger_V1_AuraExecutionPolicyApplyRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeAuraExecutionPolicyApplyRequest, rhs: AuraAgentNativeAuraExecutionPolicyApplyRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.policyWire != rhs.policyWire {return false}
     if lhs.expectedPolicyWireDigest != rhs.expectedPolicyWireDigest {return false}
@@ -6843,7 +6843,7 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyApplyRequest: SwiftPr
   }
 }
 
-nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyApplicationReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAuraExecutionPolicyApplicationReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuraExecutionPolicyApplicationReceipt"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{1}disposition\0\u{3}account_key\0\u{3}protected_account_id\0\u{3}policy_epoch\0\u{3}policy_wire_digest\0\u{1}state\0\u{3}execution_mode\0\u{3}runtime_capabilities_digest\0\u{3}model_manifest_digest\0\u{3}native_floor_epoch\0\u{3}native_floor_policy_wire_digest\0\u{3}signed_policy_digest\0\u{3}receipt_digest\0\u{3}runtime_state_schema_version\0\u{3}execution_policy_trust_keyring_digest\0")
 
@@ -6926,7 +6926,7 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyApplicationReceipt: S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_AuraExecutionPolicyApplicationReceipt, rhs: Aura_Messenger_V1_AuraExecutionPolicyApplicationReceipt) -> Bool {
+  public static func ==(lhs: AuraAgentNativeAuraExecutionPolicyApplicationReceipt, rhs: AuraAgentNativeAuraExecutionPolicyApplicationReceipt) -> Bool {
     if lhs.schemaVersion != rhs.schemaVersion {return false}
     if lhs.disposition != rhs.disposition {return false}
     if lhs.accountKey != rhs.accountKey {return false}
@@ -6948,7 +6948,7 @@ nonisolated extension Aura_Messenger_V1_AuraExecutionPolicyApplicationReceipt: S
   }
 }
 
-nonisolated extension Aura_Messenger_V1_MessageInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeMessageInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageInput"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}content_type\0\u{1}text\0\u{3}image_data\0\u{3}sender_id\0\u{3}conversation_id\0\u{1}language\0\u{3}conversation_type\0\u{3}member_count\0\u{4}\u{2}sender_relationship\0\u{3}relationship_trust_source\0\u{b}server_sender_risk_hint\0\u{c}\u{9}\u{1}")
 
@@ -7011,7 +7011,7 @@ nonisolated extension Aura_Messenger_V1_MessageInput: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_MessageInput, rhs: Aura_Messenger_V1_MessageInput) -> Bool {
+  public static func ==(lhs: AuraAgentNativeMessageInput, rhs: AuraAgentNativeMessageInput) -> Bool {
     if lhs.contentType != rhs.contentType {return false}
     if lhs._text != rhs._text {return false}
     if lhs._imageData != rhs._imageData {return false}
@@ -7027,7 +7027,7 @@ nonisolated extension Aura_Messenger_V1_MessageInput: SwiftProtobuf.Message, Swi
   }
 }
 
-nonisolated extension Aura_Messenger_V1_AnalyzeContextRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAnalyzeContextRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AnalyzeContextRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{3}timestamp_ms\0")
 
@@ -7058,7 +7058,7 @@ nonisolated extension Aura_Messenger_V1_AnalyzeContextRequest: SwiftProtobuf.Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_AnalyzeContextRequest, rhs: Aura_Messenger_V1_AnalyzeContextRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeAnalyzeContextRequest, rhs: AuraAgentNativeAnalyzeContextRequest) -> Bool {
     if lhs._message != rhs._message {return false}
     if lhs.timestampMs != rhs.timestampMs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -7066,7 +7066,7 @@ nonisolated extension Aura_Messenger_V1_AnalyzeContextRequest: SwiftProtobuf.Mes
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ThreatScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeThreatScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ThreatScore"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}threat_type\0\u{1}score\0")
 
@@ -7093,7 +7093,7 @@ nonisolated extension Aura_Messenger_V1_ThreatScore: SwiftProtobuf.Message, Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ThreatScore, rhs: Aura_Messenger_V1_ThreatScore) -> Bool {
+  public static func ==(lhs: AuraAgentNativeThreatScore, rhs: AuraAgentNativeThreatScore) -> Bool {
     if lhs.threatType != rhs.threatType {return false}
     if lhs.score != rhs.score {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -7101,7 +7101,7 @@ nonisolated extension Aura_Messenger_V1_ThreatScore: SwiftProtobuf.Message, Swif
   }
 }
 
-nonisolated extension Aura_Messenger_V1_DetectionSignal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeDetectionSignal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DetectionSignal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}threat_type\0\u{1}score\0\u{1}confidence\0\u{1}layer\0\u{1}family\0\u{3}reason_code\0\u{1}explanation\0\u{3}threat_subtype\0")
 
@@ -7152,7 +7152,7 @@ nonisolated extension Aura_Messenger_V1_DetectionSignal: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_DetectionSignal, rhs: Aura_Messenger_V1_DetectionSignal) -> Bool {
+  public static func ==(lhs: AuraAgentNativeDetectionSignal, rhs: AuraAgentNativeDetectionSignal) -> Bool {
     if lhs.threatType != rhs.threatType {return false}
     if lhs.score != rhs.score {return false}
     if lhs.confidence != rhs.confidence {return false}
@@ -7166,7 +7166,7 @@ nonisolated extension Aura_Messenger_V1_DetectionSignal: SwiftProtobuf.Message, 
   }
 }
 
-nonisolated extension Aura_Messenger_V1_RiskBreakdown: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeRiskBreakdown: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RiskBreakdown"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}content\0\u{1}conversation\0\u{1}link\0\u{1}abuse\0")
 
@@ -7201,7 +7201,7 @@ nonisolated extension Aura_Messenger_V1_RiskBreakdown: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_RiskBreakdown, rhs: Aura_Messenger_V1_RiskBreakdown) -> Bool {
+  public static func ==(lhs: AuraAgentNativeRiskBreakdown, rhs: AuraAgentNativeRiskBreakdown) -> Bool {
     if lhs.content != rhs.content {return false}
     if lhs.conversation != rhs.conversation {return false}
     if lhs.link != rhs.link {return false}
@@ -7211,7 +7211,7 @@ nonisolated extension Aura_Messenger_V1_RiskBreakdown: SwiftProtobuf.Message, Sw
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ContactSnapshot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContactSnapshot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactSnapshot"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_id\0\u{1}rating\0\u{3}trust_level\0\u{3}circle_tier\0\u{1}trend\0\u{3}is_trusted\0\u{3}is_new_contact\0\u{3}first_seen_ms\0\u{3}last_seen_ms\0\u{3}conversation_count\0")
 
@@ -7270,7 +7270,7 @@ nonisolated extension Aura_Messenger_V1_ContactSnapshot: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ContactSnapshot, rhs: Aura_Messenger_V1_ContactSnapshot) -> Bool {
+  public static func ==(lhs: AuraAgentNativeContactSnapshot, rhs: AuraAgentNativeContactSnapshot) -> Bool {
     if lhs.senderID != rhs.senderID {return false}
     if lhs.rating != rhs.rating {return false}
     if lhs.trustLevel != rhs.trustLevel {return false}
@@ -7286,7 +7286,7 @@ nonisolated extension Aura_Messenger_V1_ContactSnapshot: SwiftProtobuf.Message, 
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ActionRecommendation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeActionRecommendation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ActionRecommendation"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}parent_alert\0\u{3}follow_ups\0\u{3}crisis_resources\0\u{3}ui_actions\0\u{3}reason_codes\0")
 
@@ -7325,7 +7325,7 @@ nonisolated extension Aura_Messenger_V1_ActionRecommendation: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ActionRecommendation, rhs: Aura_Messenger_V1_ActionRecommendation) -> Bool {
+  public static func ==(lhs: AuraAgentNativeActionRecommendation, rhs: AuraAgentNativeActionRecommendation) -> Bool {
     if lhs.parentAlert != rhs.parentAlert {return false}
     if lhs.followUps != rhs.followUps {return false}
     if lhs.crisisResources != rhs.crisisResources {return false}
@@ -7336,7 +7336,7 @@ nonisolated extension Aura_Messenger_V1_ActionRecommendation: SwiftProtobuf.Mess
   }
 }
 
-nonisolated extension Aura_Messenger_V1_LatentStateEvidence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeLatentStateEvidence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LatentStateEvidence"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}score\0\u{3}reason_codes\0")
 
@@ -7367,7 +7367,7 @@ nonisolated extension Aura_Messenger_V1_LatentStateEvidence: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_LatentStateEvidence, rhs: Aura_Messenger_V1_LatentStateEvidence) -> Bool {
+  public static func ==(lhs: AuraAgentNativeLatentStateEvidence, rhs: AuraAgentNativeLatentStateEvidence) -> Bool {
     if lhs.kind != rhs.kind {return false}
     if lhs.score != rhs.score {return false}
     if lhs.reasonCodes != rhs.reasonCodes {return false}
@@ -7376,7 +7376,7 @@ nonisolated extension Aura_Messenger_V1_LatentStateEvidence: SwiftProtobuf.Messa
   }
 }
 
-nonisolated extension Aura_Messenger_V1_InferenceSummary: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeInferenceSummary: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InferenceSummary"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uncertainty\0\u{3}risk_horizon\0\u{3}escalation_likelihood_24h\0\u{3}protective_factor_strength\0\u{3}latent_states\0")
 
@@ -7415,7 +7415,7 @@ nonisolated extension Aura_Messenger_V1_InferenceSummary: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_InferenceSummary, rhs: Aura_Messenger_V1_InferenceSummary) -> Bool {
+  public static func ==(lhs: AuraAgentNativeInferenceSummary, rhs: AuraAgentNativeInferenceSummary) -> Bool {
     if lhs.uncertainty != rhs.uncertainty {return false}
     if lhs.riskHorizon != rhs.riskHorizon {return false}
     if lhs.escalationLikelihood24H != rhs.escalationLikelihood24H {return false}
@@ -7426,7 +7426,7 @@ nonisolated extension Aura_Messenger_V1_InferenceSummary: SwiftProtobuf.Message,
   }
 }
 
-nonisolated extension Aura_Messenger_V1_KidsMemoryExplainability: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeKidsMemoryExplainability: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KidsMemoryExplainability"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}reason_codes\0\u{3}mandatory_guardian_escalation\0\u{3}conversation_risk_score\0\u{3}sender_risk_score\0\u{3}escalation_message_count\0")
 
@@ -7465,7 +7465,7 @@ nonisolated extension Aura_Messenger_V1_KidsMemoryExplainability: SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_KidsMemoryExplainability, rhs: Aura_Messenger_V1_KidsMemoryExplainability) -> Bool {
+  public static func ==(lhs: AuraAgentNativeKidsMemoryExplainability, rhs: AuraAgentNativeKidsMemoryExplainability) -> Bool {
     if lhs.reasonCodes != rhs.reasonCodes {return false}
     if lhs.mandatoryGuardianEscalation != rhs.mandatoryGuardianEscalation {return false}
     if lhs.conversationRiskScore != rhs.conversationRiskScore {return false}
@@ -7476,7 +7476,7 @@ nonisolated extension Aura_Messenger_V1_KidsMemoryExplainability: SwiftProtobuf.
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ProductChildSurface: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductChildSurface: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProductChildSurface"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}delivery_mode\0\u{1}visible\0\u{1}intervention\0\u{3}ui_actions\0\u{3}reason_codes\0")
 
@@ -7515,7 +7515,7 @@ nonisolated extension Aura_Messenger_V1_ProductChildSurface: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ProductChildSurface, rhs: Aura_Messenger_V1_ProductChildSurface) -> Bool {
+  public static func ==(lhs: AuraAgentNativeProductChildSurface, rhs: AuraAgentNativeProductChildSurface) -> Bool {
     if lhs.deliveryMode != rhs.deliveryMode {return false}
     if lhs.visible != rhs.visible {return false}
     if lhs.intervention != rhs.intervention {return false}
@@ -7526,7 +7526,7 @@ nonisolated extension Aura_Messenger_V1_ProductChildSurface: SwiftProtobuf.Messa
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ProductGuardianSurface: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductGuardianSurface: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProductGuardianSurface"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}delivery_mode\0\u{1}notify\0\u{1}priority\0\u{3}follow_ups\0\u{3}reason_codes\0")
 
@@ -7565,7 +7565,7 @@ nonisolated extension Aura_Messenger_V1_ProductGuardianSurface: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ProductGuardianSurface, rhs: Aura_Messenger_V1_ProductGuardianSurface) -> Bool {
+  public static func ==(lhs: AuraAgentNativeProductGuardianSurface, rhs: AuraAgentNativeProductGuardianSurface) -> Bool {
     if lhs.deliveryMode != rhs.deliveryMode {return false}
     if lhs.notify != rhs.notify {return false}
     if lhs.priority != rhs.priority {return false}
@@ -7576,7 +7576,7 @@ nonisolated extension Aura_Messenger_V1_ProductGuardianSurface: SwiftProtobuf.Me
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ProductReviewSurface: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductReviewSurface: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProductReviewSurface"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}delivery_mode\0\u{3}open_review\0\u{1}urgency\0\u{3}reason_codes\0\u{3}latent_states\0")
 
@@ -7615,7 +7615,7 @@ nonisolated extension Aura_Messenger_V1_ProductReviewSurface: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ProductReviewSurface, rhs: Aura_Messenger_V1_ProductReviewSurface) -> Bool {
+  public static func ==(lhs: AuraAgentNativeProductReviewSurface, rhs: AuraAgentNativeProductReviewSurface) -> Bool {
     if lhs.deliveryMode != rhs.deliveryMode {return false}
     if lhs.openReview != rhs.openReview {return false}
     if lhs.urgency != rhs.urgency {return false}
@@ -7626,20 +7626,20 @@ nonisolated extension Aura_Messenger_V1_ProductReviewSurface: SwiftProtobuf.Mess
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ProductDecisionSurface: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeProductDecisionSurface: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProductDecisionSurface"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{3}rollout_mode\0\u{3}threat_type\0\u{1}action\0\u{1}score\0\u{1}child\0\u{1}guardian\0\u{1}review\0\u{3}uncertainty_disposition\0")
 
   fileprivate class _StorageClass {
     var _schemaVersion: String = String()
-    var _rolloutMode: Aura_Messenger_V1_ProductRolloutMode = .unspecified
-    var _threatType: Aura_Messenger_V1_ThreatType = .unspecified
-    var _action: Aura_Messenger_V1_Action = .unspecified
+    var _rolloutMode: AuraAgentNativeProductRolloutMode = .unspecified
+    var _threatType: AuraAgentNativeThreatType = .unspecified
+    var _action: AuraAgentNativeAction = .unspecified
     var _score: Float = 0
-    var _child: Aura_Messenger_V1_ProductChildSurface? = nil
-    var _guardian: Aura_Messenger_V1_ProductGuardianSurface? = nil
-    var _review: Aura_Messenger_V1_ProductReviewSurface? = nil
-    var _uncertaintyDisposition: Aura_Messenger_V1_ProductUncertaintyDisposition = .unspecified
+    var _child: AuraAgentNativeProductChildSurface? = nil
+    var _guardian: AuraAgentNativeProductGuardianSurface? = nil
+    var _review: AuraAgentNativeProductReviewSurface? = nil
+    var _uncertaintyDisposition: AuraAgentNativeProductUncertaintyDisposition = .unspecified
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -7729,7 +7729,7 @@ nonisolated extension Aura_Messenger_V1_ProductDecisionSurface: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ProductDecisionSurface, rhs: Aura_Messenger_V1_ProductDecisionSurface) -> Bool {
+  public static func ==(lhs: AuraAgentNativeProductDecisionSurface, rhs: AuraAgentNativeProductDecisionSurface) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -7752,26 +7752,26 @@ nonisolated extension Aura_Messenger_V1_ProductDecisionSurface: SwiftProtobuf.Me
   }
 }
 
-nonisolated extension Aura_Messenger_V1_AnalysisResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeAnalysisResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AnalysisResult"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}threat_type\0\u{1}confidence\0\u{1}action\0\u{1}score\0\u{1}explanation\0\u{3}detected_threats\0\u{1}signals\0\u{3}recommended_action\0\u{3}risk_breakdown\0\u{3}contact_snapshot\0\u{3}reason_codes\0\u{3}analysis_time_us\0\u{1}inference\0\u{3}product_surface\0\u{3}kids_memory\0")
 
   fileprivate class _StorageClass {
-    var _threatType: Aura_Messenger_V1_ThreatType = .unspecified
-    var _confidence: Aura_Messenger_V1_Confidence = .unspecified
-    var _action: Aura_Messenger_V1_Action = .unspecified
+    var _threatType: AuraAgentNativeThreatType = .unspecified
+    var _confidence: AuraAgentNativeConfidence = .unspecified
+    var _action: AuraAgentNativeAction = .unspecified
     var _score: Float = 0
     var _explanation: String = String()
-    var _detectedThreats: [Aura_Messenger_V1_ThreatScore] = []
-    var _signals: [Aura_Messenger_V1_DetectionSignal] = []
-    var _recommendedAction: Aura_Messenger_V1_ActionRecommendation? = nil
-    var _riskBreakdown: Aura_Messenger_V1_RiskBreakdown? = nil
-    var _contactSnapshot: Aura_Messenger_V1_ContactSnapshot? = nil
+    var _detectedThreats: [AuraAgentNativeThreatScore] = []
+    var _signals: [AuraAgentNativeDetectionSignal] = []
+    var _recommendedAction: AuraAgentNativeActionRecommendation? = nil
+    var _riskBreakdown: AuraAgentNativeRiskBreakdown? = nil
+    var _contactSnapshot: AuraAgentNativeContactSnapshot? = nil
     var _reasonCodes: [String] = []
     var _analysisTimeUs: UInt64 = 0
-    var _inference: Aura_Messenger_V1_InferenceSummary? = nil
-    var _productSurface: Aura_Messenger_V1_ProductDecisionSurface? = nil
-    var _kidsMemory: Aura_Messenger_V1_KidsMemoryExplainability? = nil
+    var _inference: AuraAgentNativeInferenceSummary? = nil
+    var _productSurface: AuraAgentNativeProductDecisionSurface? = nil
+    var _kidsMemory: AuraAgentNativeKidsMemoryExplainability? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -7891,7 +7891,7 @@ nonisolated extension Aura_Messenger_V1_AnalysisResult: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_AnalysisResult, rhs: Aura_Messenger_V1_AnalysisResult) -> Bool {
+  public static func ==(lhs: AuraAgentNativeAnalysisResult, rhs: AuraAgentNativeAnalysisResult) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -7920,7 +7920,7 @@ nonisolated extension Aura_Messenger_V1_AnalysisResult: SwiftProtobuf.Message, S
   }
 }
 
-nonisolated extension Aura_Messenger_V1_CanonicalSafetyEventIdentity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeCanonicalSafetyEventIdentity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CanonicalSafetyEventIdentity"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}subject_key\0\u{3}conversation_key\0\u{3}event_id\0\u{1}revision\0\u{3}occurred_at_ms\0\u{3}observed_at_ms\0")
 
@@ -7967,7 +7967,7 @@ nonisolated extension Aura_Messenger_V1_CanonicalSafetyEventIdentity: SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_CanonicalSafetyEventIdentity, rhs: Aura_Messenger_V1_CanonicalSafetyEventIdentity) -> Bool {
+  public static func ==(lhs: AuraAgentNativeCanonicalSafetyEventIdentity, rhs: AuraAgentNativeCanonicalSafetyEventIdentity) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.subjectKey != rhs.subjectKey {return false}
     if lhs.conversationKey != rhs.conversationKey {return false}
@@ -7980,13 +7980,13 @@ nonisolated extension Aura_Messenger_V1_CanonicalSafetyEventIdentity: SwiftProto
   }
 }
 
-nonisolated extension Aura_Messenger_V1_CanonicalSafetyAnalyzeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeCanonicalSafetyAnalyzeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CanonicalSafetyAnalyzeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}identity\0")
 
   fileprivate class _StorageClass {
-    var _message: Aura_Messenger_V1_MessageInput? = nil
-    var _identity: Aura_Messenger_V1_CanonicalSafetyEventIdentity? = nil
+    var _message: AuraAgentNativeMessageInput? = nil
+    var _identity: AuraAgentNativeCanonicalSafetyEventIdentity? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -8041,7 +8041,7 @@ nonisolated extension Aura_Messenger_V1_CanonicalSafetyAnalyzeRequest: SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_CanonicalSafetyAnalyzeRequest, rhs: Aura_Messenger_V1_CanonicalSafetyAnalyzeRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeCanonicalSafetyAnalyzeRequest, rhs: AuraAgentNativeCanonicalSafetyAnalyzeRequest) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -8057,7 +8057,7 @@ nonisolated extension Aura_Messenger_V1_CanonicalSafetyAnalyzeRequest: SwiftProt
   }
 }
 
-nonisolated extension Aura_Messenger_V1_CanonicalSafetyAnalyzeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeCanonicalSafetyAnalyzeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CanonicalSafetyAnalyzeResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{4}\u{2}ignored_reason\0\u{3}case_id\0\u{3}case_revision\0\u{3}case_status\0\u{3}latest_revision\0\u{4}\u{2}runtime_state_schema_version\0\u{3}case_generation\0\u{b}local_result\0\u{b}decision_json\0\u{c}\u{2}\u{1}\u{c}\u{8}\u{1}")
 
@@ -8112,7 +8112,7 @@ nonisolated extension Aura_Messenger_V1_CanonicalSafetyAnalyzeResponse: SwiftPro
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_CanonicalSafetyAnalyzeResponse, rhs: Aura_Messenger_V1_CanonicalSafetyAnalyzeResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeCanonicalSafetyAnalyzeResponse, rhs: AuraAgentNativeCanonicalSafetyAnalyzeResponse) -> Bool {
     if lhs.disposition != rhs.disposition {return false}
     if lhs._ignoredReason != rhs._ignoredReason {return false}
     if lhs._caseID != rhs._caseID {return false}
@@ -8126,13 +8126,13 @@ nonisolated extension Aura_Messenger_V1_CanonicalSafetyAnalyzeResponse: SwiftPro
   }
 }
 
-nonisolated extension Aura_Messenger_V1_LocalDecisionAnalyzeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeLocalDecisionAnalyzeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LocalDecisionAnalyzeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}identity\0")
 
   fileprivate class _StorageClass {
-    var _message: Aura_Messenger_V1_MessageInput? = nil
-    var _identity: Aura_Messenger_V1_CanonicalSafetyEventIdentity? = nil
+    var _message: AuraAgentNativeMessageInput? = nil
+    var _identity: AuraAgentNativeCanonicalSafetyEventIdentity? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -8187,7 +8187,7 @@ nonisolated extension Aura_Messenger_V1_LocalDecisionAnalyzeRequest: SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_LocalDecisionAnalyzeRequest, rhs: Aura_Messenger_V1_LocalDecisionAnalyzeRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeLocalDecisionAnalyzeRequest, rhs: AuraAgentNativeLocalDecisionAnalyzeRequest) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -8203,7 +8203,7 @@ nonisolated extension Aura_Messenger_V1_LocalDecisionAnalyzeRequest: SwiftProtob
   }
 }
 
-nonisolated extension Aura_Messenger_V1_LocalDecision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeLocalDecision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LocalDecision"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}product_surface\0\u{3}recommended_action\0\u{3}reason_codes\0\u{1}inference\0\u{3}runtime_backend\0\u{1}degraded\0")
 
@@ -8250,7 +8250,7 @@ nonisolated extension Aura_Messenger_V1_LocalDecision: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_LocalDecision, rhs: Aura_Messenger_V1_LocalDecision) -> Bool {
+  public static func ==(lhs: AuraAgentNativeLocalDecision, rhs: AuraAgentNativeLocalDecision) -> Bool {
     if lhs._productSurface != rhs._productSurface {return false}
     if lhs._recommendedAction != rhs._recommendedAction {return false}
     if lhs.reasonCodes != rhs.reasonCodes {return false}
@@ -8262,17 +8262,17 @@ nonisolated extension Aura_Messenger_V1_LocalDecision: SwiftProtobuf.Message, Sw
   }
 }
 
-nonisolated extension Aura_Messenger_V1_LocalDecisionAnalyzeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeLocalDecisionAnalyzeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LocalDecisionAnalyzeResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{1}decision\0\u{3}ignored_reason\0\u{3}case_id\0\u{3}case_revision\0\u{3}case_status\0\u{3}latest_revision\0\u{4}\u{2}runtime_state_schema_version\0\u{3}case_generation\0\u{c}\u{8}\u{1}")
 
   fileprivate class _StorageClass {
-    var _disposition: Aura_Messenger_V1_CanonicalSafetyDisposition = .unspecified
-    var _decision: Aura_Messenger_V1_LocalDecision? = nil
+    var _disposition: AuraAgentNativeCanonicalSafetyDisposition = .unspecified
+    var _decision: AuraAgentNativeLocalDecision? = nil
     var _ignoredReason: String? = nil
     var _caseID: String? = nil
     var _caseRevision: UInt64? = nil
-    var _caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus = .unspecified
+    var _caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
     var _latestRevision: UInt32? = nil
     var _runtimeStateSchemaVersion: String = String()
     var _caseGeneration: UInt64? = nil
@@ -8365,7 +8365,7 @@ nonisolated extension Aura_Messenger_V1_LocalDecisionAnalyzeResponse: SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_LocalDecisionAnalyzeResponse, rhs: Aura_Messenger_V1_LocalDecisionAnalyzeResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeLocalDecisionAnalyzeResponse, rhs: AuraAgentNativeLocalDecisionAnalyzeResponse) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -8388,7 +8388,7 @@ nonisolated extension Aura_Messenger_V1_LocalDecisionAnalyzeResponse: SwiftProto
   }
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseLifecycleCommandRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseLifecycleCommandRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SafetyCaseLifecycleCommandRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}case_id\0\u{3}command_type\0\u{3}at_ms\0\u{3}reason_code\0")
 
@@ -8427,7 +8427,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseLifecycleCommandRequest: Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_SafetyCaseLifecycleCommandRequest, rhs: Aura_Messenger_V1_SafetyCaseLifecycleCommandRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeSafetyCaseLifecycleCommandRequest, rhs: AuraAgentNativeSafetyCaseLifecycleCommandRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs.commandType != rhs.commandType {return false}
@@ -8438,7 +8438,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseLifecycleCommandRequest: Swift
   }
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseLifecycleCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseLifecycleCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SafetyCaseLifecycleCommandResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}case_id\0\u{3}case_revision\0\u{3}case_status\0\u{4}\u{2}runtime_state_schema_version\0\u{3}case_generation\0\u{b}decision_json\0\u{c}\u{4}\u{1}")
 
@@ -8481,7 +8481,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseLifecycleCommandResponse: Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_SafetyCaseLifecycleCommandResponse, rhs: Aura_Messenger_V1_SafetyCaseLifecycleCommandResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeSafetyCaseLifecycleCommandResponse, rhs: AuraAgentNativeSafetyCaseLifecycleCommandResponse) -> Bool {
     if lhs.caseID != rhs.caseID {return false}
     if lhs.caseRevision != rhs.caseRevision {return false}
     if lhs.caseStatus != rhs.caseStatus {return false}
@@ -8492,7 +8492,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseLifecycleCommandResponse: Swif
   }
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseSuccessorActivationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseSuccessorActivationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SafetyCaseSuccessorActivationRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}predecessor_case_id\0\u{3}expected_case_generation\0\u{3}expected_case_revision\0\u{3}activated_at_ms\0")
 
@@ -8535,7 +8535,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseSuccessorActivationRequest: Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_SafetyCaseSuccessorActivationRequest, rhs: Aura_Messenger_V1_SafetyCaseSuccessorActivationRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeSafetyCaseSuccessorActivationRequest, rhs: AuraAgentNativeSafetyCaseSuccessorActivationRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.predecessorCaseID != rhs.predecessorCaseID {return false}
     if lhs._expectedCaseGeneration != rhs._expectedCaseGeneration {return false}
@@ -8546,7 +8546,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseSuccessorActivationRequest: Sw
   }
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseSuccessorActivationResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseSuccessorActivationResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SafetyCaseSuccessorActivationResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{3}predecessor_case_id\0\u{3}predecessor_case_generation\0\u{3}successor_case_id\0\u{3}successor_case_generation\0\u{3}activated_at_ms\0\u{3}runtime_state_schema_version\0")
 
@@ -8593,7 +8593,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseSuccessorActivationResponse: S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_SafetyCaseSuccessorActivationResponse, rhs: Aura_Messenger_V1_SafetyCaseSuccessorActivationResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeSafetyCaseSuccessorActivationResponse, rhs: AuraAgentNativeSafetyCaseSuccessorActivationResponse) -> Bool {
     if lhs.disposition != rhs.disposition {return false}
     if lhs.predecessorCaseID != rhs.predecessorCaseID {return false}
     if lhs.predecessorCaseGeneration != rhs.predecessorCaseGeneration {return false}
@@ -8606,7 +8606,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseSuccessorActivationResponse: S
   }
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseAccountRemovalRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseAccountRemovalRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SafetyCaseAccountRemovalRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0")
 
@@ -8629,14 +8629,14 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseAccountRemovalRequest: SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_SafetyCaseAccountRemovalRequest, rhs: Aura_Messenger_V1_SafetyCaseAccountRemovalRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeSafetyCaseAccountRemovalRequest, rhs: AuraAgentNativeSafetyCaseAccountRemovalRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_SafetyCaseAccountRemovalResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeSafetyCaseAccountRemovalResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SafetyCaseAccountRemovalResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}removed_cases\0\u{3}removed_source_receipts\0\u{3}runtime_state_schema_version\0")
 
@@ -8667,7 +8667,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseAccountRemovalResponse: SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_SafetyCaseAccountRemovalResponse, rhs: Aura_Messenger_V1_SafetyCaseAccountRemovalResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeSafetyCaseAccountRemovalResponse, rhs: AuraAgentNativeSafetyCaseAccountRemovalResponse) -> Bool {
     if lhs.removedCases != rhs.removedCases {return false}
     if lhs.removedSourceReceipts != rhs.removedSourceReceipts {return false}
     if lhs.runtimeStateSchemaVersion != rhs.runtimeStateSchemaVersion {return false}
@@ -8676,7 +8676,7 @@ nonisolated extension Aura_Messenger_V1_SafetyCaseAccountRemovalResponse: SwiftP
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReport: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReport: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReport"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{3}case_id\0\u{3}case_generation\0\u{3}transition_revision\0\u{1}trigger\0\u{3}queued_at_ms\0\u{3}risk_family\0\u{3}case_status\0\u{1}severity\0\u{3}confidence_band\0\u{3}first_observed_at_ms\0\u{3}last_observed_at_ms\0\u{3}observation_volume_band\0\u{3}report_reason_codes\0\u{3}evidence_commitments\0\u{3}execution_policy_authority_lineage_id\0\u{3}execution_policy_epoch\0\u{3}execution_policy_version\0\u{3}execution_policy_assertion_digest\0\u{3}execution_rule_id\0\u{3}execution_rule_digest\0\u{3}delivery_class\0\u{3}runtime_capabilities_digest\0\u{3}model_manifest_digest\0\u{3}policy_evaluated_at_ms\0")
 
@@ -8685,15 +8685,15 @@ nonisolated extension Aura_Messenger_V1_GuardianReport: SwiftProtobuf.Message, S
     var _caseID: String = String()
     var _caseGeneration: UInt64 = 0
     var _transitionRevision: UInt64 = 0
-    var _trigger: Aura_Messenger_V1_GuardianReportTrigger = .unspecified
+    var _trigger: AuraAgentNativeGuardianReportTrigger = .unspecified
     var _queuedAtMs: UInt64 = 0
-    var _riskFamily: Aura_Messenger_V1_GuardianReportRiskFamily = .unspecified
-    var _caseStatus: Aura_Messenger_V1_SafetyCaseLifecycleStatus = .unspecified
-    var _severity: Aura_Messenger_V1_SafetyCaseSeverity = .unspecified
-    var _confidenceBand: Aura_Messenger_V1_Confidence = .unspecified
+    var _riskFamily: AuraAgentNativeGuardianReportRiskFamily = .unspecified
+    var _caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
+    var _severity: AuraAgentNativeSafetyCaseSeverity = .unspecified
+    var _confidenceBand: AuraAgentNativeConfidence = .unspecified
     var _firstObservedAtMs: UInt64 = 0
     var _lastObservedAtMs: UInt64 = 0
-    var _observationVolumeBand: Aura_Messenger_V1_GuardianReportObservationVolumeBand = .unspecified
+    var _observationVolumeBand: AuraAgentNativeGuardianReportObservationVolumeBand = .unspecified
     var _reportReasonCodes: [String] = []
     var _evidenceCommitments: [Data] = []
     var _executionPolicyAuthorityLineageID: String = String()
@@ -8702,7 +8702,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReport: SwiftProtobuf.Message, S
     var _executionPolicyAssertionDigest: Data = Data()
     var _executionRuleID: String = String()
     var _executionRuleDigest: Data = Data()
-    var _deliveryClass: Aura_Messenger_V1_GuardianReportDeliveryClass = .unspecified
+    var _deliveryClass: AuraAgentNativeGuardianReportDeliveryClass = .unspecified
     var _runtimeCapabilitiesDigest: Data = Data()
     var _modelManifestDigest: Data = Data()
     var _policyEvaluatedAtMs: UInt64 = 0
@@ -8871,7 +8871,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReport: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReport, rhs: Aura_Messenger_V1_GuardianReport) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReport, rhs: AuraAgentNativeGuardianReport) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -8910,7 +8910,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReport: SwiftProtobuf.Message, S
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportSnapshotRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportSnapshotRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportSnapshotRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}case_id\0\u{3}expected_case_generation\0\u{3}expected_case_revision\0")
 
@@ -8949,7 +8949,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportSnapshotRequest: SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportSnapshotRequest, rhs: Aura_Messenger_V1_GuardianReportSnapshotRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportSnapshotRequest, rhs: AuraAgentNativeGuardianReportSnapshotRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs._expectedCaseGeneration != rhs._expectedCaseGeneration {return false}
@@ -8959,7 +8959,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportSnapshotRequest: SwiftProt
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportSnapshotResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportSnapshotResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportSnapshotResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{3}case_id\0\u{3}case_generation\0\u{3}current_case_revision\0\u{3}current_case_status\0\u{1}report\0\u{3}deferred_trigger\0\u{3}deferred_eligible_at_ms\0\u{3}runtime_state_schema_version\0\u{3}prepared_at_ms\0\u{3}canonical_report_bytes\0\u{3}semantic_digest\0\u{3}report_id\0")
 
@@ -9034,7 +9034,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportSnapshotResponse: SwiftPro
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportSnapshotResponse, rhs: Aura_Messenger_V1_GuardianReportSnapshotResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportSnapshotResponse, rhs: AuraAgentNativeGuardianReportSnapshotResponse) -> Bool {
     if lhs.disposition != rhs.disposition {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs.caseGeneration != rhs.caseGeneration {return false}
@@ -9053,7 +9053,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportSnapshotResponse: SwiftPro
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportAccountSnapshotRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportAccountSnapshotRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportAccountSnapshotRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0")
 
@@ -9076,14 +9076,14 @@ nonisolated extension Aura_Messenger_V1_GuardianReportAccountSnapshotRequest: Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportAccountSnapshotRequest, rhs: Aura_Messenger_V1_GuardianReportAccountSnapshotRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportAccountSnapshotRequest, rhs: AuraAgentNativeGuardianReportAccountSnapshotRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportAccountSnapshotResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportAccountSnapshotResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportAccountSnapshotResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}snapshots\0\u{3}runtime_state_schema_version\0")
 
@@ -9110,7 +9110,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportAccountSnapshotResponse: S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportAccountSnapshotResponse, rhs: Aura_Messenger_V1_GuardianReportAccountSnapshotResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportAccountSnapshotResponse, rhs: AuraAgentNativeGuardianReportAccountSnapshotResponse) -> Bool {
     if lhs.snapshots != rhs.snapshots {return false}
     if lhs.runtimeStateSchemaVersion != rhs.runtimeStateSchemaVersion {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -9118,7 +9118,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportAccountSnapshotResponse: S
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportFlushRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportFlushRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportFlushRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}case_id\0\u{3}expected_case_generation\0\u{3}expected_case_revision\0\u{3}evaluated_at_ms\0")
 
@@ -9161,7 +9161,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportFlushRequest: SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportFlushRequest, rhs: Aura_Messenger_V1_GuardianReportFlushRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportFlushRequest, rhs: AuraAgentNativeGuardianReportFlushRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs._expectedCaseGeneration != rhs._expectedCaseGeneration {return false}
@@ -9172,7 +9172,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportFlushRequest: SwiftProtobu
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportPreparationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportPreparationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportPreparationRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}case_id\0\u{3}expected_case_generation\0\u{3}report_transition_revision\0\u{3}prepared_at_ms\0")
 
@@ -9215,7 +9215,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportPreparationRequest: SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportPreparationRequest, rhs: Aura_Messenger_V1_GuardianReportPreparationRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportPreparationRequest, rhs: AuraAgentNativeGuardianReportPreparationRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs._expectedCaseGeneration != rhs._expectedCaseGeneration {return false}
@@ -9226,7 +9226,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportPreparationRequest: SwiftP
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportPreparationResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportPreparationResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportPreparationResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{3}case_id\0\u{3}case_generation\0\u{3}case_revision\0\u{3}case_status\0\u{3}report_transition_revision\0\u{3}prepared_at_ms\0\u{3}runtime_state_schema_version\0")
 
@@ -9277,7 +9277,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportPreparationResponse: Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportPreparationResponse, rhs: Aura_Messenger_V1_GuardianReportPreparationResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportPreparationResponse, rhs: AuraAgentNativeGuardianReportPreparationResponse) -> Bool {
     if lhs.disposition != rhs.disposition {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs.caseGeneration != rhs.caseGeneration {return false}
@@ -9291,7 +9291,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportPreparationResponse: Swift
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportSuppressionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportSuppressionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportSuppressionRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}case_id\0\u{3}expected_case_generation\0\u{3}report_transition_revision\0\u{3}suppressed_at_ms\0\u{3}reason_code\0")
 
@@ -9338,7 +9338,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportSuppressionRequest: SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportSuppressionRequest, rhs: Aura_Messenger_V1_GuardianReportSuppressionRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportSuppressionRequest, rhs: AuraAgentNativeGuardianReportSuppressionRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs._expectedCaseGeneration != rhs._expectedCaseGeneration {return false}
@@ -9350,7 +9350,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportSuppressionRequest: SwiftP
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportSuppressionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportSuppressionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportSuppressionResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{3}case_id\0\u{3}case_generation\0\u{3}case_revision\0\u{3}case_status\0\u{3}report_transition_revision\0\u{3}suppressed_at_ms\0\u{3}reason_code\0\u{3}runtime_state_schema_version\0")
 
@@ -9405,7 +9405,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportSuppressionResponse: Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportSuppressionResponse, rhs: Aura_Messenger_V1_GuardianReportSuppressionResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportSuppressionResponse, rhs: AuraAgentNativeGuardianReportSuppressionResponse) -> Bool {
     if lhs.disposition != rhs.disposition {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs.caseGeneration != rhs.caseGeneration {return false}
@@ -9420,7 +9420,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportSuppressionResponse: Swift
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportAcknowledgementRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportAcknowledgementRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportAcknowledgementRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_key\0\u{3}case_id\0\u{3}expected_case_generation\0\u{3}report_transition_revision\0\u{3}delivered_at_ms\0")
 
@@ -9463,7 +9463,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportAcknowledgementRequest: Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportAcknowledgementRequest, rhs: Aura_Messenger_V1_GuardianReportAcknowledgementRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportAcknowledgementRequest, rhs: AuraAgentNativeGuardianReportAcknowledgementRequest) -> Bool {
     if lhs.accountKey != rhs.accountKey {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs._expectedCaseGeneration != rhs._expectedCaseGeneration {return false}
@@ -9474,7 +9474,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportAcknowledgementRequest: Sw
   }
 }
 
-nonisolated extension Aura_Messenger_V1_GuardianReportAcknowledgementResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeGuardianReportAcknowledgementResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GuardianReportAcknowledgementResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{3}case_id\0\u{3}case_generation\0\u{3}case_revision\0\u{3}case_status\0\u{3}report_transition_revision\0\u{3}delivered_at_ms\0\u{3}runtime_state_schema_version\0")
 
@@ -9525,7 +9525,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportAcknowledgementResponse: S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_GuardianReportAcknowledgementResponse, rhs: Aura_Messenger_V1_GuardianReportAcknowledgementResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeGuardianReportAcknowledgementResponse, rhs: AuraAgentNativeGuardianReportAcknowledgementResponse) -> Bool {
     if lhs.disposition != rhs.disposition {return false}
     if lhs.caseID != rhs.caseID {return false}
     if lhs.caseGeneration != rhs.caseGeneration {return false}
@@ -9539,7 +9539,7 @@ nonisolated extension Aura_Messenger_V1_GuardianReportAcknowledgementResponse: S
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ContactProfileRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContactProfileRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactProfileRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_id\0")
 
@@ -9562,14 +9562,14 @@ nonisolated extension Aura_Messenger_V1_ContactProfileRequest: SwiftProtobuf.Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ContactProfileRequest, rhs: Aura_Messenger_V1_ContactProfileRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeContactProfileRequest, rhs: AuraAgentNativeContactProfileRequest) -> Bool {
     if lhs.senderID != rhs.senderID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ContactProfile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContactProfile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactProfile"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_id\0\u{3}risk_score\0\u{1}rating\0\u{3}trust_level\0\u{3}circle_tier\0\u{1}trend\0\u{3}first_seen_ms\0\u{3}last_seen_ms\0\u{3}total_messages\0\u{3}grooming_events\0\u{3}bullying_events\0\u{3}manipulation_events\0\u{3}is_trusted\0\u{3}is_new_contact\0\u{3}conversation_count\0\u{3}average_severity\0")
 
@@ -9652,7 +9652,7 @@ nonisolated extension Aura_Messenger_V1_ContactProfile: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ContactProfile, rhs: Aura_Messenger_V1_ContactProfile) -> Bool {
+  public static func ==(lhs: AuraAgentNativeContactProfile, rhs: AuraAgentNativeContactProfile) -> Bool {
     if lhs.senderID != rhs.senderID {return false}
     if lhs.riskScore != rhs.riskScore {return false}
     if lhs.rating != rhs.rating {return false}
@@ -9674,13 +9674,13 @@ nonisolated extension Aura_Messenger_V1_ContactProfile: SwiftProtobuf.Message, S
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ContactProfileResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContactProfileResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactProfileResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}found\0\u{1}profile\0")
 
   fileprivate class _StorageClass {
     var _found: Bool = false
-    var _profile: Aura_Messenger_V1_ContactProfile? = nil
+    var _profile: AuraAgentNativeContactProfile? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -9735,7 +9735,7 @@ nonisolated extension Aura_Messenger_V1_ContactProfileResponse: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ContactProfileResponse, rhs: Aura_Messenger_V1_ContactProfileResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeContactProfileResponse, rhs: AuraAgentNativeContactProfileResponse) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -9751,7 +9751,7 @@ nonisolated extension Aura_Messenger_V1_ContactProfileResponse: SwiftProtobuf.Me
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ContactsByRiskResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContactsByRiskResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactsByRiskResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}contacts\0")
 
@@ -9774,14 +9774,14 @@ nonisolated extension Aura_Messenger_V1_ContactsByRiskResponse: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ContactsByRiskResponse, rhs: Aura_Messenger_V1_ContactsByRiskResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeContactsByRiskResponse, rhs: AuraAgentNativeContactsByRiskResponse) -> Bool {
     if lhs.contacts != rhs.contacts {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_BatchAnalyzeItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeBatchAnalyzeItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BatchAnalyzeItem"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{3}timestamp_ms\0")
 
@@ -9812,7 +9812,7 @@ nonisolated extension Aura_Messenger_V1_BatchAnalyzeItem: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_BatchAnalyzeItem, rhs: Aura_Messenger_V1_BatchAnalyzeItem) -> Bool {
+  public static func ==(lhs: AuraAgentNativeBatchAnalyzeItem, rhs: AuraAgentNativeBatchAnalyzeItem) -> Bool {
     if lhs._message != rhs._message {return false}
     if lhs._timestampMs != rhs._timestampMs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -9820,7 +9820,7 @@ nonisolated extension Aura_Messenger_V1_BatchAnalyzeItem: SwiftProtobuf.Message,
   }
 }
 
-nonisolated extension Aura_Messenger_V1_BatchAnalyzeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeBatchAnalyzeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BatchAnalyzeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}items\0")
 
@@ -9843,14 +9843,14 @@ nonisolated extension Aura_Messenger_V1_BatchAnalyzeRequest: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_BatchAnalyzeRequest, rhs: Aura_Messenger_V1_BatchAnalyzeRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeBatchAnalyzeRequest, rhs: AuraAgentNativeBatchAnalyzeRequest) -> Bool {
     if lhs.items != rhs.items {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_BatchAnalyzeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeBatchAnalyzeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BatchAnalyzeResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}results\0")
 
@@ -9873,14 +9873,14 @@ nonisolated extension Aura_Messenger_V1_BatchAnalyzeResponse: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_BatchAnalyzeResponse, rhs: Aura_Messenger_V1_BatchAnalyzeResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeBatchAnalyzeResponse, rhs: AuraAgentNativeBatchAnalyzeResponse) -> Bool {
     if lhs.results != rhs.results {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ReloadPatternsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeReloadPatternsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReloadPatternsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}patterns_path\0")
 
@@ -9903,14 +9903,14 @@ nonisolated extension Aura_Messenger_V1_ReloadPatternsRequest: SwiftProtobuf.Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ReloadPatternsRequest, rhs: Aura_Messenger_V1_ReloadPatternsRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeReloadPatternsRequest, rhs: AuraAgentNativeReloadPatternsRequest) -> Bool {
     if lhs.patternsPath != rhs.patternsPath {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_MarkContactTrustedRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeMarkContactTrustedRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MarkContactTrustedRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_id\0")
 
@@ -9933,14 +9933,14 @@ nonisolated extension Aura_Messenger_V1_MarkContactTrustedRequest: SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_MarkContactTrustedRequest, rhs: Aura_Messenger_V1_MarkContactTrustedRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeMarkContactTrustedRequest, rhs: AuraAgentNativeMarkContactTrustedRequest) -> Bool {
     if lhs.senderID != rhs.senderID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_StatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".StatusResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}message\0")
 
@@ -9971,7 +9971,7 @@ nonisolated extension Aura_Messenger_V1_StatusResponse: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_StatusResponse, rhs: Aura_Messenger_V1_StatusResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeStatusResponse, rhs: AuraAgentNativeStatusResponse) -> Bool {
     if lhs.ok != rhs.ok {return false}
     if lhs._message != rhs._message {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -9979,7 +9979,7 @@ nonisolated extension Aura_Messenger_V1_StatusResponse: SwiftProtobuf.Message, S
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ExportContextResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeExportContextResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ExportContextResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}state\0")
 
@@ -10006,14 +10006,14 @@ nonisolated extension Aura_Messenger_V1_ExportContextResponse: SwiftProtobuf.Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ExportContextResponse, rhs: Aura_Messenger_V1_ExportContextResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeExportContextResponse, rhs: AuraAgentNativeExportContextResponse) -> Bool {
     if lhs._state != rhs._state {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ImportContextRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeImportContextRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ImportContextRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}state\0")
 
@@ -10040,14 +10040,14 @@ nonisolated extension Aura_Messenger_V1_ImportContextRequest: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ImportContextRequest, rhs: Aura_Messenger_V1_ImportContextRequest) -> Bool {
+  public static func ==(lhs: AuraAgentNativeImportContextRequest, rhs: AuraAgentNativeImportContextRequest) -> Bool {
     if lhs._state != rhs._state {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ConversationSummaryItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeConversationSummaryItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConversationSummaryItem"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{3}total_events\0\u{3}unique_senders\0\u{3}threat_event_count\0\u{3}latest_event_ms\0")
 
@@ -10086,7 +10086,7 @@ nonisolated extension Aura_Messenger_V1_ConversationSummaryItem: SwiftProtobuf.M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ConversationSummaryItem, rhs: Aura_Messenger_V1_ConversationSummaryItem) -> Bool {
+  public static func ==(lhs: AuraAgentNativeConversationSummaryItem, rhs: AuraAgentNativeConversationSummaryItem) -> Bool {
     if lhs.conversationID != rhs.conversationID {return false}
     if lhs.totalEvents != rhs.totalEvents {return false}
     if lhs.uniqueSenders != rhs.uniqueSenders {return false}
@@ -10097,7 +10097,7 @@ nonisolated extension Aura_Messenger_V1_ConversationSummaryItem: SwiftProtobuf.M
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ConversationSummaryResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeConversationSummaryResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConversationSummaryResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}total_conversations\0\u{1}conversations\0")
 
@@ -10124,7 +10124,7 @@ nonisolated extension Aura_Messenger_V1_ConversationSummaryResponse: SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ConversationSummaryResponse, rhs: Aura_Messenger_V1_ConversationSummaryResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeConversationSummaryResponse, rhs: AuraAgentNativeConversationSummaryResponse) -> Bool {
     if lhs.totalConversations != rhs.totalConversations {return false}
     if lhs.conversations != rhs.conversations {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -10132,7 +10132,7 @@ nonisolated extension Aura_Messenger_V1_ConversationSummaryResponse: SwiftProtob
   }
 }
 
-nonisolated extension Aura_Messenger_V1_EventContextFrame: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeEventContextFrame: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EventContextFrame"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}speech_act\0\u{1}stance\0\u{1}directionality\0\u{3}new_contact\0\u{3}trusted_contact\0\u{3}one_sided\0\u{3}repeated_by_sender\0\u{1}escalating\0\u{3}cross_conversation\0\u{1}bursty\0\u{1}confidence\0")
 
@@ -10195,7 +10195,7 @@ nonisolated extension Aura_Messenger_V1_EventContextFrame: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_EventContextFrame, rhs: Aura_Messenger_V1_EventContextFrame) -> Bool {
+  public static func ==(lhs: AuraAgentNativeEventContextFrame, rhs: AuraAgentNativeEventContextFrame) -> Bool {
     if lhs.speechAct != rhs.speechAct {return false}
     if lhs.stance != rhs.stance {return false}
     if lhs.directionality != rhs.directionality {return false}
@@ -10212,7 +10212,7 @@ nonisolated extension Aura_Messenger_V1_EventContextFrame: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ContextEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContextEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContextEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}event_id\0\u{3}timestamp_ms\0\u{3}sender_id\0\u{3}conversation_id\0\u{1}kind\0\u{1}confidence\0\u{1}subtype\0\u{3}content_hash\0\u{1}context\0")
 
@@ -10221,11 +10221,11 @@ nonisolated extension Aura_Messenger_V1_ContextEvent: SwiftProtobuf.Message, Swi
     var _timestampMs: UInt64 = 0
     var _senderID: String = String()
     var _conversationID: String = String()
-    var _kind: Aura_Messenger_V1_EventKind = .unspecified
+    var _kind: AuraAgentNativeEventKind = .unspecified
     var _confidence: Float = 0
     var _subtype: String = String()
     var _contentHash: UInt64? = nil
-    var _context: Aura_Messenger_V1_EventContextFrame? = nil
+    var _context: AuraAgentNativeEventContextFrame? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -10315,7 +10315,7 @@ nonisolated extension Aura_Messenger_V1_ContextEvent: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ContextEvent, rhs: Aura_Messenger_V1_ContextEvent) -> Bool {
+  public static func ==(lhs: AuraAgentNativeContextEvent, rhs: AuraAgentNativeContextEvent) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -10338,7 +10338,7 @@ nonisolated extension Aura_Messenger_V1_ContextEvent: SwiftProtobuf.Message, Swi
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ConversationTimelineState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeConversationTimelineState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConversationTimelineState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{3}conversation_type\0\u{1}events\0")
 
@@ -10369,7 +10369,7 @@ nonisolated extension Aura_Messenger_V1_ConversationTimelineState: SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ConversationTimelineState, rhs: Aura_Messenger_V1_ConversationTimelineState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeConversationTimelineState, rhs: AuraAgentNativeConversationTimelineState) -> Bool {
     if lhs.conversationID != rhs.conversationID {return false}
     if lhs.conversationType != rhs.conversationType {return false}
     if lhs.events != rhs.events {return false}
@@ -10378,7 +10378,7 @@ nonisolated extension Aura_Messenger_V1_ConversationTimelineState: SwiftProtobuf
   }
 }
 
-nonisolated extension Aura_Messenger_V1_BehavioralSnapshotState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeBehavioralSnapshotState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BehavioralSnapshotState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}period_start_ms\0\u{3}period_end_ms\0\u{3}total_messages\0\u{3}hostile_count\0\u{3}supportive_count\0\u{3}neutral_count\0\u{3}grooming_count\0\u{3}manipulation_count\0\u{3}avg_severity\0\u{3}propaganda_count\0")
 
@@ -10437,7 +10437,7 @@ nonisolated extension Aura_Messenger_V1_BehavioralSnapshotState: SwiftProtobuf.M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_BehavioralSnapshotState, rhs: Aura_Messenger_V1_BehavioralSnapshotState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeBehavioralSnapshotState, rhs: AuraAgentNativeBehavioralSnapshotState) -> Bool {
     if lhs.periodStartMs != rhs.periodStartMs {return false}
     if lhs.periodEndMs != rhs.periodEndMs {return false}
     if lhs.totalMessages != rhs.totalMessages {return false}
@@ -10453,7 +10453,7 @@ nonisolated extension Aura_Messenger_V1_BehavioralSnapshotState: SwiftProtobuf.M
   }
 }
 
-nonisolated extension Aura_Messenger_V1_NarrativeHit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeNarrativeHit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".NarrativeHit"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}narrative_id\0\u{1}count\0")
 
@@ -10480,7 +10480,7 @@ nonisolated extension Aura_Messenger_V1_NarrativeHit: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_NarrativeHit, rhs: Aura_Messenger_V1_NarrativeHit) -> Bool {
+  public static func ==(lhs: AuraAgentNativeNarrativeHit, rhs: AuraAgentNativeNarrativeHit) -> Bool {
     if lhs.narrativeID != rhs.narrativeID {return false}
     if lhs.count != rhs.count {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -10488,7 +10488,7 @@ nonisolated extension Aura_Messenger_V1_NarrativeHit: SwiftProtobuf.Message, Swi
   }
 }
 
-nonisolated extension Aura_Messenger_V1_NarrativeTimelineEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeNarrativeTimelineEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".NarrativeTimelineEntry"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}timestamp_ms\0\u{3}narrative_id\0")
 
@@ -10515,7 +10515,7 @@ nonisolated extension Aura_Messenger_V1_NarrativeTimelineEntry: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_NarrativeTimelineEntry, rhs: Aura_Messenger_V1_NarrativeTimelineEntry) -> Bool {
+  public static func ==(lhs: AuraAgentNativeNarrativeTimelineEntry, rhs: AuraAgentNativeNarrativeTimelineEntry) -> Bool {
     if lhs.timestampMs != rhs.timestampMs {return false}
     if lhs.narrativeID != rhs.narrativeID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -10523,7 +10523,7 @@ nonisolated extension Aura_Messenger_V1_NarrativeTimelineEntry: SwiftProtobuf.Me
   }
 }
 
-nonisolated extension Aura_Messenger_V1_WeeklyPropagandaCount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeWeeklyPropagandaCount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WeeklyPropagandaCount"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}week_start_ms\0\u{1}count\0")
 
@@ -10550,7 +10550,7 @@ nonisolated extension Aura_Messenger_V1_WeeklyPropagandaCount: SwiftProtobuf.Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_WeeklyPropagandaCount, rhs: Aura_Messenger_V1_WeeklyPropagandaCount) -> Bool {
+  public static func ==(lhs: AuraAgentNativeWeeklyPropagandaCount, rhs: AuraAgentNativeWeeklyPropagandaCount) -> Bool {
     if lhs.weekStartMs != rhs.weekStartMs {return false}
     if lhs.count != rhs.count {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -10558,7 +10558,7 @@ nonisolated extension Aura_Messenger_V1_WeeklyPropagandaCount: SwiftProtobuf.Mes
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ChildSafetyTrajectoryState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeChildSafetyTrajectoryState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ChildSafetyTrajectoryState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}first_grooming_ms\0\u{3}last_grooming_ms\0\u{3}grooming_stage_mask\0\u{3}grooming_event_count\0\u{3}high_risk_event_count\0\u{3}rapid_escalation_ms\0")
 
@@ -10601,7 +10601,7 @@ nonisolated extension Aura_Messenger_V1_ChildSafetyTrajectoryState: SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ChildSafetyTrajectoryState, rhs: Aura_Messenger_V1_ChildSafetyTrajectoryState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeChildSafetyTrajectoryState, rhs: AuraAgentNativeChildSafetyTrajectoryState) -> Bool {
     if lhs.firstGroomingMs != rhs.firstGroomingMs {return false}
     if lhs.lastGroomingMs != rhs.lastGroomingMs {return false}
     if lhs.groomingStageMask != rhs.groomingStageMask {return false}
@@ -10613,7 +10613,7 @@ nonisolated extension Aura_Messenger_V1_ChildSafetyTrajectoryState: SwiftProtobu
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ContactProfileState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContactProfileState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactProfileState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_id\0\u{3}first_seen_ms\0\u{3}last_seen_ms\0\u{3}total_messages\0\u{3}conversation_count\0\u{1}conversations\0\u{3}grooming_event_count\0\u{3}bullying_event_count\0\u{3}manipulation_event_count\0\u{3}is_trusted\0\u{3}severity_sum\0\u{3}severity_count\0\u{3}inferred_age\0\u{1}rating\0\u{3}trust_level\0\u{3}circle_tier\0\u{1}trend\0\u{3}weekly_snapshots\0\u{3}current_snapshot\0\u{3}active_days\0\u{3}propaganda_event_count\0\u{3}propaganda_source_count\0\u{3}narrative_hits\0\u{3}propaganda_score\0\u{3}narrative_diversity\0\u{3}first_propaganda_ms\0\u{3}last_propaganda_ms\0\u{3}propaganda_conversations\0\u{3}hourly_activity\0\u{3}message_fingerprints\0\u{3}narrative_timeline\0\u{3}weekly_propaganda_counts\0\u{3}age_source\0\u{3}child_safety\0")
 
@@ -10633,14 +10633,14 @@ nonisolated extension Aura_Messenger_V1_ContactProfileState: SwiftProtobuf.Messa
     var _inferredAge: UInt32? = nil
     var _rating: Float = 0
     var _trustLevel: Float = 0
-    var _circleTier: Aura_Messenger_V1_CircleTier = .unspecified
-    var _trend: Aura_Messenger_V1_BehavioralTrend = .unspecified
-    var _weeklySnapshots: [Aura_Messenger_V1_BehavioralSnapshotState] = []
-    var _currentSnapshot: Aura_Messenger_V1_BehavioralSnapshotState? = nil
+    var _circleTier: AuraAgentNativeCircleTier = .unspecified
+    var _trend: AuraAgentNativeBehavioralTrend = .unspecified
+    var _weeklySnapshots: [AuraAgentNativeBehavioralSnapshotState] = []
+    var _currentSnapshot: AuraAgentNativeBehavioralSnapshotState? = nil
     var _activeDays: [UInt32] = []
     var _propagandaEventCount: UInt64 = 0
     var _propagandaSourceCount: UInt64 = 0
-    var _narrativeHits: [Aura_Messenger_V1_NarrativeHit] = []
+    var _narrativeHits: [AuraAgentNativeNarrativeHit] = []
     var _propagandaScore: Float = 0
     var _narrativeDiversity: UInt32 = 0
     var _firstPropagandaMs: UInt64 = 0
@@ -10648,10 +10648,10 @@ nonisolated extension Aura_Messenger_V1_ContactProfileState: SwiftProtobuf.Messa
     var _propagandaConversations: [String] = []
     var _hourlyActivity: [UInt32] = []
     var _messageFingerprints: [UInt64] = []
-    var _narrativeTimeline: [Aura_Messenger_V1_NarrativeTimelineEntry] = []
-    var _weeklyPropagandaCounts: [Aura_Messenger_V1_WeeklyPropagandaCount] = []
-    var _ageSource: Aura_Messenger_V1_AgeSource = .unspecified
-    var _childSafety: Aura_Messenger_V1_ChildSafetyTrajectoryState? = nil
+    var _narrativeTimeline: [AuraAgentNativeNarrativeTimelineEntry] = []
+    var _weeklyPropagandaCounts: [AuraAgentNativeWeeklyPropagandaCount] = []
+    var _ageSource: AuraAgentNativeAgeSource = .unspecified
+    var _childSafety: AuraAgentNativeChildSafetyTrajectoryState? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -10866,7 +10866,7 @@ nonisolated extension Aura_Messenger_V1_ContactProfileState: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ContactProfileState, rhs: Aura_Messenger_V1_ContactProfileState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeContactProfileState, rhs: AuraAgentNativeContactProfileState) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -10914,7 +10914,7 @@ nonisolated extension Aura_Messenger_V1_ContactProfileState: SwiftProtobuf.Messa
   }
 }
 
-nonisolated extension Aura_Messenger_V1_ContactProfilerState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeContactProfilerState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactProfilerState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}profiles\0")
 
@@ -10937,14 +10937,14 @@ nonisolated extension Aura_Messenger_V1_ContactProfilerState: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_ContactProfilerState, rhs: Aura_Messenger_V1_ContactProfilerState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeContactProfilerState, rhs: AuraAgentNativeContactProfilerState) -> Bool {
     if lhs.profiles != rhs.profiles {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Aura_Messenger_V1_TrackerState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeTrackerState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrackerState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{1}timelines\0\u{3}contact_profiler\0\u{3}kids_memory\0")
 
@@ -10983,7 +10983,7 @@ nonisolated extension Aura_Messenger_V1_TrackerState: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_TrackerState, rhs: Aura_Messenger_V1_TrackerState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeTrackerState, rhs: AuraAgentNativeTrackerState) -> Bool {
     if lhs.schemaVersion != rhs.schemaVersion {return false}
     if lhs.timelines != rhs.timelines {return false}
     if lhs._contactProfiler != rhs._contactProfiler {return false}
@@ -10993,7 +10993,7 @@ nonisolated extension Aura_Messenger_V1_TrackerState: SwiftProtobuf.Message, Swi
   }
 }
 
-nonisolated extension Aura_Messenger_V1_KidsMessageRiskSnapshot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeKidsMessageRiskSnapshot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KidsMessageRiskSnapshot"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_id\0\u{3}has_grooming\0\u{3}has_manipulation\0\u{3}has_bullying\0\u{3}has_self_harm\0\u{3}has_blackmail_or_sextortion\0\u{3}ml_grooming\0\u{3}ml_bullying\0\u{3}ml_self_harm\0\u{3}ml_manipulation\0")
 
@@ -11056,7 +11056,7 @@ nonisolated extension Aura_Messenger_V1_KidsMessageRiskSnapshot: SwiftProtobuf.M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_KidsMessageRiskSnapshot, rhs: Aura_Messenger_V1_KidsMessageRiskSnapshot) -> Bool {
+  public static func ==(lhs: AuraAgentNativeKidsMessageRiskSnapshot, rhs: AuraAgentNativeKidsMessageRiskSnapshot) -> Bool {
     if lhs._senderID != rhs._senderID {return false}
     if lhs.hasGrooming_p != rhs.hasGrooming_p {return false}
     if lhs.hasManipulation_p != rhs.hasManipulation_p {return false}
@@ -11072,7 +11072,7 @@ nonisolated extension Aura_Messenger_V1_KidsMessageRiskSnapshot: SwiftProtobuf.M
   }
 }
 
-nonisolated extension Aura_Messenger_V1_KidsConversationMemoryState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeKidsConversationMemoryState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KidsConversationMemoryState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{1}entries\0\u{3}message_index\0\u{3}last_activity_index\0\u{3}last_emitted\0")
 
@@ -11115,7 +11115,7 @@ nonisolated extension Aura_Messenger_V1_KidsConversationMemoryState: SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_KidsConversationMemoryState, rhs: Aura_Messenger_V1_KidsConversationMemoryState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeKidsConversationMemoryState, rhs: AuraAgentNativeKidsConversationMemoryState) -> Bool {
     if lhs.conversationID != rhs.conversationID {return false}
     if lhs.entries != rhs.entries {return false}
     if lhs.messageIndex != rhs.messageIndex {return false}
@@ -11126,7 +11126,7 @@ nonisolated extension Aura_Messenger_V1_KidsConversationMemoryState: SwiftProtob
   }
 }
 
-nonisolated extension Aura_Messenger_V1_KidsSenderMemoryState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeKidsSenderMemoryState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KidsSenderMemoryState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_id\0\u{3}event_index\0\u{3}recent_high_risk_conversations\0\u{3}last_activity_index\0\u{3}last_emitted\0\u{3}guardian_blocked\0")
 
@@ -11173,7 +11173,7 @@ nonisolated extension Aura_Messenger_V1_KidsSenderMemoryState: SwiftProtobuf.Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_KidsSenderMemoryState, rhs: Aura_Messenger_V1_KidsSenderMemoryState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeKidsSenderMemoryState, rhs: AuraAgentNativeKidsSenderMemoryState) -> Bool {
     if lhs.senderID != rhs.senderID {return false}
     if lhs.eventIndex != rhs.eventIndex {return false}
     if lhs.recentHighRiskConversations != rhs.recentHighRiskConversations {return false}
@@ -11185,7 +11185,7 @@ nonisolated extension Aura_Messenger_V1_KidsSenderMemoryState: SwiftProtobuf.Mes
   }
 }
 
-nonisolated extension Aura_Messenger_V1_KidsEmissionCheckpoint: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeKidsEmissionCheckpoint: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KidsEmissionCheckpoint"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}reason_code\0\u{3}emitted_at_index\0")
 
@@ -11212,7 +11212,7 @@ nonisolated extension Aura_Messenger_V1_KidsEmissionCheckpoint: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_KidsEmissionCheckpoint, rhs: Aura_Messenger_V1_KidsEmissionCheckpoint) -> Bool {
+  public static func ==(lhs: AuraAgentNativeKidsEmissionCheckpoint, rhs: AuraAgentNativeKidsEmissionCheckpoint) -> Bool {
     if lhs.reasonCode != rhs.reasonCode {return false}
     if lhs.emittedAtIndex != rhs.emittedAtIndex {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -11220,7 +11220,7 @@ nonisolated extension Aura_Messenger_V1_KidsEmissionCheckpoint: SwiftProtobuf.Me
   }
 }
 
-nonisolated extension Aura_Messenger_V1_KidsMemoryState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension AuraAgentNativeKidsMemoryState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KidsMemoryState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}conversations\0\u{1}senders\0\u{3}schema_version\0")
 
@@ -11251,7 +11251,7 @@ nonisolated extension Aura_Messenger_V1_KidsMemoryState: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Aura_Messenger_V1_KidsMemoryState, rhs: Aura_Messenger_V1_KidsMemoryState) -> Bool {
+  public static func ==(lhs: AuraAgentNativeKidsMemoryState, rhs: AuraAgentNativeKidsMemoryState) -> Bool {
     if lhs.conversations != rhs.conversations {return false}
     if lhs.senders != rhs.senders {return false}
     if lhs.schemaVersion != rhs.schemaVersion {return false}

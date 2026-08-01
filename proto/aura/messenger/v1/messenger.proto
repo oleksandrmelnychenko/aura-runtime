@@ -2,6 +2,11 @@ syntax = "proto3";
 
 package aura.messenger.v1;
 
+// AuraAgent is imported beside the application's independently generated
+// AuraProtos module. A distinct prefix prevents public Swift symbols for the
+// same wire schema from becoming ambiguous at the integration boundary.
+option swift_prefix = "AuraAgentNative";
+
 enum ProtectionLevel {
   PROTECTION_LEVEL_UNSPECIFIED = 0;
   PROTECTION_LEVEL_OFF = 1;

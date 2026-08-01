@@ -43,8 +43,8 @@ public final class AuraAgentRuntime: @unchecked Sendable {
     /// commit the response and native state before applying UI or guardian
     /// effects.
     public func analyzeLocalDecision(
-        _ request: Aura_Messenger_V1_LocalDecisionAnalyzeRequest
-    ) throws -> Aura_Messenger_V1_LocalDecisionAnalyzeResponse {
+        _ request: AuraAgentNativeLocalDecisionAnalyzeRequest
+    ) throws -> AuraAgentNativeLocalDecisionAnalyzeResponse {
         let requestBytes: Data
         do {
             requestBytes = try request.serializedData()
@@ -57,7 +57,7 @@ public final class AuraAgentRuntime: @unchecked Sendable {
             }
         }
         do {
-            return try Aura_Messenger_V1_LocalDecisionAnalyzeResponse(
+            return try AuraAgentNativeLocalDecisionAnalyzeResponse(
                 serializedBytes: responseBytes
             )
         } catch {
