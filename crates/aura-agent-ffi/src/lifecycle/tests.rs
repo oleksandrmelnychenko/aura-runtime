@@ -67,6 +67,83 @@ fn ios_local_analysis_config_initializes() {
 }
 
 #[test]
+fn configured_missing_pattern_pack_blocks_initialization() {
+    unsafe {
+        let mut config = proto_config(proto::AccountType::Adult, true);
+        let missing_path = std::env::temp_dir().join(format!(
+            "aura-missing-pattern-pack-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time must follow UNIX epoch")
+                .as_nanos()
+        ));
+        config.patterns_path = Some(missing_path.to_string_lossy().into_owned());
+
+        let bytes = encode_proto(&config);
+        let handle = aura_init(bytes.as_ptr(), bytes.len());
+
+        assert!(handle.is_null(), "missing pattern pack must fail closed");
+        let error = last_error_string();
+        assert!(error.starts_with(PATTERN_PACK_LOAD_FAILED));
+        assert!(error.contains("failed to load configured pattern pack"));
+        assert!(error.contains("failed to read pattern file"));
+    }
+}
+
+#[test]
+fn configured_invalid_pattern_pack_blocks_initialization() {
+    unsafe {
+        let pattern_file = tempfile::NamedTempFile::new().expect("temporary pattern file");
+        std::fs::write(pattern_file.path(), b"{not-json").expect("write invalid pattern pack");
+        let mut config = proto_config(proto::AccountType::Adult, true);
+        config.patterns_path = Some(pattern_file.path().to_string_lossy().into_owned());
+
+        let bytes = encode_proto(&config);
+        let handle = aura_init(bytes.as_ptr(), bytes.len());
+
+        assert!(handle.is_null(), "invalid pattern pack must fail closed");
+        let error = last_error_string();
+        assert!(error.starts_with(PATTERN_PACK_LOAD_FAILED));
+        assert!(error.contains("failed to load configured pattern pack"));
+        assert!(error.contains("failed to parse pattern JSON"));
+    }
+}
+
+#[test]
+fn configured_valid_pattern_pack_initializes() {
+    unsafe {
+        let pattern_file = tempfile::NamedTempFile::new().expect("temporary pattern file");
+        let pattern_json = br#"{
+            "version": "rel003-custom",
+            "updated_at": "2026-08-01",
+            "rules": [{
+                "id": "rel003_sentinel",
+                "threat_type": "phishing",
+                "kind": { "type": "keyword", "words": ["rel003sentinel"] },
+                "score": 0.9,
+                "languages": ["en"],
+                "explanation": "REL-003 test rule"
+            }]
+        }"#;
+        std::fs::write(pattern_file.path(), pattern_json).expect("write valid pattern pack");
+        let mut config = proto_config(proto::AccountType::Adult, true);
+        config.patterns_path = Some(pattern_file.path().to_string_lossy().into_owned());
+
+        let decoded = aura_config_from_proto(config.clone()).expect("decode config");
+        let loaded = load_pattern_db(&decoded).expect("load configured pattern pack");
+        assert_eq!(loaded.version, "rel003-custom");
+        assert_eq!(loaded.rules.len(), 1);
+
+        let bytes = encode_proto(&config);
+        let handle = aura_init(bytes.as_ptr(), bytes.len());
+
+        assert!(!handle.is_null(), "valid configured pattern pack must load");
+        aura_free(handle);
+    }
+}
+
+#[test]
 fn last_error_does_not_leak_to_another_thread() {
     let synchronized = std::sync::Arc::new(std::sync::Barrier::new(2));
     let release_writer = std::sync::Arc::new(std::sync::Barrier::new(2));

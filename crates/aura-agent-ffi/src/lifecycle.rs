@@ -39,7 +39,6 @@ use aura_patterns::PatternDatabase;
 use aura_proto::messenger::v1 as proto;
 use prost::Message as ProstMessage;
 use sha2::{Digest, Sha256};
-use tracing::warn;
 
 use crate::execution_policy;
 
@@ -72,7 +71,7 @@ fn build_instance(config: DecodedConfig) -> Result<*mut c_void, String> {
         .validate()
         .map_err(|e| format!("config validation failed: {e}"))?;
 
-    let pattern_db = load_pattern_db(&config.aura_config);
+    let pattern_db = load_pattern_db(&config.aura_config)?;
     let analyzer = AgentRuntime::new(config.aura_config, &pattern_db);
     let instance = Box::new(Mutex::new(AuraInstance { analyzer }));
     Ok(Box::into_raw(instance) as *mut c_void)

@@ -1,6 +1,7 @@
 use super::*;
 
 pub(super) const MAX_FFI_IDENTIFIER_BYTES: usize = 256;
+pub(super) const PATTERN_PACK_LOAD_FAILED: &str = "PATTERN_PACK_LOAD_FAILED";
 
 fn validate_ffi_identifier(field: &str, value: String) -> Result<String, String> {
     if value.is_empty() {
@@ -18,21 +19,13 @@ fn validate_ffi_identifier(field: &str, value: String) -> Result<String, String>
     Ok(value)
 }
 
-pub(super) fn load_pattern_db(config: &AuraConfig) -> PatternDatabase {
+pub(super) fn load_pattern_db(config: &AuraConfig) -> Result<PatternDatabase, String> {
     if let Some(ref path) = config.patterns_path {
-        match try_load_pattern_db(path) {
-            Ok(db) => db,
-            Err(error) => {
-                warn!(
-                    patterns_path = %path,
-                    error = %error,
-                    "falling back to built-in MVP patterns during init"
-                );
-                PatternDatabase::default_mvp()
-            }
-        }
+        try_load_pattern_db(path).map_err(|error| {
+            format!("{PATTERN_PACK_LOAD_FAILED}: failed to load configured pattern pack: {error}")
+        })
     } else {
-        PatternDatabase::default_mvp()
+        Ok(PatternDatabase::default_mvp())
     }
 }
 

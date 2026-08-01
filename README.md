@@ -288,6 +288,9 @@ Public header: `include/aura_ffi.h`
   thread-local and must be read on the same thread as the failed call
 - Sender and conversation IDs crossing the FFI are opaque 1–256-byte values;
   empty values, whitespace/control characters, and oversized values are rejected
+- `patterns_path = None` explicitly selects the built-in pattern pack; when a
+  path is supplied, a missing or invalid pack fails initialization with
+  `PATTERN_PACK_LOAD_FAILED` and is never silently replaced
 
 The Apple/C boundary exposes only the canonical Safety Case lifecycle:
 

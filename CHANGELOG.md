@@ -25,6 +25,10 @@
 - Made `aura_last_error` strictly thread-local by removing its process-global
   fallback. A concurrency regression proves one thread cannot consume another
   thread's error; callers must read the error on the failing call's thread.
+- Made configured pattern packs fail closed during FFI initialization. An
+  absent or invalid `patterns_path` now rejects initialization with the stable
+  `PATTERN_PACK_LOAD_FAILED` reason instead of silently running built-in rules;
+  omitting the path remains the explicit way to select the built-in pack.
 
 ## Unreleased — Canonical Apple ABI
 

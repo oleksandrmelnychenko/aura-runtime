@@ -88,7 +88,7 @@ Relay повинен бути технічно вимкнений у профі�
 | --- | --- | --- | --- |
 | `REL-001` | закрито | після rate limit повертався чистий `Allow` | Analyzer більше не має внутрішнього пропуску; кожне прийняте повідомлення проходить повний pipeline |
 | `REL-002` | відкрито | Apple API не повертає негайний product decision | один типізований локальний decision API |
-| `REL-003` | відкрито | помилка заданого pattern pack приховано вмикає вбудовані правила | fail-closed або явно засвідчений дозволений fallback |
+| `REL-003` | закрито | помилка заданого pattern pack приховано вмикала вбудовані правила | заданий шлях завантажується повністю або блокує init зі стабільною причиною; відсутній шлях явно обирає built-in pack |
 | `REL-004` | відкрито | немає міграції persisted state v2 -> v3 | перевірена міграція і golden fixtures |
 | `REL-005` | закрито | guardian feedback очищав неправильний обсяг пам'яті й кодував `Block` вигаданими діалогами | точна ізольована семантика account/sender/conversation та версійований стан блокування |
 | `REL-006` | закрито | порожні FFI IDs ставали спільним `unknown` | неправильні live та persisted sender/conversation IDs відхиляються до зміни стану |
@@ -236,7 +236,8 @@ Relay повинен бути технічно вимкнений у профі�
 
 Завдання:
 
-- заданий і неправильний `patterns_path` блокує ініціалізацію;
+- ✅ заданий і неправильний `patterns_path` блокує ініціалізацію з
+  `PATTERN_PACK_LOAD_FAILED`;
 - fallback дозволяється лише профілем, який прямо це декларує;
 - pattern validator перевіряє унікальність/non-empty ID, відомий threat type,
   score range, непорожню matcher semantics і schema version;
@@ -634,7 +635,8 @@ evidence є інфраструктурою докторського дослід
    явний версійований `Block` і міграція v1 -> v2.
 3. ✅ `REL-006` ID validation і `REL-007` error isolation — bounded FFI IDs,
    перевірка imported state та суто thread-local `aura_last_error`.
-4. `REL-003` pattern/config fail semantics.
+4. ✅ `REL-003` pattern/config fail semantics — заданий зовнішній pack більше
+   не може бути мовчки замінений built-in rules.
 5. `REL-004` state v2 -> v3 migration.
 6. `REL-008` minor configuration invariant.
 7. ADR та реалізація `REL-002` local product decision API.
