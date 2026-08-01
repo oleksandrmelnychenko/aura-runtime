@@ -94,7 +94,7 @@ Relay повинен бути технічно вимкнений у профі�
 | `REL-006` | закрито | порожні FFI IDs ставали спільним `unknown` | неправильні live та persisted sender/conversation IDs відхиляються до зміни стану |
 | `REL-007` | закрито | `aura_last_error` міг повертати помилку іншого потоку | суто thread-local канал із багатопотоковим regression test |
 | `REL-008` | закрито | `enabled=false` суперечив недозволеному вимкненню для minor | child/teen завжди мають активний захист і Kids domain; суперечливий init/update відхиляється до мутації |
-| `REL-009` | відкрито | iOS ще не приймає manifest v5/descriptor v3 | точний pin і Swift contract tests |
+| `REL-009` | artifact готовий; iOS приймання відкрито | iOS ще не приймає manifest v5/descriptor v3 | чистий XCFramework перевірено; потрібні зовнішній exact pin і Swift contract tests |
 | `REL-010` | відкрито | чотири людські signoff залишаються pending | реальні підписані рішення |
 
 ### Окремі блокувальники Relay
@@ -652,7 +652,8 @@ evidence є інфраструктурою докторського дослід
    для config, Analyzer, AgentRuntime і FFI.
 7. ◐ ADR і source-реалізація `REL-002` local product decision API завершені;
    artifact pin та фактичний iOS/UI gate залишаються відкритими.
-8. iOS integration harness та `REL-009` exact Apple pin.
+8. ◐ Чистий `REL-009` XCFramework і незалежна artifact verification готові;
+   iOS integration harness та зовнішній exact pin залишаються відкритими.
 9. Повний RC gate і реальні `REL-010` signoffs.
 10. Controlled local-only KIDS pilot.
 11. Окремий Military допуск.
