@@ -66,24 +66,38 @@ fn ios_local_analysis_config_initializes() {
     }
 }
 
-// Directly validates the device-symptom fix: when the thread-local LAST_ERROR
-// read comes back empty (the static-lib/iOS behavior that produced
-// "unknown error"), aura_last_error must still surface the message from the
-// sticky process-global mirror.
 #[test]
-fn last_error_global_fallback_survives_threadlocal_clear() {
-    unsafe {
-        set_last_error("boom-global-fallback-xyz");
-        // Simulate the iOS symptom: thread-local does not retain the write.
-        LAST_ERROR.with(|e| {
-            *e.borrow_mut() = None;
-        });
-        let err = aura_last_error();
-        assert!(!err.is_null(), "global fallback must surface the error");
-        let s = std::ffi::CStr::from_ptr(err).to_string_lossy().into_owned();
-        aura_free_string(err);
-        assert!(s.contains("boom-global-fallback-xyz"), "got: {s}");
-    }
+fn last_error_does_not_leak_to_another_thread() {
+    let synchronized = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let release_writer = std::sync::Arc::new(std::sync::Barrier::new(2));
+
+    let writer_synchronized = synchronized.clone();
+    let writer_release = release_writer.clone();
+    let writer = std::thread::spawn(move || {
+        set_last_error("writer-thread-error");
+        writer_synchronized.wait();
+        writer_release.wait();
+        unsafe { last_error_string() }
+    });
+
+    let observer = std::thread::spawn(move || {
+        synchronized.wait();
+        let observed = unsafe {
+            let error = aura_last_error();
+            if error.is_null() {
+                None
+            } else {
+                let message = CStr::from_ptr(error).to_string_lossy().into_owned();
+                aura_free_string(error);
+                Some(message)
+            }
+        };
+        release_writer.wait();
+        observed
+    });
+
+    assert_eq!(observer.join().expect("observer thread"), None);
+    assert_eq!(writer.join().expect("writer thread"), "writer-thread-error");
 }
 
 #[test]
@@ -129,6 +143,57 @@ fn proto_message(text: &str, sender_id: &str, conversation_id: &str) -> proto::M
         member_count: None,
         sender_relationship: proto::SenderRelationship::Unspecified as i32,
         relationship_trust_source: proto::RelationshipTrustSource::Unspecified as i32,
+    }
+}
+
+#[test]
+fn message_input_rejects_empty_whitespace_and_oversized_ids() {
+    let empty_sender = message_input_from_proto(proto_message("hello", "", "conversation"))
+        .expect_err("empty sender id must fail");
+    let empty_conversation = message_input_from_proto(proto_message("hello", "sender", ""))
+        .expect_err("empty conversation id must fail");
+    let whitespace_sender =
+        message_input_from_proto(proto_message("hello", "sender with spaces", "conversation"))
+            .expect_err("whitespace sender id must fail");
+    let oversized_sender = "s".repeat(MAX_FFI_IDENTIFIER_BYTES + 1);
+    let oversized =
+        message_input_from_proto(proto_message("hello", &oversized_sender, "conversation"))
+            .expect_err("oversized sender id must fail");
+
+    assert!(empty_sender.contains("message sender id must not be empty"));
+    assert!(empty_conversation.contains("message conversation id must not be empty"));
+    assert!(whitespace_sender.contains("whitespace or control"));
+    assert!(oversized.contains("exceeds 256 bytes"));
+}
+
+#[test]
+fn canonical_ffi_rejects_empty_message_id_before_analysis() {
+    unsafe {
+        let handle = init_handle(proto_config(proto::AccountType::Adult, true));
+        let request = proto::CanonicalSafetyAnalyzeRequest {
+            message: Some(proto_message("hello", "", "conversation")),
+            identity: Some(proto::CanonicalSafetyEventIdentity {
+                account_key: "account".to_string(),
+                subject_key: "subject".to_string(),
+                conversation_key: "conversation".to_string(),
+                event_id: "event".to_string(),
+                revision: 1,
+                occurred_at_ms: 1,
+                observed_at_ms: 1,
+            }),
+        };
+        let bytes = encode_proto(&request);
+        let mut out = AuraBuffer::empty();
+
+        assert!(!aura_analyze_canonical_safety(
+            handle,
+            bytes.as_ptr(),
+            bytes.len(),
+            &mut out,
+        ));
+        assert!(out.ptr.is_null());
+        assert!(last_error_string().contains("message sender id must not be empty"));
+        aura_free(handle);
     }
 }
 
@@ -405,6 +470,89 @@ fn kids_memory_rejects_noncurrent_schema_and_missing_activity_indices() {
     missing_sender_index.conversations[0].last_activity_index = Some(41);
     missing_sender_index.senders[0].last_activity_index = None;
     assert!(kids_memory_state_from_proto(&missing_sender_index).is_err());
+}
+
+#[test]
+fn persisted_context_rejects_invalid_nested_sender_and_conversation_ids() {
+    let invalid_timeline = proto::TrackerState {
+        schema_version: 3,
+        timelines: vec![proto::ConversationTimelineState {
+            conversation_id: String::new(),
+            conversation_type: proto::ConversationType::Direct as i32,
+            events: Vec::new(),
+        }],
+        contact_profiler: None,
+        kids_memory: None,
+    };
+    let timeline_error = tracker_state_from_proto(invalid_timeline)
+        .err()
+        .expect("empty timeline conversation id must fail");
+
+    let invalid_event = proto::ContextEvent {
+        sender_id: String::new(),
+        conversation_id: "conversation".to_string(),
+        kind: proto::EventKind::NormalConversation as i32,
+        ..proto::ContextEvent::default()
+    };
+    let event_error =
+        context_event_from_proto(invalid_event).expect_err("empty context sender id must fail");
+
+    let invalid_contact = proto::ContactProfilerState {
+        profiles: vec![proto::ContactProfileState::default()],
+    };
+    let contact_error = contact_profiler_state_from_proto(invalid_contact)
+        .expect_err("empty contact sender id must fail");
+
+    assert!(timeline_error.contains("timeline conversation id must not be empty"));
+    assert!(event_error.contains("context event sender id must not be empty"));
+    assert!(contact_error.contains("contact profile sender id must not be empty"));
+}
+
+#[test]
+fn persisted_kids_memory_rejects_invalid_nested_ids() {
+    let valid_conversation = proto::KidsConversationMemoryState {
+        conversation_id: "conversation".to_string(),
+        entries: vec![proto::KidsMessageRiskSnapshot {
+            sender_id: Some("sender".to_string()),
+            ..proto::KidsMessageRiskSnapshot::default()
+        }],
+        message_index: 1,
+        last_activity_index: Some(1),
+        last_emitted: Vec::new(),
+    };
+    let valid_sender = proto::KidsSenderMemoryState {
+        sender_id: "sender".to_string(),
+        event_index: 1,
+        recent_high_risk_conversations: vec!["conversation".to_string()],
+        last_activity_index: Some(1),
+        last_emitted: Vec::new(),
+        guardian_blocked: false,
+    };
+    let valid_state = proto::KidsMemoryState {
+        conversations: vec![valid_conversation],
+        senders: vec![valid_sender],
+        schema_version: aura_agent_core::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION,
+    };
+
+    let mut empty_conversation = valid_state.clone();
+    empty_conversation.conversations[0].conversation_id.clear();
+    let conversation_error = kids_memory_state_from_proto(&empty_conversation)
+        .expect_err("empty kids conversation id must fail");
+
+    let mut empty_snapshot_sender = valid_state.clone();
+    empty_snapshot_sender.conversations[0].entries[0].sender_id = Some(String::new());
+    let snapshot_error = kids_memory_state_from_proto(&empty_snapshot_sender)
+        .expect_err("empty kids snapshot sender id must fail");
+
+    let mut oversized_recent_conversation = valid_state;
+    oversized_recent_conversation.senders[0].recent_high_risk_conversations[0] =
+        "c".repeat(MAX_FFI_IDENTIFIER_BYTES + 1);
+    let recent_error = kids_memory_state_from_proto(&oversized_recent_conversation)
+        .expect_err("oversized recent conversation id must fail");
+
+    assert!(conversation_error.contains("kids conversation id must not be empty"));
+    assert!(snapshot_error.contains("kids message sender id must not be empty"));
+    assert!(recent_error.contains("kids recent conversation id exceeds 256 bytes"));
 }
 
 #[test]

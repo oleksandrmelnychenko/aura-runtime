@@ -71,7 +71,8 @@ bool aura_import_safety_case_state(void *handle, const uint8_t *account_key_ptr,
 /// aura-protected-protocol's `aura_version` when co-linked.
 const char *aura_agent_version(void);
 
-/// Returns the last error message, or NULL if no error occurred.
+/// Returns the calling thread's last error message, or NULL if none occurred.
+/// Must be called on the same thread as the failed FFI operation.
 /// Caller must free with aura_free_string.
 char *aura_last_error(void);
 

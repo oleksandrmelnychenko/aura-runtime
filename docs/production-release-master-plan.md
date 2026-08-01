@@ -91,8 +91,8 @@ Relay повинен бути технічно вимкнений у профі�
 | `REL-003` | відкрито | помилка заданого pattern pack приховано вмикає вбудовані правила | fail-closed або явно засвідчений дозволений fallback |
 | `REL-004` | відкрито | немає міграції persisted state v2 -> v3 | перевірена міграція і golden fixtures |
 | `REL-005` | закрито | guardian feedback очищав неправильний обсяг пам'яті й кодував `Block` вигаданими діалогами | точна ізольована семантика account/sender/conversation та версійований стан блокування |
-| `REL-006` | відкрито | порожні FFI IDs стають спільним `unknown` | відхилення неправильного запиту |
-| `REL-007` | відкрито | `aura_last_error` може змішувати потоки | ізоляція за потоком або handle/request |
+| `REL-006` | закрито | порожні FFI IDs ставали спільним `unknown` | неправильні live та persisted sender/conversation IDs відхиляються до зміни стану |
+| `REL-007` | закрито | `aura_last_error` міг повертати помилку іншого потоку | суто thread-local канал із багатопотоковим regression test |
 | `REL-008` | відкрито | `enabled=false` суперечить недозволеному вимкненню для minor | єдина валідована конфігураційна семантика |
 | `REL-009` | відкрито | iOS ще не приймає manifest v5/descriptor v3 | точний pin і Swift contract tests |
 | `REL-010` | відкрито | чотири людські signoff залишаються pending | реальні підписані рішення |
@@ -202,8 +202,19 @@ Relay повинен бути технічно вимкнений у профі�
      справжньої історії діалогів;
    - усі операції над двома memory maps використовують один порядок блокувань;
    - regression і scope-matrix tests доводять збереження всіх непов'язаних пар.
-3. Відхиляти порожні або надмірні ідентифікатори на FFI boundary.
-4. Ізолювати last-error і додати багатопотокові тести.
+3. Реалізовано сувору перевірку FFI ідентифікаторів:
+   - live message sender/conversation IDs більше не замінюються спільним
+     `unknown`;
+   - порожні, довші за 256 bytes, whitespace/control IDs відхиляються до
+     аналізу та мутації state;
+   - ті самі правила діють для вкладених timeline/event/contact/KIDS IDs під
+     час імпорту persisted context.
+4. Ізольовано last-error:
+   - process-global fallback вилучено;
+   - `aura_last_error` читає тільки помилку потоку, в якому стався виклик;
+   - C header фіксує same-thread requirement;
+   - barrier-based concurrency regression доводить відсутність cross-thread
+     leakage.
 5. Уніфікувати minor configuration: protection для child/teen не може бути
    частково вимкнений суперечливою комбінацією полів.
 6. Виправити Relay observation pairing, навіть якщо Relay залишається вимкненим.
@@ -621,7 +632,8 @@ evidence є інфраструктурою докторського дослід
 1. ✅ `REL-001` rate-limit safety — внутрішній fail-open шлях вилучено.
 2. ✅ `REL-005` guardian memory scope — точні межі `Trusted`/`FalsePositive`,
    явний версійований `Block` і міграція v1 -> v2.
-3. `REL-006` ID validation і `REL-007` error isolation.
+3. ✅ `REL-006` ID validation і `REL-007` error isolation — bounded FFI IDs,
+   перевірка imported state та суто thread-local `aura_last_error`.
 4. `REL-003` pattern/config fail semantics.
 5. `REL-004` state v2 -> v3 migration.
 6. `REL-008` minor configuration invariant.

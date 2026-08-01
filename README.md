@@ -284,7 +284,10 @@ Public header: `include/aura_ffi.h`
 - Wire format is **protobuf only**
 - Requests and responses are encoded byte buffers
 - `AuraBuffer` is the output transport type
-- `aura_last_error()` is the only string-based error channel
+- `aura_last_error()` is the only string-based error channel; it is
+  thread-local and must be read on the same thread as the failed call
+- Sender and conversation IDs crossing the FFI are opaque 1–256-byte values;
+  empty values, whitespace/control characters, and oversized values are rejected
 
 The Apple/C boundary exposes only the canonical Safety Case lifecycle:
 

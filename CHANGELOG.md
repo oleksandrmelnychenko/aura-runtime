@@ -18,6 +18,13 @@
 - Standardized the conversation-before-sender lock order for feedback that
   updates both memory maps, and added regression, scope-matrix, persistence,
   protobuf, and legacy-migration coverage.
+- Removed the shared `"unknown"` fallback for empty message identifiers. The
+  canonical FFI now rejects empty, whitespace/control-containing, or
+  over-256-byte sender and conversation IDs before analysis, and applies the
+  same validation to imported Core and KIDS state.
+- Made `aura_last_error` strictly thread-local by removing its process-global
+  fallback. A concurrency regression proves one thread cannot consume another
+  thread's error; callers must read the error on the failing call's thread.
 
 ## Unreleased — Canonical Apple ABI
 

@@ -276,7 +276,13 @@ pub unsafe extern "C" fn aura_analyze_canonical_safety(
             set_last_error("missing identity in canonical safety request");
             return false;
         };
-        let input = message_input_from_proto(message);
+        let input = match message_input_from_proto(message) {
+            Ok(input) => input,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
         let identity = match canonical_safety_identity_from_proto(identity, &input) {
             Ok(identity) => identity,
             Err(error) => {
@@ -1374,28 +1380,13 @@ pub extern "C" fn aura_version() -> *const c_char {
     })
 }
 
-/// Returns the last error message as a C string, or null if no error occurred.
+/// Returns this thread's last error message as a C string, or null if none occurred.
+///
+/// The caller must invoke this on the same thread as the failed FFI operation.
 #[no_mangle]
 pub extern "C" fn aura_last_error() -> *mut c_char {
     ffi_guard(std::ptr::null_mut(), move || {
-        // Prefer the thread-local (correct per-thread semantics); fall back to
-        // the process-global mirror when the thread-local read comes back empty
-        // (see LAST_ERROR_GLOBAL) so a real error is never reported as null.
-        let local_message = LAST_ERROR.with(|error| error.borrow().clone());
-        let message = match local_message {
-            Some(message) => {
-                if let Ok(mut guard) = LAST_ERROR_GLOBAL.lock() {
-                    if guard.as_deref() == Some(message.as_str()) {
-                        *guard = None;
-                    }
-                }
-                Some(message)
-            }
-            None => LAST_ERROR_GLOBAL
-                .lock()
-                .ok()
-                .and_then(|mut guard| guard.take()),
-        };
+        let message = LAST_ERROR.with(|error| error.borrow().clone());
         match message {
             Some(msg) => string_to_c(msg),
             None => std::ptr::null_mut(),

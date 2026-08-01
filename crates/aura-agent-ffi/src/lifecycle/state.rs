@@ -1,5 +1,23 @@
 use super::*;
 
+pub(super) const MAX_FFI_IDENTIFIER_BYTES: usize = 256;
+
+fn validate_ffi_identifier(field: &str, value: String) -> Result<String, String> {
+    if value.is_empty() {
+        return Err(format!("{field} must not be empty"));
+    }
+    if value.len() > MAX_FFI_IDENTIFIER_BYTES {
+        return Err(format!("{field} exceeds {MAX_FFI_IDENTIFIER_BYTES} bytes"));
+    }
+    if value
+        .chars()
+        .any(|character| character.is_control() || character.is_whitespace())
+    {
+        return Err(format!("{field} contains whitespace or control characters"));
+    }
+    Ok(value)
+}
+
 pub(super) fn load_pattern_db(config: &AuraConfig) -> PatternDatabase {
     if let Some(ref path) = config.patterns_path {
         match try_load_pattern_db(path) {
@@ -63,16 +81,21 @@ pub(super) fn decoded_config_from_proto(
     })
 }
 
-pub(super) fn message_input_from_proto(message: proto::MessageInput) -> MessageInput {
-    MessageInput {
+pub(super) fn message_input_from_proto(
+    message: proto::MessageInput,
+) -> Result<MessageInput, String> {
+    Ok(MessageInput {
         content_type: content_type_from_proto(message.content_type),
         text: message.text,
         image_data: message.image_data,
-        sender_id: aura_agent_core::SenderId::from(non_empty_or(message.sender_id, "unknown")),
-        conversation_id: aura_agent_core::ConversationId::from(non_empty_or(
+        sender_id: aura_agent_core::SenderId::from(validate_ffi_identifier(
+            "message sender id",
+            message.sender_id,
+        )?),
+        conversation_id: aura_agent_core::ConversationId::from(validate_ffi_identifier(
+            "message conversation id",
             message.conversation_id,
-            "unknown",
-        )),
+        )?),
         language: message.language,
         conversation_type: conversation_type_from_proto(message.conversation_type),
         member_count: message.member_count,
@@ -80,15 +103,7 @@ pub(super) fn message_input_from_proto(message: proto::MessageInput) -> MessageI
         relationship_trust_source: relationship_trust_source_from_proto(
             message.relationship_trust_source,
         ),
-    }
-}
-
-pub(super) fn non_empty_or(value: String, default: &str) -> String {
-    if value.is_empty() {
-        default.to_string()
-    } else {
-        value
-    }
+    })
 }
 
 pub(super) fn tracker_state_to_proto(
@@ -227,26 +242,24 @@ pub(super) fn kids_memory_state_from_proto(
             .conversations
             .iter()
             .map(|conv| {
+                let conversation_id =
+                    validate_ffi_identifier("kids conversation id", conv.conversation_id.clone())?;
                 let last_activity_index = conv
                     .last_activity_index
                     .ok_or_else(|| "kids conversation activity index is required".to_string())?;
-                Ok(ExportedConversationMemory {
-                    conversation_id: conv.conversation_id.clone(),
-                    message_index: conv.message_index,
-                    last_activity_index,
-                    last_emitted: conv
-                        .last_emitted
-                        .iter()
-                        .map(|checkpoint| ExportedEmissionCheckpoint {
-                            reason_code: checkpoint.reason_code.clone(),
-                            emitted_at_index: checkpoint.emitted_at_index,
-                        })
-                        .collect(),
-                    entries: conv
-                        .entries
-                        .iter()
-                        .map(|snap| ExportedMessageSnapshot {
-                            sender_id: snap.sender_id.clone(),
+                let entries = conv
+                    .entries
+                    .iter()
+                    .map(|snap| {
+                        let sender_id = snap
+                            .sender_id
+                            .as_ref()
+                            .map(|sender_id| {
+                                validate_ffi_identifier("kids message sender id", sender_id.clone())
+                            })
+                            .transpose()?;
+                        Ok(ExportedMessageSnapshot {
+                            sender_id,
                             has_grooming: snap.has_grooming,
                             has_manipulation: snap.has_manipulation,
                             has_bullying: snap.has_bullying,
@@ -257,7 +270,21 @@ pub(super) fn kids_memory_state_from_proto(
                             ml_self_harm: snap.ml_self_harm,
                             ml_manipulation: snap.ml_manipulation,
                         })
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                Ok(ExportedConversationMemory {
+                    conversation_id,
+                    message_index: conv.message_index,
+                    last_activity_index,
+                    last_emitted: conv
+                        .last_emitted
+                        .iter()
+                        .map(|checkpoint| ExportedEmissionCheckpoint {
+                            reason_code: checkpoint.reason_code.clone(),
+                            emitted_at_index: checkpoint.emitted_at_index,
+                        })
                         .collect(),
+                    entries,
                 })
             })
             .collect::<Result<Vec<_>, String>>()?,
@@ -265,11 +292,21 @@ pub(super) fn kids_memory_state_from_proto(
             .senders
             .iter()
             .map(|sender| {
+                let sender_id =
+                    validate_ffi_identifier("kids sender id", sender.sender_id.clone())?;
                 let last_activity_index = sender
                     .last_activity_index
                     .ok_or_else(|| "kids sender activity index is required".to_string())?;
+                let mut recent_high_risk_conversations =
+                    Vec::with_capacity(sender.recent_high_risk_conversations.len());
+                for conversation_id in &sender.recent_high_risk_conversations {
+                    recent_high_risk_conversations.push(validate_ffi_identifier(
+                        "kids recent conversation id",
+                        conversation_id.clone(),
+                    )?);
+                }
                 Ok(ExportedSenderMemory {
-                    sender_id: sender.sender_id.clone(),
+                    sender_id,
                     event_index: sender.event_index,
                     last_activity_index,
                     last_emitted: sender
@@ -280,7 +317,7 @@ pub(super) fn kids_memory_state_from_proto(
                             emitted_at_index: checkpoint.emitted_at_index,
                         })
                         .collect(),
-                    recent_high_risk_conversations: sender.recent_high_risk_conversations.clone(),
+                    recent_high_risk_conversations,
                     guardian_blocked: sender.guardian_blocked,
                 })
             })
@@ -302,7 +339,10 @@ pub(super) fn conversation_timeline_state_from_proto(
     state: proto::ConversationTimelineState,
 ) -> Result<CoreConversationTimelineState, String> {
     Ok(CoreConversationTimelineState {
-        conversation_id: aura_agent_core::ConversationId::from(state.conversation_id),
+        conversation_id: aura_agent_core::ConversationId::from(validate_ffi_identifier(
+            "timeline conversation id",
+            state.conversation_id,
+        )?),
         conversation_type: conversation_type_from_proto(state.conversation_type),
         events: state
             .events
@@ -331,8 +371,14 @@ pub(super) fn context_event_from_proto(
     Ok(CoreContextEvent {
         event_id: event.event_id,
         timestamp_ms: event.timestamp_ms,
-        sender_id: aura_agent_core::SenderId::from(event.sender_id),
-        conversation_id: aura_agent_core::ConversationId::from(event.conversation_id),
+        sender_id: aura_agent_core::SenderId::from(validate_ffi_identifier(
+            "context event sender id",
+            event.sender_id,
+        )?),
+        conversation_id: aura_agent_core::ConversationId::from(validate_ffi_identifier(
+            "context event conversation id",
+            event.conversation_id,
+        )?),
         kind: event_kind_from_proto(event.kind)?,
         confidence: event.confidence,
         subtype: if event.subtype.is_empty() {
@@ -459,6 +505,7 @@ pub(super) fn contact_profile_state_to_proto(
 pub(super) fn contact_profile_state_from_proto(
     state: proto::ContactProfileState,
 ) -> Result<CoreContactProfileState, String> {
+    let sender_id = validate_ffi_identifier("contact profile sender id", state.sender_id)?;
     let inferred_age = match state.inferred_age {
         Some(age) if age > u16::MAX as u32 => {
             return Err(format!("inferred_age {age} exceeds u16 range"));
@@ -518,24 +565,29 @@ pub(super) fn contact_profile_state_from_proto(
         weekly_propaganda_counts.push_back((entry.week_start_ms, entry.count as u16));
     }
 
+    let mut conversations = Vec::with_capacity(state.conversations.len());
+    for conversation_id in state.conversations {
+        conversations.push(aura_agent_core::ConversationId::from(
+            validate_ffi_identifier("contact conversation id", conversation_id)?,
+        ));
+    }
+
     let mut propaganda_conversations = Vec::with_capacity(state.propaganda_conversations.len());
     for conversation_id in state.propaganda_conversations {
-        propaganda_conversations.push(aura_agent_core::ConversationId::from(conversation_id));
+        propaganda_conversations.push(aura_agent_core::ConversationId::from(
+            validate_ffi_identifier("propaganda conversation id", conversation_id)?,
+        ));
     }
 
     let child_safety = child_safety_trajectory_from_proto(state.child_safety)?;
 
     Ok(CoreContactProfileState {
-        sender_id: aura_agent_core::SenderId::from(state.sender_id),
+        sender_id: aura_agent_core::SenderId::from(sender_id),
         first_seen_ms: state.first_seen_ms,
         last_seen_ms: state.last_seen_ms,
         total_messages: state.total_messages,
         conversation_count: state.conversation_count as usize,
-        conversations: state
-            .conversations
-            .into_iter()
-            .map(aura_agent_core::ConversationId::from)
-            .collect(),
+        conversations,
         grooming_event_count: state.grooming_event_count,
         bullying_event_count: state.bullying_event_count,
         manipulation_event_count: state.manipulation_event_count,
