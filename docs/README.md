@@ -7,6 +7,7 @@ Status: synchronized with runtime and policy behavior on July 25, 2026.
 
 ## Active Operating Set
 
+- [Master Production Release Plan](./production-release-master-plan.md)
 - [AURA Core Refactor Completion Plan](./aura-core-refactor-completion-plan.md)
 - [AURA Core Research Evidence Roadmap](./research-evidence-roadmap.md)
 - [Apple Artifact Integration Contract](./apple-artifact-integration.md)
@@ -54,14 +55,17 @@ Status: synchronized with runtime and policy behavior on July 25, 2026.
 - `DetectionSignal.threat_subtype` is part of the stable product-facing payload
   and is now populated for heuristic URL detections (`doppelganger`,
   `homoglyph`, `heuristic`) and broader military/psyops subtype paths.
-- Current `patterns_mvp.json` size is 322 rules.
+- Current `patterns_mvp.json` size is 533 rules.
 - `aura-ml` ONNX safety/intent integration tests are opt-in via
   `AURA_RUN_SAFETY_INTENT_ONNX=1`; default runs keep core ONNX coverage but
   skip these heavy load checks on platforms where they can hang.
 
 ## How To Use These Docs
 
-- Start with the roadmap to understand what was delivered in the Phase 2
+- Start with the master production release plan for the authoritative release
+  scope, blockers, execution order, evidence gates, signoffs, rollout, and
+  rollback rules.
+- Use the Phase 2 roadmap to understand what was delivered in the earlier
   release-hardening track and what remains for the next phase.
 - Use the Phase 3 roadmap when planning pilot-readiness work, shadow mode,
   product integration, or simulation-to-regression promotion.
