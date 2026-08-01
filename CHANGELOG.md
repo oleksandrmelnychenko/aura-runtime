@@ -1,5 +1,15 @@
 # AURA Core — Changelog
 
+## Unreleased — Release Reliability
+
+- Removed the stateless Analyzer's per-sender rate-limit short-circuit, which
+  could return a clean `Allow` without running pattern, ML, domain, or context
+  analysis after 60 messages in one minute. Every message accepted by the
+  Analyzer now runs through the full local pipeline; admission control belongs
+  before the safety boundary.
+- Added a regression proving that an explicit threat in the 61st message from
+  one sender is still detected and produces at least a warning.
+
 ## Unreleased — Canonical Apple ABI
 
 - Reduced the Apple XCFramework and Swift package boundary to initialization,

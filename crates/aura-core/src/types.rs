@@ -673,13 +673,6 @@ impl AnalysisResult {
         }
     }
 
-    /// Creates a clean result for a rate-limited message.
-    pub fn rate_limited(analysis_time_us: u64) -> Self {
-        let mut result = Self::clean(analysis_time_us);
-        result.explanation = "rate_limited".to_string();
-        result
-    }
-
     /// Returns `true` if any threat was detected.
     pub fn is_threat(&self) -> bool {
         self.threat_type != ThreatType::None

@@ -80,22 +80,22 @@ Relay повинен бути технічно вимкнений у профі�
 - Обов'язкові `kids.memory.*` причини не знижуються під час налаштування порогів.
 - Рішення опікуна змінює лише визначений обліковий запис, контакт і діалог.
 
-## 4. Поточні блокувальники
+## 4. Початкові блокувальники та поточний стан
 
 ### Блокувальники локального Agent/KIDS випуску
 
-| Код | Проблема | Необхідний результат |
-| --- | --- | --- |
-| `REL-001` | після rate limit повертається чистий `Allow` | безпечна деградація без пропуску явних загроз |
-| `REL-002` | Apple API не повертає негайний product decision | один типізований локальний decision API |
-| `REL-003` | помилка заданого pattern pack приховано вмикає вбудовані правила | fail-closed або явно засвідчений дозволений fallback |
-| `REL-004` | немає міграції persisted state v2 -> v3 | перевірена міграція і golden fixtures |
-| `REL-005` | guardian feedback очищає неправильний обсяг пам'яті | точна account/sender/conversation семантика |
-| `REL-006` | порожні FFI IDs стають спільним `unknown` | відхилення неправильного запиту |
-| `REL-007` | `aura_last_error` може змішувати потоки | ізоляція за потоком або handle/request |
-| `REL-008` | `enabled=false` суперечить недозволеному вимкненню для minor | єдина валідована конфігураційна семантика |
-| `REL-009` | iOS ще не приймає manifest v5/descriptor v3 | точний pin і Swift contract tests |
-| `REL-010` | чотири людські signoff залишаються pending | реальні підписані рішення |
+| Код | Стан | Проблема | Необхідний результат |
+| --- | --- | --- | --- |
+| `REL-001` | закрито | після rate limit повертався чистий `Allow` | Analyzer більше не має внутрішнього пропуску; кожне прийняте повідомлення проходить повний pipeline |
+| `REL-002` | відкрито | Apple API не повертає негайний product decision | один типізований локальний decision API |
+| `REL-003` | відкрито | помилка заданого pattern pack приховано вмикає вбудовані правила | fail-closed або явно засвідчений дозволений fallback |
+| `REL-004` | відкрито | немає міграції persisted state v2 -> v3 | перевірена міграція і golden fixtures |
+| `REL-005` | відкрито | guardian feedback очищає неправильний обсяг пам'яті | точна account/sender/conversation семантика |
+| `REL-006` | відкрито | порожні FFI IDs стають спільним `unknown` | відхилення неправильного запиту |
+| `REL-007` | відкрито | `aura_last_error` може змішувати потоки | ізоляція за потоком або handle/request |
+| `REL-008` | відкрито | `enabled=false` суперечить недозволеному вимкненню для minor | єдина валідована конфігураційна семантика |
+| `REL-009` | відкрито | iOS ще не приймає manifest v5/descriptor v3 | точний pin і Swift contract tests |
+| `REL-010` | відкрито | чотири людські signoff залишаються pending | реальні підписані рішення |
 
 ### Окремі блокувальники Relay
 
@@ -183,12 +183,13 @@ Relay повинен бути технічно вимкнений у профі�
 
 Завдання:
 
-1. Замінити rate-limit fail-open:
-   - завжди виконувати дешевий explicit-anchor scan;
-   - не пропускати KIDS/MILITARY critical families;
-   - повертати типізований `Degraded`, а не clean result;
-   - перевірити 60 безпечних + 61 ризикове повідомлення;
-   - перевірити burst, різних senders, restart і clock rollback.
+1. Усунути rate-limit fail-open:
+   - внутрішній per-sender short-circuit вилучено з Analyzer;
+   - кожне повідомлення, уже прийняте safety boundary, проходить повний pipeline;
+   - admission control переноситься перед Analyzer і не може підробити clean result;
+   - regression перевіряє 60 безпечних + 61-ше ризикове повідомлення;
+   - повний аналіз 1000 повідомлень залишається всередині чинного performance
+     budget.
 2. Виправити guardian feedback:
    - `Trusted` очищає визначеного sender у всіх дозволених conversations;
    - `FalsePositive` видаляє лише відповідну sender/conversation evidence;
@@ -457,7 +458,7 @@ Relay спочатку працює лише у shadow. Він переходи�
 
 | Відмова | Обов'язкова поведінка |
 | --- | --- |
-| rate limit | дешевий critical scan + типізований degraded result; не silent allow |
+| перевищення ingress rate limit | повідомлення або не приймається до safety boundary з явним статусом, або після прийняття проходить повний Analyzer pipeline; не silent allow |
 | Relay timeout/down | локальне рішення, ознака remote unavailable |
 | model missing у rules profile | засвідчений rules fallback |
 | model missing у ONNX profile | ініціалізація/допуск заблоковані |
@@ -610,7 +611,7 @@ evidence є інфраструктурою докторського дослід
 
 ## 14. Рекомендований точний порядок робіт
 
-1. `REL-001` rate-limit safety.
+1. ✅ `REL-001` rate-limit safety — внутрішній fail-open шлях вилучено.
 2. `REL-005` guardian memory scope.
 3. `REL-006` ID validation і `REL-007` error isolation.
 4. `REL-003` pattern/config fail semantics.
@@ -649,4 +650,3 @@ evidence є інфраструктурою докторського дослід
 - Relay, ONNX і Military або окремо допущені, або доведено вимкнені;
 - документація описує фактичний стан без застарілих заяв;
 - верхньорівневий `aura.release_decision.v1` має `decision = go`.
-

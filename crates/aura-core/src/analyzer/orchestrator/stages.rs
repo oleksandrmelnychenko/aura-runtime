@@ -11,18 +11,6 @@ impl Analyzer {
             return AnalysisResult::clean(0);
         }
 
-        // Rate-limit: skip expensive pipeline for senders that exceed
-        // 60 messages/minute. The message is still counted (total_messages
-        // increments) but pattern/ML/context analysis is skipped.
-        // Uses wall-clock millis since MessageInput has no timestamp field.
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
-        if !self.rate_limiter.check(&input.sender_id, now_ms) {
-            return AnalysisResult::rate_limited(start.elapsed().as_micros() as u64);
-        }
-
         let mut raw_observations = Vec::with_capacity(12);
 
         if let Some(ref raw_text) = input.text {

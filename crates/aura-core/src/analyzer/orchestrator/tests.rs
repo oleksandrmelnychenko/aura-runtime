@@ -376,6 +376,24 @@ fn threat_is_detected_and_warned() {
 }
 
 #[test]
+fn explicit_threat_is_analyzed_after_high_volume_from_same_sender() {
+    let db = test_db();
+    let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+    let benign = default_input("Hey, how are you?");
+
+    for _ in 0..60 {
+        analyzer.analyze(&benign);
+    }
+
+    let result = analyzer.analyze(&default_input("I will kill you"));
+
+    assert!(
+        result.threat_type == ThreatType::Threat && result.action >= Action::Warn,
+        "High-volume traffic must not bypass explicit-threat analysis: {result:?}"
+    );
+}
+
+#[test]
 fn grooming_detected_for_all_users() {
     let db = test_db();
     let mut analyzer = Analyzer::new(child_config(), &db);
