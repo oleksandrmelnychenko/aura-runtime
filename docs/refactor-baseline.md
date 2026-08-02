@@ -6,8 +6,8 @@ Status: refreshed after the reviewed release differential on August 2, 2026.
 
 The checked-in
 `crates/aura-core/data/refactor_baseline_v1.json` freezes the observable
-behavior and boundary contracts at revision
-`56567c3c4fcbbd728cf5e6c9a0ef7adff9369e57`.
+behavior and boundary contracts at the exact revision stored in its
+`source.revision` field.
 
 It records:
 
@@ -92,3 +92,7 @@ Update it only after:
 
 After accepting a new baseline, clear obsolete entries from
 `docs/refactor-diff-approvals.json`; the empty state is the normal state.
+The baseline and exact-approval JSON files are deliberately excluded from the
+Apple build-source digest because they review hashes stored in the Apple
+artifact itself. This exact two-file exclusion prevents a cryptographic
+self-reference; it does not exclude governed fixtures or executable CI code.

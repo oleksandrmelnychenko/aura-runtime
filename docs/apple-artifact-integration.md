@@ -45,6 +45,16 @@ The release manifest adds:
 The descriptor carries the same provenance and contract-version fields. The
 client must require equality between manifest and descriptor values.
 
+`source_tree_sha256` uses the domain-separated
+`aura.build-source-tree.v2` algorithm over every tracked or untracked
+build-relevant file. It excludes generated `dist/apple` outputs and exactly
+two non-build governance artifacts:
+`crates/aura-core/data/refactor_baseline_v1.json` and
+`docs/refactor-diff-approvals.json`. Those files contain the artifact hashes
+they review, so including them would create a cryptographic self-reference.
+All neighboring governed datasets, CI code, headers, Rust/Swift sources, lock
+files, and release scripts remain inside the digest.
+
 ## Required iOS Validation
 
 The migrated Swift contract must reject the artifact unless:

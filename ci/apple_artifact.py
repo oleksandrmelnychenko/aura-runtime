@@ -19,7 +19,7 @@ from typing import Any
 RELEASE_MANIFEST_SCHEMA_VERSION = 5
 RUNTIME_DESCRIPTOR_SCHEMA_VERSION = 3
 VERIFICATION_REPORT_SCHEMA = "aura.apple_artifact_verification.v1"
-SOURCE_TREE_DIGEST_DOMAIN = b"aura.source-tree.v1\0"
+SOURCE_TREE_DIGEST_DOMAIN = b"aura.build-source-tree.v2\0"
 
 GENERATED_SOURCE_PATHS = {
     "dist/apple/release-manifest.json",
@@ -27,6 +27,10 @@ GENERATED_SOURCE_PATHS = {
     "dist/apple/runtime-artifact-identities.env",
 }
 GENERATED_SOURCE_PREFIXES = ("dist/apple/AuraAgentFFI.xcframework/",)
+NON_BUILD_GOVERNANCE_PATHS = {
+    "crates/aura-core/data/refactor_baseline_v1.json",
+    "docs/refactor-diff-approvals.json",
+}
 
 EXPECTED_TARGET_TRIPLES = [
     "aarch64-apple-ios",
@@ -90,9 +94,11 @@ def _git_paths(root: Path, args: list[str]) -> set[str]:
     }
 
 
-def _is_generated_source_path(relative_path: str) -> bool:
-    return relative_path in GENERATED_SOURCE_PATHS or relative_path.startswith(
-        GENERATED_SOURCE_PREFIXES
+def _is_build_source_excluded_path(relative_path: str) -> bool:
+    return (
+        relative_path in GENERATED_SOURCE_PATHS
+        or relative_path in NON_BUILD_GOVERNANCE_PATHS
+        or relative_path.startswith(GENERATED_SOURCE_PREFIXES)
     )
 
 
@@ -101,7 +107,7 @@ def _source_paths(root: Path) -> list[str]:
         root,
         ["ls-files", "--cached", "--others", "--exclude-standard"],
     )
-    return sorted(path for path in paths if not _is_generated_source_path(path))
+    return sorted(path for path in paths if not _is_build_source_excluded_path(path))
 
 
 def _frame(hasher: Any, payload: bytes) -> None:
@@ -110,7 +116,7 @@ def _frame(hasher: Any, payload: bytes) -> None:
 
 
 def source_tree_digest(root: Path) -> str:
-    """Hash the reviewable source tree while excluding generated Apple outputs."""
+    """Hash build-relevant source without generated or self-referential evidence."""
 
     root = root.resolve()
     paths = _source_paths(root)
@@ -152,7 +158,7 @@ def source_tree_dirty(root: Path) -> bool:
     changed.update(
         _git_paths(root, ["ls-files", "--others", "--exclude-standard"])
     )
-    return any(not _is_generated_source_path(path) for path in changed)
+    return any(not _is_build_source_excluded_path(path) for path in changed)
 
 
 def _source_revision_is_ancestor(

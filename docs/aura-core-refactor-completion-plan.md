@@ -764,11 +764,11 @@ AURA_RUN_SAFETY_INTENT_ONNX=1 \
 
 ## 12. Етап 7 — release artifact та інтеграція
 
-Статус: core artifact complete, client acceptance pending. Clean source
-`fa6945d3ab7ebf1f0e25f7a3fb3402af6e06af9c` зібрано в перевірений
-artifact-коміт `42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c` для всіх п'яти Apple
-target triples. Manifest має `shippable=true`; slices, architectures, embedded
-headers, binary hashes і точний export allowlist пройшли незалежну перевірку.
+Статус: core artifact complete, client acceptance pending. Точні clean source
+revision, artifact commit і binary hashes записані в
+`dist/apple/release-manifest.json` та Git history. Усі п'ять Apple target
+triples мають `shippable=true`; slices, architectures, embedded headers,
+binary hashes і точний export allowlist пройшли незалежну перевірку.
 Залишається окремий client gate: iOS має прийняти manifest v5/descriptor v3,
 закріпити точні hashes і викликати terminal-source checkpoint лише після
 довготривало збереженого terminal inbox state. Ця міграція не змішується з
@@ -794,8 +794,10 @@ headers, binary hashes і точний export allowlist пройшли неза�
 
 ### Поточний evidence contract
 
-- `ci/apple_artifact.py source-digest` створює deterministic SHA-256 для
-  reviewable source tree, виключаючи лише generated Apple outputs;
+- `ci/apple_artifact.py source-digest` створює domain-separated SHA-256 для
+  build-relevant source tree; крім generated Apple outputs, він виключає лише
+  baseline та exact approvals, які містять hashes артефакту й інакше створили
+  б криптографічне самопосилання;
 - release manifest v5 і runtime descriptor v3 роздільно фіксують Git revision,
   source-tree digest/dirty state, runtime/wire/state/FFI versions, Cargo
   profile/features, trust keyring, headers і binaries;

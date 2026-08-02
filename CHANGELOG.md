@@ -81,6 +81,9 @@
 - Bound the protected sender identity from the verified execution-policy
   account key, preventing owner-authored messages from being profiled as an
   external contact.
+- Removed the Apple provenance self-reference by domain-separating the
+  build-source digest and excluding only generated Apple outputs plus the two
+  non-build refactor evidence files that contain the reviewed artifact hashes.
 - Canonicalized the generated XCFramework `AvailableLibraries` order before
   hashing. Repeated same-revision builds now keep `Info.plist` and the release
   manifest byte-identical when the binaries are unchanged.

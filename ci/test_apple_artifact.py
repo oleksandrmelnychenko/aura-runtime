@@ -21,6 +21,14 @@ class SourceTreeIdentityTests(unittest.TestCase):
         (self.root / "dist" / "apple" / "release-manifest.json").write_text(
             '{"schema_version": 4}\n'
         )
+        (self.root / "crates" / "aura-core" / "data").mkdir(parents=True)
+        (self.root / "crates" / "aura-core" / "data" / "refactor_baseline_v1.json").write_text(
+            '{"baseline_id": "fixture"}\n'
+        )
+        (self.root / "docs").mkdir()
+        (self.root / "docs" / "refactor-diff-approvals.json").write_text(
+            '{"approvals": []}\n'
+        )
         subprocess.run(["git", "add", "."], cwd=self.root, check=True)
         subprocess.run(
             [
@@ -54,6 +62,28 @@ class SourceTreeIdentityTests(unittest.TestCase):
         baseline = source_tree_digest(self.root)
 
         (self.root / "src" / "lib.rs").write_text("pub fn value() -> u8 { 2 }\n")
+
+        self.assertNotEqual(source_tree_digest(self.root), baseline)
+        self.assertTrue(source_tree_dirty(self.root))
+
+    def test_digest_ignores_self_referential_refactor_evidence(self) -> None:
+        baseline = source_tree_digest(self.root)
+
+        (self.root / "crates" / "aura-core" / "data" / "refactor_baseline_v1.json").write_text(
+            '{"baseline_id": "accepted"}\n'
+        )
+        (self.root / "docs" / "refactor-diff-approvals.json").write_text(
+            '{"approvals": [{"path": "/artifact/hash"}]}\n'
+        )
+
+        self.assertEqual(source_tree_digest(self.root), baseline)
+        self.assertFalse(source_tree_dirty(self.root))
+
+    def test_digest_still_tracks_neighboring_governed_data(self) -> None:
+        baseline = source_tree_digest(self.root)
+        governed = self.root / "crates" / "aura-core" / "data" / "governed.json"
+
+        governed.write_text('{"rule": "new"}\n')
 
         self.assertNotEqual(source_tree_digest(self.root), baseline)
         self.assertTrue(source_tree_dirty(self.root))
