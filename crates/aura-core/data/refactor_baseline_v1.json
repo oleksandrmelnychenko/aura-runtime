@@ -1,5 +1,5 @@
 {
-  "baseline_id": "aura-core-56567c3c",
+  "baseline_id": "aura-core-29117877bf",
   "behavior": {
     "pilot_regression": {
       "by_case_class": [
@@ -9636,20 +9636,20 @@
       "warn_events": 94
     }
   },
-  "captured_at_utc": "2026-08-02T11:03:15.854991+00:00",
+  "captured_at_utc": "2026-08-02T11:15:47.415941+00:00",
   "contracts": {
     "apple_artifact": {
       "manifest_file": {
         "bytes": 1750,
         "path": "dist/apple/release-manifest.json",
-        "sha256": "73701f38634f61adceec30ebd90ed50e223710998ac6c91369627ff308c5f984"
+        "sha256": "8d3eae8a2b03ee570def07a1ac431eb393e5ada61441b4161dd88240bccf6f98"
       },
       "release_manifest": {
         "aura_ffi_header_sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
         "binary_sha256": {
-          "ios-arm64": "db47b56eb4df0a05cb57d5768467c6c822c9e758ecbdf43de50c4d5f93c6536e",
-          "ios-arm64_x86_64-maccatalyst": "b48bf24d909097438545db9a314bc59d5531cebcf434c33f28dd4e110c03a8e7",
-          "ios-arm64_x86_64-simulator": "ee66c395784568bb527a6cfd5b89b4c24a70751f7ed84b362fb0ca8981fabebf"
+          "ios-arm64": "6b8efe2c04374437860588bdd8ecc6149229d329e54e0e0d8faf4bd167721f77",
+          "ios-arm64_x86_64-maccatalyst": "e7a3777a766ffe7dca74d5c9e873c4c3dde581562a01a0fbb7f3acaeac28daaa",
+          "ios-arm64_x86_64-simulator": "a814afa93ec073a808fde9b359eabc02fd40101c19d3bbf71a2e1f0592478da2"
         },
         "cargo_features": [],
         "cargo_locked": true,
@@ -9659,15 +9659,15 @@
         "minimum_ios_version": "18.0",
         "model_bundle_included": false,
         "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
-        "runtime_artifact_descriptor_sha256": "8d17587fb22c972374db49d77cd108eff93a3803bcb2cc85bcebf00d4e9d6f0d",
-        "runtime_artifact_identities_env_sha256": "b926a1a2674928e5be0a63a2903dd58dbf47b8210f0aae980a38ad9dba3fd6c6",
+        "runtime_artifact_descriptor_sha256": "a54f6f941706d19f0cfb95e794b8449af4a60ca1581c2844845699720c7f224f",
+        "runtime_artifact_identities_env_sha256": "207d0309dbc082642c7e1b0b14314f3f22ef48e52872112f801e146129c48e3a",
         "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
         "runtime_release_version": "0.2.0",
         "schema_version": 5,
         "shippable": true,
-        "source_revision": "fa6945d3ab7ebf1f0e25f7a3fb3402af6e06af9c",
+        "source_revision": "0ba6fc4f2fcd38cbf22c1fabbb3cf3e071ba67cd",
         "source_tree_dirty": false,
-        "source_tree_sha256": "bbbaaa1a577cc74fe0f622997212ad79bb2bb58306085f6b393491790a1efa25",
+        "source_tree_sha256": "cc5250b17a9c7106c6261d76e51333a498e444fd0d0e2cb650a03d6fc1680280",
         "state_schema_version": 3,
         "target_triples": [
           "aarch64-apple-ios",
@@ -10067,10 +10067,10 @@
         "threat_events": 26,
         "tier": "10k",
         "timing": {
-          "elapsed_seconds": 15.91,
-          "max_rss_mb": 338.844,
-          "system_seconds": 0.13,
-          "user_seconds": 15.01
+          "elapsed_seconds": 18.49,
+          "max_rss_mb": 295.0,
+          "system_seconds": 0.3,
+          "user_seconds": 16.44
         },
         "total_events": 13647,
         "warn_events": 19
@@ -10079,7 +10079,7 @@
   },
   "schema_version": "aura.refactor_baseline.v1",
   "source": {
-    "revision": "56567c3c4fcbbd728cf5e6c9a0ef7adff9369e57",
+    "revision": "29117877bf8ce06cc7dcd6e63087b3ac59c76637",
     "tree_dirty": false
   },
   "workspace": {
