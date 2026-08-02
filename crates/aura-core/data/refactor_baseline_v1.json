@@ -1,5 +1,5 @@
 {
-  "baseline_id": "aura-core-8d08e951",
+  "baseline_id": "aura-core-56567c3c",
   "behavior": {
     "pilot_regression": {
       "by_case_class": [
@@ -4816,12 +4816,12 @@
         },
         {
           "evaluation": {
-            "brier_score": 0.106402464,
+            "brier_score": 0.11926046,
             "by_threat": [
               {
-                "brier_score": 0.120409854,
-                "count": 60,
-                "expected_calibration_error": 0.14062606,
+                "brier_score": 0.1177733,
+                "count": 116,
+                "expected_calibration_error": 0.1325221,
                 "threat_type": "Bullying"
               },
               {
@@ -4861,65 +4861,71 @@
                 "threat_type": "Manipulation"
               },
               {
-                "brier_score": 0.30388147,
-                "count": 27,
-                "expected_calibration_error": 0.32,
+                "brier_score": 0.1980585,
+                "count": 125,
+                "expected_calibration_error": 0.23513608,
+                "threat_type": "HateSpeech"
+              },
+              {
+                "brier_score": 0.17093332,
+                "count": 48,
+                "expected_calibration_error": 0.18,
                 "threat_type": "Propaganda"
               },
               {
                 "brier_score": 0.0,
-                "count": 3,
+                "count": 6,
                 "expected_calibration_error": 0.0,
                 "threat_type": "OpsecViolation"
               },
               {
-                "brier_score": 0.0008000008,
-                "count": 6,
-                "expected_calibration_error": 0.02000001,
+                "brier_score": 0.0004000004,
+                "count": 12,
+                "expected_calibration_error": 0.010000005,
                 "threat_type": "CoordinateLeak"
               }
             ],
-            "calibration_count": 469,
-            "expected_calibration_error": 0.10863908,
-            "negative_false_positive_rate": 0.051282052,
-            "negative_scenarios": 39,
-            "onset_cases": 62,
-            "positive_detection_rate": 0.9677419,
-            "positive_scenarios": 62,
-            "pre_onset_detection_rate": 0.58064514
+            "calibration_count": 680,
+            "expected_calibration_error": 0.115205884,
+            "negative_false_positive_rate": 0.039215688,
+            "negative_scenarios": 51,
+            "onset_cases": 92,
+            "positive_detection_rate": 0.9782609,
+            "positive_scenarios": 92,
+            "pre_onset_detection_rate": 0.4347826
           },
           "evaluation_gates": {
             "checks": [
               {
-                "actual": 0.106402464,
+                "actual": 0.11926046,
                 "comparison": "at_most",
                 "name": "max_brier_score",
                 "passed": true,
                 "threshold": 0.28
               },
               {
-                "actual": 0.10863908,
+                "actual": 0.115205884,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error",
                 "passed": true,
                 "threshold": 0.3
               },
               {
-                "actual": 0.9677419,
+                "actual": 0.9782609,
                 "comparison": "at_least",
                 "name": "min_positive_detection_rate",
                 "passed": true,
                 "threshold": 0.75
               },
               {
-                "actual": 0.051282052,
+                "actual": 0.039215688,
                 "comparison": "at_most",
                 "name": "max_negative_false_positive_rate",
                 "passed": true,
                 "threshold": 0.28
               },
               {
-                "actual": 0.58064514,
+                "actual": 0.4347826,
                 "comparison": "at_least",
                 "name": "min_pre_onset_detection_rate",
                 "passed": true,
@@ -4989,21 +4995,21 @@
                 "threshold": 0.28
               },
               {
-                "actual": 60.0,
+                "actual": 116.0,
                 "comparison": "at_least",
                 "name": "per_threat.bullying.min_example_count",
                 "passed": true,
                 "threshold": 6.0
               },
               {
-                "actual": 0.120409854,
+                "actual": 0.1177733,
                 "comparison": "at_most",
                 "name": "per_threat.bullying.max_brier_score",
                 "passed": true,
                 "threshold": 0.22
               },
               {
-                "actual": 0.14062606,
+                "actual": 0.1325221,
                 "comparison": "at_most",
                 "name": "per_threat.bullying.max_expected_calibration_error",
                 "passed": true,
@@ -5063,7 +5069,7 @@
               },
               "group": "cohort",
               "policy": {},
-              "slice_id": "trusted_adult_authority_boundary",
+              "slice_id": "trusted_adult_logistics_boundary",
               "status": "insufficient_support",
               "support": {
                 "calibration_examples": 46,
@@ -5136,7 +5142,7 @@
               },
               "group": "cohort",
               "policy": {},
-              "slice_id": "school_group_social_pressure",
+              "slice_id": "peer_banter_boundary",
               "status": "insufficient_support",
               "support": {
                 "calibration_examples": 57,
@@ -5170,7 +5176,7 @@
               },
               "group": "cohort",
               "policy": {},
-              "slice_id": "selfharm_disclosure_support_boundary",
+              "slice_id": "selfharm_support_boundary",
               "status": "pass",
               "support": {
                 "calibration_examples": 80,
@@ -5375,9 +5381,9 @@
             },
             {
               "evaluation": {
-                "brier_score": 0.00053333386,
-                "calibration_count": 9,
-                "expected_calibration_error": 0.013333341,
+                "brier_score": 0.00026666693,
+                "calibration_count": 18,
+                "expected_calibration_error": 0.0066666706,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 3,
                 "onset_cases": 3,
@@ -5387,13 +5393,13 @@
               },
               "group": "cohort",
               "policy": {},
-              "slice_id": "military_opsec_warning_boundary",
+              "slice_id": "opsec_warning_boundary",
               "status": "insufficient_support",
               "support": {
-                "calibration_examples": 9,
+                "calibration_examples": 18,
                 "missing_release_blocking": [
                   {
-                    "actual": 9,
+                    "actual": 18,
                     "passed": false,
                     "required": 32,
                     "requirement": "min_blocking_calibration_examples"
@@ -5421,7 +5427,34 @@
                 "onset_cases": 3,
                 "positive_scenarios": 3,
                 "release_blocking_ready": false,
-                "reportable": false
+                "reportable": true
+              },
+              "support_enforcement": "report_only"
+            },
+            {
+              "evaluation": {
+                "brier_score": 0.15442786,
+                "calibration_count": 202,
+                "expected_calibration_error": 0.17983669,
+                "negative_false_positive_rate": 0.0,
+                "negative_scenarios": 12,
+                "onset_cases": 30,
+                "positive_detection_rate": 1.0,
+                "positive_scenarios": 30,
+                "pre_onset_detection_rate": 0.13333334
+              },
+              "group": "cohort",
+              "policy": {},
+              "slice_id": "hate_counter_speech_boundary",
+              "status": "pass",
+              "support": {
+                "calibration_examples": 202,
+                "missing_release_blocking": [],
+                "negative_scenarios": 12,
+                "onset_cases": 30,
+                "positive_scenarios": 30,
+                "release_blocking_ready": true,
+                "reportable": true
               },
               "support_enforcement": "report_only"
             }
@@ -9603,34 +9636,39 @@
       "warn_events": 94
     }
   },
-  "captured_at_utc": "2026-07-24T19:42:13.378918+00:00",
+  "captured_at_utc": "2026-08-02T11:03:15.854991+00:00",
   "contracts": {
     "apple_artifact": {
       "manifest_file": {
-        "bytes": 1475,
+        "bytes": 1750,
         "path": "dist/apple/release-manifest.json",
-        "sha256": "1d1fccd16ba37211901bc6e9d60f918a30e67a612a5ec8df850bf92427c97353"
+        "sha256": "73701f38634f61adceec30ebd90ed50e223710998ac6c91369627ff308c5f984"
       },
       "release_manifest": {
-        "aura_ffi_header_sha256": "bf55ff30f5a35407b3e595ecc3d56c8b8e8901a149bc9912219246316e4bcf86",
+        "aura_ffi_header_sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
         "binary_sha256": {
-          "ios-arm64": "deac8ac069c51641a2ed81fcfffa2774b8952f2ca347a5503c38b86f3e3b44d0",
-          "ios-arm64_x86_64-maccatalyst": "08488cbd55b2f788392cea3e810cf48a8bd6a636d315db3c6ab3608152af45e7",
-          "ios-arm64_x86_64-simulator": "1fba940c69c5bfc80a51bbaf9350a26a4221d493cbd0bff9bf8b26510051b056"
+          "ios-arm64": "db47b56eb4df0a05cb57d5768467c6c822c9e758ecbdf43de50c4d5f93c6536e",
+          "ios-arm64_x86_64-maccatalyst": "b48bf24d909097438545db9a314bc59d5531cebcf434c33f28dd4e110c03a8e7",
+          "ios-arm64_x86_64-simulator": "ee66c395784568bb527a6cfd5b89b4c24a70751f7ed84b362fb0ca8981fabebf"
         },
         "cargo_features": [],
         "cargo_locked": true,
         "cargo_profile": "release",
         "execution_policy_trust_keyring_sha256": "9339c0165962cfeb66a677bcf47de5318f5655ad24e3e006e2d1e40aa8164152",
+        "ffi_contract_version": 1,
         "minimum_ios_version": "18.0",
         "model_bundle_included": false,
         "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
-        "runtime_artifact_descriptor_sha256": "5dd5e053b759b9b6ae2b45833fa0a2d073b2ccc36ffa4717e71e83316cde0f02",
-        "runtime_artifact_identities_env_sha256": "6dab7f7d7ee58c339ea49c5684651f3b9a374934113430cd420478a70b87f486",
+        "runtime_artifact_descriptor_sha256": "8d17587fb22c972374db49d77cd108eff93a3803bcb2cc85bcebf00d4e9d6f0d",
+        "runtime_artifact_identities_env_sha256": "b926a1a2674928e5be0a63a2903dd58dbf47b8210f0aae980a38ad9dba3fd6c6",
         "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
-        "schema_version": 4,
-        "source_revision": "c2481dbe568d6292c8cb10e55658d40b7a77a0a9",
+        "runtime_release_version": "0.2.0",
+        "schema_version": 5,
+        "shippable": true,
+        "source_revision": "fa6945d3ab7ebf1f0e25f7a3fb3402af6e06af9c",
         "source_tree_dirty": false,
+        "source_tree_sha256": "bbbaaa1a577cc74fe0f622997212ad79bb2bb58306085f6b393491790a1efa25",
+        "state_schema_version": 3,
         "target_triples": [
           "aarch64-apple-ios",
           "aarch64-apple-ios-sim",
@@ -9638,7 +9676,9 @@
           "aarch64-apple-ios-macabi",
           "x86_64-apple-ios-macabi"
         ],
-        "xcframework_info_plist_sha256": "900e3c83f0ee7102c06e884f61113a173ae4b9b01538d0f6992e9f6ebd265e01"
+        "wire_major_version": 1,
+        "wire_package": "aura.messenger.v1",
+        "xcframework_info_plist_sha256": "1e336683b41580c0e5addcf8d7f2683ce19278a7e3791794fbed872992edccb3"
       }
     },
     "contract_evidence": {
@@ -9652,11 +9692,14 @@
           "pointer_width_bits": 64,
           "size_bytes": 16
         },
+        "export_allowlist_path": "include/aura_ffi.exports",
         "exported_functions": [
           "aura_agent_init",
           "aura_attest_runtime_artifacts",
           "aura_apply_execution_policy",
           "aura_analyze_canonical_safety",
+          "aura_analyze_local_decision",
+          "aura_acknowledge_source_checkpoint",
           "aura_apply_safety_case_lifecycle",
           "aura_activate_safety_case_successor",
           "aura_remove_safety_case_account",
@@ -9677,6 +9720,10 @@
           "aura_free_buffer"
         ],
         "header_path": "include/aura_ffi.h",
+        "implementation_source_paths": [
+          "crates/aura-agent-ffi/src/lifecycle.rs",
+          "crates/aura-agent-ffi/src/lifecycle/buffers.rs"
+        ],
         "request_limits_bytes": [
           {
             "constant_name": "MAX_CONFIG_REQUEST_BYTES",
@@ -9702,26 +9749,59 @@
         "smoke_source_path": "ci/ffi_header_smoke.c",
         "source_path": "crates/aura-agent-ffi/src/lib.rs"
       },
+      "context_rule_packs": {
+        "interpretation": {
+          "policy_version": "aura.context.interpretation.v1",
+          "rule_count": 8,
+          "sha256": "0a20901ea19ff7bc9fa90df7d89ecef90c6d5203aa37d9439ae4873f84737aea"
+        },
+        "memory": {
+          "policy_version": "aura.context.memory.v1",
+          "rule_count": 9,
+          "sha256": "eafaa69104c4f09b605c51d5f45e32e79f954a87687ee54661b6b06e672ee6aa"
+        },
+        "policy": {
+          "policy_version": "aura.context.policy.v1",
+          "rule_count": 5,
+          "sha256": "bce92a561de52d204849f55859dcb390690a15f2858a0996ddf907d4afdb864e"
+        },
+        "schema_version": 1
+      },
       "files": [
         {
-          "bytes": 39616,
+          "bytes": 42674,
           "path": "proto/aura/messenger/v1/messenger.proto",
-          "sha256": "4f4b8f8e0ee479983db3fe893e371cbf5b3b240b9a2e78e9ab923308fba29969"
+          "sha256": "c6d167ad0a2a5214930c50dae71fd3acc46f11999c5882feb5bea6a280a60d0f"
         },
         {
-          "bytes": 4765,
+          "bytes": 5345,
           "path": "include/aura_ffi.h",
-          "sha256": "bf55ff30f5a35407b3e595ecc3d56c8b8e8901a149bc9912219246316e4bcf86"
+          "sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87"
         },
         {
-          "bytes": 1661,
+          "bytes": 1726,
           "path": "ci/ffi_header_smoke.c",
-          "sha256": "635ae85405dc9a8372f6e3edfb1cf07b6f10acbac685dc67e0e2f7f2ceb58470"
+          "sha256": "4c8ab8b7cd3dd754c71aaf025121b82043d8ed8ba7e4181aeef939368d99cbe5"
         },
         {
-          "bytes": 148887,
+          "bytes": 320,
           "path": "crates/aura-agent-ffi/src/lib.rs",
-          "sha256": "d052640d7edcc859572bd3472cc92b2ed575d55c1383e87e86b828a7ed39bb98"
+          "sha256": "2b6be45c91e8eda39236cc15b42f6130ed0d83709857425d09183d39127fe1a6"
+        },
+        {
+          "bytes": 57473,
+          "path": "crates/aura-agent-ffi/src/lifecycle.rs",
+          "sha256": "5e6c297fce3cebde9a2c68cc5265ec65262581aea955800ffdd2a56890255a6e"
+        },
+        {
+          "bytes": 1719,
+          "path": "crates/aura-agent-ffi/src/lifecycle/buffers.rs",
+          "sha256": "44ae5c90f956d01668ff0c46237fd10ab74d3d108ce5bb59c8b0577a75186777"
+        },
+        {
+          "bytes": 666,
+          "path": "include/aura_ffi.exports",
+          "sha256": "2886647286eef51e55a310a03d0d951f1d164fb08ee6ea227c1f908e08e23a37"
         }
       ],
       "persisted_state": {
@@ -9752,6 +9832,11 @@
         "bytes": 408,
         "path": "crates/aura-proto/tests/fixtures/tracker_state.pb",
         "sha256": "edeab2e6c03ef392ed7299213a05eb979f4932bb443d94e740ee060e2db44a50"
+      },
+      {
+        "bytes": 445,
+        "path": "crates/aura-proto/tests/fixtures/tracker_state_v3.pb",
+        "sha256": "7991df9a0e62ce510bb3b17fa2b22d64a2a67f6b010d4d9c8fe2ccc69707391b"
       }
     ]
   },
@@ -9760,6 +9845,21 @@
       "bytes": 4877,
       "path": "crates/aura-core/data/action_policy_expectations.json",
       "sha256": "ac6744840c795aeb29fad95c938c0461669041adb58c9e4b071708c004dcb53a"
+    },
+    {
+      "bytes": 3589,
+      "path": "crates/aura-core/data/context_interpretation_rules.json",
+      "sha256": "36b957126036d2b60b02c53721f329772086a52dee0de15d8504a5e668a69b2c"
+    },
+    {
+      "bytes": 4679,
+      "path": "crates/aura-core/data/context_memory_rules.json",
+      "sha256": "fe5a3d175d9fca89bfb55767d56255bbc8eb52751da03cfb34532e02bb49bbc2"
+    },
+    {
+      "bytes": 1667,
+      "path": "crates/aura-core/data/context_policy_rules.json",
+      "sha256": "08e3fcdd1a8729b56422d77c36a80492e61b3a92c102e77a49690055f2fe95c0"
     },
     {
       "bytes": 8904,
@@ -9802,9 +9902,9 @@
       "sha256": "f0376b94a57c104f796f7a1e066bb1bc75270edccd13022133a0a1a21b2e1bb2"
     },
     {
-      "bytes": 11795,
+      "bytes": 14686,
       "path": "crates/aura-core/data/social_context_cohorts.json",
-      "sha256": "6c25862d5928de200b32de510bd7378eb3e6cecc1b9e1d8096b0be06ae1e92cb"
+      "sha256": "ddc287361fc30f13be769c9f8649d02ba61c0f5e29fba4cdb0aa2e4854f33c6f"
     },
     {
       "bytes": 1011,
@@ -9967,10 +10067,10 @@
         "threat_events": 26,
         "tier": "10k",
         "timing": {
-          "elapsed_seconds": 16.06,
-          "max_rss_mb": 302.953,
-          "system_seconds": 0.23,
-          "user_seconds": 15.38
+          "elapsed_seconds": 15.91,
+          "max_rss_mb": 338.844,
+          "system_seconds": 0.13,
+          "user_seconds": 15.01
         },
         "total_events": 13647,
         "warn_events": 19
@@ -9979,7 +10079,7 @@
   },
   "schema_version": "aura.refactor_baseline.v1",
   "source": {
-    "revision": "8d08e951a0cb9a832d191dec2919790175b15fd2",
+    "revision": "56567c3c4fcbbd728cf5e6c9a0ef7adff9369e57",
     "tree_dirty": false
   },
   "workspace": {

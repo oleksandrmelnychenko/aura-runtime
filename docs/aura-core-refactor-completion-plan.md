@@ -764,15 +764,15 @@ AURA_RUN_SAFETY_INTENT_ONNX=1 \
 
 ## 12. Етап 7 — release artifact та інтеграція
 
-Статус: in progress. Локальний release-profile XCFramework збирається для всіх
-п'яти Apple target triples і проходить незалежну перевірку slices,
-architectures, embedded headers, binary hashes та точного export allowlist.
-Artifact із dirty source tree завжди маркується `shippable=false`; перевірений
-`dist/apple` та iOS pin не оновлюються до clean reviewed revision. Окремий
-`aura-messenger-ios` зараз має незавершений BLE/offline worktree, тому
-cross-repository pin навмисно не змішується з цією хвилею.
-Точна Swift-side міграція manifest v5/descriptor v3 зафіксована в
-`docs/apple-artifact-integration.md`.
+Статус: core artifact complete, client acceptance pending. Clean source
+`fa6945d3ab7ebf1f0e25f7a3fb3402af6e06af9c` зібрано в перевірений
+artifact-коміт `42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c` для всіх п'яти Apple
+target triples. Manifest має `shippable=true`; slices, architectures, embedded
+headers, binary hashes і точний export allowlist пройшли незалежну перевірку.
+Залишається окремий client gate: iOS має прийняти manifest v5/descriptor v3,
+закріпити точні hashes і викликати terminal-source checkpoint лише після
+довготривало збереженого terminal inbox state. Ця міграція не змішується з
+незавершеним BLE/offline worktree.
 
 ### Завдання
 

@@ -1,23 +1,25 @@
 # AURA Core Refactor Baseline
 
-Status: active from July 24, 2026.
+Status: refreshed after the reviewed release differential on August 2, 2026.
 
 ## Purpose
 
 The checked-in
 `crates/aura-core/data/refactor_baseline_v1.json` freezes the observable
 behavior and boundary contracts at revision
-`8d08e951a0cb9a832d191dec2919790175b15fd2`.
+`56567c3c4fcbbd728cf5e6c9a0ef7adff9369e57`.
 
 It records:
 
 - the 21-crate workspace graph;
 - runtime, protobuf wire, persisted state, C ABI, and request-size contracts;
 - protobuf compatibility fixture hashes;
-- the reviewed Apple artifact manifest;
+- the reviewed schema-5 Apple artifact manifest, exact export allowlist, and
+  clean source provenance;
 - governed detector and evaluation input hashes;
 - normalized release, pilot, and 16-world lifecycle results;
-- a release-built 10k performance snapshot and bounded comparison envelope.
+- a release-built 10k performance snapshot and bounded comparison envelope;
+- the additive canonical local-decision and terminal-source checkpoint ABI.
 
 Timestamps, source-tree dirtiness, raw world event logs, and absolute artifact
 paths are not behavioral comparison inputs.
