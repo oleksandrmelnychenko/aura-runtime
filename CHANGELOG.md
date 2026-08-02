@@ -73,6 +73,14 @@
 - Added rollback, duplicate, stale-edit, cross-API, malformed-request,
   restart-replay, and supportive self-harm boundary regressions for the new
   path.
+- Added the terminal `aura_acknowledge_source_checkpoint` operation so clients
+  can compact non-observation receipts only after a durable inbox checkpoint;
+  case-observation receipts remain integrity-bound to persisted case state.
+- Restored the six-month and dense two-year FFI/client-boundary replays under
+  fail-closed scripts that reject missing or zero-test filters.
+- Bound the protected sender identity from the verified execution-policy
+  account key, preventing owner-authored messages from being profiled as an
+  external contact.
 - Canonicalized the generated XCFramework `AvailableLibraries` order before
   hashing. Repeated same-revision builds now keep `Info.plist` and the release
   manifest byte-identical when the binaries are unchanged.

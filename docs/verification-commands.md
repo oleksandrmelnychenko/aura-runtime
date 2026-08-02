@@ -107,10 +107,26 @@ six-month fixture and dense two-year fixture through the protobuf FFI boundary.
 bash ci/client_boundary_replay_gate.sh
 ```
 
-This runs the same long world fixtures while periodically exporting context,
-destroying the FFI handle, initializing a new handle, importing context, and
-continuing replay. It simulates app restarts and verifies analyzer memory
-survives client lifecycle boundaries.
+This runs the same long world fixtures while periodically exporting both
+Safety Case and context state, destroying the FFI handle, initializing a new
+handle, importing both states, reapplying the execution policy, and continuing
+replay. Terminal clean sources are checkpointed through the same explicit
+native-to-host ownership transfer required by clients. It simulates app
+restarts and verifies bounded analyzer memory across client lifecycle
+boundaries.
+
+## Analyzer Microbenchmark Gate
+
+Run the analyzer latency smoke test in isolation so the strict wall-clock
+threshold is not distorted by concurrent corpus tests:
+
+```bash
+bash ci/analyzer_microbenchmark_gate.sh
+```
+
+The script fails closed if the ignored microbenchmark is missing or renamed,
+then runs exactly that test in the optimized release profile and enforces the
+existing sub-millisecond bound.
 
 ## World Performance Gate
 

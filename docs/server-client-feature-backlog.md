@@ -139,6 +139,12 @@ Latest known expanded lifecycle-suite gate:
 
 - [ ] Define encrypted local storage requirements for conversation state,
   contact memory, and kids memory.
+- [x] Add a native terminal-source checkpoint API and fail-closed long-run FFI
+  gates so clean exactly-once receipts can be compacted only after durable host
+  ownership transfers.
+- [ ] Call `acknowledgeSourceCheckpoint` from every client only after its inbox
+  event is durably terminal, then persist the compacted native state. Never
+  acknowledge before the crash-recovery decision checkpoint is committed.
 - [ ] Add retention and TTL tests for two-year lifecycles.
 - [ ] Add state compaction tests for high-volume group chats and public
   comment surfaces.

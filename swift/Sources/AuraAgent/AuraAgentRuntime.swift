@@ -67,6 +67,25 @@ public final class AuraAgentRuntime: @unchecked Sendable {
         }
     }
 
+    /// Transfers replay responsibility for a terminal canonical source to the
+    /// host after its durable inbox/checkpoint transaction has completed.
+    public func acknowledgeSourceCheckpoint(
+        _ identity: AuraAgentNativeCanonicalSafetyEventIdentity
+    ) throws {
+        let requestBytes: Data
+        do {
+            requestBytes = try identity.serializedData()
+        } catch {
+            throw AuraAgentError.invalidInput("failed to encode source checkpoint: \(error)")
+        }
+        let succeeded = try Self.withBytePointer(requestBytes) { ptr, count in
+            native_aura_agent_acknowledge_source_checkpoint(handle, ptr, count)
+        }
+        guard succeeded else {
+            throw AuraAgentError.callFailed(Self.consumeLastError())
+        }
+    }
+
     /// Returns the native canonical artifact attestation response bytes.
     public func attestRuntimeArtifacts(requestBytes: Data) throws -> Data {
         try withOutputBuffer { out in

@@ -43,6 +43,13 @@ internal func native_aura_agent_analyze_local_decision(
     _ out: UnsafeMutablePointer<NativeAuraAgentBuffer>?
 ) -> Bool
 
+@_silgen_name("aura_acknowledge_source_checkpoint")
+internal func native_aura_agent_acknowledge_source_checkpoint(
+    _ handle: UnsafeMutableRawPointer?,
+    _ requestPtr: UnsafePointer<UInt8>?,
+    _ requestLen: Int
+) -> Bool
+
 @_silgen_name("aura_apply_safety_case_lifecycle")
 internal func native_aura_agent_apply_safety_case_lifecycle(
     _ handle: UnsafeMutableRawPointer?,

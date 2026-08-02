@@ -2,13 +2,14 @@
 
 Status: REL-009 artifact contract, August 1, 2026.
 
-The source ABI now includes the additive typed
-`aura_analyze_local_decision` symbol and generated Swift protobuf models. The
-release XCFramework is rebuilt from a clean source revision and independently
-verified against the exact export allowlist, source digest, headers, slices,
-and binary hashes. External iOS acceptance and its exact artifact pin remain a
-separate gate: a client must not assume the new symbol exists until it accepts
-the manifest and binary produced by the sequence below.
+The source ABI includes the additive typed `aura_analyze_local_decision` and
+terminal `aura_acknowledge_source_checkpoint` symbols plus generated Swift
+protobuf models. The release XCFramework is rebuilt from a clean source
+revision and independently verified against the exact export allowlist, source
+digest, headers, slices, and binary hashes. External iOS acceptance and its
+exact artifact pin remain a separate gate: a client must not assume the new
+symbols exist until it accepts the manifest and binary produced by the
+sequence below.
 
 ## Current Boundary
 

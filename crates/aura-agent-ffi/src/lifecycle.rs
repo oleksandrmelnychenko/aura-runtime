@@ -215,6 +215,10 @@ pub unsafe extern "C" fn aura_apply_execution_policy(
             let account_key = SafetyAccountKey::new(request.account_key.clone())
                 .map_err(|error| error.to_string())?;
             let policy = execution_policy::policy_from_apply_request(&instance.analyzer, &request)?;
+            instance
+                .analyzer
+                .validate_protected_account_id_binding(account_key.as_str())
+                .map_err(|error| error.to_string())?;
             let snapshot = instance.analyzer.safety_cases().clone();
             let receipt = instance
                 .analyzer
@@ -223,6 +227,13 @@ pub unsafe extern "C" fn aura_apply_execution_policy(
                 .map_err(|error| error.to_string())?;
             if let Err(error) =
                 ensure_canonical_persistence_within_budget(&instance.analyzer, &account_key)
+            {
+                *instance.analyzer.safety_cases_mut() = snapshot;
+                return Err(error.to_string());
+            }
+            if let Err(error) = instance
+                .analyzer
+                .bind_protected_account_id(account_key.as_str().to_string())
             {
                 *instance.analyzer.safety_cases_mut() = snapshot;
                 return Err(error.to_string());
@@ -438,6 +449,59 @@ pub unsafe extern "C" fn aura_analyze_local_decision(
                 return Err("local decision response exceeded its guarded byte budget".to_string());
             }
             write_proto_message(out, &response)
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                set_last_error(error);
+                false
+            }
+        }
+    })
+}
+
+/// Transfers one terminal canonical source checkpoint to durable host state.
+///
+/// The host must call this only after its own inbox/checkpoint transaction
+/// makes the event permanently ineligible for processing. Native receipts
+/// linked to retained Safety Case observations remain in native state.
+#[no_mangle]
+pub unsafe extern "C" fn aura_acknowledge_source_checkpoint(
+    handle: *mut c_void,
+    request_ptr: *const u8,
+    request_len: usize,
+) -> bool {
+    ffi_guard(false, move || {
+        clear_last_error();
+        let identity: proto::CanonicalSafetyEventIdentity = match decode_proto_bounded(
+            request_ptr,
+            request_len,
+            "canonical source checkpoint request",
+            MAX_SMALL_CONTROL_REQUEST_BYTES,
+        ) {
+            Ok(identity) => identity,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        let identity = match canonical_safety_identity_without_message_from_proto(identity) {
+            Ok(identity) => identity,
+            Err(error) => {
+                set_last_error(error);
+                return false;
+            }
+        };
+        match with_instance(handle, |instance| {
+            instance
+                .analyzer
+                .safety_cases()
+                .require_active_execution_policy(identity.account_key(), identity.observed_at_ms())
+                .map_err(|error| error.to_string())?;
+            instance
+                .analyzer
+                .safety_cases_mut()
+                .acknowledge_source_checkpoint(&identity);
+            Ok(())
         }) {
             Ok(()) => true,
             Err(error) => {

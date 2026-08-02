@@ -302,6 +302,7 @@ product-facing local decision operation:
 - `aura_apply_execution_policy`
 - `aura_analyze_canonical_safety`
 - `aura_analyze_local_decision`
+- `aura_acknowledge_source_checkpoint`
 - `aura_apply_safety_case_lifecycle`
 - `aura_activate_safety_case_successor`
 - `aura_remove_safety_case_account`
@@ -319,7 +320,10 @@ The exact symbol list, including guardian-report lifecycle operations, is
 maintained in `include/aura_ffi.exports`. `aura_analyze_local_decision` returns
 only a compact typed projection plus the canonical source receipt; it does not
 restore the former general-purpose analysis API. Duplicate and stale calls are
-content-free and never analyze the source revision again.
+content-free and never analyze the source revision again. After the host inbox
+event is durably terminal, `aura_acknowledge_source_checkpoint` transfers replay
+ownership to the host and compacts only receipts that do not cover retained
+Safety Case observations.
 
 Batch/shadow utilities, live config/pattern mutation, raw signals,
 explanations, and contact/profile convenience APIs remain Rust-side concerns

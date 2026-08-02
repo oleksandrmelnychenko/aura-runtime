@@ -362,9 +362,9 @@ fn test_execution_policy() -> NativeExecutionPolicy {
         model_manifest_digest,
         execution_policy_trust_keyring_digest,
         valid_from_ms: 1,
-        valid_until_ms: 1_000_000,
-        maximum_case_observations: 128,
-        maximum_case_reason_codes: 16,
+        valid_until_ms: i64::MAX as u64,
+        maximum_case_observations: 4_096,
+        maximum_case_reason_codes: 64,
         guardian_policy: Some(GuardianExecutionPolicy {
             authority_lineage_id: "test-authority".to_string(),
             policy_epoch: 1,
@@ -374,7 +374,7 @@ fn test_execution_policy() -> NativeExecutionPolicy {
             model_manifest_digest,
             execution_policy_trust_keyring_digest,
             valid_from_ms: 1,
-            valid_until_ms: 1_000_000,
+            valid_until_ms: i64::MAX as u64,
             execution_mode: GuardianExecutionMode::ShadowCases,
             rules: Vec::new(),
         }),
@@ -385,6 +385,10 @@ fn test_execution_policy() -> NativeExecutionPolicy {
 unsafe fn apply_test_execution_policy(handle: *mut c_void) {
     let account_key = SafetyAccountKey::new("account").expect("test account key must be valid");
     with_instance(handle, |instance| {
+        instance
+            .analyzer
+            .bind_protected_account_id(account_key.as_str().to_string())
+            .map_err(|error| error.to_string())?;
         instance
             .analyzer
             .safety_cases_mut()
@@ -461,6 +465,30 @@ unsafe fn analyze_local_decision(
         last_error_string()
     );
     decode_buffer(out)
+}
+
+unsafe fn acknowledge_source_checkpoint(
+    handle: *mut c_void,
+    conversation_key: &str,
+    event_id: &str,
+    revision: u32,
+    timestamp_ms: u64,
+) {
+    let identity = proto::CanonicalSafetyEventIdentity {
+        account_key: "account".to_string(),
+        subject_key: "subject".to_string(),
+        conversation_key: conversation_key.to_string(),
+        event_id: event_id.to_string(),
+        revision,
+        occurred_at_ms: timestamp_ms,
+        observed_at_ms: timestamp_ms,
+    };
+    let bytes = encode_proto(&identity);
+    assert!(
+        aura_acknowledge_source_checkpoint(handle, bytes.as_ptr(), bytes.len()),
+        "source checkpoint failed: {}",
+        last_error_string()
+    );
 }
 
 unsafe fn export_context(handle: *mut c_void) -> proto::ExportContextResponse {
@@ -1174,6 +1202,199 @@ fn local_decision_preserves_supportive_self_harm_boundary() {
 }
 
 #[test]
+fn execution_policy_account_binding_excludes_owner_messages_from_contact_risk() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        for event in 1..=150 {
+            let response = analyze_local_decision(
+                handle,
+                proto_message(
+                    "Normal update from the protected account",
+                    "account",
+                    "owner-conversation",
+                ),
+                &format!("owner-event-{event}"),
+                1,
+                event * 60_000,
+            );
+            let decision = response
+                .decision
+                .expect("owner event must return a local decision");
+            assert!(
+                !decision
+                    .reason_codes
+                    .iter()
+                    .any(|code| code.starts_with("conversation.contact.")),
+                "owner event {event} was profiled as an external contact: {:?}",
+                decision.reason_codes
+            );
+        }
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn terminal_host_checkpoint_compacts_non_observation_receipts_idempotently() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let message = proto_message(
+            "ordinary clean message",
+            "sender",
+            "checkpoint-conversation",
+        );
+        let first = analyze_local_decision(handle, message.clone(), "checkpoint-event", 1, 1_000);
+        assert!(first.decision.is_some());
+        assert_eq!(
+            with_instance(handle, |instance| Ok(instance
+                .analyzer
+                .safety_cases()
+                .source_receipt_count()))
+            .expect("receipt count"),
+            1
+        );
+
+        acknowledge_source_checkpoint(
+            handle,
+            "checkpoint-conversation",
+            "checkpoint-event",
+            1,
+            1_000,
+        );
+        acknowledge_source_checkpoint(
+            handle,
+            "checkpoint-conversation",
+            "checkpoint-event",
+            1,
+            1_000,
+        );
+        assert_eq!(
+            with_instance(handle, |instance| Ok(instance
+                .analyzer
+                .safety_cases()
+                .source_receipt_count()))
+            .expect("receipt count"),
+            0
+        );
+
+        let transferred = analyze_local_decision(handle, message, "checkpoint-event", 1, 1_000);
+        assert!(
+            transferred.decision.is_some(),
+            "after a terminal host checkpoint, native replay responsibility is intentionally released"
+        );
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn terminal_host_checkpoint_retains_receipts_that_cover_case_observations() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let message = proto_message(
+            "don't tell your parents, it's our secret",
+            "sender",
+            "observed-conversation",
+        );
+        let first = analyze_local_decision(handle, message.clone(), "observed-event", 1, 1_000);
+        assert!(first.case_id.is_some(), "fixture must reduce into a case");
+
+        acknowledge_source_checkpoint(handle, "observed-conversation", "observed-event", 1, 1_000);
+        assert_eq!(
+            with_instance(handle, |instance| Ok(instance
+                .analyzer
+                .safety_cases()
+                .source_receipt_count()))
+            .expect("receipt count"),
+            1
+        );
+        let duplicate = analyze_local_decision(handle, message, "observed-event", 1, 1_000);
+        assert!(duplicate.decision.is_none());
+        assert!(matches!(
+            proto::CanonicalSafetyDisposition::try_from(duplicate.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::DuplicateApplied
+        ));
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn source_checkpoint_rejects_a_different_account_without_mutation() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let first = analyze_local_decision(
+            handle,
+            proto_message(
+                "ordinary clean message",
+                "sender",
+                "account-bound-conversation",
+            ),
+            "account-bound-event",
+            1,
+            1_000,
+        );
+        assert!(first.decision.is_some());
+
+        let request = proto::CanonicalSafetyEventIdentity {
+            account_key: "different-account".to_string(),
+            subject_key: "subject".to_string(),
+            conversation_key: "account-bound-conversation".to_string(),
+            event_id: "account-bound-event".to_string(),
+            revision: 1,
+            occurred_at_ms: 1_000,
+            observed_at_ms: 1_000,
+        };
+        let bytes = encode_proto(&request);
+        assert!(!aura_acknowledge_source_checkpoint(
+            handle,
+            bytes.as_ptr(),
+            bytes.len()
+        ));
+        let error = last_error_string();
+        assert!(error.contains("execution policy"), "{error}");
+        assert_eq!(
+            with_instance(handle, |instance| Ok(instance
+                .analyzer
+                .safety_cases()
+                .source_receipt_count()))
+            .expect("receipt count"),
+            1
+        );
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn malformed_source_checkpoint_is_rejected_without_mutation() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let request = proto::CanonicalSafetyEventIdentity {
+            account_key: "account".to_string(),
+            subject_key: "subject".to_string(),
+            conversation_key: "conversation".to_string(),
+            event_id: "event".to_string(),
+            revision: 1,
+            occurred_at_ms: 0,
+            observed_at_ms: 0,
+        };
+        let bytes = encode_proto(&request);
+        assert!(!aura_acknowledge_source_checkpoint(
+            handle,
+            bytes.as_ptr(),
+            bytes.len()
+        ));
+        assert!(last_error_string().contains("timestamps must be nonzero"));
+        assert_eq!(
+            with_instance(handle, |instance| Ok(instance
+                .analyzer
+                .safety_cases()
+                .source_receipt_count()))
+            .expect("receipt count"),
+            0
+        );
+        aura_free(handle);
+    }
+}
+
+#[test]
 fn invalid_local_decision_request_does_not_mutate_context() {
     unsafe {
         let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
@@ -1292,3 +1513,5 @@ fn repeated_export_import_roundtrips_preserve_growth() {
         aura_free(second);
     }
 }
+
+mod world_replay;

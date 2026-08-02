@@ -14,18 +14,28 @@ pub(super) fn canonical_safety_identity_from_proto(
     identity: proto::CanonicalSafetyEventIdentity,
     input: &MessageInput,
 ) -> Result<SafetyCaseIngestIdentity, String> {
+    let canonical = canonical_safety_identity_without_message_from_proto(identity)?;
+    if canonical.source_event().conversation_key().as_str() != input.conversation_id.0.as_str() {
+        return Err(
+            "canonical conversation key does not match message conversation id".to_string(),
+        );
+    }
+    Ok(canonical)
+}
+
+pub(super) fn canonical_safety_identity_without_message_from_proto(
+    identity: proto::CanonicalSafetyEventIdentity,
+) -> Result<SafetyCaseIngestIdentity, String> {
     let account_key =
         SafetyAccountKey::new(identity.account_key).map_err(|error| error.to_string())?;
     let subject_key =
         SafetyCaseSubjectKey::new(identity.subject_key).map_err(|error| error.to_string())?;
     let conversation_key =
         ConversationEventKey::new(identity.conversation_key).map_err(|error| error.to_string())?;
-    if conversation_key.as_str() != input.conversation_id.0.as_str() {
-        return Err(
-            "canonical conversation key does not match message conversation id".to_string(),
-        );
-    }
     let event_id = SourceEventId::new(identity.event_id).map_err(|error| error.to_string())?;
+    if identity.occurred_at_ms == 0 || identity.observed_at_ms == 0 {
+        return Err("canonical source timestamps must be nonzero".to_string());
+    }
     if identity.observed_at_ms < identity.occurred_at_ms {
         return Err("canonical observation timestamp predates source event".to_string());
     }

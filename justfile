@@ -34,6 +34,9 @@ ffi-world-replay-gate:
 client-boundary-replay-gate:
     bash ci/client_boundary_replay_gate.sh
 
+analyzer-microbenchmark-gate:
+    bash ci/analyzer_microbenchmark_gate.sh
+
 world-performance-gate:
     bash ci/world_performance_gate.sh
 

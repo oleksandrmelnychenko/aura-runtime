@@ -53,6 +53,8 @@ jobs:
       run: cargo clippy --workspace --all-features --all-targets -- -D warnings
     - name: Run tests
       run: cargo test --workspace --all-features --all-targets --verbose
+    - name: Run Analyzer Microbenchmark Gate
+      run: bash ci/analyzer_microbenchmark_gate.sh
     - name: Run Community Surface Gate
       run: |
         cargo run --quiet --example community_surface_sim -p aura-core -- \

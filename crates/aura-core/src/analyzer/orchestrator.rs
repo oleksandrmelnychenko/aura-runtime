@@ -767,6 +767,50 @@ impl Analyzer {
         self.context_tracker.mark_contact_trusted(sender_id);
     }
 
+    /// Binds the stable sender ID of the protected account exactly once.
+    ///
+    /// Callers must derive this value from authenticated account identity. The
+    /// binding is immutable for the lifetime of an analyzer so conversation
+    /// context from different protected accounts cannot share one runtime.
+    pub fn bind_protected_account_id(
+        &mut self,
+        protected_account_id: String,
+    ) -> Result<(), crate::error::AuraError> {
+        self.validate_protected_account_id_binding(&protected_account_id)?;
+        if let Some(current) = self.config.protected_account_id.as_deref() {
+            if current == protected_account_id {
+                return Ok(());
+            }
+        }
+
+        let mut config = self.config.clone();
+        config.protected_account_id = Some(protected_account_id);
+        self.context_tracker
+            .update_config(Self::tracker_config(&config));
+        self.config = config;
+        Ok(())
+    }
+
+    /// Validates an authenticated account binding without mutating runtime state.
+    pub fn validate_protected_account_id_binding(
+        &self,
+        protected_account_id: &str,
+    ) -> Result<(), crate::error::AuraError> {
+        if self
+            .config
+            .protected_account_id
+            .as_deref()
+            .is_some_and(|current| current != protected_account_id)
+        {
+            return Err(crate::error::AuraError::InvalidConfig(
+                "protected_account_id is already bound for this runtime".to_string(),
+            ));
+        }
+        let mut candidate = self.config.clone();
+        candidate.protected_account_id = Some(protected_account_id.to_string());
+        candidate.validate()
+    }
+
     /// Replaces the analyzer configuration and rebuilds pattern matchers and ML pipeline.
     ///
     /// Validation happens before any runtime state is mutated.
@@ -775,6 +819,13 @@ impl Analyzer {
         config: AuraConfig,
         pattern_db: &PatternDatabase,
     ) -> Result<(), crate::error::AuraError> {
+        if let Some(bound) = self.config.protected_account_id.as_deref() {
+            if config.protected_account_id.as_deref() != Some(bound) {
+                return Err(crate::error::AuraError::InvalidConfig(
+                    "protected_account_id is immutable for this runtime".to_string(),
+                ));
+            }
+        }
         config.validate()?;
         let tracker_config = Self::tracker_config(&config);
         let signal_enricher = Self::signal_enricher(&config);

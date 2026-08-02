@@ -258,6 +258,17 @@ pub enum SafetyCaseSourcePreflight {
     },
 }
 
+/// Result of transferring a terminal source checkpoint to durable host state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SafetyCaseSourceCheckpointDisposition {
+    /// A content-free receipt with no case observation was removed.
+    Forgotten,
+    /// The receipt remains because a retained case observation depends on it.
+    ObservationRetained,
+    /// The source was already absent, making checkpoint retries idempotent.
+    AlreadyAbsent,
+}
+
 /// Result of projecting one analyzer result into case state.
 #[derive(Debug, Clone)]
 pub enum SafetyCaseIngestOutcome {
@@ -570,9 +581,9 @@ pub enum SafetyCaseRuntimeError {
     /// The requested case does not exist in this runtime.
     #[error("safety case was not found")]
     CaseNotFound,
-    /// Canonical analysis requires a freshly applied Enabled signed policy for
-    /// the exact account partition in this process.
-    #[error("canonical analysis requires an active enabled execution policy")]
+    /// Canonical safety operations require a freshly applied Enabled signed
+    /// policy for the exact account partition in this process.
+    #[error("canonical safety operation requires an active enabled execution policy")]
     ExecutionPolicyInactive,
     /// Observation commands must pass through canonical source ingestion.
     #[error("direct observation commands are forbidden; use ingest_analysis")]
@@ -996,6 +1007,45 @@ impl SafetyCaseRuntime {
     /// Returns the number of canonical receipts, including ignored events.
     pub fn source_receipt_count(&self) -> usize {
         self.source_receipts.len()
+    }
+
+    /// Transfers replay responsibility for one terminal source to the host.
+    ///
+    /// The host may call this only after its inbox/checkpoint state guarantees
+    /// that the event can never become eligible for processing again. Receipts
+    /// that cover retained case observations cannot be removed because they
+    /// are part of the persisted case-integrity proof.
+    pub fn acknowledge_source_checkpoint(
+        &mut self,
+        identity: &SafetyCaseIngestIdentity,
+    ) -> SafetyCaseSourceCheckpointDisposition {
+        let source_key = canonical_source_key(identity);
+        let Some(entry) = self.source_receipts.get(&source_key) else {
+            return SafetyCaseSourceCheckpointDisposition::AlreadyAbsent;
+        };
+        if entry.observation_id.is_some() {
+            return SafetyCaseSourceCheckpointDisposition::ObservationRetained;
+        }
+
+        self.source_receipts.remove(&source_key);
+        let event_key = canonical_event_key(identity);
+        let latest_revision = self
+            .source_receipts
+            .keys()
+            .filter(|key| {
+                key.account_key == event_key.account_key
+                    && key.subject_key == event_key.subject_key
+                    && key.source_event.conversation_key() == &event_key.conversation_key
+                    && key.source_event.event_id() == &event_key.event_id
+            })
+            .map(|key| key.source_event.revision())
+            .max();
+        if let Some(latest_revision) = latest_revision {
+            self.latest_revisions.insert(event_key, latest_revision);
+        } else {
+            self.latest_revisions.remove(&event_key);
+        }
+        SafetyCaseSourceCheckpointDisposition::Forgotten
     }
 
     /// Returns the active deterministic reducer policy.

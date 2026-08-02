@@ -519,6 +519,43 @@ fn invalid_minor_update_is_rejected_before_runtime_mutation() {
 }
 
 #[test]
+fn protected_account_binding_is_idempotent_and_immutable() {
+    let db = test_db();
+    let mut analyzer = Analyzer::new(AuraConfig::default(), &db);
+    analyzer
+        .bind_protected_account_id("protected-account".to_string())
+        .expect("first authenticated binding");
+    analyzer
+        .validate_protected_account_id_binding("protected-account")
+        .expect("exact binding validation retry");
+    analyzer
+        .bind_protected_account_id("protected-account".to_string())
+        .expect("exact binding retry");
+    assert_eq!(
+        analyzer
+            .context_tracker
+            .config()
+            .protected_account_id
+            .as_deref(),
+        Some("protected-account")
+    );
+
+    let replacement = analyzer
+        .bind_protected_account_id("other-account".to_string())
+        .expect_err("runtime account binding must be immutable");
+    assert!(replacement.to_string().contains("already bound"));
+    let validation = analyzer
+        .validate_protected_account_id_binding("other-account")
+        .expect_err("validation must reject a different identity without mutation");
+    assert!(validation.to_string().contains("already bound"));
+
+    let update = analyzer
+        .update_config(AuraConfig::default(), &db)
+        .expect_err("config update must not erase an authenticated binding");
+    assert!(update.to_string().contains("immutable"));
+}
+
+#[test]
 fn try_new_rejects_invalid_minor_configuration() {
     let db = test_db();
     let invalid_config = AuraConfig {
@@ -553,6 +590,7 @@ fn teen_cannot_disable_aura() {
 }
 
 #[test]
+#[ignore = "wall-clock microbenchmark; run in isolation via ci/analyzer_microbenchmark_gate.sh"]
 fn analysis_is_fast() {
     let db = test_db();
     let mut analyzer = Analyzer::new(AuraConfig::default(), &db);

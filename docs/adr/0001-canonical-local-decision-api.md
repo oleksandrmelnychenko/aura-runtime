@@ -47,19 +47,22 @@ runtime-state schema version.
 | Host persistence commit | Before applying UI or guardian effects, the host atomically stores the response, exported context, and encrypted account-scoped Safety Case state. |
 | Host persistence failure | The host must not apply the decision. It destroys the uncommitted handle, restores the last durable context and Safety Case state into a fresh handle, reapplies the signed execution policy, and retries the same identity. |
 | Restart after commit but before display | The host reads and applies the stored typed response. Calling native again yields a duplicate receipt and cannot double-apply context or Safety Case state. |
+| Terminal source checkpoint | Only after the host inbox row is durably terminal, the host calls `aura_acknowledge_source_checkpoint` and persists the resulting compacted native state. Native forgets ignored/rejected receipts but retains every receipt that covers a Safety Case observation. |
 | Background/foreground repetition | The same identity/revision follows the duplicate rule. An edit must increment revision. |
 | Display copy | The application owns localization keys and text. Native returns policy enums and reason codes only. |
 
 ## Compatibility
 
 The change is additive: existing protobuf field numbers and C functions remain
-unchanged. `CanonicalSafetyAnalyzeResponse` stays content-free. The new symbol
-is added to the exact Apple export allowlist and the Swift wrapper uses the
-same owned-buffer rules as every canonical bytes API.
+unchanged. `CanonicalSafetyAnalyzeResponse` stays content-free. The local
+decision and terminal-source checkpoint symbols are added to the exact Apple
+export allowlist. The checkpoint consumes an existing
+`CanonicalSafetyEventIdentity` protobuf and returns no buffer.
 
 ## Consequences
 
 There is one state-mutating product analysis path and no double-apply between
 local decisions and Safety Case lifecycle. Durable retry remains a host/native
 protocol: the native library cannot claim a host database transaction has
-committed. UI application before the host commit is a contract violation.
+committed. UI application before the host commit, or source acknowledgement
+before the inbox event is durably terminal, is a contract violation.

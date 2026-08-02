@@ -53,9 +53,10 @@ pub use safety_case_runtime::{
     ExportedSafetyCaseRuntimeState, SafetyAccountKey, SafetyAccountKeyError,
     SafetyCaseAccountRemoval, SafetyCaseGeneration, SafetyCaseIgnoredReason,
     SafetyCaseIngestIdentity, SafetyCaseIngestOutcome, SafetyCaseRuntime, SafetyCaseRuntimeConfig,
-    SafetyCaseRuntimeError, SafetyCaseSourcePreflight, SafetyCaseSourceReceipt,
-    SafetyCaseSuccessorActivationDisposition, SafetyCaseSuccessorActivationOutcome,
-    SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES, SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
+    SafetyCaseRuntimeError, SafetyCaseSourceCheckpointDisposition, SafetyCaseSourcePreflight,
+    SafetyCaseSourceReceipt, SafetyCaseSuccessorActivationDisposition,
+    SafetyCaseSuccessorActivationOutcome, SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES,
+    SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
 };
 
 // Product surface
@@ -445,6 +446,25 @@ impl AgentRuntime {
 
     pub fn mark_contact_trusted(&mut self, sender_id: &str) {
         self.analyzer.mark_contact_trusted(sender_id);
+    }
+
+    /// Binds the protected sender identity after its account authority has
+    /// been authenticated. A different identity cannot replace the binding.
+    pub fn bind_protected_account_id(
+        &mut self,
+        protected_account_id: String,
+    ) -> Result<(), AuraError> {
+        self.analyzer
+            .bind_protected_account_id(protected_account_id)
+    }
+
+    /// Validates an authenticated account binding without mutating runtime state.
+    pub fn validate_protected_account_id_binding(
+        &self,
+        protected_account_id: &str,
+    ) -> Result<(), AuraError> {
+        self.analyzer
+            .validate_protected_account_id_binding(protected_account_id)
     }
 
     pub fn update_config(
