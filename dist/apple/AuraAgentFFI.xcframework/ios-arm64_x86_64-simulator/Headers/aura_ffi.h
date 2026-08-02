@@ -30,6 +30,10 @@ bool aura_analyze_canonical_safety(void *handle, const uint8_t *request_ptr, siz
 /// Analyze protobuf LocalDecisionAnalyzeRequest exactly once. Writes typed LocalDecisionAnalyzeResponse into out.
 bool aura_analyze_local_decision(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 
+/// Transfer a terminal protobuf CanonicalSafetyEventIdentity checkpoint to the host.
+/// Receipts linked to retained Safety Case observations remain in native state.
+bool aura_acknowledge_source_checkpoint(void *handle, const uint8_t *request_ptr, size_t request_len);
+
 /// Apply protobuf SafetyCaseLifecycleCommandRequest. Writes protobuf SafetyCaseLifecycleCommandResponse into out.
 bool aura_apply_safety_case_lifecycle(void *handle, const uint8_t *request_ptr, size_t request_len, AuraBuffer *out);
 
