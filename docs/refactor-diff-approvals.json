@@ -2,120 +2,6 @@
   "schema_version": "aura.refactor_diff_approvals.v1",
   "approvals": [
     {
-      "path": "/contracts/contract_evidence/files/3/bytes",
-      "classification": "structural_only",
-      "baseline": 148887,
-      "candidate": 320,
-      "reason": "Stage 5 replaces the monolithic FFI crate root with a documented façade and private lifecycle modules. The public header, exported symbol allowlist, request limits, AuraBuffer layout, protobuf contract, and observed runtime behavior are unchanged; lifecycle and buffer implementation sources are now tracked separately below."
-    },
-    {
-      "path": "/contracts/contract_evidence/files/3/sha256",
-      "classification": "structural_only",
-      "baseline": "d052640d7edcc859572bd3472cc92b2ed575d55c1383e87e86b828a7ed39bb98",
-      "candidate": "2b6be45c91e8eda39236cc15b42f6130ed0d83709857425d09183d39127fe1a6",
-      "reason": "Digest companion to the reviewed FFI façade extraction; contract evidence still reports the identical C ABI allowlist, AuraBuffer layout, request caps, protobuf fixtures, and state version."
-    },
-    {
-      "path": "/contracts/contract_evidence/abi/implementation_source_paths",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": [
-        "crates/aura-agent-ffi/src/lifecycle.rs",
-        "crates/aura-agent-ffi/src/lifecycle/buffers.rs"
-      ],
-      "reason": "Makes the decomposed FFI contract ownership explicit in release evidence: the façade remains the stable Rust entry point, lifecycle owns exported C functions and request caps, and buffers owns the repr(C) response buffer."
-    },
-    {
-      "path": "/contracts/contract_evidence/files/4",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": {
-        "bytes": 50906,
-        "path": "crates/aura-agent-ffi/src/lifecycle.rs",
-        "sha256": "5d95f0b5289ee988f57953750512b08742b4809c14c3ab31527aed58c8a77175"
-      },
-      "reason": "Adds deterministic digest coverage for the lifecycle owner created by the structural FFI decomposition. Export names, request caps, protobuf schema and behavior remain unchanged."
-    },
-    {
-      "path": "/contracts/contract_evidence/files/5",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": {
-        "bytes": 1719,
-        "path": "crates/aura-agent-ffi/src/lifecycle/buffers.rs",
-        "sha256": "44ae5c90f956d01668ff0c46237fd10ab74d3d108ce5bb59c8b0577a75186777"
-      },
-      "reason": "Adds deterministic digest coverage for the extracted AuraBuffer implementation; the C header layout evidence and ownership tests remain identical."
-    },
-    {
-      "path": "/contracts/contract_evidence/context_rule_packs",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": {
-        "interpretation": {
-          "policy_version": "aura.context.interpretation.v1",
-          "rule_count": 8,
-          "sha256": "0a20901ea19ff7bc9fa90df7d89ecef90c6d5203aa37d9439ae4873f84737aea"
-        },
-        "memory": {
-          "policy_version": "aura.context.memory.v1",
-          "rule_count": 9,
-          "sha256": "eafaa69104c4f09b605c51d5f45e32e79f954a87687ee54661b6b06e672ee6aa"
-        },
-        "policy": {
-          "policy_version": "aura.context.policy.v1",
-          "rule_count": 5,
-          "sha256": "bce92a561de52d204849f55859dcb390690a15f2858a0996ddf907d4afdb864e"
-        },
-        "schema_version": 1
-      },
-      "reason": "Adds deterministic release evidence for the three bundled, schema-versioned context rule packs. The packs encode the previously baseline-confirmed interpretation, memory, and relationship-policy exceptions; full differential behavior, social-context cohorts, and world replay remain unchanged."
-    },
-    {
-      "path": "/fixture_inputs/crates~1aura-core~1data~1context_interpretation_rules.json",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": {
-        "bytes": 3589,
-        "sha256": "36b957126036d2b60b02c53721f329772086a52dee0de15d8504a5e668a69b2c"
-      },
-      "reason": "Adds the reviewable source JSON for eight interpretation rules migrated from the existing hardcoded baseline. Safe/risky context boundaries and output behavior are unchanged."
-    },
-    {
-      "path": "/fixture_inputs/crates~1aura-core~1data~1context_memory_rules.json",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": {
-        "bytes": 4679,
-        "sha256": "fe5a3d175d9fca89bfb55767d56255bbc8eb52751da03cfb34532e02bb49bbc2"
-      },
-      "reason": "Adds the reviewable source JSON for nine memory-eligibility rules migrated from the existing hardcoded baseline. Tracker persistence and realistic simulation behavior are unchanged."
-    },
-    {
-      "path": "/fixture_inputs/crates~1aura-core~1data~1context_policy_rules.json",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": {
-        "bytes": 1667,
-        "sha256": "08e3fcdd1a8729b56422d77c36a80492e61b3a92c102e77a49690055f2fe95c0"
-      },
-      "reason": "Adds the reviewable source JSON for five relationship-policy calibration rules migrated from the existing hardcoded baseline. The pack cannot create product actions directly, and policy outputs remain unchanged."
-    },
-    {
       "path": "/behavior/release/suites/6/evaluation/brier_score",
       "classification": "approved_safety_improvement",
       "baseline": 0.106402464,
@@ -354,27 +240,6 @@
       "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. Scenario behavior and runtime contracts are unchanged."
     },
     {
-      "path": "/behavior/release/suites/6/slices/3/slice_id",
-      "classification": "structural_only",
-      "baseline": "school_group_social_pressure",
-      "candidate": "peer_banter_boundary",
-      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. Scenario behavior and runtime contracts are unchanged."
-    },
-    {
-      "path": "/behavior/release/suites/6/slices/4/slice_id",
-      "classification": "structural_only",
-      "baseline": "selfharm_disclosure_support_boundary",
-      "candidate": "selfharm_support_boundary",
-      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. Scenario behavior and runtime contracts are unchanged."
-    },
-    {
-      "path": "/behavior/release/suites/6/slices/9/slice_id",
-      "classification": "structural_only",
-      "baseline": "military_opsec_warning_boundary",
-      "candidate": "opsec_warning_boundary",
-      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. The multi-turn evidence changes are approved separately."
-    },
-    {
       "path": "/behavior/release/suites/6/slices/10",
       "classification": "approved_safety_improvement",
       "baseline": {
@@ -410,6 +275,20 @@
       "reason": "Stage 6 adds the mandatory hate_counter_speech_boundary backed by the canonical hate/counterspeech pack. It passes with 30 positive and 12 negative scenarios, 100% detection, 0% negative false positives, and strict calibration gates."
     },
     {
+      "path": "/behavior/release/suites/6/slices/3/slice_id",
+      "classification": "structural_only",
+      "baseline": "school_group_social_pressure",
+      "candidate": "peer_banter_boundary",
+      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. Scenario behavior and runtime contracts are unchanged."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/4/slice_id",
+      "classification": "structural_only",
+      "baseline": "selfharm_disclosure_support_boundary",
+      "candidate": "selfharm_support_boundary",
+      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. Scenario behavior and runtime contracts are unchanged."
+    },
+    {
       "path": "/behavior/release/suites/6/slices/9/evaluation/brier_score",
       "classification": "approved_safety_improvement",
       "baseline": 0.00053333386,
@@ -429,6 +308,13 @@
       "baseline": 0.013333341,
       "candidate": 0.0066666706,
       "reason": "Stage 6 makes the OPSEC warning boundary explicitly multi-turn and improves its calibration error while all release gates pass."
+    },
+    {
+      "path": "/behavior/release/suites/6/slices/9/slice_id",
+      "classification": "structural_only",
+      "baseline": "military_opsec_warning_boundary",
+      "candidate": "opsec_warning_boundary",
+      "reason": "Stage 6 standardizes this evaluation-only identifier to the mandatory boundary-contract name. The multi-turn evidence changes are approved separately."
     },
     {
       "path": "/behavior/release/suites/6/slices/9/support/calibration_examples",
@@ -452,6 +338,481 @@
       "reason": "The added multi-turn evidence makes the mandatory OPSEC warning boundary independently reportable."
     },
     {
+      "path": "/contracts/apple_artifact/manifest_file/bytes",
+      "classification": "structural_only",
+      "baseline": 1475,
+      "candidate": 1750,
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/manifest_file/sha256",
+      "classification": "structural_only",
+      "baseline": "1d1fccd16ba37211901bc6e9d60f918a30e67a612a5ec8df850bf92427c97353",
+      "candidate": "73701f38634f61adceec30ebd90ed50e223710998ac6c91369627ff308c5f984",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/aura_ffi_header_sha256",
+      "classification": "structural_only",
+      "baseline": "bf55ff30f5a35407b3e595ecc3d56c8b8e8901a149bc9912219246316e4bcf86",
+      "candidate": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64",
+      "classification": "approved_safety_improvement",
+      "baseline": "deac8ac069c51641a2ed81fcfffa2774b8952f2ca347a5503c38b86f3e3b44d0",
+      "candidate": "db47b56eb4df0a05cb57d5768467c6c822c9e758ecbdf43de50c4d5f93c6536e",
+      "reason": "Clean Apple binary rebuilt from reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; exact export verification, full workspace tests, strict Clippy, RustSec audit, and real six-month/dense-two-year FFI and client-boundary replays pass."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64_x86_64-maccatalyst",
+      "classification": "approved_safety_improvement",
+      "baseline": "08488cbd55b2f788392cea3e810cf48a8bd6a636d315db3c6ab3608152af45e7",
+      "candidate": "b48bf24d909097438545db9a314bc59d5531cebcf434c33f28dd4e110c03a8e7",
+      "reason": "Clean Apple binary rebuilt from reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; exact export verification, full workspace tests, strict Clippy, RustSec audit, and real six-month/dense-two-year FFI and client-boundary replays pass."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64_x86_64-simulator",
+      "classification": "approved_safety_improvement",
+      "baseline": "1fba940c69c5bfc80a51bbaf9350a26a4221d493cbd0bff9bf8b26510051b056",
+      "candidate": "ee66c395784568bb527a6cfd5b89b4c24a70751f7ed84b362fb0ca8981fabebf",
+      "reason": "Clean Apple binary rebuilt from reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; exact export verification, full workspace tests, strict Clippy, RustSec audit, and real six-month/dense-two-year FFI and client-boundary replays pass."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/ffi_contract_version",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": 1,
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/runtime_artifact_descriptor_sha256",
+      "classification": "structural_only",
+      "baseline": "5dd5e053b759b9b6ae2b45833fa0a2d073b2ccc36ffa4717e71e83316cde0f02",
+      "candidate": "8d17587fb22c972374db49d77cd108eff93a3803bcb2cc85bcebf00d4e9d6f0d",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/runtime_artifact_identities_env_sha256",
+      "classification": "structural_only",
+      "baseline": "6dab7f7d7ee58c339ea49c5684651f3b9a374934113430cd420478a70b87f486",
+      "candidate": "b926a1a2674928e5be0a63a2903dd58dbf47b8210f0aae980a38ad9dba3fd6c6",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/runtime_release_version",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": "0.2.0",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/schema_version",
+      "classification": "structural_only",
+      "baseline": 4,
+      "candidate": 5,
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/shippable",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": true,
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/source_revision",
+      "classification": "structural_only",
+      "baseline": "c2481dbe568d6292c8cb10e55658d40b7a77a0a9",
+      "candidate": "fa6945d3ab7ebf1f0e25f7a3fb3402af6e06af9c",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/source_tree_sha256",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": "bbbaaa1a577cc74fe0f622997212ad79bb2bb58306085f6b393491790a1efa25",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/state_schema_version",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": 3,
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/wire_major_version",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": 1,
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/wire_package",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": "aura.messenger.v1",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/xcframework_info_plist_sha256",
+      "classification": "structural_only",
+      "baseline": "900e3c83f0ee7102c06e884f61113a173ae4b9b01538d0f6992e9f6ebd265e01",
+      "candidate": "1e336683b41580c0e5addcf8d7f2683ce19278a7e3791794fbed872992edccb3",
+      "reason": "Apple artifact provenance and hashes were regenerated from clean reviewed source 42b4f13b4f3ba32f0bb1601a4d9ce44d4e727f5c; manifest schema 5, descriptor schema 3, all headers, architectures, exact exports, and declared hashes pass independent verification."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/export_allowlist_path",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": "include/aura_ffi.exports",
+      "reason": "Stage 7 makes the existing reviewed C ABI export set machine-readable so the Apple build and independent verifier share an exact allowlist. Header parsing tests prove the function set is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/10",
+      "classification": "structural_only",
+      "baseline": "aura_confirm_guardian_report_prepared",
+      "candidate": "aura_export_guardian_report_account_snapshot",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/11",
+      "classification": "structural_only",
+      "baseline": "aura_suppress_guardian_report",
+      "candidate": "aura_flush_deferred_guardian_report",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/12",
+      "classification": "structural_only",
+      "baseline": "aura_acknowledge_guardian_report",
+      "candidate": "aura_confirm_guardian_report_prepared",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/13",
+      "classification": "structural_only",
+      "baseline": "aura_export_context",
+      "candidate": "aura_suppress_guardian_report",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/14",
+      "classification": "structural_only",
+      "baseline": "aura_import_context",
+      "candidate": "aura_acknowledge_guardian_report",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/15",
+      "classification": "structural_only",
+      "baseline": "aura_export_safety_case_state",
+      "candidate": "aura_export_context",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/16",
+      "classification": "structural_only",
+      "baseline": "aura_import_safety_case_state",
+      "candidate": "aura_import_context",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/17",
+      "classification": "structural_only",
+      "baseline": "aura_agent_version",
+      "candidate": "aura_export_safety_case_state",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/18",
+      "classification": "structural_only",
+      "baseline": "aura_last_error",
+      "candidate": "aura_import_safety_case_state",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/19",
+      "classification": "structural_only",
+      "baseline": "aura_free",
+      "candidate": "aura_agent_version",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/20",
+      "classification": "structural_only",
+      "baseline": "aura_free_string",
+      "candidate": "aura_last_error",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/21",
+      "classification": "structural_only",
+      "baseline": "aura_free_buffer",
+      "candidate": "aura_free",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/22",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": "aura_free_string",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/23",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": "aura_free_buffer",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/4",
+      "classification": "structural_only",
+      "baseline": "aura_apply_safety_case_lifecycle",
+      "candidate": "aura_analyze_local_decision",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/5",
+      "classification": "structural_only",
+      "baseline": "aura_activate_safety_case_successor",
+      "candidate": "aura_acknowledge_source_checkpoint",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/6",
+      "classification": "structural_only",
+      "baseline": "aura_remove_safety_case_account",
+      "candidate": "aura_apply_safety_case_lifecycle",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/7",
+      "classification": "structural_only",
+      "baseline": "aura_export_guardian_report_snapshot",
+      "candidate": "aura_activate_safety_case_successor",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/8",
+      "classification": "structural_only",
+      "baseline": "aura_export_guardian_report_account_snapshot",
+      "candidate": "aura_remove_safety_case_account",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/exported_functions/9",
+      "classification": "structural_only",
+      "baseline": "aura_flush_deferred_guardian_report",
+      "candidate": "aura_export_guardian_report_snapshot",
+      "reason": "Stable ordered ABI evidence shifts after the safe additive local-decision and terminal-checkpoint symbols; every pre-existing symbol, signature, ownership rule, and AuraBuffer layout is unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/abi/implementation_source_paths",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": [
+        "crates/aura-agent-ffi/src/lifecycle.rs",
+        "crates/aura-agent-ffi/src/lifecycle/buffers.rs"
+      ],
+      "reason": "Makes the decomposed FFI contract ownership explicit in release evidence: the façade remains the stable Rust entry point, lifecycle owns exported C functions and request caps, and buffers owns the repr(C) response buffer."
+    },
+    {
+      "path": "/contracts/contract_evidence/context_rule_packs",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "interpretation": {
+          "policy_version": "aura.context.interpretation.v1",
+          "rule_count": 8,
+          "sha256": "0a20901ea19ff7bc9fa90df7d89ecef90c6d5203aa37d9439ae4873f84737aea"
+        },
+        "memory": {
+          "policy_version": "aura.context.memory.v1",
+          "rule_count": 9,
+          "sha256": "eafaa69104c4f09b605c51d5f45e32e79f954a87687ee54661b6b06e672ee6aa"
+        },
+        "policy": {
+          "policy_version": "aura.context.policy.v1",
+          "rule_count": 5,
+          "sha256": "bce92a561de52d204849f55859dcb390690a15f2858a0996ddf907d4afdb864e"
+        },
+        "schema_version": 1
+      },
+      "reason": "Adds deterministic release evidence for the three bundled, schema-versioned context rule packs. The packs encode the previously baseline-confirmed interpretation, memory, and relationship-policy exceptions; full differential behavior, social-context cohorts, and world replay remain unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/0/bytes",
+      "classification": "structural_only",
+      "baseline": 39616,
+      "candidate": 42674,
+      "reason": "Protobuf v1 source changed only through allowed additive messages/fields; existing field numbers and semantics remain intact and compatibility plus golden-fixture tests pass."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/0/sha256",
+      "classification": "structural_only",
+      "baseline": "4f4b8f8e0ee479983db3fe893e371cbf5b3b240b9a2e78e9ab923308fba29969",
+      "candidate": "c6d167ad0a2a5214930c50dae71fd3acc46f11999c5882feb5bea6a280a60d0f",
+      "reason": "Protobuf v1 source changed only through allowed additive messages/fields; existing field numbers and semantics remain intact and compatibility plus golden-fixture tests pass."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/1/bytes",
+      "classification": "structural_only",
+      "baseline": 4765,
+      "candidate": 5345,
+      "reason": "C header and compile-smoke evidence include safe additive functions while all existing signatures, pointer semantics, ownership rules, and AuraBuffer layout remain unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/1/sha256",
+      "classification": "structural_only",
+      "baseline": "bf55ff30f5a35407b3e595ecc3d56c8b8e8901a149bc9912219246316e4bcf86",
+      "candidate": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
+      "reason": "C header and compile-smoke evidence include safe additive functions while all existing signatures, pointer semantics, ownership rules, and AuraBuffer layout remain unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/2/bytes",
+      "classification": "structural_only",
+      "baseline": 1661,
+      "candidate": 1726,
+      "reason": "C header and compile-smoke evidence include safe additive functions while all existing signatures, pointer semantics, ownership rules, and AuraBuffer layout remain unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/2/sha256",
+      "classification": "structural_only",
+      "baseline": "635ae85405dc9a8372f6e3edfb1cf07b6f10acbac685dc67e0e2f7f2ceb58470",
+      "candidate": "4c8ab8b7cd3dd754c71aaf025121b82043d8ed8ba7e4181aeef939368d99cbe5",
+      "reason": "C header and compile-smoke evidence include safe additive functions while all existing signatures, pointer semantics, ownership rules, and AuraBuffer layout remain unchanged."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/3/bytes",
+      "classification": "structural_only",
+      "baseline": 148887,
+      "candidate": 320,
+      "reason": "Stage 5 replaces the monolithic FFI crate root with a documented façade and private lifecycle modules. The public header, exported symbol allowlist, request limits, AuraBuffer layout, protobuf contract, and observed runtime behavior are unchanged; lifecycle and buffer implementation sources are now tracked separately below."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/3/sha256",
+      "classification": "structural_only",
+      "baseline": "d052640d7edcc859572bd3472cc92b2ed575d55c1383e87e86b828a7ed39bb98",
+      "candidate": "2b6be45c91e8eda39236cc15b42f6130ed0d83709857425d09183d39127fe1a6",
+      "reason": "Digest companion to the reviewed FFI façade extraction; contract evidence still reports the identical C ABI allowlist, AuraBuffer layout, request caps, protobuf fixtures, and state version."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/4",
+      "classification": "approved_safety_improvement",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 57473,
+        "path": "crates/aura-agent-ffi/src/lifecycle.rs",
+        "sha256": "5e6c297fce3cebde9a2c68cc5265ec65262581aea955800ffdd2a56890255a6e"
+      },
+      "reason": "Lifecycle source adds authenticated immutable owner binding and terminal checkpoint compaction; malformed/cross-account/observation-retention/idempotency tests and both long replay gates pass."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/5",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 1719,
+        "path": "crates/aura-agent-ffi/src/lifecycle/buffers.rs",
+        "sha256": "44ae5c90f956d01668ff0c46237fd10ab74d3d108ce5bb59c8b0577a75186777"
+      },
+      "reason": "Adds deterministic digest coverage for the extracted AuraBuffer implementation; the C header layout evidence and ownership tests remain identical."
+    },
+    {
+      "path": "/contracts/contract_evidence/files/6",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 666,
+        "path": "include/aura_ffi.exports",
+        "sha256": "2886647286eef51e55a310a03d0d951f1d164fb08ee6ea227c1f908e08e23a37"
+      },
+      "reason": "Machine-readable export allowlist adds the reviewed terminal-checkpoint symbol; all packaged Apple archives export exactly the header-declared set and no extra public symbols."
+    },
+    {
+      "path": "/contracts/protobuf_compatibility_fixtures/3",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 445,
+        "path": "crates/aura-proto/tests/fixtures/tracker_state_v3.pb",
+        "sha256": "7991df9a0e62ce510bb3b17fa2b22d64a2a67f6b010d4d9c8fe2ccc69707391b"
+      },
+      "reason": "Adds the byte-pinned tracker-state v3 golden fixture beside the unchanged v2 migration fixture; v2 import, v3 round-trip, and future-schema rejection tests pass."
+    },
+    {
+      "path": "/fixture_inputs/crates~1aura-core~1data~1context_interpretation_rules.json",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 3589,
+        "sha256": "36b957126036d2b60b02c53721f329772086a52dee0de15d8504a5e668a69b2c"
+      },
+      "reason": "Adds the reviewable source JSON for eight interpretation rules migrated from the existing hardcoded baseline. Safe/risky context boundaries and output behavior are unchanged."
+    },
+    {
+      "path": "/fixture_inputs/crates~1aura-core~1data~1context_memory_rules.json",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 4679,
+        "sha256": "fe5a3d175d9fca89bfb55767d56255bbc8eb52751da03cfb34532e02bb49bbc2"
+      },
+      "reason": "Adds the reviewable source JSON for nine memory-eligibility rules migrated from the existing hardcoded baseline. Tracker persistence and realistic simulation behavior are unchanged."
+    },
+    {
+      "path": "/fixture_inputs/crates~1aura-core~1data~1context_policy_rules.json",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": {
+        "bytes": 1667,
+        "sha256": "08e3fcdd1a8729b56422d77c36a80492e61b3a92c102e77a49690055f2fe95c0"
+      },
+      "reason": "Adds the reviewable source JSON for five relationship-policy calibration rules migrated from the existing hardcoded baseline. The pack cannot create product actions directly, and policy outputs remain unchanged."
+    },
+    {
       "path": "/fixture_inputs/crates~1aura-core~1data~1social_context_cohorts.json/bytes",
       "classification": "approved_safety_improvement",
       "baseline": 11795,
@@ -464,28 +825,6 @@
       "baseline": "6c25862d5928de200b32de510bd7378eb3e6cecc1b9e1d8096b0be06ae1e92cb",
       "candidate": "ddc287361fc30f13be769c9f8649d02ba61c0f5e29fba4cdb0aa2e4854f33c6f",
       "reason": "Digest companion to the reviewed Stage 6 social-context cohort expansion; release, restart, contamination, determinism, lifecycle, FFI, client, and performance gates pass."
-    },
-    {
-      "path": "/contracts/contract_evidence/abi/export_allowlist_path",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": "include/aura_ffi.exports",
-      "reason": "Stage 7 makes the existing reviewed C ABI export set machine-readable so the Apple build and independent verifier share an exact allowlist. Header parsing tests prove the function set is unchanged."
-    },
-    {
-      "path": "/contracts/contract_evidence/files/6",
-      "classification": "structural_only",
-      "baseline": {
-        "$aura_missing": true
-      },
-      "candidate": {
-        "bytes": 603,
-        "path": "include/aura_ffi.exports",
-        "sha256": "f3c60f367acd3a17e5d768a4ca69cf494e1c3820d42104ce4985a8f7ae795f1a"
-      },
-      "reason": "Adds deterministic contract-evidence coverage for the machine-readable Apple/C ABI allowlist. All 22 entries match aura_ffi.h and every packaged archive exports exactly that set."
     }
   ]
 }
