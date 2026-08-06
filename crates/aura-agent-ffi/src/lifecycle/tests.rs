@@ -1150,6 +1150,60 @@ fn local_decision_temporal_context_distinguishes_event_and_observation_time() {
 }
 
 #[test]
+fn local_decision_temporal_context_retains_bounds_for_out_of_order_arrival() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let first = analyze_local_decision_at(
+            handle,
+            proto_message(
+                "don't tell your parents, it's our secret",
+                "sender",
+                "out-of-order-conversation",
+            ),
+            "later-source-event",
+            1,
+            3_000,
+            4_000,
+        );
+        assert_eq!(
+            proto::CanonicalSafetyDisposition::try_from(first.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::ProcessedReduced
+        );
+
+        let backfill = analyze_local_decision_at(
+            handle,
+            proto_message(
+                "don't tell your parents, it's our secret",
+                "sender",
+                "out-of-order-conversation",
+            ),
+            "earlier-source-event",
+            1,
+            1_000,
+            9_000,
+        );
+        assert_eq!(
+            proto::CanonicalSafetyDisposition::try_from(backfill.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::ProcessedReduced
+        );
+        assert_eq!(backfill.case_id, first.case_id);
+        let temporal = backfill
+            .decision
+            .expect("backfilled first attempt decision")
+            .temporal_context
+            .expect("backfilled temporal context");
+        assert_eq!(temporal.occurred_at_ms, 1_000);
+        assert_eq!(temporal.observed_at_ms, 9_000);
+        assert_eq!(temporal.observation_delay_ms, 8_000);
+        assert_eq!(temporal.retained_observation_count, 2);
+        assert_eq!(temporal.case_first_event_at_ms, Some(1_000));
+        assert_eq!(temporal.case_last_event_at_ms, Some(3_000));
+
+        aura_free(handle);
+    }
+}
+
+#[test]
 fn ignored_local_decision_has_content_free_temporal_context_without_case_projection() {
     unsafe {
         let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
@@ -1218,7 +1272,11 @@ fn local_decision_restart_replays_receipt_without_double_analysis() {
         import_safety_case_state(restored, &safety_state);
         import_context_state(restored, context.clone());
 
-        let duplicate = analyze_local_decision(restored, message, "restart-event", 1, 1_000);
+        // Timestamps are not exactly-once identity fields. Even if a relaunched
+        // host supplies drifted values, native state must not analyze twice;
+        // the host reconciles the response with its encrypted original receipt.
+        let duplicate =
+            analyze_local_decision_at(restored, message, "restart-event", 1, 900, 1_500);
         assert!(matches!(
             proto::CanonicalSafetyDisposition::try_from(duplicate.disposition).unwrap(),
             proto::CanonicalSafetyDisposition::DuplicateIgnored
