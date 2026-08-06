@@ -1,8 +1,8 @@
 {
   "schema_version": 5,
-  "source_revision": "311b24e15e673b54ba4602b49e7e97a6274d2ec8",
+  "source_revision": "c2c2c75d474dcff3253c2a36b9e7a69c4f563c9a",
   "source_tree_dirty": false,
-  "source_tree_sha256": "97a2d1a8f4c5912ced0d8db43411db31e7b16a40392f1a97a02547a220e43a32",
+  "source_tree_sha256": "fe2ab34e6dac3e1446e1a9d2a264e4de0293e5e718301d9c6364f682c87a453d",
   "shippable": true,
   "cargo_profile": "release",
   "cargo_locked": true,
@@ -22,15 +22,15 @@
   ],
   "aura_ffi_header_sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
   "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
-  "runtime_artifact_descriptor_sha256": "f7d7da5cfcd7cd83c175ff3b52725b4ed96fe638a452453a26084b50af9da6f3",
-  "runtime_artifact_identities_env_sha256": "079785922dc30530d7859d1c0dae82cb537c513462123a90dd28342cb348ae90",
+  "runtime_artifact_descriptor_sha256": "c2720eba8298fe5f8adbb9d679dda83dce90fab0b56a970c969742ee4669bc07",
+  "runtime_artifact_identities_env_sha256": "68a6352630984d5444d07aa70bd1e0444105fbb3dcacadaac6c93a333b041032",
   "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
   "execution_policy_trust_keyring_sha256": "9339c0165962cfeb66a677bcf47de5318f5655ad24e3e006e2d1e40aa8164152",
   "xcframework_info_plist_sha256": "1e336683b41580c0e5addcf8d7f2683ce19278a7e3791794fbed872992edccb3",
   "binary_sha256": {
-    "ios-arm64": "101988f75a3589657fab5e593e42ca9bd46f96752c5567200c846fa791a6c376",
-    "ios-arm64_x86_64-simulator": "74fd8517c6e310a10e5f0157ee5a5e9bd8738767a06268d4369b4ef04ba791ee",
-    "ios-arm64_x86_64-maccatalyst": "ef12b34a6e707782183816062890dc10e44975bc8a5fc22f8707b2110288e15b"
+    "ios-arm64": "b426b39fb0a78bf9279dca6d11107ecfdd217ee80b7633f88358145254ee63c1",
+    "ios-arm64_x86_64-simulator": "fba586dee2ee7dde15bc6c64331f9e02eca684e160e7f62ed79fc1ac66d17cc5",
+    "ios-arm64_x86_64-maccatalyst": "dff31a6bdb4d48a30f5daba315dc448281923d59b973b1f8981011bdda9365a8"
   },
   "model_bundle_included": false
 }
