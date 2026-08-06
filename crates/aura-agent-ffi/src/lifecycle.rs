@@ -30,12 +30,12 @@ use aura_agent_core::{
     ConversationEventKey, ExportedSafetyCaseRuntimeState, GuardianDeliveryClass, GuardianReport,
     GuardianReportKey, GuardianReportObservationVolumeBand, GuardianReportTrigger, MessageInput,
     RelationshipTrustSource, RuntimeBackend, SafetyAccountKey, SafetyCase, SafetyCaseCommand,
-    SafetyCaseDecision, SafetyCaseGeneration, SafetyCaseId, SafetyCaseIgnoredReason,
-    SafetyCaseIngestIdentity, SafetyCaseIngestOutcome, SafetyCaseRuntimeError, SafetyCaseSeverity,
-    SafetyCaseSourcePreflight, SafetyCaseSourceReceipt, SafetyCaseStatus, SafetyCaseSubjectKey,
-    SafetyCaseSuccessorActivationDisposition, SafetyCaseSuccessorActivationOutcome,
-    SafetyReasonCode, SenderRelationship, SourceEventId, ThreatType,
-    SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES, SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
+    SafetyCaseDecision, SafetyCaseEvent, SafetyCaseGeneration, SafetyCaseId,
+    SafetyCaseIgnoredReason, SafetyCaseIngestIdentity, SafetyCaseIngestOutcome,
+    SafetyCaseRuntimeError, SafetyCaseSeverity, SafetyCaseSourcePreflight, SafetyCaseSourceReceipt,
+    SafetyCaseStatus, SafetyCaseSubjectKey, SafetyCaseSuccessorActivationDisposition,
+    SafetyCaseSuccessorActivationOutcome, SafetyReasonCode, SenderRelationship, SourceEventId,
+    ThreatType, SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES, SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
 };
 use aura_patterns::PatternDatabase;
 use aura_proto::messenger::v1 as proto;
@@ -50,6 +50,7 @@ const MAX_CANONICAL_SAFETY_REQUEST_BYTES: usize = 1024 * 1024;
 const MAX_LOCAL_DECISION_REQUEST_BYTES: usize = 1024 * 1024;
 const MAX_LOCAL_DECISION_RESPONSE_BYTES: usize = 256 * 1024;
 const LOCAL_DECISION_RESPONSE_METADATA_RESERVE_BYTES: usize = 4 * 1024;
+const LOCAL_DECISION_TEMPORAL_CONTEXT_SCHEMA_VERSION: u32 = 1;
 // Matches the host store's release limits for the two native-owned payloads.
 // Guardian outbox and envelope overhead have separate host-owned budgets.
 const MAX_CANONICAL_CONTEXT_STATE_BYTES: usize = 4 * 1024 * 1024;
@@ -444,7 +445,8 @@ pub unsafe extern "C" fn aura_analyze_local_decision(
                     },
                 )
                 .map_err(|error| error.to_string())?;
-            let response = local_decision_response_to_proto(outcome, &instance.analyzer)?;
+            let response =
+                local_decision_response_to_proto(outcome, &identity, &instance.analyzer)?;
             if response.encoded_len() > MAX_LOCAL_DECISION_RESPONSE_BYTES {
                 return Err("local decision response exceeded its guarded byte budget".to_string());
             }

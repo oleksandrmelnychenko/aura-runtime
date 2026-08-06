@@ -804,6 +804,31 @@ message LocalDecisionAnalyzeRequest {
 // Compact, content-free projection that a client may persist and apply. Raw
 // message text, analyzer explanations, individual signals, and contact IDs are
 // deliberately excluded from this boundary.
+message LocalDecisionTemporalContext {
+  // Exact schema for this additive, content-free temporal projection.
+  uint32 schema_version = 1;
+  // Host-owned source-event time and the frozen time at which the runtime first
+  // observed this exact source revision.
+  uint64 occurred_at_ms = 2;
+  uint64 observed_at_ms = 3;
+  // Exact observed_at_ms - occurred_at_ms. This is an observation delay, not
+  // analyzer execution latency and not a calibrated risk feature.
+  uint64 observation_delay_ms = 4;
+  // True only when this source added a retained Safety Case observation.
+  bool contributed_to_case = 5;
+  optional uint64 case_generation = 6;
+  optional uint64 case_revision = 7;
+  SafetyCaseLifecycleStatus status_before = 8;
+  SafetyCaseLifecycleStatus status_after = 9;
+  bool status_changed = 10;
+  // Content-free state after this reduction. Risk is an index in basis points,
+  // not a probability. These fields are zero when no case was produced.
+  uint32 retained_observation_count = 11;
+  uint32 peak_risk_basis_points = 12;
+  optional uint64 case_first_event_at_ms = 13;
+  optional uint64 case_last_event_at_ms = 14;
+}
+
 message LocalDecision {
   ProductDecisionSurface product_surface = 1;
   ActionRecommendation recommended_action = 2;
@@ -811,6 +836,7 @@ message LocalDecision {
   InferenceSummary inference = 4;
   RuntimeBackend runtime_backend = 5;
   bool degraded = 6;
+  LocalDecisionTemporalContext temporal_context = 7;
 }
 
 // Exactly-once local product decision plus the same Safety Case receipt used

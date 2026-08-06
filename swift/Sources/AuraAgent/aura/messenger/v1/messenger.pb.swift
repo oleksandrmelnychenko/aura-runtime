@@ -4218,136 +4218,227 @@ public nonisolated struct AuraAgentNativeLocalDecisionAnalyzeRequest: @unchecked
 /// Compact, content-free projection that a client may persist and apply. Raw
 /// message text, analyzer explanations, individual signals, and contact IDs are
 /// deliberately excluded from this boundary.
-public nonisolated struct AuraAgentNativeLocalDecision: Sendable {
+public nonisolated struct AuraAgentNativeLocalDecisionTemporalContext: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var productSurface: AuraAgentNativeProductDecisionSurface {
-    get {_productSurface ?? AuraAgentNativeProductDecisionSurface()}
-    set {_productSurface = newValue}
+  /// Exact schema for this additive, content-free temporal projection.
+  public var schemaVersion: UInt32 = 0
+
+  /// Host-owned source-event time and the frozen time at which the runtime first
+  /// observed this exact source revision.
+  public var occurredAtMs: UInt64 = 0
+
+  public var observedAtMs: UInt64 = 0
+
+  /// Exact observed_at_ms - occurred_at_ms. This is an observation delay, not
+  /// analyzer execution latency and not a calibrated risk feature.
+  public var observationDelayMs: UInt64 = 0
+
+  /// True only when this source added a retained Safety Case observation.
+  public var contributedToCase: Bool = false
+
+  public var caseGeneration: UInt64 {
+    get {_caseGeneration ?? 0}
+    set {_caseGeneration = newValue}
   }
-  /// Returns true if `productSurface` has been explicitly set.
-  public var hasProductSurface: Bool {self._productSurface != nil}
-  /// Clears the value of `productSurface`. Subsequent reads from it will return its default value.
-  public mutating func clearProductSurface() {self._productSurface = nil}
+  /// Returns true if `caseGeneration` has been explicitly set.
+  public var hasCaseGeneration: Bool {self._caseGeneration != nil}
+  /// Clears the value of `caseGeneration`. Subsequent reads from it will return its default value.
+  public mutating func clearCaseGeneration() {self._caseGeneration = nil}
 
-  public var recommendedAction: AuraAgentNativeActionRecommendation {
-    get {_recommendedAction ?? AuraAgentNativeActionRecommendation()}
-    set {_recommendedAction = newValue}
+  public var caseRevision: UInt64 {
+    get {_caseRevision ?? 0}
+    set {_caseRevision = newValue}
   }
-  /// Returns true if `recommendedAction` has been explicitly set.
-  public var hasRecommendedAction: Bool {self._recommendedAction != nil}
-  /// Clears the value of `recommendedAction`. Subsequent reads from it will return its default value.
-  public mutating func clearRecommendedAction() {self._recommendedAction = nil}
+  /// Returns true if `caseRevision` has been explicitly set.
+  public var hasCaseRevision: Bool {self._caseRevision != nil}
+  /// Clears the value of `caseRevision`. Subsequent reads from it will return its default value.
+  public mutating func clearCaseRevision() {self._caseRevision = nil}
 
-  public var reasonCodes: [String] = []
+  public var statusBefore: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
 
-  public var inference: AuraAgentNativeInferenceSummary {
-    get {_inference ?? AuraAgentNativeInferenceSummary()}
-    set {_inference = newValue}
+  public var statusAfter: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
+
+  public var statusChanged: Bool = false
+
+  /// Content-free state after this reduction. Risk is an index in basis points,
+  /// not a probability. These fields are zero when no case was produced.
+  public var retainedObservationCount: UInt32 = 0
+
+  public var peakRiskBasisPoints: UInt32 = 0
+
+  public var caseFirstEventAtMs: UInt64 {
+    get {_caseFirstEventAtMs ?? 0}
+    set {_caseFirstEventAtMs = newValue}
   }
-  /// Returns true if `inference` has been explicitly set.
-  public var hasInference: Bool {self._inference != nil}
-  /// Clears the value of `inference`. Subsequent reads from it will return its default value.
-  public mutating func clearInference() {self._inference = nil}
+  /// Returns true if `caseFirstEventAtMs` has been explicitly set.
+  public var hasCaseFirstEventAtMs: Bool {self._caseFirstEventAtMs != nil}
+  /// Clears the value of `caseFirstEventAtMs`. Subsequent reads from it will return its default value.
+  public mutating func clearCaseFirstEventAtMs() {self._caseFirstEventAtMs = nil}
 
-  public var runtimeBackend: AuraAgentNativeRuntimeBackend = .unspecified
-
-  public var degraded: Bool = false
+  public var caseLastEventAtMs: UInt64 {
+    get {_caseLastEventAtMs ?? 0}
+    set {_caseLastEventAtMs = newValue}
+  }
+  /// Returns true if `caseLastEventAtMs` has been explicitly set.
+  public var hasCaseLastEventAtMs: Bool {self._caseLastEventAtMs != nil}
+  /// Clears the value of `caseLastEventAtMs`. Subsequent reads from it will return its default value.
+  public mutating func clearCaseLastEventAtMs() {self._caseLastEventAtMs = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _productSurface: AuraAgentNativeProductDecisionSurface? = nil
-  fileprivate var _recommendedAction: AuraAgentNativeActionRecommendation? = nil
-  fileprivate var _inference: AuraAgentNativeInferenceSummary? = nil
+  fileprivate var _caseGeneration: UInt64? = nil
+  fileprivate var _caseRevision: UInt64? = nil
+  fileprivate var _caseFirstEventAtMs: UInt64? = nil
+  fileprivate var _caseLastEventAtMs: UInt64? = nil
 }
 
-/// Exactly-once local product decision plus the same Safety Case receipt used
-/// by the canonical lifecycle API. `decision` is present only for a successful
-/// first attempt. Duplicate and stale calls are content-free and must resolve
-/// the already persisted decision by canonical source identity.
-public nonisolated struct AuraAgentNativeLocalDecisionAnalyzeResponse: @unchecked Sendable {
+public nonisolated struct AuraAgentNativeLocalDecision: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var disposition: AuraAgentNativeCanonicalSafetyDisposition {
-    get {_storage._disposition}
-    set {_uniqueStorage()._disposition = newValue}
+  public var productSurface: AuraAgentNativeProductDecisionSurface {
+    get {_storage._productSurface ?? AuraAgentNativeProductDecisionSurface()}
+    set {_uniqueStorage()._productSurface = newValue}
+  }
+  /// Returns true if `productSurface` has been explicitly set.
+  public var hasProductSurface: Bool {_storage._productSurface != nil}
+  /// Clears the value of `productSurface`. Subsequent reads from it will return its default value.
+  public mutating func clearProductSurface() {_uniqueStorage()._productSurface = nil}
+
+  public var recommendedAction: AuraAgentNativeActionRecommendation {
+    get {_storage._recommendedAction ?? AuraAgentNativeActionRecommendation()}
+    set {_uniqueStorage()._recommendedAction = newValue}
+  }
+  /// Returns true if `recommendedAction` has been explicitly set.
+  public var hasRecommendedAction: Bool {_storage._recommendedAction != nil}
+  /// Clears the value of `recommendedAction`. Subsequent reads from it will return its default value.
+  public mutating func clearRecommendedAction() {_uniqueStorage()._recommendedAction = nil}
+
+  public var reasonCodes: [String] {
+    get {_storage._reasonCodes}
+    set {_uniqueStorage()._reasonCodes = newValue}
   }
 
-  public var decision: AuraAgentNativeLocalDecision {
-    get {_storage._decision ?? AuraAgentNativeLocalDecision()}
-    set {_uniqueStorage()._decision = newValue}
+  public var inference: AuraAgentNativeInferenceSummary {
+    get {_storage._inference ?? AuraAgentNativeInferenceSummary()}
+    set {_uniqueStorage()._inference = newValue}
   }
-  /// Returns true if `decision` has been explicitly set.
-  public var hasDecision: Bool {_storage._decision != nil}
-  /// Clears the value of `decision`. Subsequent reads from it will return its default value.
-  public mutating func clearDecision() {_uniqueStorage()._decision = nil}
+  /// Returns true if `inference` has been explicitly set.
+  public var hasInference: Bool {_storage._inference != nil}
+  /// Clears the value of `inference`. Subsequent reads from it will return its default value.
+  public mutating func clearInference() {_uniqueStorage()._inference = nil}
 
-  public var ignoredReason: String {
-    get {_storage._ignoredReason ?? String()}
-    set {_uniqueStorage()._ignoredReason = newValue}
-  }
-  /// Returns true if `ignoredReason` has been explicitly set.
-  public var hasIgnoredReason: Bool {_storage._ignoredReason != nil}
-  /// Clears the value of `ignoredReason`. Subsequent reads from it will return its default value.
-  public mutating func clearIgnoredReason() {_uniqueStorage()._ignoredReason = nil}
-
-  public var caseID: String {
-    get {_storage._caseID ?? String()}
-    set {_uniqueStorage()._caseID = newValue}
-  }
-  /// Returns true if `caseID` has been explicitly set.
-  public var hasCaseID: Bool {_storage._caseID != nil}
-  /// Clears the value of `caseID`. Subsequent reads from it will return its default value.
-  public mutating func clearCaseID() {_uniqueStorage()._caseID = nil}
-
-  public var caseRevision: UInt64 {
-    get {_storage._caseRevision ?? 0}
-    set {_uniqueStorage()._caseRevision = newValue}
-  }
-  /// Returns true if `caseRevision` has been explicitly set.
-  public var hasCaseRevision: Bool {_storage._caseRevision != nil}
-  /// Clears the value of `caseRevision`. Subsequent reads from it will return its default value.
-  public mutating func clearCaseRevision() {_uniqueStorage()._caseRevision = nil}
-
-  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus {
-    get {_storage._caseStatus}
-    set {_uniqueStorage()._caseStatus = newValue}
+  public var runtimeBackend: AuraAgentNativeRuntimeBackend {
+    get {_storage._runtimeBackend}
+    set {_uniqueStorage()._runtimeBackend = newValue}
   }
 
-  public var latestRevision: UInt32 {
-    get {_storage._latestRevision ?? 0}
-    set {_uniqueStorage()._latestRevision = newValue}
-  }
-  /// Returns true if `latestRevision` has been explicitly set.
-  public var hasLatestRevision: Bool {_storage._latestRevision != nil}
-  /// Clears the value of `latestRevision`. Subsequent reads from it will return its default value.
-  public mutating func clearLatestRevision() {_uniqueStorage()._latestRevision = nil}
-
-  public var runtimeStateSchemaVersion: String {
-    get {_storage._runtimeStateSchemaVersion}
-    set {_uniqueStorage()._runtimeStateSchemaVersion = newValue}
+  public var degraded: Bool {
+    get {_storage._degraded}
+    set {_uniqueStorage()._degraded = newValue}
   }
 
-  public var caseGeneration: UInt64 {
-    get {_storage._caseGeneration ?? 0}
-    set {_uniqueStorage()._caseGeneration = newValue}
+  public var temporalContext: AuraAgentNativeLocalDecisionTemporalContext {
+    get {_storage._temporalContext ?? AuraAgentNativeLocalDecisionTemporalContext()}
+    set {_uniqueStorage()._temporalContext = newValue}
   }
-  /// Returns true if `caseGeneration` has been explicitly set.
-  public var hasCaseGeneration: Bool {_storage._caseGeneration != nil}
-  /// Clears the value of `caseGeneration`. Subsequent reads from it will return its default value.
-  public mutating func clearCaseGeneration() {_uniqueStorage()._caseGeneration = nil}
+  /// Returns true if `temporalContext` has been explicitly set.
+  public var hasTemporalContext: Bool {_storage._temporalContext != nil}
+  /// Clears the value of `temporalContext`. Subsequent reads from it will return its default value.
+  public mutating func clearTemporalContext() {_uniqueStorage()._temporalContext = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+/// Exactly-once local product decision plus the same Safety Case receipt used
+/// by the canonical lifecycle API. `decision` is present only for a successful
+/// first attempt. Duplicate and stale calls are content-free and must resolve
+/// the already persisted decision by canonical source identity.
+public nonisolated struct AuraAgentNativeLocalDecisionAnalyzeResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var disposition: AuraAgentNativeCanonicalSafetyDisposition = .unspecified
+
+  public var decision: AuraAgentNativeLocalDecision {
+    get {_decision ?? AuraAgentNativeLocalDecision()}
+    set {_decision = newValue}
+  }
+  /// Returns true if `decision` has been explicitly set.
+  public var hasDecision: Bool {self._decision != nil}
+  /// Clears the value of `decision`. Subsequent reads from it will return its default value.
+  public mutating func clearDecision() {self._decision = nil}
+
+  public var ignoredReason: String {
+    get {_ignoredReason ?? String()}
+    set {_ignoredReason = newValue}
+  }
+  /// Returns true if `ignoredReason` has been explicitly set.
+  public var hasIgnoredReason: Bool {self._ignoredReason != nil}
+  /// Clears the value of `ignoredReason`. Subsequent reads from it will return its default value.
+  public mutating func clearIgnoredReason() {self._ignoredReason = nil}
+
+  public var caseID: String {
+    get {_caseID ?? String()}
+    set {_caseID = newValue}
+  }
+  /// Returns true if `caseID` has been explicitly set.
+  public var hasCaseID: Bool {self._caseID != nil}
+  /// Clears the value of `caseID`. Subsequent reads from it will return its default value.
+  public mutating func clearCaseID() {self._caseID = nil}
+
+  public var caseRevision: UInt64 {
+    get {_caseRevision ?? 0}
+    set {_caseRevision = newValue}
+  }
+  /// Returns true if `caseRevision` has been explicitly set.
+  public var hasCaseRevision: Bool {self._caseRevision != nil}
+  /// Clears the value of `caseRevision`. Subsequent reads from it will return its default value.
+  public mutating func clearCaseRevision() {self._caseRevision = nil}
+
+  public var caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
+
+  public var latestRevision: UInt32 {
+    get {_latestRevision ?? 0}
+    set {_latestRevision = newValue}
+  }
+  /// Returns true if `latestRevision` has been explicitly set.
+  public var hasLatestRevision: Bool {self._latestRevision != nil}
+  /// Clears the value of `latestRevision`. Subsequent reads from it will return its default value.
+  public mutating func clearLatestRevision() {self._latestRevision = nil}
+
+  public var runtimeStateSchemaVersion: String = String()
+
+  public var caseGeneration: UInt64 {
+    get {_caseGeneration ?? 0}
+    set {_caseGeneration = newValue}
+  }
+  /// Returns true if `caseGeneration` has been explicitly set.
+  public var hasCaseGeneration: Bool {self._caseGeneration != nil}
+  /// Clears the value of `caseGeneration`. Subsequent reads from it will return its default value.
+  public mutating func clearCaseGeneration() {self._caseGeneration = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _decision: AuraAgentNativeLocalDecision? = nil
+  fileprivate var _ignoredReason: String? = nil
+  fileprivate var _caseID: String? = nil
+  fileprivate var _caseRevision: UInt64? = nil
+  fileprivate var _latestRevision: UInt32? = nil
+  fileprivate var _caseGeneration: UInt64? = nil
 }
 
 public nonisolated struct AuraAgentNativeSafetyCaseLifecycleCommandRequest: Sendable {
@@ -8203,9 +8294,9 @@ nonisolated extension AuraAgentNativeLocalDecisionAnalyzeRequest: SwiftProtobuf.
   }
 }
 
-nonisolated extension AuraAgentNativeLocalDecision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".LocalDecision"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}product_surface\0\u{3}recommended_action\0\u{3}reason_codes\0\u{1}inference\0\u{3}runtime_backend\0\u{1}degraded\0")
+nonisolated extension AuraAgentNativeLocalDecisionTemporalContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LocalDecisionTemporalContext"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{3}occurred_at_ms\0\u{3}observed_at_ms\0\u{3}observation_delay_ms\0\u{3}contributed_to_case\0\u{3}case_generation\0\u{3}case_revision\0\u{3}status_before\0\u{3}status_after\0\u{3}status_changed\0\u{3}retained_observation_count\0\u{3}peak_risk_basis_points\0\u{3}case_first_event_at_ms\0\u{3}case_last_event_at_ms\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8213,12 +8304,20 @@ nonisolated extension AuraAgentNativeLocalDecision: SwiftProtobuf.Message, Swift
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._productSurface) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._recommendedAction) }()
-      case 3: try { try decoder.decodeRepeatedStringField(value: &self.reasonCodes) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._inference) }()
-      case 5: try { try decoder.decodeSingularEnumField(value: &self.runtimeBackend) }()
-      case 6: try { try decoder.decodeSingularBoolField(value: &self.degraded) }()
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.schemaVersion) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.occurredAtMs) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.observedAtMs) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.observationDelayMs) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.contributedToCase) }()
+      case 6: try { try decoder.decodeSingularUInt64Field(value: &self._caseGeneration) }()
+      case 7: try { try decoder.decodeSingularUInt64Field(value: &self._caseRevision) }()
+      case 8: try { try decoder.decodeSingularEnumField(value: &self.statusBefore) }()
+      case 9: try { try decoder.decodeSingularEnumField(value: &self.statusAfter) }()
+      case 10: try { try decoder.decodeSingularBoolField(value: &self.statusChanged) }()
+      case 11: try { try decoder.decodeSingularUInt32Field(value: &self.retainedObservationCount) }()
+      case 12: try { try decoder.decodeSingularUInt32Field(value: &self.peakRiskBasisPoints) }()
+      case 13: try { try decoder.decodeSingularUInt64Field(value: &self._caseFirstEventAtMs) }()
+      case 14: try { try decoder.decodeSingularUInt64Field(value: &self._caseLastEventAtMs) }()
       default: break
       }
     }
@@ -8229,53 +8328,83 @@ nonisolated extension AuraAgentNativeLocalDecision: SwiftProtobuf.Message, Swift
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._productSurface {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._recommendedAction {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    if !self.reasonCodes.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.reasonCodes, fieldNumber: 3)
+    if self.schemaVersion != 0 {
+      try visitor.visitSingularUInt32Field(value: self.schemaVersion, fieldNumber: 1)
     }
-    try { if let v = self._inference {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    if self.occurredAtMs != 0 {
+      try visitor.visitSingularUInt64Field(value: self.occurredAtMs, fieldNumber: 2)
+    }
+    if self.observedAtMs != 0 {
+      try visitor.visitSingularUInt64Field(value: self.observedAtMs, fieldNumber: 3)
+    }
+    if self.observationDelayMs != 0 {
+      try visitor.visitSingularUInt64Field(value: self.observationDelayMs, fieldNumber: 4)
+    }
+    if self.contributedToCase != false {
+      try visitor.visitSingularBoolField(value: self.contributedToCase, fieldNumber: 5)
+    }
+    try { if let v = self._caseGeneration {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 6)
     } }()
-    if self.runtimeBackend != .unspecified {
-      try visitor.visitSingularEnumField(value: self.runtimeBackend, fieldNumber: 5)
+    try { if let v = self._caseRevision {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 7)
+    } }()
+    if self.statusBefore != .unspecified {
+      try visitor.visitSingularEnumField(value: self.statusBefore, fieldNumber: 8)
     }
-    if self.degraded != false {
-      try visitor.visitSingularBoolField(value: self.degraded, fieldNumber: 6)
+    if self.statusAfter != .unspecified {
+      try visitor.visitSingularEnumField(value: self.statusAfter, fieldNumber: 9)
     }
+    if self.statusChanged != false {
+      try visitor.visitSingularBoolField(value: self.statusChanged, fieldNumber: 10)
+    }
+    if self.retainedObservationCount != 0 {
+      try visitor.visitSingularUInt32Field(value: self.retainedObservationCount, fieldNumber: 11)
+    }
+    if self.peakRiskBasisPoints != 0 {
+      try visitor.visitSingularUInt32Field(value: self.peakRiskBasisPoints, fieldNumber: 12)
+    }
+    try { if let v = self._caseFirstEventAtMs {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 13)
+    } }()
+    try { if let v = self._caseLastEventAtMs {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 14)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: AuraAgentNativeLocalDecision, rhs: AuraAgentNativeLocalDecision) -> Bool {
-    if lhs._productSurface != rhs._productSurface {return false}
-    if lhs._recommendedAction != rhs._recommendedAction {return false}
-    if lhs.reasonCodes != rhs.reasonCodes {return false}
-    if lhs._inference != rhs._inference {return false}
-    if lhs.runtimeBackend != rhs.runtimeBackend {return false}
-    if lhs.degraded != rhs.degraded {return false}
+  public static func ==(lhs: AuraAgentNativeLocalDecisionTemporalContext, rhs: AuraAgentNativeLocalDecisionTemporalContext) -> Bool {
+    if lhs.schemaVersion != rhs.schemaVersion {return false}
+    if lhs.occurredAtMs != rhs.occurredAtMs {return false}
+    if lhs.observedAtMs != rhs.observedAtMs {return false}
+    if lhs.observationDelayMs != rhs.observationDelayMs {return false}
+    if lhs.contributedToCase != rhs.contributedToCase {return false}
+    if lhs._caseGeneration != rhs._caseGeneration {return false}
+    if lhs._caseRevision != rhs._caseRevision {return false}
+    if lhs.statusBefore != rhs.statusBefore {return false}
+    if lhs.statusAfter != rhs.statusAfter {return false}
+    if lhs.statusChanged != rhs.statusChanged {return false}
+    if lhs.retainedObservationCount != rhs.retainedObservationCount {return false}
+    if lhs.peakRiskBasisPoints != rhs.peakRiskBasisPoints {return false}
+    if lhs._caseFirstEventAtMs != rhs._caseFirstEventAtMs {return false}
+    if lhs._caseLastEventAtMs != rhs._caseLastEventAtMs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension AuraAgentNativeLocalDecisionAnalyzeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".LocalDecisionAnalyzeResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{1}decision\0\u{3}ignored_reason\0\u{3}case_id\0\u{3}case_revision\0\u{3}case_status\0\u{3}latest_revision\0\u{4}\u{2}runtime_state_schema_version\0\u{3}case_generation\0\u{c}\u{8}\u{1}")
+nonisolated extension AuraAgentNativeLocalDecision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LocalDecision"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}product_surface\0\u{3}recommended_action\0\u{3}reason_codes\0\u{1}inference\0\u{3}runtime_backend\0\u{1}degraded\0\u{3}temporal_context\0")
 
   fileprivate class _StorageClass {
-    var _disposition: AuraAgentNativeCanonicalSafetyDisposition = .unspecified
-    var _decision: AuraAgentNativeLocalDecision? = nil
-    var _ignoredReason: String? = nil
-    var _caseID: String? = nil
-    var _caseRevision: UInt64? = nil
-    var _caseStatus: AuraAgentNativeSafetyCaseLifecycleStatus = .unspecified
-    var _latestRevision: UInt32? = nil
-    var _runtimeStateSchemaVersion: String = String()
-    var _caseGeneration: UInt64? = nil
+    var _productSurface: AuraAgentNativeProductDecisionSurface? = nil
+    var _recommendedAction: AuraAgentNativeActionRecommendation? = nil
+    var _reasonCodes: [String] = []
+    var _inference: AuraAgentNativeInferenceSummary? = nil
+    var _runtimeBackend: AuraAgentNativeRuntimeBackend = .unspecified
+    var _degraded: Bool = false
+    var _temporalContext: AuraAgentNativeLocalDecisionTemporalContext? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -8286,15 +8415,13 @@ nonisolated extension AuraAgentNativeLocalDecisionAnalyzeResponse: SwiftProtobuf
     private init() {}
 
     init(copying source: _StorageClass) {
-      _disposition = source._disposition
-      _decision = source._decision
-      _ignoredReason = source._ignoredReason
-      _caseID = source._caseID
-      _caseRevision = source._caseRevision
-      _caseStatus = source._caseStatus
-      _latestRevision = source._latestRevision
-      _runtimeStateSchemaVersion = source._runtimeStateSchemaVersion
-      _caseGeneration = source._caseGeneration
+      _productSurface = source._productSurface
+      _recommendedAction = source._recommendedAction
+      _reasonCodes = source._reasonCodes
+      _inference = source._inference
+      _runtimeBackend = source._runtimeBackend
+      _degraded = source._degraded
+      _temporalContext = source._temporalContext
     }
   }
 
@@ -8313,15 +8440,13 @@ nonisolated extension AuraAgentNativeLocalDecisionAnalyzeResponse: SwiftProtobuf
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularEnumField(value: &_storage._disposition) }()
-        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._decision) }()
-        case 3: try { try decoder.decodeSingularStringField(value: &_storage._ignoredReason) }()
-        case 4: try { try decoder.decodeSingularStringField(value: &_storage._caseID) }()
-        case 5: try { try decoder.decodeSingularUInt64Field(value: &_storage._caseRevision) }()
-        case 6: try { try decoder.decodeSingularEnumField(value: &_storage._caseStatus) }()
-        case 7: try { try decoder.decodeSingularUInt32Field(value: &_storage._latestRevision) }()
-        case 9: try { try decoder.decodeSingularStringField(value: &_storage._runtimeStateSchemaVersion) }()
-        case 10: try { try decoder.decodeSingularUInt64Field(value: &_storage._caseGeneration) }()
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._productSurface) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._recommendedAction) }()
+        case 3: try { try decoder.decodeRepeatedStringField(value: &_storage._reasonCodes) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._inference) }()
+        case 5: try { try decoder.decodeSingularEnumField(value: &_storage._runtimeBackend) }()
+        case 6: try { try decoder.decodeSingularBoolField(value: &_storage._degraded) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._temporalContext) }()
         default: break
         }
       }
@@ -8334,55 +8459,121 @@ nonisolated extension AuraAgentNativeLocalDecisionAnalyzeResponse: SwiftProtobuf
       // allocates stack space for every if/case branch local when no optimizations
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
-      if _storage._disposition != .unspecified {
-        try visitor.visitSingularEnumField(value: _storage._disposition, fieldNumber: 1)
-      }
-      try { if let v = _storage._decision {
+      try { if let v = _storage._productSurface {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._recommendedAction {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
       } }()
-      try { if let v = _storage._ignoredReason {
-        try visitor.visitSingularStringField(value: v, fieldNumber: 3)
-      } }()
-      try { if let v = _storage._caseID {
-        try visitor.visitSingularStringField(value: v, fieldNumber: 4)
-      } }()
-      try { if let v = _storage._caseRevision {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 5)
-      } }()
-      if _storage._caseStatus != .unspecified {
-        try visitor.visitSingularEnumField(value: _storage._caseStatus, fieldNumber: 6)
+      if !_storage._reasonCodes.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._reasonCodes, fieldNumber: 3)
       }
-      try { if let v = _storage._latestRevision {
-        try visitor.visitSingularUInt32Field(value: v, fieldNumber: 7)
+      try { if let v = _storage._inference {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
       } }()
-      if !_storage._runtimeStateSchemaVersion.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._runtimeStateSchemaVersion, fieldNumber: 9)
+      if _storage._runtimeBackend != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._runtimeBackend, fieldNumber: 5)
       }
-      try { if let v = _storage._caseGeneration {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 10)
+      if _storage._degraded != false {
+        try visitor.visitSingularBoolField(value: _storage._degraded, fieldNumber: 6)
+      }
+      try { if let v = _storage._temporalContext {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
       } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: AuraAgentNativeLocalDecisionAnalyzeResponse, rhs: AuraAgentNativeLocalDecisionAnalyzeResponse) -> Bool {
+  public static func ==(lhs: AuraAgentNativeLocalDecision, rhs: AuraAgentNativeLocalDecision) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
         let rhs_storage = _args.1
-        if _storage._disposition != rhs_storage._disposition {return false}
-        if _storage._decision != rhs_storage._decision {return false}
-        if _storage._ignoredReason != rhs_storage._ignoredReason {return false}
-        if _storage._caseID != rhs_storage._caseID {return false}
-        if _storage._caseRevision != rhs_storage._caseRevision {return false}
-        if _storage._caseStatus != rhs_storage._caseStatus {return false}
-        if _storage._latestRevision != rhs_storage._latestRevision {return false}
-        if _storage._runtimeStateSchemaVersion != rhs_storage._runtimeStateSchemaVersion {return false}
-        if _storage._caseGeneration != rhs_storage._caseGeneration {return false}
+        if _storage._productSurface != rhs_storage._productSurface {return false}
+        if _storage._recommendedAction != rhs_storage._recommendedAction {return false}
+        if _storage._reasonCodes != rhs_storage._reasonCodes {return false}
+        if _storage._inference != rhs_storage._inference {return false}
+        if _storage._runtimeBackend != rhs_storage._runtimeBackend {return false}
+        if _storage._degraded != rhs_storage._degraded {return false}
+        if _storage._temporalContext != rhs_storage._temporalContext {return false}
         return true
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension AuraAgentNativeLocalDecisionAnalyzeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LocalDecisionAnalyzeResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}disposition\0\u{1}decision\0\u{3}ignored_reason\0\u{3}case_id\0\u{3}case_revision\0\u{3}case_status\0\u{3}latest_revision\0\u{4}\u{2}runtime_state_schema_version\0\u{3}case_generation\0\u{c}\u{8}\u{1}")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.disposition) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._decision) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self._ignoredReason) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self._caseID) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self._caseRevision) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.caseStatus) }()
+      case 7: try { try decoder.decodeSingularUInt32Field(value: &self._latestRevision) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.runtimeStateSchemaVersion) }()
+      case 10: try { try decoder.decodeSingularUInt64Field(value: &self._caseGeneration) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.disposition != .unspecified {
+      try visitor.visitSingularEnumField(value: self.disposition, fieldNumber: 1)
+    }
+    try { if let v = self._decision {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._ignoredReason {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._caseID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._caseRevision {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 5)
+    } }()
+    if self.caseStatus != .unspecified {
+      try visitor.visitSingularEnumField(value: self.caseStatus, fieldNumber: 6)
+    }
+    try { if let v = self._latestRevision {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 7)
+    } }()
+    if !self.runtimeStateSchemaVersion.isEmpty {
+      try visitor.visitSingularStringField(value: self.runtimeStateSchemaVersion, fieldNumber: 9)
+    }
+    try { if let v = self._caseGeneration {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 10)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: AuraAgentNativeLocalDecisionAnalyzeResponse, rhs: AuraAgentNativeLocalDecisionAnalyzeResponse) -> Bool {
+    if lhs.disposition != rhs.disposition {return false}
+    if lhs._decision != rhs._decision {return false}
+    if lhs._ignoredReason != rhs._ignoredReason {return false}
+    if lhs._caseID != rhs._caseID {return false}
+    if lhs._caseRevision != rhs._caseRevision {return false}
+    if lhs.caseStatus != rhs.caseStatus {return false}
+    if lhs._latestRevision != rhs._latestRevision {return false}
+    if lhs.runtimeStateSchemaVersion != rhs.runtimeStateSchemaVersion {return false}
+    if lhs._caseGeneration != rhs._caseGeneration {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -78,6 +78,22 @@ fn local_decision_response_round_trip_preserves_typed_contract() {
             inference: None,
             runtime_backend: proto::RuntimeBackend::RulesFallback as i32,
             degraded: true,
+            temporal_context: Some(proto::LocalDecisionTemporalContext {
+                schema_version: 1,
+                occurred_at_ms: 1_000,
+                observed_at_ms: 1_500,
+                observation_delay_ms: 500,
+                contributed_to_case: true,
+                case_generation: Some(0),
+                case_revision: Some(3),
+                status_before: proto::SafetyCaseLifecycleStatus::Observing as i32,
+                status_after: proto::SafetyCaseLifecycleStatus::Open as i32,
+                status_changed: true,
+                retained_observation_count: 2,
+                peak_risk_basis_points: 7_500,
+                case_first_event_at_ms: Some(900),
+                case_last_event_at_ms: Some(1_000),
+            }),
         }),
         ignored_reason: None,
         case_id: Some("case-token".to_string()),
@@ -99,6 +115,9 @@ fn local_decision_response_round_trip_preserves_typed_contract() {
         proto::RuntimeBackend::RulesFallback
     );
     assert!(decision.degraded);
+    let temporal = decision.temporal_context.expect("temporal context");
+    assert_eq!(temporal.observation_delay_ms, 500);
+    assert_eq!(temporal.case_revision, Some(3));
 }
 
 #[test]

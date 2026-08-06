@@ -164,13 +164,20 @@ pub(super) fn canonical_safety_response_to_proto(
 
 pub(super) fn local_decision_response_to_proto(
     outcome: CanonicalLocalDecisionAnalysisOutcome,
+    identity: &SafetyCaseIngestIdentity,
     runtime: &AgentRuntime,
 ) -> Result<proto::LocalDecisionAnalyzeResponse, String> {
     let decision = match &outcome {
         CanonicalLocalDecisionAnalysisOutcome::Processed {
             local_result: Some(result),
-            safety_case: Ok(_),
-        } => Some(local_decision_to_proto(result, runtime)),
+            safety_case: Ok(safety_case),
+        } => {
+            let temporal_context =
+                local_decision_temporal_context_to_proto(identity, safety_case, runtime)?;
+            let mut decision = local_decision_to_proto(result, runtime);
+            decision.temporal_context = Some(temporal_context);
+            Some(decision)
+        }
         CanonicalLocalDecisionAnalysisOutcome::Processed { .. }
         | CanonicalLocalDecisionAnalysisOutcome::DuplicateIgnored { .. }
         | CanonicalLocalDecisionAnalysisOutcome::StaleIgnored { .. } => None,
@@ -218,6 +225,78 @@ pub(super) fn local_decision_to_proto(
         inference: Some(inference_summary_to_proto(&result.inference)),
         runtime_backend: proto_runtime_backend(capabilities.backend) as i32,
         degraded,
+        temporal_context: None,
+    }
+}
+
+fn local_decision_temporal_context_to_proto(
+    identity: &SafetyCaseIngestIdentity,
+    outcome: &SafetyCaseIngestOutcome,
+    runtime: &AgentRuntime,
+) -> Result<proto::LocalDecisionTemporalContext, String> {
+    let mut context = proto::LocalDecisionTemporalContext {
+        schema_version: LOCAL_DECISION_TEMPORAL_CONTEXT_SCHEMA_VERSION,
+        occurred_at_ms: identity.occurred_at_ms(),
+        observed_at_ms: identity.observed_at_ms(),
+        observation_delay_ms: identity
+            .observed_at_ms()
+            .checked_sub(identity.occurred_at_ms())
+            .ok_or_else(|| "canonical observation timestamp predates source event".to_string())?,
+        contributed_to_case: false,
+        case_generation: None,
+        case_revision: None,
+        status_before: proto::SafetyCaseLifecycleStatus::Unspecified as i32,
+        status_after: proto::SafetyCaseLifecycleStatus::Unspecified as i32,
+        status_changed: false,
+        retained_observation_count: 0,
+        peak_risk_basis_points: 0,
+        case_first_event_at_ms: None,
+        case_last_event_at_ms: None,
+    };
+
+    match outcome {
+        SafetyCaseIngestOutcome::Ignored(_) => Ok(context),
+        SafetyCaseIngestOutcome::Reduced(decision) => {
+            let (case, generation) = runtime
+                .safety_cases()
+                .account_case_by_id(identity.account_key(), decision.case_id())
+                .ok_or_else(|| {
+                    "local decision is missing its account-scoped Safety Case state".to_string()
+                })?;
+            if case.revision() != decision.case_revision() || case.status() != decision.status() {
+                return Err(
+                    "local decision Safety Case state does not match its receipt".to_string(),
+                );
+            }
+
+            let status_before = decision
+                .events()
+                .iter()
+                .find_map(|event| match event {
+                    SafetyCaseEvent::StatusChanged { from, .. } => Some(*from),
+                    _ => None,
+                })
+                .unwrap_or(decision.status());
+            context.contributed_to_case = decision
+                .events()
+                .iter()
+                .any(|event| matches!(event, SafetyCaseEvent::ObservationAccepted { .. }));
+            context.case_generation = Some(generation.value());
+            context.case_revision = Some(decision.case_revision());
+            context.status_before = proto_safety_case_status(status_before) as i32;
+            context.status_after = proto_safety_case_status(decision.status()) as i32;
+            context.status_changed = status_before != decision.status();
+            context.retained_observation_count = u32::try_from(case.observations().len())
+                .map_err(|_| "local decision observation count exceeds u32".to_string())?;
+            context.peak_risk_basis_points = u32::from(case.peak_risk_score().basis_points());
+            context.case_first_event_at_ms = case.first_observed_at_ms();
+            context.case_last_event_at_ms = case.last_observed_at_ms();
+            Ok(context)
+        }
+        SafetyCaseIngestOutcome::DuplicateIgnored(_)
+        | SafetyCaseIngestOutcome::StaleIgnored { .. } => {
+            Err("local decision returned a non-canonical first-attempt outcome".to_string())
+        }
     }
 }
 

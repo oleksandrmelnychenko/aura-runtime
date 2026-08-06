@@ -2,6 +2,10 @@
 
 ## Unreleased — Release Reliability
 
+- Added a content-free temporal context to each first-attempt local decision,
+  binding source time, observation delay, Safety Case transition, bounded
+  observation volume, and peak risk index without exposing message content or
+  contact identifiers.
 - Removed the stateless Analyzer's per-sender rate-limit short-circuit, which
   could return a clean `Allow` without running pattern, ML, domain, or context
   analysis after 60 messages in one minute. Every message accepted by the

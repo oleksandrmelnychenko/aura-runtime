@@ -42,8 +42,8 @@ pub use aura_agent_policy::safety_case::{
     ConversationEventKey, GuardianDeliveryClass, GuardianExecutionMode, GuardianExecutionPolicy,
     GuardianExecutionRule, GuardianReport, GuardianReportExecutionBinding, GuardianReportKey,
     GuardianReportObservationVolumeBand, GuardianReportTrigger, SafetyCase, SafetyCaseCommand,
-    SafetyCaseDecision, SafetyCaseId, SafetyCaseSeverity, SafetyCaseStatus, SafetyCaseSubjectKey,
-    SafetyReasonCode, SourceEventId, SourceEventKey,
+    SafetyCaseDecision, SafetyCaseEvent, SafetyCaseId, SafetyCaseSeverity, SafetyCaseStatus,
+    SafetyCaseSubjectKey, SafetyReasonCode, SourceEventId, SourceEventKey,
 };
 pub use execution_policy::{
     NativeExecutionMode, NativeExecutionPolicy, NativeExecutionPolicyApplicationReceipt,

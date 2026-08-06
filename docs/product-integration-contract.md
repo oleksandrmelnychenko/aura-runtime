@@ -30,10 +30,35 @@ disposition and, only for a successful first processing attempt, one
 - `inference`
 - `runtime_backend`
 - `degraded`
+- `temporal_context`
 
 It deliberately excludes raw message text, explanations, individual detection
 signals, contact identifiers, and arbitrary JSON. Duplicate and stale
 responses never contain `decision`.
+
+## Temporal Decision Context
+
+Every successful first-attempt `LocalDecision` carries
+`LocalDecisionTemporalContext` schema `1`. This is the content-free bridge from
+the canonical source event to the longitudinal Safety Case and the product
+surface. It contains:
+
+- the host-owned event time and the runtime's frozen observation time;
+- their exact difference as observation delay, never analyzer latency;
+- whether this source contributed a retained case observation;
+- the case generation/revision and status before/after the reduction;
+- the retained observation count, peak risk index in basis points, and the
+  first/last source-event times represented by the case.
+
+For an ignored result, the timing fields remain present while every case field
+is absent, unspecified, or zero. For a reduced result, the temporal case
+generation, revision, and final status must equal the canonical response
+receipt. Clients must reject a mismatch rather than reconstruct it from scores.
+
+The temporal context contains no message text, free-form explanation, sender
+or conversation identifier, reason code, or server-readable semantic result.
+It is persisted only inside the same encrypted local decision ledger as the
+rest of `LocalDecision`.
 
 Rust-internal integrations may additionally inspect `AnalysisResult`, including
 `signals[].threat_subtype` and `kids_memory`; these fields do not cross the

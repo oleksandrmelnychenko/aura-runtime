@@ -443,6 +443,24 @@ unsafe fn analyze_local_decision(
     revision: u32,
     timestamp_ms: u64,
 ) -> proto::LocalDecisionAnalyzeResponse {
+    analyze_local_decision_at(
+        handle,
+        message,
+        event_id,
+        revision,
+        timestamp_ms,
+        timestamp_ms,
+    )
+}
+
+unsafe fn analyze_local_decision_at(
+    handle: *mut c_void,
+    message: proto::MessageInput,
+    event_id: &str,
+    revision: u32,
+    occurred_at_ms: u64,
+    observed_at_ms: u64,
+) -> proto::LocalDecisionAnalyzeResponse {
     let conversation_key = message.conversation_id.clone();
     let request = proto::LocalDecisionAnalyzeRequest {
         message: Some(message),
@@ -452,8 +470,8 @@ unsafe fn analyze_local_decision(
             conversation_key,
             event_id: event_id.to_string(),
             revision,
-            occurred_at_ms: timestamp_ms,
-            observed_at_ms: timestamp_ms,
+            occurred_at_ms,
+            observed_at_ms,
         }),
     };
     let bytes = encode_proto(&request);
@@ -1064,6 +1082,16 @@ fn local_decision_returns_typed_product_projection_exactly_once() {
             proto::RuntimeBackend::RulesFallback
         );
         assert!(decision.degraded);
+        let temporal = decision
+            .temporal_context
+            .expect("first decision must carry temporal context");
+        assert_eq!(temporal.schema_version, 1);
+        assert_eq!(temporal.occurred_at_ms, 1_000);
+        assert_eq!(temporal.observed_at_ms, 1_000);
+        assert_eq!(temporal.observation_delay_ms, 0);
+        assert_eq!(temporal.case_generation, first.case_generation);
+        assert_eq!(temporal.case_revision, first.case_revision);
+        assert_eq!(temporal.status_after, first.case_status);
 
         let context_after_first = export_context(handle);
         let duplicate = analyze_local_decision(handle, message, "local-event", 1, 1_000);
@@ -1075,6 +1103,94 @@ fn local_decision_returns_typed_product_projection_exactly_once() {
         ));
         assert!(duplicate.decision.is_none());
         assert_eq!(export_context(handle), context_after_first);
+
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn local_decision_temporal_context_distinguishes_event_and_observation_time() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let response = analyze_local_decision_at(
+            handle,
+            proto_message(
+                "don't tell your parents, it's our secret",
+                "sender",
+                "temporal-conversation",
+            ),
+            "temporal-event",
+            1,
+            1_000,
+            9_000,
+        );
+        assert_eq!(
+            proto::CanonicalSafetyDisposition::try_from(response.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::ProcessedReduced
+        );
+        let temporal = response
+            .decision
+            .expect("first attempt decision")
+            .temporal_context
+            .expect("temporal context");
+        assert_eq!(temporal.occurred_at_ms, 1_000);
+        assert_eq!(temporal.observed_at_ms, 9_000);
+        assert_eq!(temporal.observation_delay_ms, 8_000);
+        assert!(temporal.contributed_to_case);
+        assert_eq!(temporal.case_generation, response.case_generation);
+        assert_eq!(temporal.case_revision, response.case_revision);
+        assert_eq!(temporal.status_after, response.case_status);
+        assert_eq!(temporal.retained_observation_count, 1);
+        assert!(temporal.peak_risk_basis_points > 0);
+        assert_eq!(temporal.case_first_event_at_ms, Some(1_000));
+        assert_eq!(temporal.case_last_event_at_ms, Some(1_000));
+
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn ignored_local_decision_has_content_free_temporal_context_without_case_projection() {
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let response = analyze_local_decision_at(
+            handle,
+            proto_message(
+                "ordinary clean message",
+                "sender",
+                "clean-temporal-conversation",
+            ),
+            "clean-temporal-event",
+            1,
+            2_000,
+            3_500,
+        );
+        assert_eq!(
+            proto::CanonicalSafetyDisposition::try_from(response.disposition).unwrap(),
+            proto::CanonicalSafetyDisposition::ProcessedIgnored
+        );
+        let temporal = response
+            .decision
+            .expect("first attempt decision")
+            .temporal_context
+            .expect("temporal context");
+        assert_eq!(temporal.observation_delay_ms, 1_500);
+        assert!(!temporal.contributed_to_case);
+        assert!(temporal.case_generation.is_none());
+        assert!(temporal.case_revision.is_none());
+        assert_eq!(
+            proto::SafetyCaseLifecycleStatus::try_from(temporal.status_before).unwrap(),
+            proto::SafetyCaseLifecycleStatus::Unspecified
+        );
+        assert_eq!(
+            proto::SafetyCaseLifecycleStatus::try_from(temporal.status_after).unwrap(),
+            proto::SafetyCaseLifecycleStatus::Unspecified
+        );
+        assert!(!temporal.status_changed);
+        assert_eq!(temporal.retained_observation_count, 0);
+        assert_eq!(temporal.peak_risk_basis_points, 0);
+        assert!(temporal.case_first_event_at_ms.is_none());
+        assert!(temporal.case_last_event_at_ms.is_none());
 
         aura_free(handle);
     }
