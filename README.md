@@ -19,7 +19,7 @@ Current product direction is narrow on purpose:
 - **3 languages**: English, Ukrainian, Russian, including slang, shorthand, and noisy chat normalization
 - **Protobuf-only FFI**: stable C ABI over encoded bytes via `AuraBuffer`
 - **Type-safe domain model**: `SenderId`, `ConversationId`, `ReasonCode` newtypes prevent string ID misuse at compile time; `AnalysisMode` enum replaces boolean flags
-- **Production release discipline**: persisted release, contract, dataset, audit, FFI smoke, and FFI soak artifacts are aggregated into one machine-readable evidence manifest
+- **Production release discipline**: persisted release, contract, dataset, audit, temporal Shadow, FFI smoke, and FFI soak artifacts are aggregated into one machine-readable evidence manifest with optional detached Ed25519 attestation
 - **Boundary hardening**: size-bounded protobuf decode, atomic failure on malformed batch inputs, bounded contact-profile memory, and panic-free FFI behavior from the caller's perspective
 - **Pattern and link hardening**: strict pattern-database validation, fail-closed regex loading, and IDN-aware URL normalization
 - **Privacy-safe audit path**: structured audit records keep reasons and actions while tokenizing identifiers under a declared salted scheme
@@ -238,9 +238,11 @@ example output. The current release bundle includes:
 - contract evidence for protobuf, ABI, request limits, and state schema
 - dataset evidence with coverage snapshot and changelog linkage
 - audit evidence proving forbidden plaintext fields are absent
+- temporal Shadow evaluation and on-prem/ADK telemetry validation evidence
 - FFI header smoke evidence
 - FFI state-sync soak evidence
 - unified evidence manifest (`aura.evidence_manifest.v1`)
+- optional detached Ed25519 evidence attestation, required for release promotion
 
 Default workflow entrypoints:
 
@@ -249,9 +251,15 @@ cargo run --quiet --example release_report -p aura-core -- --output artifacts/re
 cargo run --quiet --example contract_evidence -p aura-core -- --output artifacts/contract-evidence.json
 python3 ci/generate_dataset_evidence.py --output artifacts/dataset-evidence.json
 cargo run --quiet --example audit_evidence -p aura-core -- --output artifacts/audit-evidence.json
+bash ci/temporal_shadow_gate.sh
 python3 ci/run_ffi_soak.py --output artifacts/ffi-state-sync-soak.json --iterations 2 --label local-check
-python3 ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.json --label local-check --release-report artifacts/release-report.json --contract-evidence artifacts/contract-evidence.json --dataset-evidence artifacts/dataset-evidence.json --audit-evidence artifacts/audit-evidence.json --ffi-soak artifacts/ffi-state-sync-soak.json --ffi-smoke artifacts/ffi-header-smoke.json
+python3 ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.json --label local-check --release-report artifacts/release-report.json --contract-evidence artifacts/contract-evidence.json --dataset-evidence artifacts/dataset-evidence.json --audit-evidence artifacts/audit-evidence.json --temporal-shadow-report artifacts/temporal-shadow-report.json --temporal-shadow-telemetry-validation artifacts/temporal-shadow-telemetry-validation.json --ffi-soak artifacts/ffi-state-sync-soak.json --ffi-smoke artifacts/ffi-header-smoke.json
 ```
+
+See `docs/temporal-independent-review.md`,
+`docs/temporal-shadow-telemetry.md`, and
+`docs/evidence-manifest-attestation.md` for the research-readiness and release
+trust boundaries.
 
 ## Usage (Rust)
 

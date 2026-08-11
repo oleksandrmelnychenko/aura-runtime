@@ -6,7 +6,8 @@ description = "AURA.MILITARY domain module"
 
 [features]
 default = []
-evaluation = ["dep:sha2", "dep:thiserror"]
+shadow-telemetry = ["dep:thiserror"]
+evaluation = ["shadow-telemetry", "dep:sha2"]
 
 [dependencies]
 aura-domain = { path = "../aura-domain" }
@@ -19,4 +20,19 @@ thiserror = { workspace = true, optional = true }
 [[example]]
 name = "temporal_shadow_eval"
 path = "examples/temporal_shadow_eval.rs"
+required-features = ["evaluation"]
+
+[[example]]
+name = "temporal_independent_review"
+path = "examples/temporal_independent_review.rs"
+required-features = ["evaluation"]
+
+[[example]]
+name = "temporal_shadow_telemetry"
+path = "examples/temporal_shadow_telemetry.rs"
+required-features = ["shadow-telemetry"]
+
+[[example]]
+name = "temporal_shadow_telemetry_validation"
+path = "examples/temporal_shadow_telemetry_validation.rs"
 required-features = ["evaluation"]

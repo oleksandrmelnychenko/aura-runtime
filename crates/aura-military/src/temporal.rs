@@ -131,7 +131,7 @@ pub(crate) fn run_military_temporal_pipeline(input: &DomainTemporalInput) -> Dom
     evaluate_with_policy(input, policy)
 }
 
-#[cfg(feature = "evaluation")]
+#[cfg(any(feature = "evaluation", feature = "shadow-telemetry"))]
 pub(crate) fn run_military_temporal_shadow_pipeline(
     input: &DomainTemporalInput,
 ) -> Result<DomainTemporalOutput, String> {

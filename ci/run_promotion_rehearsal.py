@@ -51,6 +51,21 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to pilot review signoffs JSON. If provided, a pilot gate report will be generated.",
     )
+    parser.add_argument(
+        "--evidence-signing-private-key",
+        default=os.environ.get("AURA_EVIDENCE_SIGNING_PRIVATE_KEY_PATH"),
+        help="Optional Ed25519 private key PEM used for detached evidence attestation.",
+    )
+    parser.add_argument(
+        "--evidence-signing-public-key",
+        default=os.environ.get("AURA_EVIDENCE_SIGNING_PUBLIC_KEY_PATH"),
+        help="Optional trusted Ed25519 public key PEM used to verify the attestation.",
+    )
+    parser.add_argument(
+        "--evidence-signing-key-id",
+        default=os.environ.get("AURA_EVIDENCE_SIGNING_KEY_ID"),
+        help="Trust-store key identifier for detached evidence attestation.",
+    )
     return parser.parse_args()
 
 
@@ -214,6 +229,25 @@ def apply_manifest_summary(summary: dict, manifest: dict) -> None:
     )
     summary["pilot_shadow_status"] = manifest_summary.get("pilot_shadow_status")
     summary["pilot_regression_status"] = manifest_summary.get("pilot_regression_status")
+    summary["temporal_shadow_status"] = manifest_summary.get("temporal_shadow_status")
+    summary["temporal_shadow_adversarial_variant_count"] = manifest_summary.get(
+        "temporal_shadow_adversarial_variant_count"
+    )
+    summary["temporal_shadow_adversarial_mismatch_count"] = manifest_summary.get(
+        "temporal_shadow_adversarial_mismatch_count"
+    )
+    summary["temporal_shadow_telemetry_validation_status"] = manifest_summary.get(
+        "temporal_shadow_telemetry_validation_status"
+    )
+    summary["temporal_shadow_telemetry_on_prem_inputs"] = manifest_summary.get(
+        "temporal_shadow_telemetry_on_prem_inputs"
+    )
+    summary["temporal_shadow_telemetry_adk_inputs"] = manifest_summary.get(
+        "temporal_shadow_telemetry_adk_inputs"
+    )
+    summary["temporal_policy_activation_readiness"] = manifest_summary.get(
+        "temporal_policy_activation_readiness"
+    )
     summary["pilot_gate_status"] = manifest_summary.get("pilot_gate_status")
     summary["world_lifecycle_status"] = manifest_summary.get("world_lifecycle_status")
     summary["world_lifecycle_total_worlds"] = manifest_summary.get(
@@ -316,6 +350,8 @@ def main() -> int:
         "pilot_shadow_bundle_2": output_dir / "pilot-shadow-bundle-2.json",
         "pilot_regression_report": output_dir / "pilot-regression-report.json",
         "temporal_shadow_report": output_dir / "temporal-shadow-report.json",
+        "temporal_shadow_telemetry_validation": output_dir
+        / "temporal-shadow-telemetry-validation.json",
         "kids_memory_health": output_dir / "kids-memory-health.json",
         "kids_preprod_dry_run": output_dir / "kids-preprod-dry-run-matrix.json",
         "pilot_gate_report": output_dir / "pilot-gate-report.json",
@@ -323,6 +359,9 @@ def main() -> int:
         "ffi_smoke": output_dir / "ffi-header-smoke.json",
         "ffi_smoke_object": output_dir / "ffi-header-smoke.o",
         "manifest": output_dir / "evidence-manifest.json",
+        "manifest_attestation": output_dir / "evidence-manifest.attestation.json",
+        "manifest_attestation_verification": output_dir
+        / "evidence-manifest.attestation-verification.json",
         "summary": output_dir / "promotion-rehearsal-summary.json",
     }
 
@@ -348,6 +387,7 @@ def main() -> int:
         "release_social_context_inference_failed_expectations": None,
         "pilot_shadow_status": None,
         "pilot_regression_status": None,
+        "temporal_policy_activation_readiness": None,
         "pilot_gate_status": None,
         "world_lifecycle_status": None,
         "world_lifecycle_total_worlds": None,
@@ -359,12 +399,13 @@ def main() -> int:
 
     started = time.monotonic()
 
-    def record_and_require(argv: list[str]) -> None:
+    def record_and_require(argv: list[str]) -> dict:
         result = run_command(argv, cwd=workspace_root)
         summary["commands"].append(result)
         if result["returncode"] != 0:
             summary["status"] = "fail"
             raise RuntimeError(f"command failed: {' '.join(argv)}")
+        return result
 
     try:
         if not args.skip_build:
@@ -387,6 +428,24 @@ def main() -> int:
                 "--",
                 "--output",
                 paths["temporal_shadow_report"].as_posix(),
+                "--require-pass",
+            ]
+        )
+        record_and_require(
+            [
+                "cargo",
+                "run",
+                "--quiet",
+                "--locked",
+                "-p",
+                "aura-military",
+                "--features",
+                "evaluation",
+                "--example",
+                "temporal_shadow_telemetry_validation",
+                "--",
+                "--output",
+                paths["temporal_shadow_telemetry_validation"].as_posix(),
                 "--require-pass",
             ]
         )
@@ -627,6 +686,10 @@ def main() -> int:
             paths["pilot_shadow_bundle"].as_posix(),
             "--pilot-regression-report",
             paths["pilot_regression_report"].as_posix(),
+            "--temporal-shadow-report",
+            paths["temporal_shadow_report"].as_posix(),
+            "--temporal-shadow-telemetry-validation",
+            paths["temporal_shadow_telemetry_validation"].as_posix(),
             "--world-lifecycle-report",
             paths["world_lifecycle_report"].as_posix(),
             *(
@@ -662,6 +725,58 @@ def main() -> int:
                 raise BlockedRehearsal(summary["blocker"])
             summary["status"] = "fail"
             raise RuntimeError(f"command failed: {' '.join(manifest_argv)}")
+
+        signing_values = (
+            args.evidence_signing_private_key,
+            args.evidence_signing_public_key,
+            args.evidence_signing_key_id,
+        )
+        if all(signing_values):
+            sign_result = record_and_require(
+                [
+                    sys.executable,
+                    "ci/evidence_attestation.py",
+                    "sign",
+                    "--manifest",
+                    paths["manifest"].as_posix(),
+                    "--private-key",
+                    str(args.evidence_signing_private_key),
+                    "--key-id",
+                    str(args.evidence_signing_key_id),
+                    "--output",
+                    paths["manifest_attestation"].as_posix(),
+                ]
+            )
+            summary["evidence_attestation_sign_returncode"] = sign_result["returncode"]
+            verify_result = record_and_require(
+                [
+                    sys.executable,
+                    "ci/evidence_attestation.py",
+                    "verify",
+                    "--manifest",
+                    paths["manifest"].as_posix(),
+                    "--attestation",
+                    paths["manifest_attestation"].as_posix(),
+                    "--public-key",
+                    str(args.evidence_signing_public_key),
+                    "--expected-key-id",
+                    str(args.evidence_signing_key_id),
+                    "--output",
+                    paths["manifest_attestation_verification"].as_posix(),
+                    "--require-pass",
+                ]
+            )
+            summary["evidence_attestation_verify_returncode"] = verify_result[
+                "returncode"
+            ]
+        elif any(signing_values):
+            summary["status"] = "blocked"
+            summary["blocker"] = "evidence attestation requires private key, public key, and key id"
+            raise BlockedRehearsal(summary["blocker"])
+        elif args.target == "release":
+            summary["status"] = "blocked"
+            summary["blocker"] = "release rehearsal requires Ed25519 evidence signing credentials"
+            raise BlockedRehearsal(summary["blocker"])
     except BlockedRehearsal:
         return_code = 1
     except RuntimeError as error:

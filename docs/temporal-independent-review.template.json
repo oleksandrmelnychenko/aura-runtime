@@ -1,0 +1,14 @@
+{
+  "schema_version": "aura.military.temporal_independent_review.v1",
+  "review_bundle_id": "replace_with_review_round_id",
+  "dataset_id": "aura_military_temporal_shadow_seed_v1",
+  "corpus_sha256": "ca502f671dccaa6d712751c71d6b77a12e7b8c1ad88613a4e9f4fc83afba3d2d",
+  "protocol": {
+    "label_blinding": true,
+    "minimum_reviewers_per_case": 2,
+    "distinct_reviewer_affiliations": true,
+    "independent_adjudicator": true
+  },
+  "reviewers": [],
+  "cases": []
+}

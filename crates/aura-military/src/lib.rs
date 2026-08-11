@@ -8,6 +8,10 @@ mod text;
 
 #[cfg(feature = "evaluation")]
 pub mod temporal_eval;
+#[cfg(feature = "evaluation")]
+pub mod temporal_review;
+#[cfg(feature = "shadow-telemetry")]
+pub mod temporal_shadow_telemetry;
 
 use aura_domain::{
     DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainTemporalInput,

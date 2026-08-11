@@ -18,6 +18,7 @@ env:
   AURA_PILOT_SHADOW_BUNDLE_PATH_2: artifacts/pilot-shadow-bundle-2.json
   AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
   AURA_TEMPORAL_SHADOW_REPORT_PATH: artifacts/temporal-shadow-report.json
+  AURA_TEMPORAL_SHADOW_TELEMETRY_VALIDATION_PATH: artifacts/temporal-shadow-telemetry-validation.json
   AURA_KIDS_MEMORY_HEALTH_PATH: artifacts/kids-memory-health.json
   AURA_KIDS_PREPROD_DRY_RUN_PATH: artifacts/kids-preprod-dry-run-matrix.json
   AURA_COMMUNITY_SURFACE_REPORT_PATH: artifacts/community-surface-report.json
@@ -43,7 +44,7 @@ jobs:
     - name: Lint Domain Lexicons
       run: python3 ci/lint_lexicons.py
     - name: Run CI Helper Tests
-      run: python3 -m unittest ci.test_apple_artifact ci.test_generate_evidence_manifest ci.test_refactor_baseline ci.test_world_performance_gate
+      run: python3 -m unittest ci.test_apple_artifact ci.test_evidence_attestation ci.test_generate_evidence_manifest ci.test_refactor_baseline ci.test_world_performance_gate
     - name: Audit Dependencies
       run: |
         cargo install cargo-audit --quiet 2>/dev/null || true
@@ -217,6 +218,8 @@ jobs:
           --audit-evidence "$AURA_AUDIT_EVIDENCE_PATH" \
           --pilot-shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
+          --temporal-shadow-report "$AURA_TEMPORAL_SHADOW_REPORT_PATH" \
+          --temporal-shadow-telemetry-validation "$AURA_TEMPORAL_SHADOW_TELEMETRY_VALIDATION_PATH" \
           $PILOT_GATE_ARGS \
           $KIDS_PREPROD_ARGS \
           --community-surface-report "$AURA_COMMUNITY_SURFACE_REPORT_PATH" \
@@ -283,6 +286,14 @@ jobs:
             summary.write(f"- pilot_shadow_finding_count: `{summary_data['pilot_shadow_finding_count']}`\n")
             summary.write(f"- pilot_regression: `{summary_data['pilot_regression_status']}`\n")
             summary.write(f"- pilot_regression_scenarios: `{summary_data['pilot_regression_scenario_count']}`\n")
+            summary.write(f"- temporal_shadow: `{summary_data.get('temporal_shadow_status', 'missing')}`\n")
+            summary.write(f"- temporal_shadow_cases: `{summary_data.get('temporal_shadow_case_count', 'missing')}`\n")
+            summary.write(f"- temporal_shadow_adversarial_variants: `{summary_data.get('temporal_shadow_adversarial_variant_count', 'missing')}`\n")
+            summary.write(f"- temporal_shadow_adversarial_mismatches: `{summary_data.get('temporal_shadow_adversarial_mismatch_count', 'missing')}`\n")
+            summary.write(f"- temporal_shadow_telemetry_validation: `{summary_data.get('temporal_shadow_telemetry_validation_status', 'missing')}`\n")
+            summary.write(f"- temporal_policy_activation_readiness: `{summary_data.get('temporal_policy_activation_readiness', 'missing')}`\n")
+            summary.write(f"- temporal_shadow_telemetry_on_prem_inputs: `{summary_data.get('temporal_shadow_telemetry_on_prem_inputs', 'missing')}`\n")
+            summary.write(f"- temporal_shadow_telemetry_adk_inputs: `{summary_data.get('temporal_shadow_telemetry_adk_inputs', 'missing')}`\n")
             summary.write(f"- pilot_gate: `{summary_data.get('pilot_gate_status', 'missing')}`\n")
             summary.write(f"- pilot_gate_shadow_runs: `{summary_data.get('pilot_gate_shadow_run_count', 'missing')}`\n")
             summary.write(f"- kids_preprod_dry_run: `{summary_data.get('kids_preprod_dry_run_status', 'missing')}`\n")
@@ -360,6 +371,13 @@ jobs:
       with:
         name: aura-military-temporal-shadow-report
         path: ${{ env.AURA_TEMPORAL_SHADOW_REPORT_PATH }}
+        if-no-files-found: warn
+    - name: Upload Military Temporal Shadow Telemetry Validation
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-military-temporal-shadow-telemetry-validation
+        path: ${{ env.AURA_TEMPORAL_SHADOW_TELEMETRY_VALIDATION_PATH }}
         if-no-files-found: warn
     - name: Upload Pilot Gate Report
       if: ${{ always() }}

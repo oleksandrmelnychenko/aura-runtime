@@ -14,12 +14,18 @@ use thiserror::Error;
 use crate::temporal::{
     run_military_temporal_pipeline, run_military_temporal_shadow_pipeline, temporal_enabled,
 };
+use crate::temporal_shadow_telemetry::{
+    TemporalShadowDeployment, TemporalShadowTelemetryCollector, TemporalShadowTelemetryError,
+    TemporalShadowTelemetryReport,
+};
 
 const CORPUS_SCHEMA_VERSION: u32 = 1;
 const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_shadow_report.v1";
 const MIN_TOTAL_CASES: usize = 30;
 const MIN_NEGATIVE_CASES: usize = 18;
 const MIN_POSITIVE_CASES_PER_SIGNAL: usize = 4;
+const MIN_ADVERSARIAL_VARIANTS: usize = 200;
+const ADVERSARIAL_TIME_SHIFT_MS: u64 = 86_400_000;
 
 const INFLUENCE_PRESSURE: &str = "military.temporal.influence_pressure";
 const OPERATIONAL_COLLECTION: &str = "military.temporal.operational_collection_attempt";
@@ -50,6 +56,8 @@ pub enum TemporalShadowError {
     InvalidCorpus(String),
     #[error("temporal Shadow policy unavailable: {0}")]
     Policy(String),
+    #[error("temporal Shadow telemetry validation failed: {0}")]
+    Telemetry(#[from] TemporalShadowTelemetryError),
 }
 
 /// Stable corpus identity included in every evaluation report.
@@ -91,10 +99,21 @@ pub struct TemporalShadowMetrics {
     pub clean_negative_false_positive_rate: f64,
     pub exact_match_rate: f64,
     pub storage_order_mismatch_cases: usize,
+    pub adversarial_variants: usize,
+    pub adversarial_mismatch_variants: usize,
     pub disabled_runtime_signal_cases: usize,
     pub shadow_action_cases: usize,
     pub max_events_per_case: usize,
     pub by_signal: Vec<TemporalShadowLabelMetrics>,
+    pub by_adversarial_variant: Vec<TemporalAdversarialVariantMetrics>,
+}
+
+/// Metamorphic robustness results for one adversarial transformation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TemporalAdversarialVariantMetrics {
+    pub variant: String,
+    pub evaluated_cases: usize,
+    pub mismatch_cases: usize,
 }
 
 /// One strict release-gate assertion and its observed value.
@@ -116,6 +135,8 @@ pub struct TemporalShadowCaseResult {
     pub actual_reason_codes: Vec<String>,
     pub exact_match: bool,
     pub storage_order_invariant: bool,
+    pub adversarial_invariant: bool,
+    pub adversarial_mismatch_variants: Vec<String>,
     pub disabled_runtime_clean: bool,
     pub shadow_action: Option<DomainAction>,
 }
@@ -193,6 +214,12 @@ struct TemporalShadowEventSpec {
     context_confidence: f32,
 }
 
+pub(crate) struct TemporalReviewTarget {
+    pub dataset_id: String,
+    pub corpus_sha256: String,
+    pub expected_labels: BTreeMap<String, BTreeSet<String>>,
+}
+
 #[derive(Default)]
 struct LabelAccumulator {
     expected_count: usize,
@@ -200,6 +227,12 @@ struct LabelAccumulator {
     true_positive_count: usize,
     false_positive_count: usize,
     false_negative_count: usize,
+}
+
+#[derive(Default)]
+struct AdversarialAccumulator {
+    evaluated_cases: usize,
+    mismatch_cases: usize,
 }
 
 /// Runs the embedded, versioned temporal Shadow corpus.
@@ -210,11 +243,60 @@ pub fn run_embedded_temporal_shadow_report() -> Result<TemporalShadowReport, Tem
     run_temporal_shadow_report(include_str!("../data/temporal_shadow_corpus.json"))
 }
 
+pub(crate) fn embedded_temporal_review_target() -> Result<TemporalReviewTarget, TemporalShadowError>
+{
+    let raw = include_str!("../data/temporal_shadow_corpus.json");
+    let file: TemporalShadowCorpusFile = serde_json::from_str(raw)?;
+    validate_corpus(&file)?;
+    let expected_labels = file
+        .cases
+        .iter()
+        .map(|case| {
+            (
+                case.id.clone(),
+                case.expected_reason_codes.iter().cloned().collect(),
+            )
+        })
+        .collect();
+    Ok(TemporalReviewTarget {
+        dataset_id: file.dataset_id,
+        corpus_sha256: sha256_hex(raw.as_bytes()),
+        expected_labels,
+    })
+}
+
 /// Parses and evaluates a content-free temporal Shadow corpus.
 pub fn run_temporal_shadow_report(json: &str) -> Result<TemporalShadowReport, TemporalShadowError> {
     let file: TemporalShadowCorpusFile = serde_json::from_str(json)?;
     validate_corpus(&file)?;
     evaluate_corpus(file, json)
+}
+
+/// Runs the embedded corpus through the aggregate on-prem or ADK collector.
+pub fn run_embedded_temporal_shadow_telemetry_report(
+    deployment: TemporalShadowDeployment,
+) -> Result<TemporalShadowTelemetryReport, TemporalShadowError> {
+    let raw = include_str!("../data/temporal_shadow_corpus.json");
+    let file: TemporalShadowCorpusFile = serde_json::from_str(raw)?;
+    validate_corpus(&file)?;
+    let window_start_ms = file
+        .cases
+        .iter()
+        .map(|case| case.as_of_ms)
+        .min()
+        .ok_or_else(|| TemporalShadowError::InvalidCorpus("corpus has no cases".to_string()))?;
+    let window_end_ms = file
+        .cases
+        .iter()
+        .map(|case| case.as_of_ms)
+        .max()
+        .ok_or_else(|| TemporalShadowError::InvalidCorpus("corpus has no cases".to_string()))?;
+    let mut collector =
+        TemporalShadowTelemetryCollector::new(deployment, window_start_ms, window_end_ms)?;
+    for case in &file.cases {
+        collector.observe(&case.to_input())?;
+    }
+    collector.finish().map_err(TemporalShadowError::from)
 }
 
 fn evaluate_corpus(
@@ -233,6 +315,7 @@ fn evaluate_corpus(
     let mut exact_match_cases = 0usize;
     let mut clean_false_positive_cases = 0usize;
     let mut storage_order_mismatch_cases = 0usize;
+    let mut adversarial = BTreeMap::<String, AdversarialAccumulator>::new();
     let mut disabled_runtime_signal_cases = 0usize;
     let mut shadow_action_cases = 0usize;
     let mut max_events_per_case = 0usize;
@@ -245,6 +328,25 @@ fn evaluate_corpus(
         reversed_input.events.reverse();
         let reversed_output = run_military_temporal_shadow_pipeline(&reversed_input)
             .map_err(TemporalShadowError::Policy)?;
+        let mut adversarial_mismatch_variants = Vec::new();
+        record_adversarial_result(
+            &mut adversarial,
+            "reverse_storage",
+            &output,
+            &reversed_output,
+            &mut adversarial_mismatch_variants,
+        );
+        for (variant, variant_input) in adversarial_inputs(&input) {
+            let variant_output = run_military_temporal_shadow_pipeline(&variant_input)
+                .map_err(TemporalShadowError::Policy)?;
+            record_adversarial_result(
+                &mut adversarial,
+                variant,
+                &output,
+                &variant_output,
+                &mut adversarial_mismatch_variants,
+            );
+        }
         let runtime_output = run_military_temporal_pipeline(&input);
 
         let expected = case
@@ -300,6 +402,8 @@ fn evaluate_corpus(
             actual_reason_codes: actual.into_iter().collect(),
             exact_match,
             storage_order_invariant,
+            adversarial_invariant: adversarial_mismatch_variants.is_empty(),
+            adversarial_mismatch_variants,
             disabled_runtime_clean,
             shadow_action: output.action,
         });
@@ -338,6 +442,22 @@ fn evaluate_corpus(
             false_negative_count: metrics.false_negative_count,
         })
         .collect::<Vec<_>>();
+    let by_adversarial_variant = adversarial
+        .into_iter()
+        .map(|(variant, metrics)| TemporalAdversarialVariantMetrics {
+            variant,
+            evaluated_cases: metrics.evaluated_cases,
+            mismatch_cases: metrics.mismatch_cases,
+        })
+        .collect::<Vec<_>>();
+    let adversarial_variants = by_adversarial_variant
+        .iter()
+        .map(|variant| variant.evaluated_cases)
+        .sum();
+    let adversarial_mismatch_variants = by_adversarial_variant
+        .iter()
+        .map(|variant| variant.mismatch_cases)
+        .sum();
     let metrics = TemporalShadowMetrics {
         total_cases: file.cases.len(),
         total_events,
@@ -352,10 +472,13 @@ fn evaluate_corpus(
         clean_negative_false_positive_rate,
         exact_match_rate,
         storage_order_mismatch_cases,
+        adversarial_variants,
+        adversarial_mismatch_variants,
         disabled_runtime_signal_cases,
         shadow_action_cases,
         max_events_per_case,
         by_signal,
+        by_adversarial_variant,
     };
     let runtime_policy_enabled = temporal_enabled();
     let gate_checks = build_gate_checks(&metrics, &coverage_tags, runtime_policy_enabled);
@@ -420,6 +543,15 @@ fn build_gate_checks(
             "storage_order_mismatch_cases",
             metrics.storage_order_mismatch_cases,
         ),
+        minimum_check(
+            "minimum_adversarial_variants",
+            metrics.adversarial_variants,
+            MIN_ADVERSARIAL_VARIANTS,
+        ),
+        zero_check(
+            "adversarial_mismatch_variants",
+            metrics.adversarial_mismatch_variants,
+        ),
         zero_check(
             "disabled_runtime_signal_cases",
             metrics.disabled_runtime_signal_cases,
@@ -452,6 +584,80 @@ fn build_gate_checks(
         ));
     }
     checks
+}
+
+fn record_adversarial_result(
+    accumulators: &mut BTreeMap<String, AdversarialAccumulator>,
+    variant: &str,
+    baseline: &aura_domain::DomainTemporalOutput,
+    candidate: &aura_domain::DomainTemporalOutput,
+    mismatch_variants: &mut Vec<String>,
+) {
+    let accumulator = accumulators.entry(variant.to_string()).or_default();
+    accumulator.evaluated_cases += 1;
+    if baseline != candidate {
+        accumulator.mismatch_cases += 1;
+        mismatch_variants.push(variant.to_string());
+    }
+}
+
+fn adversarial_inputs(input: &DomainTemporalInput) -> Vec<(&'static str, DomainTemporalInput)> {
+    let mut rotated = input.clone();
+    if !rotated.events.is_empty() {
+        let midpoint = rotated.events.len() / 2;
+        rotated.events.rotate_left(midpoint);
+    }
+
+    let mut remapped_actors = input.clone();
+    remapped_actors.current_actor_id = remapped_actors.current_actor_id.wrapping_add(0x4000_0000);
+    for event in &mut remapped_actors.events {
+        event.actor_id = event.actor_id.wrapping_add(0x4000_0000);
+    }
+
+    let mut remapped_event_ids = input.clone();
+    for event in &mut remapped_event_ids.events {
+        event.event_id ^= 0x8000_0000_0000_0000;
+    }
+
+    let mut shifted_time = input.clone();
+    shifted_time.as_of_ms = shifted_time
+        .as_of_ms
+        .saturating_add(ADVERSARIAL_TIME_SHIFT_MS);
+    for event in &mut shifted_time.events {
+        event.timestamp_ms = event.timestamp_ms.saturating_add(ADVERSARIAL_TIME_SHIFT_MS);
+    }
+
+    let mut filtered_decoys = input.clone();
+    for index in 0..4_u64 {
+        filtered_decoys.events.push(DomainTemporalEvent {
+            event_id: u64::MAX - index,
+            timestamp_ms: input.as_of_ms,
+            actor_id: input.current_actor_id.wrapping_add(0x2000_0000),
+            actor_role: DomainTemporalActorRole::External,
+            kind: DomainEventKind::IntelGathering,
+            confidence: 0.0,
+            content_hash: Some(u64::MAX - index),
+            context: DomainTemporalContext {
+                speech_act: DomainTemporalSpeechAct::Solicit,
+                stance: DomainTemporalStance::Endorse,
+                directionality: DomainTemporalDirectionality::DirectedAtUser,
+                trusted_contact: false,
+                confidence: 1.0,
+            },
+        });
+    }
+
+    let mut replayed_events = input.clone();
+    replayed_events.events.extend(input.events.iter().cloned());
+
+    vec![
+        ("rotate_storage", rotated),
+        ("actor_id_bijection", remapped_actors),
+        ("event_id_bijection", remapped_event_ids),
+        ("global_time_shift", shifted_time),
+        ("filtered_decoy_injection", filtered_decoys),
+        ("replay_duplication", replayed_events),
+    ]
 }
 
 fn minimum_check(name: &str, actual: usize, minimum: usize) -> TemporalShadowGateCheck {
@@ -719,5 +925,22 @@ mod tests {
         let report = evaluate_corpus(file, raw).expect("evaluation remains valid");
 
         assert_eq!(report.overall_status, "fail");
+    }
+
+    #[test]
+    fn embedded_corpus_validates_on_prem_shadow_telemetry() {
+        let report =
+            run_embedded_temporal_shadow_telemetry_report(TemporalShadowDeployment::OnPrem)
+                .expect("on-prem aggregate telemetry");
+
+        assert_eq!(report.overall_status, "pass");
+    }
+
+    #[test]
+    fn embedded_corpus_validates_adk_shadow_telemetry() {
+        let report = run_embedded_temporal_shadow_telemetry_report(TemporalShadowDeployment::Adk)
+            .expect("ADK aggregate telemetry");
+
+        assert_eq!(report.overall_status, "pass");
     }
 }

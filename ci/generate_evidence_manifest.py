@@ -11,6 +11,12 @@ from pathlib import Path
 
 SCHEMA_VERSION = "aura.evidence_manifest.v1"
 PILOT_SHADOW_SCHEMA_VERSION = "aura.shadow_mode_bundle.v1"
+TEMPORAL_SHADOW_SCHEMA_VERSION = "aura.military.temporal_shadow_report.v1"
+TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v1"
+TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
+    "aura.military.temporal_shadow_telemetry_validation.v1"
+)
+TEMPORAL_TELEMETRY_SCHEMA_VERSION = "aura.military.temporal_shadow_telemetry.v1"
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,6 +50,21 @@ def parse_args() -> argparse.Namespace:
         "--pilot-regression-report",
         default=None,
         help="Optional path to pilot simulation regression report JSON.",
+    )
+    parser.add_argument(
+        "--temporal-shadow-report",
+        default=None,
+        help="Optional path to military temporal Shadow evaluation JSON.",
+    )
+    parser.add_argument(
+        "--temporal-independent-review-report",
+        default=None,
+        help="Optional path to independent temporal review readiness JSON.",
+    )
+    parser.add_argument(
+        "--temporal-shadow-telemetry-validation",
+        default=None,
+        help="Optional path to on-prem/ADK temporal Shadow telemetry validation JSON.",
     )
     parser.add_argument(
         "--pilot-gate-report",
@@ -194,6 +215,126 @@ def pilot_regression_status(payload: dict | None) -> str | None:
     return payload.get("overall_status")
 
 
+def temporal_shadow_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != TEMPORAL_SHADOW_SCHEMA_VERSION:
+        return "invalid_schema"
+    privacy = payload.get("privacy")
+    metrics = payload.get("metrics")
+    if not isinstance(privacy, dict) or not isinstance(metrics, dict):
+        return "invalid_summary"
+    if payload.get("overall_status") != "pass":
+        return "fail"
+    if payload.get("runtime_policy_enabled") is not False:
+        return "runtime_policy_enabled"
+    if any(
+        privacy.get(field) is not False
+        for field in (
+            "raw_text_present",
+            "stable_actor_identifiers_present",
+            "content_hashes_reported",
+        )
+    ):
+        return "privacy_fail"
+    if metrics.get("adversarial_variants", 0) < 200:
+        return "insufficient_adversarial_coverage"
+    if metrics.get("adversarial_mismatch_variants") != 0:
+        return "adversarial_mismatch"
+    if metrics.get("shadow_action_cases") != 0:
+        return "shadow_actions_present"
+    return "pass"
+
+
+def temporal_independent_review_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != TEMPORAL_REVIEW_SCHEMA_VERSION:
+        return "invalid_schema"
+    privacy = payload.get("privacy")
+    if not isinstance(privacy, dict):
+        return "invalid_summary"
+    if any(
+        privacy.get(field) is not False
+        for field in (
+            "raw_text_present",
+            "reviewer_tokens_exported",
+            "affiliation_tokens_exported",
+            "stable_actor_identifiers_present",
+        )
+    ):
+        return "privacy_fail"
+    return payload.get("overall_status")
+
+
+def temporal_shadow_telemetry_validation_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION:
+        return "invalid_schema"
+    if payload.get("overall_status") != "pass":
+        return "fail"
+    for deployment_name in ("on_prem", "adk"):
+        report = payload.get(deployment_name)
+        if not isinstance(report, dict):
+            return "invalid_summary"
+        if report.get("schema_version") != TEMPORAL_TELEMETRY_SCHEMA_VERSION:
+            return "invalid_schema"
+        if report.get("overall_status") != "pass":
+            return "fail"
+        if report.get("deployment") != deployment_name:
+            return "deployment_mismatch"
+        if report.get("runtime_policy_enabled") is not False:
+            return "runtime_policy_enabled"
+        if report.get("action_execution_enabled") is not False:
+            return "action_execution_enabled"
+        privacy = report.get("privacy")
+        metrics = report.get("metrics")
+        if not isinstance(privacy, dict) or not isinstance(metrics, dict):
+            return "invalid_summary"
+        if any(
+            privacy.get(field) is not False
+            for field in (
+                "raw_text_collected",
+                "actor_identifiers_collected",
+                "content_hashes_collected",
+                "event_timestamps_exported",
+                "per_conversation_records_exported",
+            )
+        ):
+            return "privacy_fail"
+        if privacy.get("minimum_aggregation_inputs", 0) < 20:
+            return "insufficient_privacy_threshold"
+        if metrics.get("evaluated_inputs", 0) < 20:
+            return "insufficient_aggregation"
+        if metrics.get("suppressed_actions") != 0:
+            return "shadow_actions_present"
+    return "pass"
+
+
+def temporal_policy_activation_readiness(
+    temporal_shadow_payload: dict | None,
+    temporal_independent_review_payload: dict | None,
+    temporal_shadow_telemetry_validation_payload: dict | None,
+) -> str | None:
+    shadow_status = temporal_shadow_status(temporal_shadow_payload)
+    review_status = temporal_independent_review_status(
+        temporal_independent_review_payload
+    )
+    telemetry_status = temporal_shadow_telemetry_validation_status(
+        temporal_shadow_telemetry_validation_payload
+    )
+    if shadow_status is None and review_status is None and telemetry_status is None:
+        return None
+    if shadow_status != "pass" or telemetry_status != "pass":
+        return "fail"
+    if review_status == "pass":
+        return "pass"
+    if review_status in (None, "pending"):
+        return "pending"
+    return "fail"
+
+
 def pilot_gate_status(payload: dict | None) -> str | None:
     if payload is None:
         return None
@@ -319,6 +460,12 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["pilot_regression_status"] not in (None, "pass"):
         return "fail"
+    if summary["temporal_shadow_status"] not in (None, "pass"):
+        return "fail"
+    if summary["temporal_independent_review_status"] not in (None, "pass"):
+        return "fail"
+    if summary["temporal_shadow_telemetry_validation_status"] not in (None, "pass"):
+        return "fail"
     if summary["pilot_gate_status"] not in (None, "pass"):
         return "fail"
     if summary["kids_preprod_dry_run_status"] not in (None, "pass"):
@@ -346,6 +493,9 @@ def attach_payload_details(
     audit_payload: dict | None,
     pilot_shadow_payload: dict | None,
     pilot_regression_payload: dict | None,
+    temporal_shadow_payload: dict | None,
+    temporal_independent_review_payload: dict | None,
+    temporal_shadow_telemetry_validation_payload: dict | None,
     pilot_gate_payload: dict | None,
     kids_preprod_dry_run_payload: dict | None,
     community_surface_payload: dict | None,
@@ -434,6 +584,64 @@ def attach_payload_details(
         artifacts["pilot_regression_report"]["scenario_count"] = len(
             pilot_regression_payload.get("scenarios", [])
         )
+    if temporal_shadow_payload is not None:
+        artifacts["temporal_shadow_report"]["observed_status"] = temporal_shadow_status(
+            temporal_shadow_payload
+        )
+        artifacts["temporal_shadow_report"]["schema_version"] = temporal_shadow_payload.get(
+            "schema_version"
+        )
+        metrics = temporal_shadow_payload.get("metrics", {})
+        artifacts["temporal_shadow_report"]["case_count"] = metrics.get("total_cases")
+        artifacts["temporal_shadow_report"]["event_count"] = metrics.get("total_events")
+        artifacts["temporal_shadow_report"]["adversarial_variant_count"] = metrics.get(
+            "adversarial_variants"
+        )
+        artifacts["temporal_shadow_report"]["adversarial_mismatch_count"] = metrics.get(
+            "adversarial_mismatch_variants"
+        )
+        artifacts["temporal_shadow_report"]["runtime_policy_enabled"] = (
+            temporal_shadow_payload.get("runtime_policy_enabled")
+        )
+    if temporal_independent_review_payload is not None:
+        artifacts["temporal_independent_review_report"][
+            "observed_status"
+        ] = temporal_independent_review_status(temporal_independent_review_payload)
+        artifacts["temporal_independent_review_report"][
+            "schema_version"
+        ] = temporal_independent_review_payload.get("schema_version")
+        review_metrics = temporal_independent_review_payload.get("metrics", {})
+        artifacts["temporal_independent_review_report"]["corpus_cases"] = review_metrics.get(
+            "corpus_cases"
+        )
+        artifacts["temporal_independent_review_report"][
+            "independently_reviewed_cases"
+        ] = review_metrics.get("cases_with_two_independent_reviews")
+    if temporal_shadow_telemetry_validation_payload is not None:
+        artifacts["temporal_shadow_telemetry_validation"][
+            "observed_status"
+        ] = temporal_shadow_telemetry_validation_status(
+            temporal_shadow_telemetry_validation_payload
+        )
+        artifacts["temporal_shadow_telemetry_validation"][
+            "schema_version"
+        ] = temporal_shadow_telemetry_validation_payload.get("schema_version")
+        artifacts["temporal_shadow_telemetry_validation"]["deployments"] = {
+            deployment: {
+                "evaluated_inputs": temporal_shadow_telemetry_validation_payload.get(
+                    deployment, {}
+                )
+                .get("metrics", {})
+                .get("evaluated_inputs"),
+                "runtime_policy_enabled": temporal_shadow_telemetry_validation_payload.get(
+                    deployment, {}
+                ).get("runtime_policy_enabled"),
+                "action_execution_enabled": temporal_shadow_telemetry_validation_payload.get(
+                    deployment, {}
+                ).get("action_execution_enabled"),
+            }
+            for deployment in ("on_prem", "adk")
+        }
     if pilot_gate_payload is not None:
         artifacts["pilot_gate_report"]["observed_status"] = pilot_gate_status(
             pilot_gate_payload
@@ -576,6 +784,28 @@ def main() -> int:
     pilot_regression_payload, pilot_regression_artifact = load_json_artifact(
         args.pilot_regression_report, required=args.pilot_regression_report is not None
     ) if args.pilot_regression_report else (None, None)
+    temporal_shadow_payload, temporal_shadow_artifact = load_json_artifact(
+        args.temporal_shadow_report, required=args.temporal_shadow_report is not None
+    ) if args.temporal_shadow_report else (None, None)
+    temporal_independent_review_payload, temporal_independent_review_artifact = (
+        load_json_artifact(
+            args.temporal_independent_review_report,
+            required=args.temporal_independent_review_report is not None,
+        )
+        if args.temporal_independent_review_report
+        else (None, None)
+    )
+    (
+        temporal_shadow_telemetry_validation_payload,
+        temporal_shadow_telemetry_validation_artifact,
+    ) = (
+        load_json_artifact(
+            args.temporal_shadow_telemetry_validation,
+            required=args.temporal_shadow_telemetry_validation is not None,
+        )
+        if args.temporal_shadow_telemetry_validation
+        else (None, None)
+    )
     pilot_gate_payload, pilot_gate_artifact = load_json_artifact(
         args.pilot_gate_report, required=args.pilot_gate_report is not None
     ) if args.pilot_gate_report else (None, None)
@@ -618,6 +848,16 @@ def main() -> int:
         artifacts["pilot_shadow_bundle"] = pilot_shadow_artifact
     if pilot_regression_artifact is not None:
         artifacts["pilot_regression_report"] = pilot_regression_artifact
+    if temporal_shadow_artifact is not None:
+        artifacts["temporal_shadow_report"] = temporal_shadow_artifact
+    if temporal_independent_review_artifact is not None:
+        artifacts[
+            "temporal_independent_review_report"
+        ] = temporal_independent_review_artifact
+    if temporal_shadow_telemetry_validation_artifact is not None:
+        artifacts[
+            "temporal_shadow_telemetry_validation"
+        ] = temporal_shadow_telemetry_validation_artifact
     if pilot_gate_artifact is not None:
         artifacts["pilot_gate_report"] = pilot_gate_artifact
     if kids_preprod_dry_run_artifact is not None:
@@ -645,6 +885,11 @@ def main() -> int:
         audit_payload=audit_payload,
         pilot_shadow_payload=pilot_shadow_payload,
         pilot_regression_payload=pilot_regression_payload,
+        temporal_shadow_payload=temporal_shadow_payload,
+        temporal_independent_review_payload=temporal_independent_review_payload,
+        temporal_shadow_telemetry_validation_payload=(
+            temporal_shadow_telemetry_validation_payload
+        ),
         pilot_gate_payload=pilot_gate_payload,
         kids_preprod_dry_run_payload=kids_preprod_dry_run_payload,
         community_surface_payload=community_surface_payload,
@@ -759,6 +1004,83 @@ def main() -> int:
         "pilot_regression_scenario_count": (
             len(pilot_regression_payload.get("scenarios", []))
             if pilot_regression_payload
+            else None
+        ),
+        "temporal_shadow_status": temporal_shadow_status(temporal_shadow_payload),
+        "temporal_shadow_schema_version": (
+            temporal_shadow_payload.get("schema_version")
+            if temporal_shadow_payload
+            else None
+        ),
+        "temporal_shadow_case_count": (
+            temporal_shadow_payload.get("metrics", {}).get("total_cases")
+            if temporal_shadow_payload
+            else None
+        ),
+        "temporal_shadow_event_count": (
+            temporal_shadow_payload.get("metrics", {}).get("total_events")
+            if temporal_shadow_payload
+            else None
+        ),
+        "temporal_shadow_adversarial_variant_count": (
+            temporal_shadow_payload.get("metrics", {}).get("adversarial_variants")
+            if temporal_shadow_payload
+            else None
+        ),
+        "temporal_shadow_adversarial_mismatch_count": (
+            temporal_shadow_payload.get("metrics", {}).get(
+                "adversarial_mismatch_variants"
+            )
+            if temporal_shadow_payload
+            else None
+        ),
+        "temporal_shadow_runtime_policy_enabled": (
+            temporal_shadow_payload.get("runtime_policy_enabled")
+            if temporal_shadow_payload
+            else None
+        ),
+        "temporal_independent_review_status": temporal_independent_review_status(
+            temporal_independent_review_payload
+        ),
+        "temporal_independent_review_schema_version": (
+            temporal_independent_review_payload.get("schema_version")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_case_count": (
+            temporal_independent_review_payload.get("metrics", {}).get("corpus_cases")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independently_reviewed_case_count": (
+            temporal_independent_review_payload.get("metrics", {}).get(
+                "cases_with_two_independent_reviews"
+            )
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_shadow_telemetry_validation_status": (
+            temporal_shadow_telemetry_validation_status(
+                temporal_shadow_telemetry_validation_payload
+            )
+        ),
+        "temporal_policy_activation_readiness": temporal_policy_activation_readiness(
+            temporal_shadow_payload,
+            temporal_independent_review_payload,
+            temporal_shadow_telemetry_validation_payload,
+        ),
+        "temporal_shadow_telemetry_on_prem_inputs": (
+            temporal_shadow_telemetry_validation_payload.get("on_prem", {})
+            .get("metrics", {})
+            .get("evaluated_inputs")
+            if temporal_shadow_telemetry_validation_payload
+            else None
+        ),
+        "temporal_shadow_telemetry_adk_inputs": (
+            temporal_shadow_telemetry_validation_payload.get("adk", {})
+            .get("metrics", {})
+            .get("evaluated_inputs")
+            if temporal_shadow_telemetry_validation_payload
             else None
         ),
         "pilot_gate_status": pilot_gate_status(pilot_gate_payload),

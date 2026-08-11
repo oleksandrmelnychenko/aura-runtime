@@ -2,6 +2,20 @@
 
 ## Unreleased — Release Reliability
 
+- Expanded the disabled Military temporal Shadow gate with 259 metamorphic
+  adversarial checks covering storage order, identifier remapping, time shift,
+  filtered decoys, and replay duplication.
+- Added a corpus-bound independent-review protocol requiring two blinded
+  reviewers from distinct affiliations and a separate adjudicator; the
+  research-readiness status remains `pending` until real review data exists.
+- Added aggregate-only on-prem and ADK temporal Shadow telemetry with a
+  20-observation privacy floor, bounded inputs, coarse latency buckets, no
+  per-conversation export, and no action execution path.
+- Added temporal evaluation and telemetry validation to the unified evidence
+  manifest plus detached Ed25519 signing and trusted-public-key verification
+  for release promotion.
+- Added a separate temporal policy activation-readiness state so a releasable,
+  disabled Shadow build cannot be mistaken for independently validated policy.
 - Added a content-free temporal context to each first-attempt local decision,
   binding source time, observation delay, Safety Case transition, bounded
   observation volume, and peak risk index without exposing message content or
