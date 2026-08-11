@@ -1,5 +1,5 @@
 {
-  "baseline_id": "aura-core-6e777b278816",
+  "baseline_id": "aura-core-5722ed2f1081",
   "behavior": {
     "pilot_regression": {
       "by_case_class": [
@@ -3033,14 +3033,14 @@
           "gates": {
             "checks": [
               {
-                "actual": 0.033338584,
+                "actual": 0.033435807,
                 "comparison": "at_most",
                 "name": "max_brier_delta",
                 "passed": true,
                 "threshold": 0.08
               },
               {
-                "actual": 0.030411512,
+                "actual": 0.030496046,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error_delta",
                 "passed": true,
@@ -3064,8 +3064,8 @@
             "passed": true
           },
           "metrics": {
-            "brier_delta": 0.033338584,
-            "expected_calibration_error_delta": 0.030411512,
+            "brier_delta": 0.033435807,
+            "expected_calibration_error_delta": 0.030496046,
             "negative_false_positive_rate_delta": 0.0,
             "positive_detection_rate_delta": 0.0
           },
@@ -3081,14 +3081,14 @@
           "gates": {
             "checks": [
               {
-                "actual": 0.024245732,
+                "actual": 0.0241234,
                 "comparison": "at_most",
                 "name": "max_brier_delta",
                 "passed": true,
                 "threshold": 0.08
               },
               {
-                "actual": 0.032047853,
+                "actual": 0.03194149,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error_delta",
                 "passed": true,
@@ -3112,8 +3112,8 @@
             "passed": true
           },
           "metrics": {
-            "brier_delta": 0.024245732,
-            "expected_calibration_error_delta": 0.032047853,
+            "brier_delta": 0.0241234,
+            "expected_calibration_error_delta": 0.03194149,
             "negative_false_positive_rate_delta": 0.0,
             "positive_detection_rate_delta": 0.0
           },
@@ -3129,14 +3129,14 @@
           "gates": {
             "checks": [
               {
-                "actual": 0.057584316,
+                "actual": 0.057559207,
                 "comparison": "at_most",
                 "name": "max_brier_delta",
                 "passed": true,
                 "threshold": 0.08
               },
               {
-                "actual": 0.062459365,
+                "actual": 0.062437534,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error_delta",
                 "passed": true,
@@ -3160,8 +3160,8 @@
             "passed": true
           },
           "metrics": {
-            "brier_delta": 0.057584316,
-            "expected_calibration_error_delta": 0.062459365,
+            "brier_delta": 0.057559207,
+            "expected_calibration_error_delta": 0.062437534,
             "negative_false_positive_rate_delta": 0.0,
             "positive_detection_rate_delta": 0.0
           },
@@ -3229,7 +3229,7 @@
       "suites": [
         {
           "evaluation": {
-            "brier_score": 0.10096971,
+            "brier_score": 0.10084738,
             "by_threat": [
               {
                 "brier_score": 0.08731728,
@@ -3262,14 +3262,14 @@
                 "threat_type": "Phishing"
               },
               {
-                "brier_score": 0.1258825,
+                "brier_score": 0.12552314,
                 "count": 32,
-                "expected_calibration_error": 0.12750123,
+                "expected_calibration_error": 0.12718873,
                 "threat_type": "Manipulation"
               }
             ],
             "calibration_count": 94,
-            "expected_calibration_error": 0.10796033,
+            "expected_calibration_error": 0.107853964,
             "negative_false_positive_rate": 0.0,
             "negative_scenarios": 3,
             "onset_cases": 12,
@@ -3280,14 +3280,14 @@
           "evaluation_gates": {
             "checks": [
               {
-                "actual": 0.10096971,
+                "actual": 0.10084738,
                 "comparison": "at_most",
                 "name": "max_brier_score",
                 "passed": true,
                 "threshold": 0.22
               },
               {
-                "actual": 0.10796033,
+                "actual": 0.107853964,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error",
                 "passed": true,
@@ -3406,14 +3406,14 @@
                 "threshold": 20.0
               },
               {
-                "actual": 0.1258825,
+                "actual": 0.12552314,
                 "comparison": "at_most",
                 "name": "per_threat.manipulation.max_brier_score",
                 "passed": true,
                 "threshold": 0.22
               },
               {
-                "actual": 0.12750123,
+                "actual": 0.12718873,
                 "comparison": "at_most",
                 "name": "per_threat.manipulation.max_expected_calibration_error",
                 "passed": true,
@@ -3427,9 +3427,9 @@
           "slices": [
             {
               "evaluation": {
-                "brier_score": 0.10096971,
+                "brier_score": 0.10084738,
                 "calibration_count": 94,
-                "expected_calibration_error": 0.10796033,
+                "expected_calibration_error": 0.107853964,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 3,
                 "onset_cases": 12,
@@ -3613,7 +3613,7 @@
         },
         {
           "evaluation": {
-            "brier_score": 0.093156025,
+            "brier_score": 0.09579558,
             "by_threat": [
               {
                 "brier_score": 0.083499014,
@@ -3622,9 +3622,9 @@
                 "threat_type": "Bullying"
               },
               {
-                "brier_score": 0.08722383,
+                "brier_score": 0.10042159,
                 "count": 7,
-                "expected_calibration_error": 0.1851851,
+                "expected_calibration_error": 0.19827315,
                 "threat_type": "Grooming"
               },
               {
@@ -3647,7 +3647,7 @@
               }
             ],
             "calibration_count": 35,
-            "expected_calibration_error": 0.12140562,
+            "expected_calibration_error": 0.12402323,
             "negative_false_positive_rate": 0.0,
             "negative_scenarios": 2,
             "onset_cases": 4,
@@ -3658,14 +3658,14 @@
           "evaluation_gates": {
             "checks": [
               {
-                "actual": 0.093156025,
+                "actual": 0.09579558,
                 "comparison": "at_most",
                 "name": "max_brier_score",
                 "passed": true,
                 "threshold": 0.25
               },
               {
-                "actual": 0.12140562,
+                "actual": 0.12402323,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error",
                 "passed": true,
@@ -3700,9 +3700,9 @@
           "slices": [
             {
               "evaluation": {
-                "brier_score": 0.11624805,
+                "brier_score": 0.12335454,
                 "calibration_count": 13,
-                "expected_calibration_error": 0.15697567,
+                "expected_calibration_error": 0.16402309,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 2,
                 "onset_cases": 4,
@@ -4160,7 +4160,7 @@
         },
         {
           "evaluation": {
-            "brier_score": 0.09850636,
+            "brier_score": 0.09946096,
             "by_threat": [
               {
                 "brier_score": 0.13710275,
@@ -4169,9 +4169,9 @@
                 "threat_type": "Bullying"
               },
               {
-                "brier_score": 0.08434848,
+                "brier_score": 0.08854564,
                 "count": 48,
-                "expected_calibration_error": 0.099566326,
+                "expected_calibration_error": 0.141903,
                 "threat_type": "Grooming"
               },
               {
@@ -4193,14 +4193,14 @@
                 "threat_type": "Phishing"
               },
               {
-                "brier_score": 0.08959667,
+                "brier_score": 0.089434706,
                 "count": 71,
-                "expected_calibration_error": 0.108525336,
+                "expected_calibration_error": 0.1083845,
                 "threat_type": "Manipulation"
               }
             ],
             "calibration_count": 199,
-            "expected_calibration_error": 0.09657976,
+            "expected_calibration_error": 0.10674138,
             "negative_false_positive_rate": 0.0,
             "negative_scenarios": 9,
             "onset_cases": 24,
@@ -4211,14 +4211,14 @@
           "evaluation_gates": {
             "checks": [
               {
-                "actual": 0.09850636,
+                "actual": 0.09946096,
                 "comparison": "at_most",
                 "name": "max_brier_score",
                 "passed": true,
                 "threshold": 0.28
               },
               {
-                "actual": 0.09657976,
+                "actual": 0.10674138,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error",
                 "passed": true,
@@ -4253,14 +4253,14 @@
                 "threshold": 16.0
               },
               {
-                "actual": 0.08434848,
+                "actual": 0.08854564,
                 "comparison": "at_most",
                 "name": "per_threat.grooming.max_brier_score",
                 "passed": true,
                 "threshold": 0.24
               },
               {
-                "actual": 0.099566326,
+                "actual": 0.141903,
                 "comparison": "at_most",
                 "name": "per_threat.grooming.max_expected_calibration_error",
                 "passed": true,
@@ -4274,14 +4274,14 @@
                 "threshold": 16.0
               },
               {
-                "actual": 0.08959667,
+                "actual": 0.089434706,
                 "comparison": "at_most",
                 "name": "per_threat.manipulation.max_brier_score",
                 "passed": true,
                 "threshold": 0.28
               },
               {
-                "actual": 0.108525336,
+                "actual": 0.1083845,
                 "comparison": "at_most",
                 "name": "per_threat.manipulation.max_expected_calibration_error",
                 "passed": true,
@@ -4337,9 +4337,9 @@
           "slices": [
             {
               "evaluation": {
-                "brier_score": 0.10140963,
+                "brier_score": 0.10144991,
                 "calibration_count": 129,
-                "expected_calibration_error": 0.097321905,
+                "expected_calibration_error": 0.09736371,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 5,
                 "onset_cases": 16,
@@ -4371,9 +4371,9 @@
             },
             {
               "evaluation": {
-                "brier_score": 0.093156025,
+                "brier_score": 0.09579558,
                 "calibration_count": 35,
-                "expected_calibration_error": 0.12140562,
+                "expected_calibration_error": 0.12402323,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 2,
                 "onset_cases": 4,
@@ -4417,9 +4417,9 @@
             },
             {
               "evaluation": {
-                "brier_score": 0.093156025,
+                "brier_score": 0.09579558,
                 "calibration_count": 35,
-                "expected_calibration_error": 0.12140562,
+                "expected_calibration_error": 0.12402323,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 2,
                 "onset_cases": 4,
@@ -4468,7 +4468,7 @@
         },
         {
           "evaluation": {
-            "brier_score": 0.09638169,
+            "brier_score": 0.096850485,
             "by_threat": [
               {
                 "brier_score": 0.14216447,
@@ -4477,9 +4477,9 @@
                 "threat_type": "Bullying"
               },
               {
-                "brier_score": 0.080933556,
+                "brier_score": 0.083082035,
                 "count": 86,
-                "expected_calibration_error": 0.08815272,
+                "expected_calibration_error": 0.11160351,
                 "threat_type": "Grooming"
               },
               {
@@ -4501,9 +4501,9 @@
                 "threat_type": "Phishing"
               },
               {
-                "brier_score": 0.09549051,
+                "brier_score": 0.09536185,
                 "count": 128,
-                "expected_calibration_error": 0.12256567,
+                "expected_calibration_error": 0.1227024,
                 "threat_type": "Manipulation"
               },
               {
@@ -4514,7 +4514,7 @@
               }
             ],
             "calibration_count": 359,
-            "expected_calibration_error": 0.09746714,
+            "expected_calibration_error": 0.09690799,
             "negative_false_positive_rate": 0.0,
             "negative_scenarios": 19,
             "onset_cases": 43,
@@ -4525,14 +4525,14 @@
           "evaluation_gates": {
             "checks": [
               {
-                "actual": 0.09638169,
+                "actual": 0.096850485,
                 "comparison": "at_most",
                 "name": "max_brier_score",
                 "passed": true,
                 "threshold": 0.28
               },
               {
-                "actual": 0.09746714,
+                "actual": 0.09690799,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error",
                 "passed": true,
@@ -4567,14 +4567,14 @@
                 "threshold": 10.0
               },
               {
-                "actual": 0.080933556,
+                "actual": 0.083082035,
                 "comparison": "at_most",
                 "name": "per_threat.grooming.max_brier_score",
                 "passed": true,
                 "threshold": 0.24
               },
               {
-                "actual": 0.08815272,
+                "actual": 0.11160351,
                 "comparison": "at_most",
                 "name": "per_threat.grooming.max_expected_calibration_error",
                 "passed": true,
@@ -4588,14 +4588,14 @@
                 "threshold": 12.0
               },
               {
-                "actual": 0.09549051,
+                "actual": 0.09536185,
                 "comparison": "at_most",
                 "name": "per_threat.manipulation.max_brier_score",
                 "passed": true,
                 "threshold": 0.28
               },
               {
-                "actual": 0.12256567,
+                "actual": 0.1227024,
                 "comparison": "at_most",
                 "name": "per_threat.manipulation.max_expected_calibration_error",
                 "passed": true,
@@ -4651,9 +4651,9 @@
           "slices": [
             {
               "evaluation": {
-                "brier_score": 0.10383976,
+                "brier_score": 0.103755824,
                 "calibration_count": 137,
-                "expected_calibration_error": 0.105741456,
+                "expected_calibration_error": 0.10566846,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 6,
                 "onset_cases": 17,
@@ -4685,9 +4685,9 @@
             },
             {
               "evaluation": {
-                "brier_score": 0.10071597,
+                "brier_score": 0.1006797,
                 "calibration_count": 137,
-                "expected_calibration_error": 0.10197381,
+                "expected_calibration_error": 0.10191907,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 6,
                 "onset_cases": 17,
@@ -4719,9 +4719,9 @@
             },
             {
               "evaluation": {
-                "brier_score": 0.072096206,
+                "brier_score": 0.074104555,
                 "calibration_count": 46,
-                "expected_calibration_error": 0.08403905,
+                "expected_calibration_error": 0.09450897,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 4,
                 "onset_cases": 5,
@@ -4765,9 +4765,9 @@
             },
             {
               "evaluation": {
-                "brier_score": 0.08360156,
+                "brier_score": 0.08597039,
                 "calibration_count": 39,
-                "expected_calibration_error": 0.10895376,
+                "expected_calibration_error": 0.1113029,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 3,
                 "onset_cases": 4,
@@ -4816,7 +4816,7 @@
         },
         {
           "evaluation": {
-            "brier_score": 0.11926046,
+            "brier_score": 0.11966805,
             "by_threat": [
               {
                 "brier_score": 0.1177733,
@@ -4825,9 +4825,9 @@
                 "threat_type": "Bullying"
               },
               {
-                "brier_score": 0.0751099,
+                "brier_score": 0.07809004,
                 "count": 93,
-                "expected_calibration_error": 0.085451335,
+                "expected_calibration_error": 0.11797984,
                 "threat_type": "Grooming"
               },
               {
@@ -4886,7 +4886,7 @@
               }
             ],
             "calibration_count": 680,
-            "expected_calibration_error": 0.115205884,
+            "expected_calibration_error": 0.1148017,
             "negative_false_positive_rate": 0.039215688,
             "negative_scenarios": 51,
             "onset_cases": 92,
@@ -4897,14 +4897,14 @@
           "evaluation_gates": {
             "checks": [
               {
-                "actual": 0.11926046,
+                "actual": 0.11966805,
                 "comparison": "at_most",
                 "name": "max_brier_score",
                 "passed": true,
                 "threshold": 0.28
               },
               {
-                "actual": 0.115205884,
+                "actual": 0.1148017,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error",
                 "passed": true,
@@ -4939,14 +4939,14 @@
                 "threshold": 10.0
               },
               {
-                "actual": 0.0751099,
+                "actual": 0.07809004,
                 "comparison": "at_most",
                 "name": "per_threat.grooming.max_brier_score",
                 "passed": true,
                 "threshold": 0.24
               },
               {
-                "actual": 0.085451335,
+                "actual": 0.11797984,
                 "comparison": "at_most",
                 "name": "per_threat.grooming.max_expected_calibration_error",
                 "passed": true,
@@ -5023,9 +5023,9 @@
           "slices": [
             {
               "evaluation": {
-                "brier_score": 0.18455875,
+                "brier_score": 0.18840809,
                 "calibration_count": 72,
-                "expected_calibration_error": 0.21784882,
+                "expected_calibration_error": 0.19971061,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 0,
                 "onset_cases": 9,
@@ -5471,7 +5471,7 @@
         },
         {
           "evaluation": {
-            "brier_score": 0.1343083,
+            "brier_score": 0.13428319,
             "by_threat": [
               {
                 "brier_score": 0.13969497,
@@ -5498,14 +5498,14 @@
                 "threat_type": "Phishing"
               },
               {
-                "brier_score": 0.16485083,
+                "brier_score": 0.16478238,
                 "count": 168,
-                "expected_calibration_error": 0.1662631,
+                "expected_calibration_error": 0.16620357,
                 "threat_type": "Manipulation"
               }
             ],
             "calibration_count": 458,
-            "expected_calibration_error": 0.13837184,
+            "expected_calibration_error": 0.13835001,
             "negative_false_positive_rate": 0.0,
             "negative_scenarios": 40,
             "onset_cases": 44,
@@ -5516,14 +5516,14 @@
           "evaluation_gates": {
             "checks": [
               {
-                "actual": 0.1343083,
+                "actual": 0.13428319,
                 "comparison": "at_most",
                 "name": "max_brier_score",
                 "passed": true,
                 "threshold": 0.32
               },
               {
-                "actual": 0.13837184,
+                "actual": 0.13835001,
                 "comparison": "at_most",
                 "name": "max_expected_calibration_error",
                 "passed": true,
@@ -5558,9 +5558,9 @@
           "slices": [
             {
               "evaluation": {
-                "brier_score": 0.14379285,
+                "brier_score": 0.14375263,
                 "calibration_count": 286,
-                "expected_calibration_error": 0.15279193,
+                "expected_calibration_error": 0.15275697,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 25,
                 "onset_cases": 30,
@@ -5764,9 +5764,9 @@
             },
             {
               "evaluation": {
-                "brier_score": 0.12593456,
+                "brier_score": 0.12584999,
                 "calibration_count": 136,
-                "expected_calibration_error": 0.15510142,
+                "expected_calibration_error": 0.1550279,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 8,
                 "onset_cases": 12,
@@ -5897,9 +5897,9 @@
             },
             {
               "evaluation": {
-                "brier_score": 0.13024908,
+                "brier_score": 0.13018335,
                 "calibration_count": 175,
-                "expected_calibration_error": 0.12778533,
+                "expected_calibration_error": 0.12772818,
                 "negative_false_positive_rate": 0.0,
                 "negative_scenarios": 18,
                 "onset_cases": 23,
@@ -7512,14 +7512,14 @@
       "action_counts": {
         "allow": 20201,
         "block": 23,
-        "blur": 2,
+        "blur": 12,
         "mark": 27,
-        "warn": 94
+        "warn": 84
       },
       "alert_counts": {
-        "high": 88,
+        "high": 99,
         "medium": 41,
-        "urgent": 17
+        "urgent": 6
       },
       "block_events": 23,
       "context_store": null,
@@ -8035,7 +8035,7 @@
             "max_contact_messages": 40,
             "max_timeline_events": 56,
             "timeline_count": 5,
-            "total_timeline_events": 130
+            "total_timeline_events": 129
           },
           "findings": [],
           "label": "andrii_14_peer_blackmail_recovery_4mo",
@@ -8359,7 +8359,7 @@
             "max_contact_messages": 38,
             "max_timeline_events": 40,
             "timeline_count": 6,
-            "total_timeline_events": 124
+            "total_timeline_events": 122
           },
           "findings": [],
           "label": "ira_15_artist_slow_grooming_6mo",
@@ -8408,13 +8408,14 @@
           "action_counts": {
             "allow": 263,
             "block": 4,
+            "blur": 10,
             "mark": 17,
-            "warn": 18
+            "warn": 8
           },
           "alert_counts": {
-            "high": 8,
+            "high": 19,
             "medium": 18,
-            "urgent": 13
+            "urgent": 2
           },
           "block_events": 4,
           "context_store": {
@@ -8423,7 +8424,7 @@
             "max_contact_messages": 38,
             "max_timeline_events": 56,
             "timeline_count": 10,
-            "total_timeline_events": 318
+            "total_timeline_events": 317
           },
           "findings": [],
           "label": "kateryna_16_recruitment_pressure_9mo",
@@ -8517,7 +8518,7 @@
           },
           "threat_events": 39,
           "total_events": 302,
-          "warn_events": 18
+          "warn_events": 8
         },
         {
           "action_counts": {
@@ -8537,7 +8538,7 @@
             "max_contact_messages": 401,
             "max_timeline_events": 500,
             "timeline_count": 9,
-            "total_timeline_events": 1755
+            "total_timeline_events": 1753
           },
           "findings": [],
           "label": "lev_10_gaming_scam_grooming_1y",
@@ -9010,7 +9011,7 @@
             "max_contact_messages": 401,
             "max_timeline_events": 500,
             "timeline_count": 9,
-            "total_timeline_events": 1591
+            "total_timeline_events": 1590
           },
           "findings": [],
           "label": "mykola_12_public_unknown_adult_network_1y",
@@ -9141,7 +9142,7 @@
             "max_contact_messages": 20,
             "max_timeline_events": 41,
             "timeline_count": 7,
-            "total_timeline_events": 117
+            "total_timeline_events": 116
           },
           "findings": [],
           "label": "olena_09_game_3mo",
@@ -9633,23 +9634,23 @@
       "total_events": 20347,
       "total_findings": 0,
       "total_worlds": 16,
-      "warn_events": 94
+      "warn_events": 84
     }
   },
-  "captured_at_utc": "2026-08-11T18:55:06.264093+00:00",
+  "captured_at_utc": "2026-08-11T20:33:27.267271+00:00",
   "contracts": {
     "apple_artifact": {
       "manifest_file": {
         "bytes": 1750,
         "path": "dist/apple/release-manifest.json",
-        "sha256": "271a2ac03fc592715f1a461398c742150200bfb51e25d151abc3483260e72066"
+        "sha256": "af5b59850da1d2db8c1749df5182a860882cb18858aafdcd4ac84bd79daad350"
       },
       "release_manifest": {
         "aura_ffi_header_sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
         "binary_sha256": {
-          "ios-arm64": "81487112d301f975440d660feb1aadfa80dbc24ead7f73a0826e93b1765f9059",
-          "ios-arm64_x86_64-maccatalyst": "4a595c3c5eb4d1cc57df0373a0fafe493114fd5c468c8829adf6ffc3f10e15a3",
-          "ios-arm64_x86_64-simulator": "b6615950b12257ef057ab9fd356dfac7860d53dcc7fc415ca9642b87ea19f6ad"
+          "ios-arm64": "e4d91a53654a441533b53a4db89d5875fd4a27deba2cde9f2d9ae4b4ffd81bff",
+          "ios-arm64_x86_64-maccatalyst": "2b1a883d91ddf7971e301b1b993d948bd6c18fd45b4262b2ae542bc6b551339a",
+          "ios-arm64_x86_64-simulator": "6efebc1a06a635f7f774bdc14e481cbbed653f588a5e91eb2c2ba528e4df65e1"
         },
         "cargo_features": [],
         "cargo_locked": true,
@@ -9659,15 +9660,15 @@
         "minimum_ios_version": "18.0",
         "model_bundle_included": false,
         "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
-        "runtime_artifact_descriptor_sha256": "077ac4b17fffe67d88f3572f092ec3ee99a1afbaedf16648f77ee7087a731543",
-        "runtime_artifact_identities_env_sha256": "fe1124fc05fd23474f95db3dea5ec14df89e1aa7fa6d6e3500ef6bc7cc0c6512",
+        "runtime_artifact_descriptor_sha256": "e5d0e0e615b82e9a6eff5206c87eba56a48ccae8bf1dcd0d126fa2a15e838b1f",
+        "runtime_artifact_identities_env_sha256": "b852c121d52591da8c5627cf7c24d1b0b67a90654fa4248f8e02b092e61c2649",
         "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
         "runtime_release_version": "0.2.0",
         "schema_version": 5,
         "shippable": true,
-        "source_revision": "0f10ed25d30b5fa34a7c44c5f57ef1d7d4a0badc",
+        "source_revision": "2126d1c0fbf98a25bc1159ae5d573061f0475d7e",
         "source_tree_dirty": false,
-        "source_tree_sha256": "b6bc8810634e7902415335a1c2331fb5994f0ab6b4f2bac1ea8ae70f95b40d37",
+        "source_tree_sha256": "353104b84422f5f5a695bcbb3b80f9adea312c05e62043c952c1f3f318950eae",
         "state_schema_version": 3,
         "target_triples": [
           "aarch64-apple-ios",
@@ -10056,7 +10057,7 @@
           "max_contact_messages": 1289,
           "max_timeline_events": 500,
           "timeline_count": 14,
-          "total_timeline_events": 1567
+          "total_timeline_events": 1564
         },
         "metrics": {
           "clean_false_positive_rate": 0.0,
@@ -10077,10 +10078,10 @@
         "threat_events": 26,
         "tier": "10k",
         "timing": {
-          "elapsed_seconds": 14.95,
-          "max_rss_mb": 344.25,
-          "system_seconds": 0.09,
-          "user_seconds": 14.32
+          "elapsed_seconds": 18.31,
+          "max_rss_mb": 306.375,
+          "system_seconds": 0.22,
+          "user_seconds": 17.18
         },
         "total_events": 13647,
         "warn_events": 19
@@ -10089,7 +10090,7 @@
   },
   "schema_version": "aura.refactor_baseline.v1",
   "source": {
-    "revision": "6e777b278816da0abaf44d8d76d62d43627555e0",
+    "revision": "5722ed2f108159b1f159b9e8f9f1c2e994e22b65",
     "tree_dirty": false
   },
   "workspace": {
