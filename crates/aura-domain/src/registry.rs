@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::{DomainInput, DomainModule, DomainModuleId, DomainOutput};
+use crate::{
+    DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainTemporalInput,
+    DomainTemporalOutput,
+};
 
 #[derive(Default)]
 pub struct DomainRegistry {
@@ -30,5 +33,68 @@ impl DomainRegistry {
     pub fn run(&self, module_id: DomainModuleId, input: &DomainInput) -> Option<DomainOutput> {
         let module = self.modules.get(&module_id)?;
         Some(module.analyze(input))
+    }
+
+    pub fn temporal_enabled(&self, module_id: DomainModuleId) -> bool {
+        self.modules
+            .get(&module_id)
+            .is_some_and(|module| module.temporal_enabled())
+    }
+
+    pub fn run_temporal(
+        &self,
+        module_id: DomainModuleId,
+        input: &DomainTemporalInput,
+    ) -> Option<DomainTemporalOutput> {
+        let module = self.modules.get(&module_id)?;
+        Some(module.analyze_temporal(input))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DomainRegistry;
+    use crate::{
+        DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainTemporalInput,
+        DomainTemporalOutput,
+    };
+
+    struct StatelessModule;
+
+    impl DomainModule for StatelessModule {
+        fn id(&self) -> DomainModuleId {
+            DomainModuleId::Military
+        }
+
+        fn analyze(&self, _input: &DomainInput) -> DomainOutput {
+            DomainOutput::default()
+        }
+    }
+
+    #[test]
+    fn stateless_module_keeps_temporal_path_disabled() {
+        let mut registry = DomainRegistry::default();
+        registry.register(StatelessModule);
+
+        assert!(!registry.temporal_enabled(DomainModuleId::Military));
+    }
+
+    #[test]
+    fn stateless_module_returns_empty_temporal_output() {
+        let mut registry = DomainRegistry::default();
+        registry.register(StatelessModule);
+        let input = DomainTemporalInput {
+            as_of_ms: 0,
+            current_actor_id: 0,
+            current_content_hash: None,
+            conversation_type: Default::default(),
+            events: Vec::new(),
+        };
+
+        let output = registry
+            .run_temporal(DomainModuleId::Military, &input)
+            .unwrap_or_else(DomainTemporalOutput::default);
+
+        assert!(output.signals.is_empty());
     }
 }

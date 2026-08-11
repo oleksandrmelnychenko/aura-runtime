@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "analysis_window_ms": 259200000,
+  "disclosure_window_ms": 86400000,
+  "max_events": 500,
+  "min_event_confidence": 0.55,
+  "min_influence_messages": 2,
+  "min_influence_kinds": 2,
+  "influence_pressure": {
+    "threat_key": "military_temporal_influence_pressure",
+    "reason_code": "military.temporal.influence_pressure",
+    "threat_type": "psyops",
+    "severity": "medium",
+    "score": 0.66,
+    "priority": 76,
+    "action": null
+  },
+  "operational_collection": {
+    "threat_key": "military_temporal_operational_collection",
+    "reason_code": "military.temporal.operational_collection_attempt",
+    "threat_type": "military_social_eng",
+    "severity": "high",
+    "score": 0.84,
+    "priority": 92,
+    "action": null
+  },
+  "linked_disclosure": {
+    "threat_key": "military_temporal_influence_linked_disclosure",
+    "reason_code": "military.temporal.influence_linked_disclosure",
+    "threat_type": "opsec_violation",
+    "severity": "critical",
+    "score": 0.97,
+    "priority": 100,
+    "action": null
+  }
+}

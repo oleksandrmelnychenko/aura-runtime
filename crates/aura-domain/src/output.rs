@@ -14,7 +14,7 @@ pub enum DomainAction {
 /// The shared contract deliberately carries behavior, not detector rule names.
 /// `aura-core` converts this enum into its internal context event without
 /// inspecting `reason_code` or `threat_key`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DomainEventKind {
     Flattery,
@@ -72,7 +72,7 @@ pub enum DomainEventKind {
     MilitaryDisinfo,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DomainSignal {
     pub threat_key: String,
     pub score: f32,

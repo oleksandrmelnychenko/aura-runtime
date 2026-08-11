@@ -199,6 +199,18 @@ impl Analyzer {
 
         signals.extend(self.context_tracker.record_events(context_events));
 
+        let temporal_domain_output = self.domain_runtime.analyze_temporal_for_mode(
+            domain_mode,
+            input,
+            timestamp_ms,
+            content_hash,
+            self.context_tracker.timeline(&input.conversation_id),
+            self.config.protected_account_id.as_deref(),
+        );
+        signals.extend(build_domain_temporal_signals(
+            temporal_domain_output.as_ref(),
+        ));
+
         let is_child = self.config.account_type == AccountType::Child;
         if let Some(timeline) = self.context_tracker.timeline(&input.conversation_id) {
             let tz_offset = self.context_tracker.config().timezone_offset_minutes;
@@ -302,6 +314,12 @@ impl Analyzer {
             &mut result.reason_codes,
             result.action,
             domain_output.as_ref(),
+            &result.signals,
+        );
+        result.action = merge_active_domain_temporal_output_effects(
+            &mut result.reason_codes,
+            result.action,
+            temporal_domain_output.as_ref(),
             &result.signals,
         );
         append_reason_codes(&mut result.reason_codes, &interpretation_reason_codes);

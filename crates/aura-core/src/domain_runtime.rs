@@ -3,17 +3,20 @@ use std::sync::Arc;
 
 use aura_domain::{
     DomainAction, DomainConversationType, DomainEventKind, DomainInput, DomainModuleId,
-    DomainOutput, DomainRegistry, DomainRiskProfile, MlSafetyHint,
+    DomainOutput, DomainRegistry, DomainRiskProfile, DomainTemporalActorRole,
+    DomainTemporalContext, DomainTemporalDirectionality, DomainTemporalEvent, DomainTemporalInput,
+    DomainTemporalOutput, DomainTemporalSpeechAct, DomainTemporalStance, MlSafetyHint,
 };
 use aura_kids::KidsModule;
 use aura_military::MilitaryModule;
 use aura_patterns::{validate_ukraine_coordinates, BlockedUrlMatch};
 
 use crate::action::{decide_action_v2, propaganda_action_for_subtype};
-use crate::context::events::EventKind;
+use crate::context::events::{EventDirectionality, EventKind, EventSpeechAct, EventStance};
 use crate::context::observation::RawObservation;
 use crate::context::propaganda::NarrativeId;
 use crate::context::propaganda::PropagandaDetector;
+use crate::context::tracker::ConversationTimeline;
 use crate::types::{
     Action, ActionRecommendation, Confidence, ConversationType, DetectionSignal, ProtectionLevel,
     SignalFamily, ThreatType,
@@ -135,6 +138,146 @@ impl AuraDomainRuntime {
             ml_safety_hint,
         };
         self.registry.run(module_id, &domain_input)
+    }
+
+    pub fn analyze_temporal_for_mode(
+        &self,
+        domain_mode: DomainMode,
+        input: &MessageInput,
+        timestamp_ms: u64,
+        content_hash: Option<u64>,
+        timeline: Option<&ConversationTimeline>,
+        protected_account_id: Option<&str>,
+    ) -> Option<DomainTemporalOutput> {
+        let module_id = domain_module_id_for_mode(domain_mode)?;
+        if !self.registry.temporal_enabled(module_id) {
+            return None;
+        }
+        let temporal_input = build_domain_temporal_input(
+            input,
+            timestamp_ms,
+            content_hash,
+            timeline?,
+            protected_account_id,
+        )?;
+        self.registry.run_temporal(module_id, &temporal_input)
+    }
+}
+
+fn build_domain_temporal_input(
+    input: &MessageInput,
+    timestamp_ms: u64,
+    content_hash: Option<u64>,
+    timeline: &ConversationTimeline,
+    protected_account_id: Option<&str>,
+) -> Option<DomainTemporalInput> {
+    let mut actors: Vec<&str> = timeline
+        .all_events()
+        .iter()
+        .filter(|event| event.timestamp_ms <= timestamp_ms)
+        .map(|event| event.sender_id.0.as_str())
+        .collect();
+    actors.push(input.sender_id.0.as_str());
+    actors.sort_unstable();
+    actors.dedup();
+
+    let current_actor_id = actor_id(&actors, &input.sender_id.0)?;
+    let events = timeline
+        .all_events()
+        .iter()
+        .filter(|event| event.timestamp_ms <= timestamp_ms)
+        .filter_map(|event| {
+            let kind = temporal_event_kind(&event.kind)?;
+            Some(DomainTemporalEvent {
+                event_id: event.event_id,
+                timestamp_ms: event.timestamp_ms,
+                actor_id: actor_id(&actors, &event.sender_id.0)?,
+                actor_role: temporal_actor_role(&event.sender_id.0, protected_account_id),
+                kind,
+                confidence: event.confidence,
+                content_hash: event.content_hash,
+                context: DomainTemporalContext {
+                    speech_act: temporal_speech_act(event.context.speech_act),
+                    stance: temporal_stance(event.context.stance),
+                    directionality: temporal_directionality(event.context.directionality),
+                    trusted_contact: event.context.trusted_contact,
+                    confidence: event.context.confidence,
+                },
+            })
+        })
+        .collect();
+
+    Some(DomainTemporalInput {
+        as_of_ms: timestamp_ms,
+        current_actor_id,
+        current_content_hash: content_hash,
+        conversation_type: domain_conversation_type(input.conversation_type),
+        events,
+    })
+}
+
+fn actor_id(actors: &[&str], sender_id: &str) -> Option<u32> {
+    let index = actors.binary_search(&sender_id).ok()?;
+    u32::try_from(index).ok()
+}
+
+fn temporal_actor_role(
+    sender_id: &str,
+    protected_account_id: Option<&str>,
+) -> DomainTemporalActorRole {
+    if protected_account_id.is_some_and(|protected| protected == sender_id) {
+        DomainTemporalActorRole::ProtectedAccount
+    } else {
+        DomainTemporalActorRole::External
+    }
+}
+
+fn temporal_event_kind(kind: &EventKind) -> Option<DomainEventKind> {
+    match kind {
+        EventKind::PropagandaNarrative => Some(DomainEventKind::PropagandaNarrative),
+        EventKind::SuspiciousSource => Some(DomainEventKind::SuspiciousSource),
+        EventKind::PositionLeak => Some(DomainEventKind::PositionLeak),
+        EventKind::UnitInfoLeak => Some(DomainEventKind::UnitInfoLeak),
+        EventKind::EquipmentLeak => Some(DomainEventKind::EquipmentLeak),
+        EventKind::CoordinateMention => Some(DomainEventKind::CoordinateMention),
+        EventKind::PsyopsPattern => Some(DomainEventKind::PsyopsPattern),
+        EventKind::IntelGathering => Some(DomainEventKind::IntelGathering),
+        EventKind::MilitaryPhishing => Some(DomainEventKind::MilitaryPhishing),
+        EventKind::MilitaryDisinfo => Some(DomainEventKind::MilitaryDisinfo),
+        _ => None,
+    }
+}
+
+fn temporal_speech_act(speech_act: EventSpeechAct) -> DomainTemporalSpeechAct {
+    match speech_act {
+        EventSpeechAct::Unknown => DomainTemporalSpeechAct::Unknown,
+        EventSpeechAct::Assert => DomainTemporalSpeechAct::Assert,
+        EventSpeechAct::Ask => DomainTemporalSpeechAct::Ask,
+        EventSpeechAct::Quote => DomainTemporalSpeechAct::Quote,
+        EventSpeechAct::Report => DomainTemporalSpeechAct::Report,
+        EventSpeechAct::Counter => DomainTemporalSpeechAct::Counter,
+        EventSpeechAct::Support => DomainTemporalSpeechAct::Support,
+        EventSpeechAct::Solicit => DomainTemporalSpeechAct::Solicit,
+    }
+}
+
+fn temporal_stance(stance: EventStance) -> DomainTemporalStance {
+    match stance {
+        EventStance::Unknown => DomainTemporalStance::Unknown,
+        EventStance::Endorse => DomainTemporalStance::Endorse,
+        EventStance::Oppose => DomainTemporalStance::Oppose,
+        EventStance::Neutral => DomainTemporalStance::Neutral,
+        EventStance::Ambiguous => DomainTemporalStance::Ambiguous,
+    }
+}
+
+fn temporal_directionality(directionality: EventDirectionality) -> DomainTemporalDirectionality {
+    match directionality {
+        EventDirectionality::Unknown => DomainTemporalDirectionality::Unknown,
+        EventDirectionality::DirectedAtUser => DomainTemporalDirectionality::DirectedAtUser,
+        EventDirectionality::SelfReferential => DomainTemporalDirectionality::SelfReferential,
+        EventDirectionality::ThirdParty => DomainTemporalDirectionality::ThirdParty,
+        EventDirectionality::Broadcast => DomainTemporalDirectionality::Broadcast,
     }
 }
 
@@ -641,8 +784,16 @@ fn push_active_domain_reason_codes(
     domain_output: &DomainOutput,
     active_signals: &[DetectionSignal],
 ) -> bool {
+    push_active_domain_signal_reason_codes(reason_codes, &domain_output.signals, active_signals)
+}
+
+fn push_active_domain_signal_reason_codes(
+    reason_codes: &mut Vec<String>,
+    domain_signals: &[aura_domain::DomainSignal],
+    active_signals: &[DetectionSignal],
+) -> bool {
     let mut found_active_signal = false;
-    for signal in &domain_output.signals {
+    for signal in domain_signals {
         let active_reason = domain_signal_reason_code(signal);
         if !active_signals
             .iter()
@@ -699,12 +850,38 @@ pub(crate) fn merge_active_domain_output_effects(
     merge_domain_action(reason_codes, current_action, domain_output)
 }
 
+pub(crate) fn merge_active_domain_temporal_output_effects(
+    reason_codes: &mut Vec<String>,
+    current_action: Action,
+    domain_output: Option<&DomainTemporalOutput>,
+    active_signals: &[DetectionSignal],
+) -> Action {
+    let Some(domain_output) = domain_output else {
+        return current_action;
+    };
+
+    if !push_active_domain_signal_reason_codes(reason_codes, &domain_output.signals, active_signals)
+    {
+        return current_action;
+    }
+
+    merge_domain_action_value(reason_codes, current_action, domain_output.action)
+}
+
 fn merge_domain_action(
     reason_codes: &mut Vec<String>,
     current_action: Action,
     domain_output: &DomainOutput,
 ) -> Action {
-    let Some(action) = domain_output.action else {
+    merge_domain_action_value(reason_codes, current_action, domain_output.action)
+}
+
+fn merge_domain_action_value(
+    reason_codes: &mut Vec<String>,
+    current_action: Action,
+    action: Option<DomainAction>,
+) -> Action {
+    let Some(action) = action else {
         return current_action;
     };
     let action_marker = domain_action_reason_marker(action);
@@ -762,6 +939,36 @@ pub fn build_domain_observations(
         observations.push(observation);
     }
     observations
+}
+
+pub fn build_domain_temporal_signals(
+    domain_output: Option<&DomainTemporalOutput>,
+) -> Vec<DetectionSignal> {
+    let Some(domain_output) = domain_output else {
+        return Vec::new();
+    };
+
+    domain_output
+        .signals
+        .iter()
+        .filter_map(|domain_signal| {
+            let threat_type = domain_signal_threat_type(domain_signal.threat_type.as_deref());
+            (threat_type != ThreatType::None).then(|| {
+                DetectionSignal::context(
+                    threat_type,
+                    domain_signal.score,
+                    domain_signal_confidence(
+                        domain_signal.severity.as_deref(),
+                        domain_signal.score,
+                    ),
+                    SignalFamily::Conversation,
+                    domain_signal_reason_code(domain_signal),
+                    "Domain temporal fusion signal",
+                )
+                .with_threat_subtype(domain_signal.threat_key.clone())
+            })
+        })
+        .collect()
 }
 
 pub fn build_blocked_url_signal(blocked: &BlockedUrlMatch) -> DetectionSignal {
@@ -922,24 +1129,178 @@ fn propaganda_source_subtype(rule_id: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_blocked_url_signal, build_domain_observations, core_action_from_domain_action,
+        build_blocked_url_signal, build_domain_observations, build_domain_temporal_input,
+        build_domain_temporal_signals, core_action_from_domain_action,
         decide_action_with_domain_overrides, detection_enabled_for_threat,
         domain_action_reason_marker, domain_conversation_type, domain_risk_profile_for_mode,
         domain_signal_confidence, domain_signal_threat_type, domain_threat_priority,
         event_kind_from_domain, is_domain_threat, is_link_family_threat, is_propaganda_threat,
         map_domain_threat_to_event_kind, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
-        map_rule_or_threat_to_event_kind, map_threat_to_event_kind, merge_domain_output_effects,
+        map_rule_or_threat_to_event_kind, map_threat_to_event_kind,
+        merge_active_domain_temporal_output_effects, merge_domain_output_effects,
         parse_domain_threat_type, parse_threat_type_label, should_skip_pattern_match,
         should_skip_pattern_rule_override, threat_priority_for_sort,
     };
 
-    use crate::context::events::EventKind;
+    use crate::context::events::{
+        ContextEvent, EventContextFrame, EventDirectionality, EventKind, EventSpeechAct,
+        EventStance,
+    };
+    use crate::context::tracker::{ConversationTracker, TrackerConfig};
     use crate::ids::{ConversationId, SenderId};
     use crate::types::{Action, ContentType, ConversationType, ProtectionLevel, ThreatType};
     use crate::{AuraConfig, AuraDomainRuntime, DomainMode, MessageInput};
-    use aura_domain::{DomainAction, DomainEventKind, DomainOutput, DomainSignal};
+    use aura_domain::{
+        DomainAction, DomainEventKind, DomainOutput, DomainSignal, DomainTemporalOutput,
+    };
     use aura_patterns::BlockedUrlMatch;
     use std::collections::HashSet;
+
+    fn temporal_message(sender_id: &str) -> MessageInput {
+        MessageInput {
+            content_type: ContentType::Text,
+            text: Some("content is intentionally not projected".to_string()),
+            image_data: None,
+            sender_id: SenderId::from(sender_id),
+            conversation_id: ConversationId::from("temporal-conversation"),
+            language: Some("uk".to_string()),
+            conversation_type: ConversationType::Direct,
+            member_count: None,
+            sender_relationship: Default::default(),
+            relationship_trust_source: Default::default(),
+        }
+    }
+
+    fn temporal_event(
+        sender_id: &str,
+        kind: EventKind,
+        timestamp_ms: u64,
+        content_hash: u64,
+    ) -> ContextEvent {
+        let mut event =
+            ContextEvent::new(timestamp_ms, sender_id, "temporal-conversation", kind, 0.9)
+                .with_context(EventContextFrame {
+                    speech_act: EventSpeechAct::Assert,
+                    stance: EventStance::Endorse,
+                    directionality: EventDirectionality::DirectedAtUser,
+                    confidence: 0.9,
+                    ..EventContextFrame::default()
+                });
+        event.content_hash = Some(content_hash);
+        event
+    }
+
+    #[test]
+    fn temporal_projection_is_exact_after_tracker_restart() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(temporal_event(
+            "external",
+            EventKind::PropagandaNarrative,
+            1_000,
+            11,
+        ));
+        tracker.record_event(temporal_event(
+            "external",
+            EventKind::PsyopsPattern,
+            2_000,
+            22,
+        ));
+        let input = temporal_message("external");
+        let before = build_domain_temporal_input(
+            &input,
+            2_000,
+            Some(22),
+            tracker
+                .timeline("temporal-conversation")
+                .expect("source timeline"),
+            Some("protected"),
+        )
+        .expect("source projection");
+
+        let state = tracker.export_wire_state();
+        let mut restored = ConversationTracker::new(TrackerConfig::default());
+        restored.import_wire_state(state).expect("state import");
+        let after = build_domain_temporal_input(
+            &input,
+            2_000,
+            Some(22),
+            restored
+                .timeline("temporal-conversation")
+                .expect("restored timeline"),
+            Some("protected"),
+        )
+        .expect("restored projection");
+
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn temporal_projection_excludes_future_events_from_backfill() {
+        let mut tracker = ConversationTracker::new(TrackerConfig::default());
+        tracker.record_event(temporal_event(
+            "external",
+            EventKind::PropagandaNarrative,
+            1_000,
+            11,
+        ));
+        tracker.record_event(temporal_event(
+            "external",
+            EventKind::PsyopsPattern,
+            3_000,
+            33,
+        ));
+        let input = temporal_message("external");
+
+        let projection = build_domain_temporal_input(
+            &input,
+            1_000,
+            Some(11),
+            tracker.timeline("temporal-conversation").expect("timeline"),
+            Some("protected"),
+        )
+        .expect("projection");
+
+        assert_eq!(projection.events.len(), 1);
+    }
+
+    #[test]
+    fn temporal_action_requires_its_derived_signal_to_be_active() {
+        let output = DomainTemporalOutput {
+            signals: vec![DomainSignal {
+                threat_key: "military_temporal_collection".to_string(),
+                reason_code: "military.temporal.collection".to_string(),
+                score: 0.9,
+                threat_type: Some("military_social_eng".to_string()),
+                severity: Some("high".to_string()),
+                priority: Some(90),
+                action: Some(DomainAction::Warn),
+            }],
+            action: Some(DomainAction::Warn),
+        };
+        let active_signals = build_domain_temporal_signals(Some(&output));
+        let mut active_reason_codes = Vec::new();
+        let active_action = merge_active_domain_temporal_output_effects(
+            &mut active_reason_codes,
+            Action::Allow,
+            Some(&output),
+            &active_signals,
+        );
+
+        assert_eq!(active_action, Action::Warn);
+        assert!(active_reason_codes
+            .iter()
+            .any(|code| code == "domain.action.warn"));
+
+        let mut inactive_reason_codes = Vec::new();
+        let inactive_action = merge_active_domain_temporal_output_effects(
+            &mut inactive_reason_codes,
+            Action::Allow,
+            Some(&output),
+            &[],
+        );
+        assert_eq!(inactive_action, Action::Allow);
+        assert!(inactive_reason_codes.is_empty());
+    }
 
     #[test]
     fn invalid_disabled_minor_config_remains_fail_closed() {
