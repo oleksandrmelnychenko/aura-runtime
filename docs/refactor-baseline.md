@@ -1,6 +1,6 @@
 # AURA Core Refactor Baseline
 
-Status: refreshed after the reviewed confirmed-memory domain differential on August 11, 2026.
+Status: refreshed after the reviewed domain-release differential on August 11, 2026.
 
 ## Purpose
 
