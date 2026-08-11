@@ -1,4 +1,52 @@
 {
   "schema_version": "aura.refactor_diff_approvals.v1",
-  "approvals": []
+  "approvals": [
+    {
+      "path": "/contracts/contract_evidence/domain_modules",
+      "classification": "structural_only",
+      "baseline": {
+        "$aura_missing": true
+      },
+      "candidate": [
+        {
+          "lexical_policy": {
+            "pack_id": "aura.kids.lexical_policy",
+            "rule_count": 23,
+            "schema_version": 1,
+            "sha256": "9ceeacde143a5bb1449530a92227acf8e9538cc364af92511bcb7364d105f841"
+          },
+          "module_id": "kids",
+          "module_version": "0.2.0",
+          "schema_version": 1,
+          "state_schema_version": 2,
+          "stateful": true,
+          "temporal_policy": null
+        },
+        {
+          "lexical_policy": {
+            "pack_id": "aura.military.lexical_policy",
+            "rule_count": 25,
+            "schema_version": 1,
+            "sha256": "43b5713c8b139b55a21c2bba4c0757fd639f5b0973c81b3bc5e912aef047d4f7"
+          },
+          "module_id": "military",
+          "module_version": "0.2.0",
+          "schema_version": 1,
+          "state_schema_version": null,
+          "stateful": false,
+          "temporal_policy": {
+            "action_execution_configured": false,
+            "pack": {
+              "pack_id": "aura.military.temporal_policy",
+              "rule_count": 3,
+              "schema_version": 1,
+              "sha256": "664830faa36ec2cf9846d612c02cb14d159a4a75ee925a3664f6147da0cc7348"
+            },
+            "runtime_enabled": false
+          }
+        }
+      ],
+      "reason": "Adds deterministic release evidence for exact Kids and Military policy packs, state ownership, and disabled Military temporal execution without changing detection, memory, policy, or product behavior."
+    }
+  ]
 }
