@@ -21,14 +21,16 @@ The Rust repository emits:
   `aura.apple_artifact_verification.v1`;
 - one XCFramework with device, simulator, and Mac Catalyst slices.
 
-The current committed iOS validator still accepts the previous exact manifest
-schema `4` and descriptor schema `2`. That rejection is intentional: exact
-shape validation prevents a new binary provenance contract from entering the
-app without a reviewed client migration.
+The iOS validator accepts only manifest schema `5` and descriptor schema `3`
+and binds the local package to an exact commit and source-tree digest. Exact
+shape validation prevents a binary provenance contract from entering the app
+without a reviewed client migration.
 
-The iOS repository also has an unrelated unfinished BLE/offline worktree.
-Stage 7 must not update its local package pin or artifact parser inside that
-mixed change set.
+The release builder uses a fresh Cargo target directory for every invocation,
+rejects ambient Rust compiler flags, remaps repository/toolchain/build paths,
+and rejects archives that still contain any of those local paths. Release
+reproducibility is established only by two clean builds in different absolute
+directories producing byte-identical `dist/apple` trees.
 
 ## Schema 5 Additions
 
@@ -89,13 +91,12 @@ build phase.
    reviewable source-tree digest is unchanged.
 4. Preserve the passing
    `artifacts/apple-release-verification.json`.
-5. Isolate or finish the unrelated iOS BLE/offline worktree.
-6. Update `AuraNativeReleaseArtifactContract.swift` for schemas `5` and `3`.
-7. Update the local-package/artifact pin to the exact Rust source revision and
+5. Update `AuraNativeReleaseArtifactContract.swift` for schemas `5` and `3`.
+6. Update the local-package/artifact pin to the exact Rust source revision and
    binary hashes.
-8. Run the production trust-manifest build phase and focused Aura runtime
+7. Run the production trust-manifest build phase and focused Aura runtime
    contract tests against device and simulator slices.
-9. Record the Rust source revision, artifact commit, iOS revision, source-tree
+8. Record the Rust source revision, artifact commit, iOS revision, source-tree
    digest, binary digests, and test result in the release evidence bundle.
 
 No pin should reference an uncommitted source tree or a verification report

@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 DIST_DIR="${AURA_APPLE_DIST_DIR:-$ROOT/dist/apple}"
 if [[ "$DIST_DIR" != /* ]]; then
   DIST_DIR="$ROOT/$DIST_DIR"
 fi
-INCLUDE_DIR="$ROOT/target/include/aura-agent-ffi"
 PROFILE="${PROFILE:-release}"
 CARGO_PROFILE_FLAG=("--release")
 CARGO_FEATURE_NAME=""
@@ -39,6 +38,44 @@ esac
 
 if [[ "$PROFILE" != "release" ]]; then
   CARGO_PROFILE_FLAG=("--profile" "$PROFILE")
+fi
+
+if [[ -n "${RUSTFLAGS:-}" || -n "${CARGO_ENCODED_RUSTFLAGS:-}" ]]; then
+  echo "Refusing ambient Rust compiler flags for an Apple release artifact." >&2
+  exit 2
+fi
+
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/aura-apple-release.XXXXXXXX")"
+trap 'rm -rf "$WORK_DIR"' EXIT HUP INT TERM
+WORK_DIR="$(cd "$WORK_DIR" && pwd -P)"
+INCLUDE_DIR="$WORK_DIR/include/aura-agent-ffi"
+export CARGO_TARGET_DIR="$WORK_DIR/cargo-target"
+
+RUST_HOST="$(rustc -vV | sed -n 's/^host: //p')"
+RUST_SYSROOT="$(cd "$(rustc --print sysroot)" && pwd -P)"
+AURA_CARGO_HOME_PATH="${CARGO_HOME:-${HOME:?HOME is required when CARGO_HOME is unset}/.cargo}"
+if [[ ! -d "$AURA_CARGO_HOME_PATH" ]]; then
+  echo "Cargo home is unavailable: $AURA_CARGO_HOME_PATH" >&2
+  exit 2
+fi
+AURA_CARGO_HOME_PATH="$(cd "$AURA_CARGO_HOME_PATH" && pwd -P)"
+
+remap_flags=(
+  "--remap-path-prefix=$ROOT=/aura/source"
+  "--remap-path-prefix=$WORK_DIR=/aura/build"
+  "--remap-path-prefix=$AURA_CARGO_HOME_PATH=/aura/cargo"
+  "--remap-path-prefix=$RUST_SYSROOT=/aura/rust"
+)
+printf -v CARGO_ENCODED_RUSTFLAGS '%s\x1f' "${remap_flags[@]}"
+CARGO_ENCODED_RUSTFLAGS="${CARGO_ENCODED_RUSTFLAGS%$'\x1f'}"
+export CARGO_ENCODED_RUSTFLAGS
+
+LLVM_NM="${AURA_LLVM_NM:-$RUST_SYSROOT/lib/rustlib/$RUST_HOST/bin/llvm-nm}"
+LLVM_STRIP="${AURA_LLVM_STRIP:-$RUST_SYSROOT/lib/rustlib/$RUST_HOST/bin/llvm-strip}"
+if [[ ! -x "$LLVM_NM" || ! -x "$LLVM_STRIP" ]]; then
+  echo "Rust llvm-nm and llvm-strip are required to package Apple artifacts." >&2
+  echo "Install them with: rustup component add llvm-tools-preview" >&2
+  exit 2
 fi
 
 mkdir -p "$DIST_DIR" "$INCLUDE_DIR"
@@ -164,32 +201,20 @@ if [[ "$PROFILE" == "release" ]]; then
   profile_dir="release"
 fi
 
-RUST_HOST="$(rustc -vV | sed -n 's/^host: //p')"
-RUST_SYSROOT="$(rustc --print sysroot)"
-LLVM_NM="${AURA_LLVM_NM:-$RUST_SYSROOT/lib/rustlib/$RUST_HOST/bin/llvm-nm}"
-LLVM_STRIP="${AURA_LLVM_STRIP:-$RUST_SYSROOT/lib/rustlib/$RUST_HOST/bin/llvm-strip}"
-if [[ ! -x "$LLVM_NM" || ! -x "$LLVM_STRIP" ]]; then
-  echo "Rust llvm-nm and llvm-strip are required to package Apple artifacts." >&2
-  echo "Install them with: rustup component add llvm-tools-preview" >&2
-  exit 2
-fi
-
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/aura-apple-release.XXXXXXXX")"
-trap 'rm -rf "$WORK_DIR"' EXIT HUP INT TERM
 DEVICE_LIB="$WORK_DIR/libaura_agent_ffi.a"
 SIM_LIB="$WORK_DIR/libaura_agent_ffi_ios_sim.a"
 MACABI_LIB="$WORK_DIR/libaura_agent_ffi_maccatalyst.a"
 
-cp "$ROOT/target/aarch64-apple-ios/$profile_dir/libaura_agent_ffi.a" "$DEVICE_LIB"
+cp "$CARGO_TARGET_DIR/aarch64-apple-ios/$profile_dir/libaura_agent_ffi.a" "$DEVICE_LIB"
 
 lipo -create \
-  "$ROOT/target/aarch64-apple-ios-sim/$profile_dir/libaura_agent_ffi.a" \
-  "$ROOT/target/x86_64-apple-ios/$profile_dir/libaura_agent_ffi.a" \
+  "$CARGO_TARGET_DIR/aarch64-apple-ios-sim/$profile_dir/libaura_agent_ffi.a" \
+  "$CARGO_TARGET_DIR/x86_64-apple-ios/$profile_dir/libaura_agent_ffi.a" \
   -output "$SIM_LIB"
 
 lipo -create \
-  "$ROOT/target/aarch64-apple-ios-macabi/$profile_dir/libaura_agent_ffi.a" \
-  "$ROOT/target/x86_64-apple-ios-macabi/$profile_dir/libaura_agent_ffi.a" \
+  "$CARGO_TARGET_DIR/aarch64-apple-ios-macabi/$profile_dir/libaura_agent_ffi.a" \
+  "$CARGO_TARGET_DIR/x86_64-apple-ios-macabi/$profile_dir/libaura_agent_ffi.a" \
   -output "$MACABI_LIB"
 
 # Cargo cannot strip every object embedded in a Mach-O static archive. Remove
@@ -198,6 +223,28 @@ lipo -create \
 "$LLVM_STRIP" -S "$DEVICE_LIB"
 "$LLVM_STRIP" -S "$SIM_LIB"
 "$LLVM_STRIP" -S "$MACABI_LIB"
+
+verify_archive_has_no_local_paths() {
+  local archive="$1"
+  local strings_file="$WORK_DIR/$(basename "$archive").strings"
+  local forbidden_path
+
+  /usr/bin/strings "$archive" >"$strings_file"
+  for forbidden_path in \
+    "$ROOT" \
+    "$WORK_DIR" \
+    "$AURA_CARGO_HOME_PATH" \
+    "$RUST_SYSROOT"; do
+    if grep -F "$forbidden_path" "$strings_file" >/dev/null; then
+      echo "Release archive contains a local build path: $forbidden_path" >&2
+      exit 1
+    fi
+  done
+}
+
+verify_archive_has_no_local_paths "$DEVICE_LIB"
+verify_archive_has_no_local_paths "$SIM_LIB"
+verify_archive_has_no_local_paths "$MACABI_LIB"
 
 required_symbols=()
 while IFS= read -r symbol; do
