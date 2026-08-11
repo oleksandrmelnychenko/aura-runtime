@@ -8,6 +8,7 @@ Status: synchronized with runtime and policy behavior on August 1, 2026.
 ## Active Operating Set
 
 - [Master Production Release Plan](./production-release-master-plan.md)
+- [Release Decision Contract](./release-decision.md)
 - [AURA Core Refactor Completion Plan](./aura-core-refactor-completion-plan.md)
 - [AURA Core Research Evidence Roadmap](./research-evidence-roadmap.md)
 - [Apple Artifact Integration Contract](./apple-artifact-integration.md)

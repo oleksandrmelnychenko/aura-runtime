@@ -542,6 +542,12 @@ account. Kill switch не повинен переводити явний риз�
 
 Потрібен верхньорівневий документ, окремий від Apple `shippable`:
 
+Статус реалізації: fail-closed агрегатор, зовнішній client-acceptance contract
+і окремі Ed25519 sign/verify команди реалізовано в
+`ci/release_decision.py`. До фактичного iOS acceptance та чотирьох реальних
+pilot signoff поточний кандидат зобов'язаний залишатися `no-go`; автоматизація
+не підміняє ці зовнішні рішення.
+
 ```json
 {
   "schema_version": "aura.release_decision.v1",

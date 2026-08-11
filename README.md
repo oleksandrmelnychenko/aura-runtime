@@ -262,6 +262,7 @@ See `docs/temporal-independent-review.md`,
 `docs/temporal-study-timestamp.md`,
 `docs/rfc3161-historical-revocation.md`,
 `docs/evidence-renewal-envelope.md`,
+`docs/release-decision.md`,
 `docs/temporal-review-roster.md`,
 `docs/temporal-review-receipts.md`,
 `docs/temporal-shadow-telemetry.md`, and

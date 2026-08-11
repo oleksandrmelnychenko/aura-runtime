@@ -1,0 +1,21 @@
+{
+  "schema_version": "aura.product_integration_acceptance.v1",
+  "status": "pass",
+  "profile": "agent-kids-rules-context",
+  "candidate_revision": "<40 lowercase hex>",
+  "source_tree_sha256": "<64 lowercase hex>",
+  "evidence_manifest_sha256": "<64 lowercase hex>",
+  "evidence_attestation_verification_sha256": "<64 lowercase hex>",
+  "apple_artifact_verification_sha256": "<64 lowercase hex>",
+  "apple_release_manifest_sha256": "<64 lowercase hex>",
+  "pilot_gate_report_sha256": "<64 lowercase hex>",
+  "runtime_artifact_descriptor_sha256": "<64 lowercase hex>",
+  "runtime_capabilities_sha256": "<64 lowercase hex>",
+  "local_decision_contract": "pass",
+  "terminal_checkpoint_contract": "pass",
+  "restart_replay_contract": "pass",
+  "exact_artifact_pin": true,
+  "model_enabled": false,
+  "relay_enabled": false,
+  "military_enabled": false
+}

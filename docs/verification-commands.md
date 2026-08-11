@@ -38,6 +38,18 @@ all CI Cargo resolution to use `Cargo.lock`. The discovery command is the
 canonical Python helper gate so newly added evidence tests cannot be omitted by
 an outdated hand-maintained module list.
 
+## Top-Level Release Decision
+
+The exact GO/NO-GO creation and Ed25519 operator-signature commands are in
+`docs/release-decision.md`. Run its focused contract tests with:
+
+```bash
+python3 -m unittest ci.test_release_decision
+```
+
+The current repository must remain `no-go` until the external Apple client
+acceptance and four real pilot signoffs exist for the same candidate.
+
 ## AURA Core Refactor Differential Gate
 
 ```bash

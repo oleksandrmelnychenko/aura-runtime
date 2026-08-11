@@ -2,6 +2,10 @@
 
 ## Unreleased — Release Reliability
 
+- Added a fail-closed `aura.release_decision.v1` aggregator and detached
+  Ed25519 operator attestation. A GO now requires one exact signed evidence,
+  Apple, pilot/signoff, rollback, and external client-acceptance set; missing
+  or mismatched inputs remain an explicit NO-GO.
 - Pinned the Rust toolchain, GitHub Actions, and `cargo-audit` installer;
   disabled persisted checkout credentials, restricted every workflow token to
   read-only repository contents, required `Cargo.lock` resolution in CI, and
