@@ -91,6 +91,11 @@ The repository now contains dedicated crates for this model:
 - The canonical contract-evidence report includes both registered modules in
   stable identity order, so a domain-policy change cannot bypass the release
   evidence manifest.
+- Domain registration rejects duplicate module identities, evidence/runtime ID
+  mismatches, unsupported evidence schemas, malformed policy-pack digests,
+  inconsistent state ownership, and disagreement between temporal evidence and
+  executable temporal activation. Rejected registration never replaces the
+  previously registered implementation.
 - Domain rule records now include `threat_type`, `severity`, and `priority` metadata
 - Domain action policy is now resolved via shared `aura-domain` policy engine
 - Integrated domain execution is two-phase: `detect` is non-mutating, core
