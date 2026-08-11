@@ -57,7 +57,7 @@ jobs:
     - name: Lint Domain Lexicons
       run: python3 ci/lint_lexicons.py
     - name: Run CI Helper Tests
-      run: python3 -m unittest ci.test_apple_artifact ci.test_evidence_attestation ci.test_generate_evidence_manifest ci.test_refactor_baseline ci.test_temporal_study_attestation ci.test_world_performance_gate
+      run: python3 -m unittest ci.test_apple_artifact ci.test_evidence_attestation ci.test_generate_evidence_manifest ci.test_refactor_baseline ci.test_temporal_study_attestation ci.test_temporal_study_timestamp ci.test_world_performance_gate
     - name: Resolve Promotion Target
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -339,6 +339,8 @@ jobs:
             summary.write(f"- temporal_shadow_adversarial_variants: `{summary_data.get('temporal_shadow_adversarial_variant_count', 'missing')}`\n")
             summary.write(f"- temporal_shadow_adversarial_mismatches: `{summary_data.get('temporal_shadow_adversarial_mismatch_count', 'missing')}`\n")
             summary.write(f"- temporal_shadow_telemetry_validation: `{summary_data.get('temporal_shadow_telemetry_validation_status', 'missing')}`\n")
+            summary.write(f"- temporal_study_timestamp: `{summary_data.get('temporal_study_timestamp_verification_status', 'missing')}`\n")
+            summary.write(f"- temporal_study_timestamp_latest_trusted_time_ms: `{summary_data.get('temporal_study_timestamp_latest_trusted_time_unix_ms', 'missing')}`\n")
             summary.write(f"- temporal_policy_activation_readiness: `{summary_data.get('temporal_policy_activation_readiness', 'missing')}`\n")
             summary.write(f"- temporal_shadow_telemetry_on_prem_inputs: `{summary_data.get('temporal_shadow_telemetry_on_prem_inputs', 'missing')}`\n")
             summary.write(f"- temporal_shadow_telemetry_adk_inputs: `{summary_data.get('temporal_shadow_telemetry_adk_inputs', 'missing')}`\n")

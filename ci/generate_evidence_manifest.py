@@ -13,9 +13,12 @@ from pathlib import Path
 SCHEMA_VERSION = "aura.evidence_manifest.v1"
 PILOT_SHADOW_SCHEMA_VERSION = "aura.shadow_mode_bundle.v1"
 TEMPORAL_SHADOW_SCHEMA_VERSION = "aura.military.temporal_shadow_report.v1"
-TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v3"
+TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v4"
 TEMPORAL_STUDY_ATTESTATION_VERIFICATION_SCHEMA_VERSION = (
     "aura.military.temporal_study_attestation_verification.v1"
+)
+TEMPORAL_STUDY_TIMESTAMP_VERIFICATION_SCHEMA_VERSION = (
+    "aura.military.temporal_study_timestamp_verification.v1"
 )
 TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
@@ -69,6 +72,11 @@ def parse_args() -> argparse.Namespace:
         "--temporal-study-attestation-verification",
         default=None,
         help="Optional path to trusted-key verification of the temporal study commitment.",
+    )
+    parser.add_argument(
+        "--temporal-study-timestamp-verification",
+        default=None,
+        help="Optional path to RFC 3161 verification of the temporal study commitment.",
     )
     parser.add_argument(
         "--temporal-shadow-telemetry-validation",
@@ -322,6 +330,40 @@ def temporal_independent_review_status(payload: dict | None) -> str | None:
             return "invalid_study_commitment"
         if payload.get("study_corpus_class") != "embargoed_external":
             return "insufficient_external_validity"
+        chronology = payload.get("chronology")
+        if (
+            not isinstance(chronology, dict)
+            or chronology.get("decision_time_assurance") != "bundle_declared"
+        ):
+            return "invalid_review_chronology"
+        chronology_fields = (
+            "declared_preregistration_at_ms",
+            "earliest_annotation_completed_at_ms",
+            "latest_annotation_completed_at_ms",
+            "earliest_adjudication_completed_at_ms",
+            "latest_adjudication_completed_at_ms",
+        )
+        chronology_values = [chronology.get(field) for field in chronology_fields]
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            for value in chronology_values
+        ):
+            return "invalid_review_chronology"
+        (
+            registered_at_ms,
+            earliest_annotation_ms,
+            latest_annotation_ms,
+            earliest_adjudication_ms,
+            latest_adjudication_ms,
+        ) = chronology_values
+        if (
+            registered_at_ms >= earliest_annotation_ms
+            or earliest_annotation_ms > latest_annotation_ms
+            or registered_at_ms >= earliest_adjudication_ms
+            or earliest_adjudication_ms > latest_adjudication_ms
+            or latest_annotation_ms >= earliest_adjudication_ms
+        ):
+            return "invalid_review_chronology"
         metrics = payload.get("metrics")
         if not isinstance(metrics, dict) or metrics.get("reviewer_pair_comparisons", 0) <= 0:
             return "invalid_agreement_summary"
@@ -411,6 +453,162 @@ def temporal_study_attestation_verification_status(
     return "pass"
 
 
+def valid_oid(value: object) -> bool:
+    if not isinstance(value, str) or not 3 <= len(value) <= 128:
+        return False
+    components = value.split(".")
+    if len(components) < 3 or any(
+        not component.isascii()
+        or not component.isdigit()
+        or (len(component) > 1 and component.startswith("0"))
+        for component in components
+    ):
+        return False
+    first = int(components[0])
+    second = int(components[1])
+    return first in (0, 1, 2) and (first == 2 or second <= 39)
+
+
+def temporal_study_timestamp_verification_status(
+    payload: dict | None,
+    temporal_independent_review_payload: dict | None,
+    temporal_study_attestation_verification_payload: dict | None,
+) -> str | None:
+    if payload is None:
+        return None
+    if (
+        payload.get("schema_version")
+        != TEMPORAL_STUDY_TIMESTAMP_VERIFICATION_SCHEMA_VERSION
+    ):
+        return "invalid_schema"
+    if payload.get("status") != "pass":
+        return "fail"
+    if (
+        payload.get("timestamp_protocol") != "RFC3161"
+        or payload.get("trusted_timestamp_assurance")
+        != "rfc3161_trusted_chain"
+        or payload.get("message_imprint_algorithm") != "sha256"
+        or payload.get("certificate_validation_time_basis") != "tsa_gen_time"
+        or payload.get("revocation_assurance") != "not_checked"
+        or payload.get("request_nonce_present") is not True
+    ):
+        return "invalid_timestamp_assurance"
+    if not valid_oid(payload.get("policy_oid")):
+        return "invalid_timestamp_identity"
+    serial = payload.get("serial_hex")
+    if (
+        not isinstance(serial, str)
+        or not serial.startswith("0x")
+        or not 1 <= len(serial[2:]) <= 40
+        or any(character not in "0123456789abcdef" for character in serial[2:])
+    ):
+        return "invalid_timestamp_identity"
+    ordering = payload.get("ordering")
+    accuracy_micros = payload.get("accuracy_micros")
+    latest_trusted_time_ms = payload.get("latest_trusted_time_unix_ms")
+    if (
+        not isinstance(ordering, bool)
+        or isinstance(accuracy_micros, bool)
+        or not isinstance(accuracy_micros, int)
+        or not 0 <= accuracy_micros <= 5 * 60 * 1_000_000
+    ):
+        return "invalid_timestamp_identity"
+    for field in (
+        "commitment_file_sha256",
+        "commitment_canonical_sha256",
+        "preregistration_canonical_sha256",
+        "corpus_sha256",
+        "packet_canonical_sha256",
+        "request_sha256",
+        "response_sha256",
+        "tsa_signer_certificate_sha256",
+        "tsa_signer_spki_sha256",
+        "trust_anchor_bundle_sha256",
+    ):
+        digest = payload.get(field)
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            return "invalid_timestamp_identity"
+    untrusted_chain_digest = payload.get("untrusted_chain_sha256")
+    if untrusted_chain_digest is not None and (
+        not isinstance(untrusted_chain_digest, str)
+        or len(untrusted_chain_digest) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in untrusted_chain_digest
+        )
+    ):
+        return "invalid_timestamp_identity"
+    for field in (
+        "registered_at_ms",
+        "gen_time_unix_ms",
+        "verification_time_unix_ms",
+    ):
+        value = payload.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            return "invalid_timestamp_chronology"
+    registered_at_ms = payload["registered_at_ms"]
+    gen_time_ms = payload["gen_time_unix_ms"]
+    verification_time_ms = payload["verification_time_unix_ms"]
+    expected_latest_trusted_time_ms = gen_time_ms + (accuracy_micros + 999) // 1000
+    if (
+        gen_time_ms + 5 * 60 * 1000 < registered_at_ms
+        or gen_time_ms > verification_time_ms + 5 * 60 * 1000
+        or latest_trusted_time_ms != expected_latest_trusted_time_ms
+    ):
+        return "invalid_timestamp_chronology"
+    if temporal_independent_review_payload is None:
+        return "missing_review_binding"
+    if temporal_study_attestation_verification_payload is None:
+        return "missing_attestation_binding"
+    attestation_bindings = (
+        "study_id",
+        "registered_at_ms",
+        "corpus_class",
+        "commitment_file_sha256",
+        "commitment_canonical_sha256",
+        "preregistration_canonical_sha256",
+        "corpus_sha256",
+        "packet_canonical_sha256",
+    )
+    if any(
+        payload.get(field)
+        != temporal_study_attestation_verification_payload.get(field)
+        for field in attestation_bindings
+    ):
+        return "attestation_binding_mismatch"
+    review_bindings = (
+        ("study_id", "study_id"),
+        ("corpus_class", "study_corpus_class"),
+        ("commitment_canonical_sha256", "study_commitment_canonical_sha256"),
+        ("preregistration_canonical_sha256", "preregistration_canonical_sha256"),
+        ("corpus_sha256", "corpus_sha256"),
+        ("packet_canonical_sha256", "blind_packet_canonical_sha256"),
+    )
+    if any(
+        payload.get(timestamp_field)
+        != temporal_independent_review_payload.get(review_field)
+        for timestamp_field, review_field in review_bindings
+    ):
+        return "review_binding_mismatch"
+    chronology = temporal_independent_review_payload.get("chronology")
+    if not isinstance(chronology, dict):
+        return "missing_review_chronology"
+    if chronology.get("declared_preregistration_at_ms") != registered_at_ms:
+        return "review_chronology_mismatch"
+    earliest_annotation_ms = chronology.get("earliest_annotation_completed_at_ms")
+    if (
+        isinstance(earliest_annotation_ms, bool)
+        or not isinstance(earliest_annotation_ms, int)
+        or latest_trusted_time_ms >= earliest_annotation_ms
+    ):
+        return "timestamp_not_before_review"
+    return "pass"
+
+
 def temporal_shadow_telemetry_validation_status(payload: dict | None) -> str | None:
     if payload is None:
         return None
@@ -461,6 +659,7 @@ def temporal_policy_activation_readiness(
     temporal_independent_review_payload: dict | None,
     temporal_shadow_telemetry_validation_payload: dict | None,
     temporal_study_attestation_verification_payload: dict | None,
+    temporal_study_timestamp_verification_payload: dict | None,
 ) -> str | None:
     shadow_status = temporal_shadow_status(temporal_shadow_payload)
     review_status = temporal_independent_review_status(
@@ -473,21 +672,29 @@ def temporal_policy_activation_readiness(
         temporal_study_attestation_verification_payload,
         temporal_independent_review_payload,
     )
+    timestamp_status = temporal_study_timestamp_verification_status(
+        temporal_study_timestamp_verification_payload,
+        temporal_independent_review_payload,
+        temporal_study_attestation_verification_payload,
+    )
     if (
         shadow_status is None
         and review_status is None
         and telemetry_status is None
         and attestation_status is None
+        and timestamp_status is None
     ):
         return None
     if shadow_status != "pass" or telemetry_status != "pass":
         return "fail"
     if attestation_status not in (None, "pass"):
         return "fail"
+    if timestamp_status not in (None, "pass"):
+        return "fail"
     if review_status == "pass":
-        if attestation_status == "pass":
+        if attestation_status == "pass" and timestamp_status == "pass":
             return "pass"
-        if attestation_status is None:
+        if attestation_status is None or timestamp_status is None:
             return "pending"
         return "fail"
     if review_status in (None, "pending"):
@@ -629,6 +836,11 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         "pass",
     ):
         return "fail"
+    if summary["temporal_study_timestamp_verification_status"] not in (
+        None,
+        "pass",
+    ):
+        return "fail"
     if summary["temporal_shadow_telemetry_validation_status"] not in (None, "pass"):
         return "fail"
     if summary["pilot_gate_status"] not in (None, "pass"):
@@ -661,6 +873,7 @@ def attach_payload_details(
     temporal_shadow_payload: dict | None,
     temporal_independent_review_payload: dict | None,
     temporal_study_attestation_verification_payload: dict | None,
+    temporal_study_timestamp_verification_payload: dict | None,
     temporal_shadow_telemetry_validation_payload: dict | None,
     pilot_gate_payload: dict | None,
     kids_preprod_dry_run_payload: dict | None,
@@ -803,6 +1016,27 @@ def attach_payload_details(
         artifacts["temporal_independent_review_report"][
             "krippendorff_alpha_nominal"
         ] = review_metrics.get("krippendorff_alpha_nominal")
+        review_chronology = temporal_independent_review_payload.get("chronology", {})
+        artifacts["temporal_independent_review_report"]["chronology"] = {
+            "decision_time_assurance": review_chronology.get(
+                "decision_time_assurance"
+            ),
+            "declared_preregistration_at_ms": review_chronology.get(
+                "declared_preregistration_at_ms"
+            ),
+            "earliest_annotation_completed_at_ms": review_chronology.get(
+                "earliest_annotation_completed_at_ms"
+            ),
+            "latest_annotation_completed_at_ms": review_chronology.get(
+                "latest_annotation_completed_at_ms"
+            ),
+            "earliest_adjudication_completed_at_ms": review_chronology.get(
+                "earliest_adjudication_completed_at_ms"
+            ),
+            "latest_adjudication_completed_at_ms": review_chronology.get(
+                "latest_adjudication_completed_at_ms"
+            ),
+        }
     if temporal_study_attestation_verification_payload is not None:
         artifact = artifacts["temporal_study_attestation_verification"]
         artifact["observed_status"] = temporal_study_attestation_verification_status(
@@ -820,6 +1054,27 @@ def attach_payload_details(
             "trusted_timestamp_assurance",
         ):
             artifact[field] = temporal_study_attestation_verification_payload.get(field)
+    if temporal_study_timestamp_verification_payload is not None:
+        artifact = artifacts["temporal_study_timestamp_verification"]
+        artifact["observed_status"] = temporal_study_timestamp_verification_status(
+            temporal_study_timestamp_verification_payload,
+            temporal_independent_review_payload,
+            temporal_study_attestation_verification_payload,
+        )
+        for field in (
+            "schema_version",
+            "timestamp_protocol",
+            "trusted_timestamp_assurance",
+            "policy_oid",
+            "serial_hex",
+            "gen_time_unix_ms",
+            "accuracy_micros",
+            "latest_trusted_time_unix_ms",
+            "tsa_signer_spki_sha256",
+            "trust_anchor_bundle_sha256",
+            "revocation_assurance",
+        ):
+            artifact[field] = temporal_study_timestamp_verification_payload.get(field)
     if temporal_shadow_telemetry_validation_payload is not None:
         artifacts["temporal_shadow_telemetry_validation"][
             "observed_status"
@@ -1010,6 +1265,17 @@ def main() -> int:
         else (None, None)
     )
     (
+        temporal_study_timestamp_verification_payload,
+        temporal_study_timestamp_verification_artifact,
+    ) = (
+        load_json_artifact(
+            args.temporal_study_timestamp_verification,
+            required=args.temporal_study_timestamp_verification is not None,
+        )
+        if args.temporal_study_timestamp_verification
+        else (None, None)
+    )
+    (
         temporal_shadow_telemetry_validation_payload,
         temporal_shadow_telemetry_validation_artifact,
     ) = (
@@ -1072,6 +1338,10 @@ def main() -> int:
         artifacts[
             "temporal_study_attestation_verification"
         ] = temporal_study_attestation_verification_artifact
+    if temporal_study_timestamp_verification_artifact is not None:
+        artifacts[
+            "temporal_study_timestamp_verification"
+        ] = temporal_study_timestamp_verification_artifact
     if temporal_shadow_telemetry_validation_artifact is not None:
         artifacts[
             "temporal_shadow_telemetry_validation"
@@ -1107,6 +1377,9 @@ def main() -> int:
         temporal_independent_review_payload=temporal_independent_review_payload,
         temporal_study_attestation_verification_payload=(
             temporal_study_attestation_verification_payload
+        ),
+        temporal_study_timestamp_verification_payload=(
+            temporal_study_timestamp_verification_payload
         ),
         temporal_shadow_telemetry_validation_payload=(
             temporal_shadow_telemetry_validation_payload
@@ -1336,6 +1609,20 @@ def main() -> int:
             if temporal_independent_review_payload
             else None
         ),
+        "temporal_review_decision_time_assurance": (
+            temporal_independent_review_payload.get("chronology", {}).get(
+                "decision_time_assurance"
+            )
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_review_earliest_annotation_completed_at_ms": (
+            temporal_independent_review_payload.get("chronology", {}).get(
+                "earliest_annotation_completed_at_ms"
+            )
+            if temporal_independent_review_payload
+            else None
+        ),
         "temporal_study_attestation_verification_status": (
             temporal_study_attestation_verification_status(
                 temporal_study_attestation_verification_payload,
@@ -1361,6 +1648,46 @@ def main() -> int:
             if temporal_study_attestation_verification_payload
             else None
         ),
+        "temporal_study_timestamp_verification_status": (
+            temporal_study_timestamp_verification_status(
+                temporal_study_timestamp_verification_payload,
+                temporal_independent_review_payload,
+                temporal_study_attestation_verification_payload,
+            )
+        ),
+        "temporal_study_timestamp_assurance": (
+            temporal_study_timestamp_verification_payload.get(
+                "trusted_timestamp_assurance"
+            )
+            if temporal_study_timestamp_verification_payload
+            else None
+        ),
+        "temporal_study_timestamp_gen_time_unix_ms": (
+            temporal_study_timestamp_verification_payload.get("gen_time_unix_ms")
+            if temporal_study_timestamp_verification_payload
+            else None
+        ),
+        "temporal_study_timestamp_latest_trusted_time_unix_ms": (
+            temporal_study_timestamp_verification_payload.get(
+                "latest_trusted_time_unix_ms"
+            )
+            if temporal_study_timestamp_verification_payload
+            else None
+        ),
+        "temporal_study_timestamp_tsa_spki_sha256": (
+            temporal_study_timestamp_verification_payload.get(
+                "tsa_signer_spki_sha256"
+            )
+            if temporal_study_timestamp_verification_payload
+            else None
+        ),
+        "temporal_study_timestamp_revocation_assurance": (
+            temporal_study_timestamp_verification_payload.get(
+                "revocation_assurance"
+            )
+            if temporal_study_timestamp_verification_payload
+            else None
+        ),
         "temporal_shadow_telemetry_validation_status": (
             temporal_shadow_telemetry_validation_status(
                 temporal_shadow_telemetry_validation_payload
@@ -1371,6 +1698,7 @@ def main() -> int:
             temporal_independent_review_payload,
             temporal_shadow_telemetry_validation_payload,
             temporal_study_attestation_verification_payload,
+            temporal_study_timestamp_verification_payload,
         ),
         "temporal_shadow_telemetry_on_prem_inputs": (
             temporal_shadow_telemetry_validation_payload.get("on_prem", {})

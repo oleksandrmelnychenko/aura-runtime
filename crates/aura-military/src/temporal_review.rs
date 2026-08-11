@@ -12,7 +12,7 @@ use crate::temporal_eval::{
 use crate::temporal_study::TemporalStudyCorpusClass;
 
 const REVIEW_SCHEMA_VERSION: &str = "aura.military.temporal_independent_review.v1";
-const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_review_report.v3";
+const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_review_report.v4";
 const MIN_REVIEWERS_PER_CASE: usize = 2;
 const MAX_REVIEWERS_PER_CASE: usize = 5;
 
@@ -81,6 +81,20 @@ pub struct TemporalReviewPrivacy {
     pub internal_case_ids_exported: bool,
 }
 
+/// Privacy-safe boundaries of the declared human-review timeline.
+///
+/// These values come from the review bundle. They support chronology checks,
+/// but are not independently trusted timestamps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TemporalReviewChronology {
+    pub decision_time_assurance: &'static str,
+    pub declared_preregistration_at_ms: Option<u64>,
+    pub earliest_annotation_completed_at_ms: Option<u64>,
+    pub latest_annotation_completed_at_ms: Option<u64>,
+    pub earliest_adjudication_completed_at_ms: Option<u64>,
+    pub latest_adjudication_completed_at_ms: Option<u64>,
+}
+
 /// Machine-readable status of independent human review for the temporal corpus.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TemporalReviewReport {
@@ -98,6 +112,7 @@ pub struct TemporalReviewReport {
     pub study_corpus_class: Option<TemporalStudyCorpusClass>,
     pub preregistration_canonical_sha256: Option<String>,
     pub study_commitment_canonical_sha256: Option<String>,
+    pub chronology: TemporalReviewChronology,
     pub metrics: TemporalReviewMetrics,
     pub checks: Vec<TemporalReviewCheck>,
     pub privacy: TemporalReviewPrivacy,
@@ -263,6 +278,24 @@ pub(crate) fn evaluate_temporal_review_against_target(
         .map(|reason_code| (reason_code, NominalAgreementAccumulator::default()))
         .collect::<BTreeMap<_, _>>();
     let required_reviewers = bundle.protocol.minimum_reviewers_per_case;
+    let annotation_completion_times = bundle
+        .cases
+        .iter()
+        .flat_map(|case| {
+            case.annotations
+                .iter()
+                .map(|annotation| annotation.completed_at_ms)
+        })
+        .collect::<Vec<_>>();
+    let adjudication_completion_times = bundle
+        .cases
+        .iter()
+        .filter_map(|case| {
+            case.adjudication
+                .as_ref()
+                .map(|adjudication| adjudication.completed_at_ms)
+        })
+        .collect::<Vec<_>>();
 
     for (case_id, expected_labels) in &target.expected_labels {
         let Some(reviewed_case) = submitted_cases.get(case_id.as_str()) else {
@@ -449,6 +482,20 @@ pub(crate) fn evaluate_temporal_review_against_target(
         study_corpus_class: None,
         preregistration_canonical_sha256: None,
         study_commitment_canonical_sha256: None,
+        chronology: TemporalReviewChronology {
+            decision_time_assurance: "bundle_declared",
+            declared_preregistration_at_ms: None,
+            earliest_annotation_completed_at_ms: annotation_completion_times.iter().copied().min(),
+            latest_annotation_completed_at_ms: annotation_completion_times.iter().copied().max(),
+            earliest_adjudication_completed_at_ms: adjudication_completion_times
+                .iter()
+                .copied()
+                .min(),
+            latest_adjudication_completed_at_ms: adjudication_completion_times
+                .iter()
+                .copied()
+                .max(),
+        },
         metrics,
         checks,
         privacy: TemporalReviewPrivacy {

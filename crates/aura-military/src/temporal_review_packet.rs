@@ -597,6 +597,7 @@ fn evaluate_temporal_blind_review_for_target(
     report.study_corpus_class = Some(preregistration.corpus_class);
     report.preregistration_canonical_sha256 = Some(preregistration.canonical_sha256.clone());
     report.study_commitment_canonical_sha256 = Some(canonical_sha256(&study_commitment)?);
+    report.chronology.declared_preregistration_at_ms = Some(preregistration.registered_at_ms);
     report.checks.extend([
         minimum_metric_check(
             "exact_set_pair_agreement_threshold",
@@ -1208,6 +1209,24 @@ mod tests {
 
         assert_eq!(report.overall_status, "pass");
         assert!(report.study_commitment_canonical_sha256.is_some());
+        assert_eq!(report.chronology.decision_time_assurance, "bundle_declared");
+        assert_eq!(report.chronology.declared_preregistration_at_ms, Some(1));
+        assert_eq!(
+            report.chronology.earliest_annotation_completed_at_ms,
+            Some(10)
+        );
+        assert_eq!(
+            report.chronology.latest_annotation_completed_at_ms,
+            Some(20)
+        );
+        assert_eq!(
+            report.chronology.earliest_adjudication_completed_at_ms,
+            Some(30)
+        );
+        assert_eq!(
+            report.chronology.latest_adjudication_completed_at_ms,
+            Some(30)
+        );
     }
 
     #[test]

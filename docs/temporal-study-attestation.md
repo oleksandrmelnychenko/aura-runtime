@@ -73,12 +73,14 @@ python3 ci/generate_evidence_manifest.py \
   --temporal-independent-review-report \
     artifacts/temporal-independent-review-report.json \
   --temporal-study-attestation-verification \
-    artifacts/temporal-study-attestation-verification.json
+    artifacts/temporal-study-attestation-verification.json \
+  --temporal-study-timestamp-verification \
+    artifacts/temporal-study-timestamp-verification.json
 ```
 
 Temporal policy activation remains `pending` when the external review passes
-but this trusted-key verification is absent. A mismatched or invalid
-verification fails the activation gate.
+but either trusted-key verification or trusted-timestamp verification is
+absent. A mismatched or invalid verification fails the activation gate.
 
 ## Time-evidence boundary
 
@@ -87,9 +89,8 @@ the exact commitment. It does not prove when signing occurred. The verification
 report therefore fixes `trusted_timestamp_assurance` to `absent`; a caller
 cannot promote it to a stronger value.
 
-For confirmatory doctoral evidence, additionally submit the commitment digest
-to an independent RFC 3161 timestamp authority or an approved append-only or
-write-once institutional log before labels are collected. Preserve the receipt,
-authority trust chain, verification output, and governance record. Trusted
-timestamp verification is a separate future evidence contract and must not be
-inferred from `registered_at_ms` or the Ed25519 signature.
+For confirmatory doctoral evidence, additionally submit the exact commitment
+to an independent RFC 3161 timestamp authority before labels are collected.
+The executable request, verification, trust-pinning, and retention procedure is
+defined in `docs/temporal-study-timestamp.md`. Trusted time must not be inferred
+from `registered_at_ms` or the Ed25519 signature.

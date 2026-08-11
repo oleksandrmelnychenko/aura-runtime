@@ -2,6 +2,15 @@
 
 ## Unreleased — Release Reliability
 
+- Added nonce-bound RFC 3161 requests and strict trusted timestamp verification
+  for temporal study commitments. Verification binds the original bytes and
+  request, expected policy OID, explicit trust chain, TSA `genTime`, and a
+  separately pinned TSA signer SPKI digest.
+- Temporal review report v4 exposes declared review chronology without
+  overstating it as trusted time. Policy activation now requires the trusted
+  commitment timestamp's `genTime + accuracy` upper bound to precede the
+  earliest declared annotation completion; certificate revocation remains
+  explicitly `not_checked`.
 - Added domain-separated Ed25519 signing and trusted-public-key verification
   for temporal study commitments. The attestation binds exact file bytes and
   canonical study, preregistration, corpus, and packet identities.

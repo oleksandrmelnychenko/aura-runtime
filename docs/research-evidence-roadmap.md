@@ -104,8 +104,12 @@ never a shippable or confirmatory research artifact.
 Temporal confirmatory review additionally uses a domain-separated Ed25519
 attestation over the preregistration/corpus/packet commitment. This authenticates
 the institutional signer and detects substitution, but it is not a trusted time
-source. Confirmatory claims still require an independently verifiable timestamp
-or immutable-log receipt created before label collection.
+source. The RFC 3161 verification contract now binds the exact commitment to an
+expected timestamp policy, certificate chain, nonce, and pinned TSA signer, and
+requires the `genTime + accuracy` upper bound before the earliest declared
+review completion. The remaining
+research limit is explicit: review completion times are bundle-declared until
+individual signed submission receipts are independently timestamped.
 
 ## Evidence Maturity
 

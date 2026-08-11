@@ -77,7 +77,7 @@ def temporal_telemetry_validation_payload(**overrides):
 
 def temporal_review_payload(**overrides):
     payload = {
-        "schema_version": "aura.military.temporal_review_report.v3",
+        "schema_version": "aura.military.temporal_review_report.v4",
         "overall_status": "pass",
         "blinding_assurance": "packet_bound",
         "blind_packet_id": "blind_round_alpha",
@@ -88,6 +88,14 @@ def temporal_review_payload(**overrides):
         "preregistration_canonical_sha256": "b" * 64,
         "study_commitment_canonical_sha256": "c" * 64,
         "corpus_sha256": "d" * 64,
+        "chronology": {
+            "decision_time_assurance": "bundle_declared",
+            "declared_preregistration_at_ms": 1780000000000,
+            "earliest_annotation_completed_at_ms": 1780000060000,
+            "latest_annotation_completed_at_ms": 1780000120000,
+            "earliest_adjudication_completed_at_ms": 1780000180000,
+            "latest_adjudication_completed_at_ms": 1780000240000,
+        },
         "privacy": {
             "raw_text_present": False,
             "reviewer_tokens_exported": False,
@@ -123,6 +131,43 @@ def temporal_study_attestation_verification_payload(**overrides):
         "packet_canonical_sha256": "a" * 64,
         "public_key_spki_sha256": "f" * 64,
         "trusted_timestamp_assurance": "absent",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def temporal_study_timestamp_verification_payload(**overrides):
+    payload = {
+        "schema_version": "aura.military.temporal_study_timestamp_verification.v1",
+        "status": "pass",
+        "timestamp_protocol": "RFC3161",
+        "trusted_timestamp_assurance": "rfc3161_trusted_chain",
+        "message_imprint_algorithm": "sha256",
+        "policy_oid": "1.2.3.4.1",
+        "serial_hex": "0x01",
+        "gen_time_unix_ms": 1780000001000,
+        "accuracy_micros": 1000000,
+        "latest_trusted_time_unix_ms": 1780000002000,
+        "ordering": True,
+        "request_nonce_present": True,
+        "study_id": "external_temporal_study_2026",
+        "registered_at_ms": 1780000000000,
+        "corpus_class": "embargoed_external",
+        "commitment_file_sha256": "e" * 64,
+        "commitment_canonical_sha256": "c" * 64,
+        "preregistration_canonical_sha256": "b" * 64,
+        "corpus_sha256": "d" * 64,
+        "packet_canonical_sha256": "a" * 64,
+        "request_sha256": "1" * 64,
+        "response_sha256": "2" * 64,
+        "tsa_signer_certificate_sha256": "3" * 64,
+        "tsa_signer_spki_sha256": "4" * 64,
+        "trust_anchor_bundle_sha256": "5" * 64,
+        "untrusted_chain_sha256": "6" * 64,
+        "certificate_validation_time_basis": "tsa_gen_time",
+        "revocation_assurance": "not_checked",
+        "verification_time_unix_ms": 1780000002000,
+        "verification_tool": "OpenSSL test",
     }
     payload.update(overrides)
     return payload
@@ -377,12 +422,24 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
             "insufficient_interreviewer_agreement",
         )
 
+    def test_temporal_review_rejects_adjudication_before_all_reviews_freeze(self):
+        payload = temporal_review_payload()
+        payload["chronology"]["earliest_adjudication_completed_at_ms"] = (
+            payload["chronology"]["latest_annotation_completed_at_ms"]
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_independent_review_status(payload),
+            "invalid_review_chronology",
+        )
+
     def test_temporal_activation_stays_pending_without_independent_review(self):
         self.assertEqual(
             generate_evidence_manifest.temporal_policy_activation_readiness(
                 temporal_shadow_payload(),
                 None,
                 temporal_telemetry_validation_payload(),
+                None,
                 None,
             ),
             "pending",
@@ -395,19 +452,91 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_review_payload(),
                 temporal_telemetry_validation_payload(),
                 None,
+                None,
             ),
             "pending",
         )
 
-    def test_temporal_activation_passes_with_verified_study_attestation(self):
+    def test_temporal_activation_remains_pending_without_trusted_timestamp(self):
         self.assertEqual(
             generate_evidence_manifest.temporal_policy_activation_readiness(
                 temporal_shadow_payload(),
                 temporal_review_payload(),
                 temporal_telemetry_validation_payload(),
                 temporal_study_attestation_verification_payload(),
+                None,
+            ),
+            "pending",
+        )
+
+    def test_temporal_activation_passes_with_verified_timestamp_precedence(self):
+        self.assertEqual(
+            generate_evidence_manifest.temporal_policy_activation_readiness(
+                temporal_shadow_payload(),
+                temporal_review_payload(),
+                temporal_telemetry_validation_payload(),
+                temporal_study_attestation_verification_payload(),
+                temporal_study_timestamp_verification_payload(),
             ),
             "pass",
+        )
+
+    def test_temporal_timestamp_must_precede_first_declared_review(self):
+        payload = temporal_study_timestamp_verification_payload(
+            gen_time_unix_ms=1780000059000,
+            latest_trusted_time_unix_ms=1780000060000,
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_timestamp_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_attestation_verification_payload(),
+            ),
+            "timestamp_not_before_review",
+        )
+
+    def test_temporal_timestamp_requires_bounded_declared_accuracy(self):
+        payload = temporal_study_timestamp_verification_payload(
+            accuracy_micros=None,
+            latest_trusted_time_unix_ms=1780000001000,
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_timestamp_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_attestation_verification_payload(),
+            ),
+            "invalid_timestamp_identity",
+        )
+
+    def test_temporal_timestamp_rejects_unverified_revocation_claim(self):
+        payload = temporal_study_timestamp_verification_payload(
+            revocation_assurance="checked"
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_timestamp_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_attestation_verification_payload(),
+            ),
+            "invalid_timestamp_assurance",
+        )
+
+    def test_temporal_timestamp_rejects_attestation_binding_mismatch(self):
+        payload = temporal_study_timestamp_verification_payload(
+            commitment_file_sha256="0" * 64
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_timestamp_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_attestation_verification_payload(),
+            ),
+            "attestation_binding_mismatch",
         )
 
     def test_temporal_attestation_rejects_review_binding_mismatch(self):
@@ -454,6 +583,7 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 "temporal_telemetry": root / "temporal-telemetry.json",
                 "temporal_review": root / "temporal-review.json",
                 "temporal_attestation": root / "temporal-attestation-verification.json",
+                "temporal_timestamp": root / "temporal-timestamp-verification.json",
                 "manifest": root / "manifest.json",
             }
             write_json(
@@ -527,6 +657,10 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_attestation"],
                 temporal_study_attestation_verification_payload(),
             )
+            write_json(
+                paths["temporal_timestamp"],
+                temporal_study_timestamp_verification_payload(),
+            )
 
             argv = [
                 "generate_evidence_manifest.py",
@@ -558,6 +692,8 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_review"].as_posix(),
                 "--temporal-study-attestation-verification",
                 paths["temporal_attestation"].as_posix(),
+                "--temporal-study-timestamp-verification",
+                paths["temporal_timestamp"].as_posix(),
             ]
             with patch.object(sys, "argv", argv):
                 self.assertEqual(generate_evidence_manifest.main(), 0)
@@ -576,6 +712,12 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
             )
             self.assertEqual(
                 manifest["summary"]["temporal_shadow_telemetry_validation_status"],
+                "pass",
+            )
+            self.assertEqual(
+                manifest["summary"][
+                    "temporal_study_timestamp_verification_status"
+                ],
                 "pass",
             )
             self.assertEqual(
