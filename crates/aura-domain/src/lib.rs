@@ -7,6 +7,8 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+/// Stable cryptographic evidence for bundled domain policy packs.
+pub mod evidence;
 /// Bounded message-level inputs and model hints.
 pub mod input;
 /// Lexical rule representation, matching, and validation.
@@ -22,6 +24,7 @@ pub mod registry;
 /// Content-free temporal projection contracts.
 pub mod temporal;
 
+pub use evidence::*;
 pub use input::*;
 pub use lexical::*;
 pub use module::*;

@@ -1,9 +1,12 @@
 use std::sync::OnceLock;
 
 use aura_domain::{
-    validate_lexical_rules, validate_schema_version, DomainPolicyThresholds, LexicalRuleRecord,
+    validate_lexical_rules, validate_schema_version, DomainPolicyPackEvidence,
+    DomainPolicyThresholds, LexicalRuleRecord,
 };
 use serde::Deserialize;
+
+const MILITARY_LEXICON_JSON: &str = include_str!("../data/lexicon.json");
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -54,9 +57,8 @@ static MILITARY_LEXICON: OnceLock<MilitaryLexicon> = OnceLock::new();
 
 fn military_lexicon() -> &'static MilitaryLexicon {
     MILITARY_LEXICON.get_or_init(|| {
-        let raw = include_str!("../data/lexicon.json");
-        let lexicon: MilitaryLexicon =
-            serde_json::from_str(raw).expect("invalid military lexical rule pack");
+        let lexicon: MilitaryLexicon = serde_json::from_str(MILITARY_LEXICON_JSON)
+            .expect("invalid military lexical rule pack");
         validate_schema_version(lexicon.schema_version, "military lexicon")
             .expect("unsupported military lexicon schema version");
         validate_lexical_rules(&lexicon.opsec).expect("invalid military.opsec rules");
@@ -67,6 +69,20 @@ fn military_lexicon() -> &'static MilitaryLexicon {
         validate_policy(&lexicon.policy).expect("invalid military.policy");
         lexicon
     })
+}
+
+pub(crate) fn evidence() -> DomainPolicyPackEvidence {
+    let lexicon = military_lexicon();
+    let rule_count = lexicon.opsec.len()
+        + lexicon.coordinate_leak.len()
+        + lexicon.psyops.len()
+        + lexicon.social_eng.len();
+    DomainPolicyPackEvidence::from_source(
+        "aura.military.lexical_policy",
+        lexicon.schema_version,
+        MILITARY_LEXICON_JSON.as_bytes(),
+        rule_count,
+    )
 }
 
 fn validate_policy(policy: &MilitaryPolicy) -> Result<(), String> {
@@ -115,10 +131,22 @@ pub fn priority_escalation_priority() -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::military_lexicon;
+    use super::{evidence, military_lexicon};
 
     #[test]
     fn military_lexicon_pack_loads_and_validates() {
         let _ = military_lexicon();
+    }
+
+    #[test]
+    fn military_lexicon_evidence_is_release_pinned() {
+        let evidence = evidence();
+
+        assert_eq!(evidence.schema_version, 1);
+        assert_eq!(evidence.rule_count, 25);
+        assert_eq!(
+            evidence.sha256,
+            "43b5713c8b139b55a21c2bba4c0757fd639f5b0973c81b3bc5e912aef047d4f7"
+        );
     }
 }

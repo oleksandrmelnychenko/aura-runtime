@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use aura_domain::{
     DomainAction, DomainConfirmedOutput, DomainConversationType, DomainEventKind, DomainInput,
-    DomainModuleId, DomainOutput, DomainRegistry, DomainRiskProfile, DomainSignal,
-    DomainTemporalActorRole, DomainTemporalContext, DomainTemporalDirectionality,
+    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainRegistry, DomainRiskProfile,
+    DomainSignal, DomainTemporalActorRole, DomainTemporalContext, DomainTemporalDirectionality,
     DomainTemporalEvent, DomainTemporalInput, DomainTemporalOutput, DomainTemporalSpeechAct,
     DomainTemporalStance, MlSafetyHint,
 };
@@ -57,6 +57,11 @@ impl AuraDomainRuntime {
             return true;
         };
         self.registry.contains(module_id)
+    }
+
+    /// Returns stable evidence for the exact registered domain implementations.
+    pub fn module_evidence(&self) -> Vec<DomainModuleEvidence> {
+        self.registry.all_evidence()
     }
 
     pub fn analyze(&self, config: &AuraConfig, input: &MessageInput) -> Option<DomainOutput> {

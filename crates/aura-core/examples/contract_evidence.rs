@@ -7,6 +7,8 @@ use std::process;
 use aura_core::context::{
     builtin_context_rule_pack_evidence, tracker::TRACKER_STATE_VERSION, ContextRulePackEvidence,
 };
+use aura_core::AuraDomainRuntime;
+use aura_domain::DomainModuleEvidence;
 use chrono::Utc;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -35,6 +37,7 @@ struct ContractEvidenceReport {
     wire: WireContractEvidence,
     persisted_state: PersistedStateEvidence,
     context_rule_packs: ContextRulePackEvidence,
+    domain_modules: Vec<DomainModuleEvidence>,
     abi: AbiContractEvidence,
     files: Vec<FileDigestEvidence>,
 }
@@ -190,6 +193,13 @@ fn build_contract_evidence() -> Result<ContractEvidenceReport, String> {
     let request_limits_bytes = parse_request_limits(&ffi_lifecycle_source_contents)?;
     let context_rule_packs = builtin_context_rule_pack_evidence()
         .map_err(|error| format!("validate bundled context rule packs: {error}"))?;
+    let domain_modules = AuraDomainRuntime::new().module_evidence();
+    if domain_modules.len() != 2 {
+        return Err(format!(
+            "expected Kids and Military domain evidence, found {} modules",
+            domain_modules.len()
+        ));
+    }
 
     Ok(ContractEvidenceReport {
         generated_at_utc: Utc::now().to_rfc3339(),
@@ -206,6 +216,7 @@ fn build_contract_evidence() -> Result<ContractEvidenceReport, String> {
             schema_field_number: 1,
         },
         context_rule_packs,
+        domain_modules,
         abi: AbiContractEvidence {
             header_path: FFI_HEADER_RELATIVE_PATH.to_string(),
             export_allowlist_path: FFI_EXPORT_ALLOWLIST_RELATIVE_PATH.to_string(),
@@ -443,6 +454,22 @@ mod tests {
         assert_eq!(
             exported.into_iter().collect::<BTreeSet<_>>(),
             allowed.into_iter().collect::<BTreeSet<_>>()
+        );
+    }
+
+    #[test]
+    fn contract_evidence_binds_both_registered_domain_packs() {
+        let evidence = AuraDomainRuntime::new().module_evidence();
+
+        assert_eq!(evidence.len(), 2);
+        assert_eq!(evidence[0].module_id, aura_domain::DomainModuleId::Kids);
+        assert_eq!(evidence[1].module_id, aura_domain::DomainModuleId::Military);
+        assert!(
+            !evidence[1]
+                .temporal_policy
+                .as_ref()
+                .expect("military temporal policy")
+                .runtime_enabled
         );
     }
 }

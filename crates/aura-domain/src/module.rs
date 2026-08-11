@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DomainConfirmedOutput, DomainInput, DomainOutput, DomainSignal, DomainTemporalInput,
-    DomainTemporalOutput,
+    DomainConfirmedOutput, DomainInput, DomainModuleEvidence, DomainOutput, DomainSignal,
+    DomainTemporalInput, DomainTemporalOutput,
 };
 
 /// Stable identity used to select a registered domain module.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DomainModuleId {
     /// Child and teen safety module.
@@ -19,6 +19,9 @@ pub enum DomainModuleId {
 pub trait DomainModule: Send + Sync {
     /// Returns the module identity used by [`crate::DomainRegistry`].
     fn id(&self) -> DomainModuleId;
+
+    /// Returns the exact policy-pack identity and activation state for release evidence.
+    fn evidence(&self) -> DomainModuleEvidence;
     /// Detects candidate signals without mutating domain-owned memory.
     ///
     /// Stateless and legacy modules inherit the standalone analysis path for

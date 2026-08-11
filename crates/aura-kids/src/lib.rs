@@ -5,7 +5,8 @@ pub mod policy;
 mod routing;
 
 use aura_domain::{
-    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainSignal,
+    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
+    DomainOutput, DomainSignal, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
 #[derive(Default)]
@@ -52,9 +53,27 @@ impl KidsModule {
     }
 }
 
+/// Returns the exact Kids policy and state identity used by release evidence.
+#[must_use]
+pub fn domain_evidence() -> DomainModuleEvidence {
+    DomainModuleEvidence {
+        schema_version: DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+        module_id: DomainModuleId::Kids,
+        module_version: env!("CARGO_PKG_VERSION").to_string(),
+        stateful: true,
+        state_schema_version: Some(pipeline::KIDS_MEMORY_STATE_VERSION),
+        lexical_policy: lexicon::evidence(),
+        temporal_policy: None,
+    }
+}
+
 impl DomainModule for KidsModule {
     fn id(&self) -> DomainModuleId {
         DomainModuleId::Kids
+    }
+
+    fn evidence(&self) -> DomainModuleEvidence {
+        domain_evidence()
     }
 
     fn detect(&self, input: &DomainInput) -> DomainOutput {
@@ -76,7 +95,7 @@ impl DomainModule for KidsModule {
 
 #[cfg(test)]
 mod tests {
-    use super::KidsModule;
+    use super::{domain_evidence, KidsModule};
     use crate::pipeline::GuardianVerdict;
     use aura_domain::{
         DomainConversationType, DomainInput, DomainModule, DomainRiskProfile, DomainSignal,
@@ -92,6 +111,18 @@ mod tests {
             conversation_type: DomainConversationType::Direct,
             ml_safety_hint: None,
         }
+    }
+
+    #[test]
+    fn domain_evidence_declares_stateful_kids_contract() {
+        let evidence = domain_evidence();
+
+        assert!(evidence.stateful);
+        assert_eq!(
+            evidence.state_schema_version,
+            Some(crate::pipeline::KIDS_MEMORY_STATE_VERSION)
+        );
+        assert!(evidence.temporal_policy.is_none());
     }
 
     fn risky_input(sender_id: &str, conversation_id: &str) -> DomainInput {

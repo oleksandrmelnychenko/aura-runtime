@@ -2,11 +2,14 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use aura_domain::{
-    validate_schema_version, DomainAction, DomainEventKind, DomainSignal, DomainTemporalActorRole,
-    DomainTemporalDirectionality, DomainTemporalEvent, DomainTemporalInput, DomainTemporalOutput,
+    validate_schema_version, DomainAction, DomainEventKind, DomainPolicyPackEvidence, DomainSignal,
+    DomainTemporalActorRole, DomainTemporalDirectionality, DomainTemporalEvent,
+    DomainTemporalInput, DomainTemporalOutput, DomainTemporalPolicyEvidence,
     DomainTemporalSpeechAct,
 };
 use serde::Deserialize;
+
+const MILITARY_TEMPORAL_POLICY_JSON: &str = include_str!("../data/temporal_fusion_rules.json");
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -68,14 +71,35 @@ static MILITARY_TEMPORAL_POLICY: OnceLock<Result<MilitaryTemporalPolicy, String>
 fn military_temporal_policy() -> Result<&'static MilitaryTemporalPolicy, &'static str> {
     MILITARY_TEMPORAL_POLICY
         .get_or_init(|| {
-            let raw = include_str!("../data/temporal_fusion_rules.json");
-            let policy: MilitaryTemporalPolicy = serde_json::from_str(raw)
-                .map_err(|err| format!("invalid military temporal rule pack: {err}"))?;
+            let policy: MilitaryTemporalPolicy =
+                serde_json::from_str(MILITARY_TEMPORAL_POLICY_JSON)
+                    .map_err(|err| format!("invalid military temporal rule pack: {err}"))?;
             validate_policy(&policy)?;
             Ok(policy)
         })
         .as_ref()
         .map_err(String::as_str)
+}
+
+pub(crate) fn evidence() -> DomainTemporalPolicyEvidence {
+    let policy = military_temporal_policy().expect("invalid military temporal rule pack");
+    let action_execution_configured = [
+        &policy.influence_pressure,
+        &policy.operational_collection,
+        &policy.linked_disclosure,
+    ]
+    .iter()
+    .any(|template| template.action.is_some());
+    DomainTemporalPolicyEvidence {
+        pack: DomainPolicyPackEvidence::from_source(
+            "aura.military.temporal_policy",
+            policy.schema_version,
+            MILITARY_TEMPORAL_POLICY_JSON.as_bytes(),
+            3,
+        ),
+        runtime_enabled: policy.enabled,
+        action_execution_configured,
+    }
 }
 
 fn validate_policy(policy: &MilitaryTemporalPolicy) -> Result<(), String> {

@@ -1,9 +1,12 @@
 use std::sync::OnceLock;
 
 use aura_domain::{
-    validate_lexical_rules, validate_schema_version, DomainPolicyThresholds, LexicalRuleRecord,
+    validate_lexical_rules, validate_schema_version, DomainPolicyPackEvidence,
+    DomainPolicyThresholds, LexicalRuleRecord,
 };
 use serde::Deserialize;
+
+const KIDS_LEXICON_JSON: &str = include_str!("../data/lexicon.json");
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -54,9 +57,8 @@ static KIDS_LEXICON: OnceLock<KidsLexicon> = OnceLock::new();
 
 fn kids_lexicon() -> &'static KidsLexicon {
     KIDS_LEXICON.get_or_init(|| {
-        let raw = include_str!("../data/lexicon.json");
         let lexicon: KidsLexicon =
-            serde_json::from_str(raw).expect("invalid kids lexical rule pack");
+            serde_json::from_str(KIDS_LEXICON_JSON).expect("invalid kids lexical rule pack");
         validate_schema_version(lexicon.schema_version, "kids lexicon")
             .expect("unsupported kids lexicon schema version");
         validate_lexical_rules(&lexicon.grooming).expect("invalid kids.grooming rules");
@@ -66,6 +68,20 @@ fn kids_lexicon() -> &'static KidsLexicon {
         validate_policy(&lexicon.policy).expect("invalid kids.policy");
         lexicon
     })
+}
+
+pub(crate) fn evidence() -> DomainPolicyPackEvidence {
+    let lexicon = kids_lexicon();
+    let rule_count = lexicon.grooming.len()
+        + lexicon.bullying.len()
+        + lexicon.selfharm.len()
+        + lexicon.manipulation.len();
+    DomainPolicyPackEvidence::from_source(
+        "aura.kids.lexical_policy",
+        lexicon.schema_version,
+        KIDS_LEXICON_JSON.as_bytes(),
+        rule_count,
+    )
 }
 
 fn validate_policy(policy: &KidsPolicy) -> Result<(), String> {
@@ -114,10 +130,22 @@ pub fn guardian_escalation_priority() -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::kids_lexicon;
+    use super::{evidence, kids_lexicon};
 
     #[test]
     fn kids_lexicon_pack_loads_and_validates() {
         let _ = kids_lexicon();
+    }
+
+    #[test]
+    fn kids_lexicon_evidence_is_release_pinned() {
+        let evidence = evidence();
+
+        assert_eq!(evidence.schema_version, 1);
+        assert_eq!(evidence.rule_count, 23);
+        assert_eq!(
+            evidence.sha256,
+            "9ceeacde143a5bb1449530a92227acf8e9538cc364af92511bcb7364d105f841"
+        );
     }
 }

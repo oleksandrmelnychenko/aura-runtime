@@ -83,6 +83,14 @@ The repository now contains dedicated crates for this model:
 - Baseline domain lexical heuristics migrated into kids/military detector crates
 - Domain lexical rules are file-based (`data/lexicon.json`) with schema validation
 - Rule packs are versioned (`schema_version`) and guarded by tests in CI
+- Every registered module exposes `DomainModuleEvidence`: module version,
+  state ownership/schema, exact lexical-policy SHA-256, and rule count.
+- Military evidence separately binds the temporal-policy SHA-256 and records
+  both runtime activation and configured action execution. The current pack is
+  explicitly `runtime_enabled=false` and has no executable action.
+- The canonical contract-evidence report includes both registered modules in
+  stable identity order, so a domain-policy change cannot bypass the release
+  evidence manifest.
 - Domain rule records now include `threat_type`, `severity`, and `priority` metadata
 - Domain action policy is now resolved via shared `aura-domain` policy engine
 - Integrated domain execution is two-phase: `detect` is non-mutating, core
