@@ -1,8 +1,8 @@
 {
   "schema_version": 5,
-  "source_revision": "59e08aa37554714f490f00120477bbacf5b33b63",
+  "source_revision": "85fb6d727537143407ed93cf03dc6933abc8e489",
   "source_tree_dirty": false,
-  "source_tree_sha256": "15ca8d631c66f88e015f3d689c6001fe723184585b23f6b2210bc13af0c6b410",
+  "source_tree_sha256": "85f67a65b5c1bde29f48e31a9c55112ce90eaa27c211fbbfaae6529b2750a454",
   "shippable": true,
   "cargo_profile": "release",
   "cargo_locked": true,
@@ -22,15 +22,15 @@
   ],
   "aura_ffi_header_sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
   "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
-  "runtime_artifact_descriptor_sha256": "d527e8c2ee8fac23981efe261432bebc910c498a7a6eaa81be51fcb0a71c0e90",
-  "runtime_artifact_identities_env_sha256": "dfdfca5d3633d7dec6eca608e8745f1c87a99879e667fb86479d2b4859d3e940",
+  "runtime_artifact_descriptor_sha256": "8edcd646c892f1266c2da4e4f71d2b80a9ddb75ea38901bdc18059332a6cfe49",
+  "runtime_artifact_identities_env_sha256": "aec743814858fe9ee0b5c9d1a70c1519b8363adcdbcc03d17eaf901a0f6ee17d",
   "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
   "execution_policy_trust_keyring_sha256": "9339c0165962cfeb66a677bcf47de5318f5655ad24e3e006e2d1e40aa8164152",
   "xcframework_info_plist_sha256": "1e336683b41580c0e5addcf8d7f2683ce19278a7e3791794fbed872992edccb3",
   "binary_sha256": {
-    "ios-arm64": "037602b6bdcaa02ea3b580bbb99adc7864f1d4c1b2a2728833fcdea8c0ef6e58",
-    "ios-arm64_x86_64-simulator": "2644a17d0253e9694fdcef08afcca18fc813cc71bbb659cfaa42ba151791e9dc",
-    "ios-arm64_x86_64-maccatalyst": "a15b280966757a2bbcd035247d1a573bdf23a9c22450e538fda1767d2aad0f78"
+    "ios-arm64": "c5045b1640909d256ead85e5d8ba5a252362c610fc636aa46929b08ba6dc20e4",
+    "ios-arm64_x86_64-simulator": "e71f22624d8646bdfe5acb49fad0af7b4dae16c89bac69376a0b94db944e5785",
+    "ios-arm64_x86_64-maccatalyst": "43e1e3a5da4d63d54019b2ab8f1e61a14128e931c875af139cb4e6b599599241"
   },
   "model_bundle_included": false
 }
