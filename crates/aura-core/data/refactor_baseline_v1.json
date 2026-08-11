@@ -1,5 +1,5 @@
 {
-  "baseline_id": "aura-core-29117877bf",
+  "baseline_id": "aura-core-bf186458ca32",
   "behavior": {
     "pilot_regression": {
       "by_case_class": [
@@ -9636,20 +9636,20 @@
       "warn_events": 94
     }
   },
-  "captured_at_utc": "2026-08-02T11:15:47.415941+00:00",
+  "captured_at_utc": "2026-08-11T17:14:07.565107+00:00",
   "contracts": {
     "apple_artifact": {
       "manifest_file": {
         "bytes": 1750,
         "path": "dist/apple/release-manifest.json",
-        "sha256": "8d3eae8a2b03ee570def07a1ac431eb393e5ada61441b4161dd88240bccf6f98"
+        "sha256": "75269beef2a4afba07e60d58ca628f68591dd18e8ef1a6b6c7297b1dcdab881c"
       },
       "release_manifest": {
         "aura_ffi_header_sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
         "binary_sha256": {
-          "ios-arm64": "6b8efe2c04374437860588bdd8ecc6149229d329e54e0e0d8faf4bd167721f77",
-          "ios-arm64_x86_64-maccatalyst": "e7a3777a766ffe7dca74d5c9e873c4c3dde581562a01a0fbb7f3acaeac28daaa",
-          "ios-arm64_x86_64-simulator": "a814afa93ec073a808fde9b359eabc02fd40101c19d3bbf71a2e1f0592478da2"
+          "ios-arm64": "c5045b1640909d256ead85e5d8ba5a252362c610fc636aa46929b08ba6dc20e4",
+          "ios-arm64_x86_64-maccatalyst": "43e1e3a5da4d63d54019b2ab8f1e61a14128e931c875af139cb4e6b599599241",
+          "ios-arm64_x86_64-simulator": "e71f22624d8646bdfe5acb49fad0af7b4dae16c89bac69376a0b94db944e5785"
         },
         "cargo_features": [],
         "cargo_locked": true,
@@ -9659,15 +9659,15 @@
         "minimum_ios_version": "18.0",
         "model_bundle_included": false,
         "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
-        "runtime_artifact_descriptor_sha256": "a54f6f941706d19f0cfb95e794b8449af4a60ca1581c2844845699720c7f224f",
-        "runtime_artifact_identities_env_sha256": "207d0309dbc082642c7e1b0b14314f3f22ef48e52872112f801e146129c48e3a",
+        "runtime_artifact_descriptor_sha256": "8edcd646c892f1266c2da4e4f71d2b80a9ddb75ea38901bdc18059332a6cfe49",
+        "runtime_artifact_identities_env_sha256": "aec743814858fe9ee0b5c9d1a70c1519b8363adcdbcc03d17eaf901a0f6ee17d",
         "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
         "runtime_release_version": "0.2.0",
         "schema_version": 5,
         "shippable": true,
-        "source_revision": "0ba6fc4f2fcd38cbf22c1fabbb3cf3e071ba67cd",
+        "source_revision": "85fb6d727537143407ed93cf03dc6933abc8e489",
         "source_tree_dirty": false,
-        "source_tree_sha256": "cc5250b17a9c7106c6261d76e51333a498e444fd0d0e2cb650a03d6fc1680280",
+        "source_tree_sha256": "85f67a65b5c1bde29f48e31a9c55112ce90eaa27c211fbbfaae6529b2750a454",
         "state_schema_version": 3,
         "target_triples": [
           "aarch64-apple-ios",
@@ -9769,9 +9769,9 @@
       },
       "files": [
         {
-          "bytes": 42674,
+          "bytes": 43859,
           "path": "proto/aura/messenger/v1/messenger.proto",
-          "sha256": "c6d167ad0a2a5214930c50dae71fd3acc46f11999c5882feb5bea6a280a60d0f"
+          "sha256": "a008febc599bfc832463f90c49c4c68a92871520140013a937f9ff9a29b14636"
         },
         {
           "bytes": 5345,
@@ -9789,9 +9789,9 @@
           "sha256": "2b6be45c91e8eda39236cc15b42f6130ed0d83709857425d09183d39127fe1a6"
         },
         {
-          "bytes": 57473,
+          "bytes": 57580,
           "path": "crates/aura-agent-ffi/src/lifecycle.rs",
-          "sha256": "5e6c297fce3cebde9a2c68cc5265ec65262581aea955800ffdd2a56890255a6e"
+          "sha256": "dd4dbc8bccbe85c294e836531e130067bb0dff92a42aca2dd167bd8698e61af6"
         },
         {
           "bytes": 1719,
@@ -10027,6 +10027,16 @@
       "sha256": "43b5713c8b139b55a21c2bba4c0757fd639f5b0973c81b3bc5e912aef047d4f7"
     },
     {
+      "bytes": 1072,
+      "path": "crates/aura-military/data/temporal_fusion_rules.json",
+      "sha256": "664830faa36ec2cf9846d612c02cb14d159a4a75ee925a3664f6147da0cc7348"
+    },
+    {
+      "bytes": 24306,
+      "path": "crates/aura-military/data/temporal_shadow_corpus.json",
+      "sha256": "ca502f671dccaa6d712751c71d6b77a12e7b8c1ad88613a4e9f4fc83afba3d2d"
+    },
+    {
       "bytes": 368395,
       "path": "crates/aura-patterns/data/patterns_mvp.json",
       "sha256": "5e96c43b145ca4698df4415b0aa23329b797bb68af9fb50a7e2814ae951156de"
@@ -10067,10 +10077,10 @@
         "threat_events": 26,
         "tier": "10k",
         "timing": {
-          "elapsed_seconds": 18.49,
-          "max_rss_mb": 295.0,
-          "system_seconds": 0.3,
-          "user_seconds": 16.44
+          "elapsed_seconds": 17.34,
+          "max_rss_mb": 298.484,
+          "system_seconds": 0.24,
+          "user_seconds": 16.12
         },
         "total_events": 13647,
         "warn_events": 19
@@ -10079,7 +10089,7 @@
   },
   "schema_version": "aura.refactor_baseline.v1",
   "source": {
-    "revision": "29117877bf8ce06cc7dcd6e63087b3ac59c76637",
+    "revision": "bf186458ca32fc50fc1087675f8dc2be6bf5aeb3",
     "tree_dirty": false
   },
   "workspace": {

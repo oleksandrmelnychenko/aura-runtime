@@ -1,6 +1,6 @@
 # AURA Core Refactor Baseline
 
-Status: refreshed after the reviewed release differential on August 2, 2026.
+Status: refreshed after the reviewed domain-release differential on August 11, 2026.
 
 ## Purpose
 
@@ -19,7 +19,9 @@ It records:
 - governed detector and evaluation input hashes;
 - normalized release, pilot, and 16-world lifecycle results;
 - a release-built 10k performance snapshot and bounded comparison envelope;
-- the additive canonical local-decision and terminal-source checkpoint ABI.
+- the additive canonical local-decision and terminal-source checkpoint ABI;
+- the additive content-free local-decision temporal context contract;
+- the governed Military temporal-fusion rules and adversarial Shadow corpus.
 
 Timestamps, source-tree dirtiness, raw world event logs, and absolute artifact
 paths are not behavioral comparison inputs.
