@@ -1,0 +1,458 @@
+{
+  "schema_version": 1,
+  "dataset_id": "aura_military_temporal_shadow_seed_v1",
+  "dataset_label": "AURA Military Temporal Fusion Shadow Seed",
+  "maintainer": "Ecliptix Security Research",
+  "created_at_ms": 1767225600000,
+  "updated_at_ms": 1786406400000,
+  "cases": [
+    {
+      "id": "influence_prop_and_psyops",
+      "tags": ["positive", "influence_pressure"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 22,
+      "expected_reason_codes": ["military.temporal.influence_pressure"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 22}
+      ]
+    },
+    {
+      "id": "influence_disinfo_and_propaganda_group",
+      "tags": ["positive", "influence_pressure", "group"],
+      "as_of_ms": 2500,
+      "current_actor_id": 4,
+      "current_content_hash": 42,
+      "conversation_type": "group",
+      "expected_reason_codes": ["military.temporal.influence_pressure"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1200, "actor_id": 4, "actor_role": "external", "kind": "military_disinfo", "content_hash": 41},
+        {"event_id": 2, "timestamp_ms": 2500, "actor_id": 4, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 42}
+      ]
+    },
+    {
+      "id": "influence_distinct_messages_same_timestamp",
+      "tags": ["positive", "influence_pressure", "ordering"],
+      "as_of_ms": 3000,
+      "current_actor_id": 1,
+      "current_content_hash": 32,
+      "expected_reason_codes": ["military.temporal.influence_pressure"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 31},
+        {"event_id": 2, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "military_disinfo", "content_hash": 32}
+      ]
+    },
+    {
+      "id": "influence_all_three_families",
+      "tags": ["positive", "influence_pressure"],
+      "as_of_ms": 4000,
+      "current_actor_id": 7,
+      "current_content_hash": 73,
+      "expected_reason_codes": ["military.temporal.influence_pressure"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 7, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 71},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 7, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 72},
+        {"event_id": 3, "timestamp_ms": 4000, "actor_id": 7, "actor_role": "external", "kind": "military_disinfo", "content_hash": 73}
+      ]
+    },
+    {
+      "id": "collection_intel_after_influence",
+      "tags": ["positive", "operational_collection"],
+      "as_of_ms": 3000,
+      "current_actor_id": 1,
+      "current_content_hash": 13,
+      "expected_reason_codes": ["military.temporal.operational_collection_attempt"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "solicit", "content_hash": 13}
+      ]
+    },
+    {
+      "id": "collection_phishing_after_influence",
+      "tags": ["positive", "operational_collection"],
+      "as_of_ms": 3300,
+      "current_actor_id": 3,
+      "current_content_hash": 33,
+      "expected_reason_codes": ["military.temporal.operational_collection_attempt"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1100, "actor_id": 3, "actor_role": "external", "kind": "military_disinfo", "content_hash": 31},
+        {"event_id": 2, "timestamp_ms": 2200, "actor_id": 3, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 32},
+        {"event_id": 3, "timestamp_ms": 3300, "actor_id": 3, "actor_role": "external", "kind": "military_phishing", "content_hash": 33}
+      ]
+    },
+    {
+      "id": "collection_coordinate_solicitation",
+      "tags": ["positive", "operational_collection", "directionality"],
+      "as_of_ms": 3600,
+      "current_actor_id": 5,
+      "current_content_hash": 53,
+      "expected_reason_codes": ["military.temporal.operational_collection_attempt"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 5, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 51},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 5, "actor_role": "external", "kind": "military_disinfo", "content_hash": 52},
+        {"event_id": 3, "timestamp_ms": 3600, "actor_id": 5, "actor_role": "external", "kind": "coordinate_mention", "speech_act": "ask", "content_hash": 53}
+      ]
+    },
+    {
+      "id": "collection_group_conversation",
+      "tags": ["positive", "operational_collection", "group"],
+      "as_of_ms": 5000,
+      "current_actor_id": 8,
+      "current_content_hash": 83,
+      "conversation_type": "group",
+      "expected_reason_codes": ["military.temporal.operational_collection_attempt"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 8, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 81},
+        {"event_id": 2, "timestamp_ms": 2500, "actor_id": 8, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 82},
+        {"event_id": 3, "timestamp_ms": 5000, "actor_id": 8, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "content_hash": 83}
+      ]
+    },
+    {
+      "id": "disclosure_coordinate_after_collection",
+      "tags": ["positive", "linked_disclosure"],
+      "as_of_ms": 4000,
+      "current_actor_id": 2,
+      "current_content_hash": 24,
+      "expected_reason_codes": ["military.temporal.influence_linked_disclosure"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 21},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 22},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "solicit", "content_hash": 23},
+        {"event_id": 4, "timestamp_ms": 4000, "actor_id": 2, "actor_role": "protected_account", "kind": "coordinate_mention", "content_hash": 24}
+      ]
+    },
+    {
+      "id": "disclosure_position_after_phishing",
+      "tags": ["positive", "linked_disclosure"],
+      "as_of_ms": 4400,
+      "current_actor_id": 2,
+      "current_content_hash": 44,
+      "expected_reason_codes": ["military.temporal.influence_linked_disclosure"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 4, "actor_role": "external", "kind": "military_disinfo", "content_hash": 41},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 4, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 42},
+        {"event_id": 3, "timestamp_ms": 3300, "actor_id": 4, "actor_role": "external", "kind": "military_phishing", "content_hash": 43},
+        {"event_id": 4, "timestamp_ms": 4400, "actor_id": 2, "actor_role": "protected_account", "kind": "position_leak", "content_hash": 44}
+      ]
+    },
+    {
+      "id": "disclosure_unit_in_group",
+      "tags": ["positive", "linked_disclosure", "group"],
+      "as_of_ms": 4800,
+      "current_actor_id": 9,
+      "current_content_hash": 94,
+      "conversation_type": "group",
+      "expected_reason_codes": ["military.temporal.influence_linked_disclosure"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 6, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 91},
+        {"event_id": 2, "timestamp_ms": 2200, "actor_id": 6, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 92},
+        {"event_id": 3, "timestamp_ms": 3500, "actor_id": 6, "actor_role": "external", "kind": "coordinate_mention", "speech_act": "solicit", "content_hash": 93},
+        {"event_id": 4, "timestamp_ms": 4800, "actor_id": 9, "actor_role": "protected_account", "kind": "unit_info_leak", "content_hash": 94}
+      ]
+    },
+    {
+      "id": "disclosure_equipment_after_collection",
+      "tags": ["positive", "linked_disclosure"],
+      "as_of_ms": 5200,
+      "current_actor_id": 2,
+      "current_content_hash": 64,
+      "expected_reason_codes": ["military.temporal.influence_linked_disclosure"],
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 6, "actor_role": "external", "kind": "military_disinfo", "content_hash": 61},
+        {"event_id": 2, "timestamp_ms": 2400, "actor_id": 6, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 62},
+        {"event_id": 3, "timestamp_ms": 3900, "actor_id": 6, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "content_hash": 63},
+        {"event_id": 4, "timestamp_ms": 5200, "actor_id": 2, "actor_role": "protected_account", "kind": "equipment_leak", "content_hash": 64}
+      ]
+    },
+    {
+      "id": "negative_repeated_single_influence_family",
+      "tags": ["negative_control", "missing_evidence"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_single_influence_message",
+      "tags": ["negative_control", "missing_evidence"],
+      "as_of_ms": 1000,
+      "current_actor_id": 1,
+      "current_content_hash": 11,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 11}
+      ]
+    },
+    {
+      "id": "negative_counter_speech",
+      "tags": ["negative_control", "counter_speech"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "speech_act": "counter", "stance": "oppose", "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_opposed_stance",
+      "tags": ["negative_control", "counter_speech"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "military_disinfo", "stance": "oppose", "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_quote_report",
+      "tags": ["negative_control", "quote_report"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "speech_act": "quote", "stance": "neutral", "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_trusted_contact",
+      "tags": ["negative_control", "trusted_contact"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "trusted_contact": true, "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_low_event_confidence",
+      "tags": ["negative_control", "confidence_boundary"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "confidence": 0.54, "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_zero_context_confidence",
+      "tags": ["negative_control", "confidence_boundary"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "context_confidence": 0.0, "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_different_external_actors",
+      "tags": ["negative_control", "actor_isolation"],
+      "as_of_ms": 3000,
+      "current_actor_id": 1,
+      "current_content_hash": 13,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 9, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 92},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "content_hash": 13}
+      ]
+    },
+    {
+      "id": "negative_same_timestamp_collection_chain",
+      "tags": ["negative_control", "ordering"],
+      "as_of_ms": 3000,
+      "current_actor_id": 1,
+      "current_content_hash": 13,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "solicit", "content_hash": 13}
+      ]
+    },
+    {
+      "id": "negative_collection_without_influence",
+      "tags": ["negative_control", "missing_evidence"],
+      "as_of_ms": 3000,
+      "current_actor_id": 1,
+      "current_content_hash": 13,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "content_hash": 13}
+      ]
+    },
+    {
+      "id": "negative_influence_outside_analysis_window",
+      "tags": ["negative_control", "time_window"],
+      "as_of_ms": 300000000,
+      "current_actor_id": 1,
+      "current_content_hash": 13,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12},
+        {"event_id": 3, "timestamp_ms": 300000000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "content_hash": 13}
+      ]
+    },
+    {
+      "id": "negative_current_hash_mismatch",
+      "tags": ["negative_control", "missing_evidence"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 99,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_future_evidence",
+      "tags": ["negative_control", "future_evidence"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 12},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 13}
+      ]
+    },
+    {
+      "id": "negative_missing_content_hash",
+      "tags": ["negative_control", "missing_evidence"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": null},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_missing_current_content_hash",
+      "tags": ["negative_control", "missing_evidence"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": null,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_disclosure_without_collection",
+      "tags": ["negative_control", "missing_evidence"],
+      "as_of_ms": 3000,
+      "current_actor_id": 2,
+      "current_content_hash": 23,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 21},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 22},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 2, "actor_role": "protected_account", "kind": "position_leak", "content_hash": 23}
+      ]
+    },
+    {
+      "id": "negative_collection_outside_disclosure_window",
+      "tags": ["negative_control", "time_window"],
+      "as_of_ms": 90000000,
+      "current_actor_id": 2,
+      "current_content_hash": 24,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 21},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 22},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "content_hash": 23},
+        {"event_id": 4, "timestamp_ms": 90000000, "actor_id": 2, "actor_role": "protected_account", "kind": "coordinate_mention", "content_hash": 24}
+      ]
+    },
+    {
+      "id": "negative_external_actor_disclosure",
+      "tags": ["negative_control", "actor_isolation"],
+      "as_of_ms": 4000,
+      "current_actor_id": 1,
+      "current_content_hash": 14,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "content_hash": 13},
+        {"event_id": 4, "timestamp_ms": 4000, "actor_id": 1, "actor_role": "external", "kind": "position_leak", "content_hash": 14}
+      ]
+    },
+    {
+      "id": "negative_self_referential_disclosure",
+      "tags": ["negative_control", "directionality"],
+      "as_of_ms": 4000,
+      "current_actor_id": 2,
+      "current_content_hash": 24,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 21},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 22},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "content_hash": 23},
+        {"event_id": 4, "timestamp_ms": 4000, "actor_id": 2, "actor_role": "protected_account", "kind": "position_leak", "directionality": "self_referential", "content_hash": 24}
+      ]
+    },
+    {
+      "id": "negative_third_party_disclosure",
+      "tags": ["negative_control", "directionality"],
+      "as_of_ms": 4000,
+      "current_actor_id": 2,
+      "current_content_hash": 24,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 21},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "military_disinfo", "content_hash": 22},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "military_phishing", "content_hash": 23},
+        {"event_id": 4, "timestamp_ms": 4000, "actor_id": 2, "actor_role": "protected_account", "kind": "unit_info_leak", "directionality": "third_party", "content_hash": 24}
+      ]
+    },
+    {
+      "id": "negative_neutral_collection_stance",
+      "tags": ["negative_control", "quote_report"],
+      "as_of_ms": 3000,
+      "current_actor_id": 1,
+      "current_content_hash": 13,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "intel_gathering", "speech_act": "ask", "stance": "neutral", "content_hash": 13}
+      ]
+    },
+    {
+      "id": "negative_broadcast_coordinate_collection",
+      "tags": ["negative_control", "directionality"],
+      "as_of_ms": 3000,
+      "current_actor_id": 1,
+      "current_content_hash": 13,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12},
+        {"event_id": 3, "timestamp_ms": 3000, "actor_id": 1, "actor_role": "external", "kind": "coordinate_mention", "speech_act": "ask", "directionality": "broadcast", "content_hash": 13}
+      ]
+    },
+    {
+      "id": "negative_legacy_unknown_context",
+      "tags": ["negative_control", "legacy_context"],
+      "as_of_ms": 2000,
+      "current_actor_id": 1,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "speech_act": "unknown", "stance": "unknown", "directionality": "unknown", "context_confidence": 0.0, "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12}
+      ]
+    },
+    {
+      "id": "negative_current_actor_mismatch",
+      "tags": ["negative_control", "actor_isolation"],
+      "as_of_ms": 2000,
+      "current_actor_id": 9,
+      "current_content_hash": 12,
+      "events": [
+        {"event_id": 1, "timestamp_ms": 1000, "actor_id": 1, "actor_role": "external", "kind": "propaganda_narrative", "content_hash": 11},
+        {"event_id": 2, "timestamp_ms": 2000, "actor_id": 1, "actor_role": "external", "kind": "psyops_pattern", "content_hash": 12}
+      ]
+    }
+  ]
+}

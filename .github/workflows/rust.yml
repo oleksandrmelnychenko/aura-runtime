@@ -17,6 +17,7 @@ env:
   AURA_PILOT_SHADOW_BUNDLE_PATH: artifacts/pilot-shadow-bundle.json
   AURA_PILOT_SHADOW_BUNDLE_PATH_2: artifacts/pilot-shadow-bundle-2.json
   AURA_PILOT_REGRESSION_REPORT_PATH: artifacts/pilot-regression-report.json
+  AURA_TEMPORAL_SHADOW_REPORT_PATH: artifacts/temporal-shadow-report.json
   AURA_KIDS_MEMORY_HEALTH_PATH: artifacts/kids-memory-health.json
   AURA_KIDS_PREPROD_DRY_RUN_PATH: artifacts/kids-preprod-dry-run-matrix.json
   AURA_COMMUNITY_SURFACE_REPORT_PATH: artifacts/community-surface-report.json
@@ -53,6 +54,8 @@ jobs:
       run: cargo clippy --workspace --all-features --all-targets -- -D warnings
     - name: Run tests
       run: cargo test --workspace --all-features --all-targets --verbose
+    - name: Run Military Temporal Shadow Gate
+      run: bash ci/temporal_shadow_gate.sh
     - name: Run Analyzer Microbenchmark Gate
       run: bash ci/analyzer_microbenchmark_gate.sh
     - name: Run Community Surface Gate
@@ -350,6 +353,13 @@ jobs:
       with:
         name: aura-pilot-regression-report
         path: ${{ env.AURA_PILOT_REGRESSION_REPORT_PATH }}
+        if-no-files-found: warn
+    - name: Upload Military Temporal Shadow Report
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: aura-military-temporal-shadow-report
+        path: ${{ env.AURA_TEMPORAL_SHADOW_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload Pilot Gate Report
       if: ${{ always() }}

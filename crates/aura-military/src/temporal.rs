@@ -63,16 +63,19 @@ impl InfluenceSupport {
     }
 }
 
-static MILITARY_TEMPORAL_POLICY: OnceLock<MilitaryTemporalPolicy> = OnceLock::new();
+static MILITARY_TEMPORAL_POLICY: OnceLock<Result<MilitaryTemporalPolicy, String>> = OnceLock::new();
 
-fn military_temporal_policy() -> &'static MilitaryTemporalPolicy {
-    MILITARY_TEMPORAL_POLICY.get_or_init(|| {
-        let raw = include_str!("../data/temporal_fusion_rules.json");
-        let policy: MilitaryTemporalPolicy =
-            serde_json::from_str(raw).expect("invalid military temporal rule pack");
-        validate_policy(&policy).expect("invalid military temporal policy");
-        policy
-    })
+fn military_temporal_policy() -> Result<&'static MilitaryTemporalPolicy, &'static str> {
+    MILITARY_TEMPORAL_POLICY
+        .get_or_init(|| {
+            let raw = include_str!("../data/temporal_fusion_rules.json");
+            let policy: MilitaryTemporalPolicy = serde_json::from_str(raw)
+                .map_err(|err| format!("invalid military temporal rule pack: {err}"))?;
+            validate_policy(&policy)?;
+            Ok(policy)
+        })
+        .as_ref()
+        .map_err(String::as_str)
 }
 
 fn validate_policy(policy: &MilitaryTemporalPolicy) -> Result<(), String> {
@@ -118,11 +121,25 @@ fn validate_template(template: &TemporalSignalTemplate) -> Result<(), String> {
 }
 
 pub(crate) fn temporal_enabled() -> bool {
-    military_temporal_policy().enabled
+    military_temporal_policy().is_ok_and(|policy| policy.enabled)
 }
 
 pub(crate) fn run_military_temporal_pipeline(input: &DomainTemporalInput) -> DomainTemporalOutput {
-    evaluate_with_policy(input, military_temporal_policy())
+    let Ok(policy) = military_temporal_policy() else {
+        return DomainTemporalOutput::default();
+    };
+    evaluate_with_policy(input, policy)
+}
+
+#[cfg(feature = "evaluation")]
+pub(crate) fn run_military_temporal_shadow_pipeline(
+    input: &DomainTemporalInput,
+) -> Result<DomainTemporalOutput, String> {
+    let mut policy = military_temporal_policy()
+        .map_err(ToString::to_string)?
+        .clone();
+    policy.enabled = true;
+    Ok(evaluate_with_policy(input, &policy))
 }
 
 fn evaluate_with_policy(
@@ -347,7 +364,9 @@ mod tests {
     const PROTECTED_ACTOR: u32 = 2;
 
     fn policy_enabled() -> MilitaryTemporalPolicy {
-        let mut policy = military_temporal_policy().clone();
+        let mut policy = military_temporal_policy()
+            .expect("embedded temporal policy")
+            .clone();
         policy.enabled = true;
         policy
     }
@@ -631,6 +650,36 @@ mod tests {
         let mut events = influence_events();
         events[0].context = DomainTemporalContext::default();
         let input = input(2_000, EXTERNAL_ACTOR, 22, events);
+
+        let output = evaluate_with_policy(&input, &policy_enabled());
+
+        assert!(output.signals.is_empty());
+    }
+
+    #[test]
+    fn evidence_evicted_by_the_event_bound_does_not_contribute() {
+        let mut events = influence_events();
+        for index in 0..498_u64 {
+            events.push(event(
+                index + 3,
+                index + 3_000,
+                EXTERNAL_ACTOR,
+                DomainTemporalActorRole::External,
+                DomainEventKind::SuspiciousSource,
+                DomainTemporalSpeechAct::Assert,
+                index + 100,
+            ));
+        }
+        events.push(event(
+            501,
+            10_000,
+            EXTERNAL_ACTOR,
+            DomainTemporalActorRole::External,
+            DomainEventKind::IntelGathering,
+            DomainTemporalSpeechAct::Solicit,
+            10_000,
+        ));
+        let input = input(10_000, EXTERNAL_ACTOR, 10_000, events);
 
         let output = evaluate_with_policy(&input, &policy_enabled());
 

@@ -4,8 +4,19 @@ version.workspace = true
 edition.workspace = true
 description = "AURA.MILITARY domain module"
 
+[features]
+default = []
+evaluation = ["dep:sha2", "dep:thiserror"]
+
 [dependencies]
 aura-domain = { path = "../aura-domain" }
 serde.workspace = true
 serde_json.workspace = true
 regex.workspace = true
+sha2 = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+
+[[example]]
+name = "temporal_shadow_eval"
+path = "examples/temporal_shadow_eval.rs"
+required-features = ["evaluation"]

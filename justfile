@@ -3,6 +3,7 @@ set shell := ["pwsh", "-NoLogo", "-Command"]
 verify:
     cargo run --quiet --example release_report -p aura-core -- --require-pass
     cargo run --quiet --example pilot_regression -p aura-core -- --require-pass
+    bash ci/temporal_shadow_gate.sh
 
 verify-full:
     cargo test --workspace --all-features --all-targets
@@ -36,6 +37,9 @@ client-boundary-replay-gate:
 
 analyzer-microbenchmark-gate:
     bash ci/analyzer_microbenchmark_gate.sh
+
+temporal-shadow-gate:
+    bash ci/temporal_shadow_gate.sh
 
 world-performance-gate:
     bash ci/world_performance_gate.sh

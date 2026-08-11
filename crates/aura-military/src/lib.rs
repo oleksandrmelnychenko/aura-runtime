@@ -6,6 +6,9 @@ mod routing;
 mod temporal;
 mod text;
 
+#[cfg(feature = "evaluation")]
+pub mod temporal_eval;
+
 use aura_domain::{
     DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainTemporalInput,
     DomainTemporalOutput,

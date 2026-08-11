@@ -315,6 +315,7 @@ def main() -> int:
         "pilot_shadow_bundle": output_dir / "pilot-shadow-bundle.json",
         "pilot_shadow_bundle_2": output_dir / "pilot-shadow-bundle-2.json",
         "pilot_regression_report": output_dir / "pilot-regression-report.json",
+        "temporal_shadow_report": output_dir / "temporal-shadow-report.json",
         "kids_memory_health": output_dir / "kids-memory-health.json",
         "kids_preprod_dry_run": output_dir / "kids-preprod-dry-run-matrix.json",
         "pilot_gate_report": output_dir / "pilot-gate-report.json",
@@ -370,6 +371,25 @@ def main() -> int:
             record_and_require(["cargo", "build", "--verbose"])
         if not args.skip_tests:
             record_and_require(["cargo", "test", "--workspace", "--all-targets", "--all-features"])
+
+        record_and_require(
+            [
+                "cargo",
+                "run",
+                "--quiet",
+                "--locked",
+                "-p",
+                "aura-military",
+                "--features",
+                "evaluation",
+                "--example",
+                "temporal_shadow_eval",
+                "--",
+                "--output",
+                paths["temporal_shadow_report"].as_posix(),
+                "--require-pass",
+            ]
+        )
 
         record_and_require(
             [
