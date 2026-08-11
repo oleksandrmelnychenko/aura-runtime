@@ -2214,6 +2214,42 @@ fn supportive_selfharm_response_cannot_retain_filtered_kids_domain_action() {
 }
 
 #[test]
+fn filtered_supportive_selfharm_cannot_seed_kids_bullying_memory() {
+    let db = PatternDatabase::default_mvp();
+    let mut analyzer = Analyzer::new(child_config(), &db);
+    let conversation = "supportive-memory-boundary";
+
+    let supportive = child_input(
+        "My friend said there is no reason to live. I'm here with you, let's tell your parents together and get help tonight.",
+        "supportive-peer",
+        conversation,
+    );
+    let first_bullying = child_input(
+        "you're worthless. nobody likes you.",
+        "bully-a",
+        conversation,
+    );
+    let second_bullying = child_input(
+        "everyone hates you. all of us hate you.",
+        "bully-b",
+        conversation,
+    );
+
+    let supportive_result = analyzer.analyze_with_context(&supportive, 1_000);
+    assert_eq!(supportive_result.threat_type, ThreatType::None);
+    let _ = analyzer.analyze_with_context(&first_bullying, 2_000);
+    let second_result = analyzer.analyze_with_context(&second_bullying, 3_000);
+
+    assert!(
+        !second_result
+            .reason_codes
+            .iter()
+            .any(|code| code == "domain.kids.memory.bullying_cascade_selfharm"),
+        "a context-filtered supportive report must not seed Kids memory: {second_result:?}"
+    );
+}
+
+#[test]
 fn supportive_bystander_rescue_filters_late_night_minor_contact() {
     let db = PatternDatabase::default_mvp();
     let mut analyzer = Analyzer::new(AuraConfig::default(), &db);

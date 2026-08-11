@@ -2,10 +2,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use aura_domain::{
-    DomainAction, DomainConversationType, DomainEventKind, DomainInput, DomainModuleId,
-    DomainOutput, DomainRegistry, DomainRiskProfile, DomainTemporalActorRole,
-    DomainTemporalContext, DomainTemporalDirectionality, DomainTemporalEvent, DomainTemporalInput,
-    DomainTemporalOutput, DomainTemporalSpeechAct, DomainTemporalStance, MlSafetyHint,
+    DomainAction, DomainConfirmedOutput, DomainConversationType, DomainEventKind, DomainInput,
+    DomainModuleId, DomainOutput, DomainRegistry, DomainRiskProfile, DomainSignal,
+    DomainTemporalActorRole, DomainTemporalContext, DomainTemporalDirectionality,
+    DomainTemporalEvent, DomainTemporalInput, DomainTemporalOutput, DomainTemporalSpeechAct,
+    DomainTemporalStance, MlSafetyHint,
 };
 use aura_kids::KidsModule;
 use aura_military::MilitaryModule;
@@ -126,18 +127,41 @@ impl AuraDomainRuntime {
         ml_safety_hint: Option<MlSafetyHint>,
     ) -> Option<DomainOutput> {
         let module_id = domain_module_id_for_mode(domain_mode)?;
-        let risk_profile = domain_risk_profile_for_mode(domain_mode, protection_level);
-        let conversation_type = domain_conversation_type(input.conversation_type);
-        let domain_input = DomainInput {
-            text: input.text.clone(),
-            language: input.language.clone(),
-            sender_id: Some(input.sender_id.0.clone()),
-            conversation_id: Some(input.conversation_id.0.clone()),
-            risk_profile,
-            conversation_type,
-            ml_safety_hint,
-        };
+        let domain_input = build_domain_input(domain_mode, protection_level, input, ml_safety_hint);
         self.registry.run(module_id, &domain_input)
+    }
+
+    /// Detects domain candidates without updating domain-owned memory.
+    pub fn detect_for_mode_with_hints(
+        &self,
+        domain_mode: DomainMode,
+        protection_level: ProtectionLevel,
+        input: &MessageInput,
+        ml_safety_hint: Option<MlSafetyHint>,
+    ) -> Option<DomainOutput> {
+        let module_id = domain_module_id_for_mode(domain_mode)?;
+        let domain_input = build_domain_input(domain_mode, protection_level, input, ml_safety_hint);
+        self.registry.run_detection(module_id, &domain_input)
+    }
+
+    /// Commits only candidates and ML hints that survived core interpretation.
+    pub fn commit_confirmed_for_mode_with_hints(
+        &self,
+        domain_mode: DomainMode,
+        protection_level: ProtectionLevel,
+        input: &MessageInput,
+        confirmed_ml_safety_hint: Option<MlSafetyHint>,
+        confirmed_signals: &[DomainSignal],
+    ) -> Option<DomainConfirmedOutput> {
+        let module_id = domain_module_id_for_mode(domain_mode)?;
+        let domain_input = build_domain_input(
+            domain_mode,
+            protection_level,
+            input,
+            confirmed_ml_safety_hint,
+        );
+        self.registry
+            .commit_confirmed(module_id, &domain_input, confirmed_signals)
     }
 
     pub fn analyze_temporal_for_mode(
@@ -161,6 +185,23 @@ impl AuraDomainRuntime {
             protected_account_id,
         )?;
         self.registry.run_temporal(module_id, &temporal_input)
+    }
+}
+
+fn build_domain_input(
+    domain_mode: DomainMode,
+    protection_level: ProtectionLevel,
+    input: &MessageInput,
+    ml_safety_hint: Option<MlSafetyHint>,
+) -> DomainInput {
+    DomainInput {
+        text: input.text.clone(),
+        language: input.language.clone(),
+        sender_id: Some(input.sender_id.0.clone()),
+        conversation_id: Some(input.conversation_id.0.clone()),
+        risk_profile: domain_risk_profile_for_mode(domain_mode, protection_level),
+        conversation_type: domain_conversation_type(input.conversation_type),
+        ml_safety_hint,
     }
 }
 
@@ -760,6 +801,47 @@ fn domain_signal_reason_code(signal: &aura_domain::DomainSignal) -> String {
     }
 }
 
+/// Projects domain candidates through the final core signal set.
+///
+/// Candidates absent from `active_signals` were rejected by contextual
+/// interpretation. When context lowered a candidate's score, domain-owned
+/// action, priority, and severity overrides are removed so they cannot undo
+/// that decision during the post-confirmation policy pass.
+pub(crate) fn context_confirmed_domain_signals(
+    domain_output: Option<&DomainOutput>,
+    active_signals: &[DetectionSignal],
+) -> Vec<DomainSignal> {
+    let Some(domain_output) = domain_output else {
+        return Vec::new();
+    };
+
+    domain_output
+        .signals
+        .iter()
+        .filter_map(|candidate| {
+            let reason_code = domain_signal_reason_code(candidate);
+            let active = active_signals.iter().find(|active| {
+                active.reason_code == reason_code
+                    && (active.threat_subtype.is_empty()
+                        || active.threat_subtype == candidate.threat_key)
+            })?;
+            let mut confirmed = candidate.clone();
+            let adjusted_score = if active.score.is_finite() {
+                active.score.clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            if adjusted_score + f32::EPSILON < confirmed.score {
+                confirmed.action = None;
+                confirmed.priority = None;
+                confirmed.severity = None;
+            }
+            confirmed.score = adjusted_score;
+            Some(confirmed)
+        })
+        .collect()
+}
+
 pub fn push_domain_reason_codes(reason_codes: &mut Vec<String>, domain_output: &DomainOutput) {
     for signal in &domain_output.signals {
         let reason_code = &signal.reason_code;
@@ -777,14 +859,6 @@ pub fn push_domain_reason_codes(reason_codes: &mut Vec<String>, domain_output: &
             }
         }
     }
-}
-
-fn push_active_domain_reason_codes(
-    reason_codes: &mut Vec<String>,
-    domain_output: &DomainOutput,
-    active_signals: &[DetectionSignal],
-) -> bool {
-    push_active_domain_signal_reason_codes(reason_codes, &domain_output.signals, active_signals)
 }
 
 fn push_active_domain_signal_reason_codes(
@@ -833,21 +907,31 @@ pub fn merge_domain_output_effects(
     merge_domain_action(reason_codes, current_action, domain_output)
 }
 
-pub(crate) fn merge_active_domain_output_effects(
+pub(crate) fn merge_active_confirmed_domain_output_effects(
     reason_codes: &mut Vec<String>,
     current_action: Action,
-    domain_output: Option<&DomainOutput>,
+    domain_output: Option<&DomainConfirmedOutput>,
     active_signals: &[DetectionSignal],
 ) -> Action {
     let Some(domain_output) = domain_output else {
         return current_action;
     };
 
-    if !push_active_domain_reason_codes(reason_codes, domain_output, active_signals) {
+    let confirmed_active = push_active_domain_signal_reason_codes(
+        reason_codes,
+        &domain_output.confirmed_signals,
+        active_signals,
+    );
+    let derived_active = push_active_domain_signal_reason_codes(
+        reason_codes,
+        &domain_output.derived_signals,
+        active_signals,
+    );
+    if !confirmed_active && !derived_active {
         return current_action;
     }
 
-    merge_domain_action(reason_codes, current_action, domain_output)
+    merge_domain_action_value(reason_codes, current_action, domain_output.action)
 }
 
 pub(crate) fn merge_active_domain_temporal_output_effects(
@@ -964,6 +1048,36 @@ pub fn build_domain_temporal_signals(
                     SignalFamily::Conversation,
                     domain_signal_reason_code(domain_signal),
                     "Domain temporal fusion signal",
+                )
+                .with_threat_subtype(domain_signal.threat_key.clone())
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn build_domain_memory_signals(
+    domain_output: Option<&DomainConfirmedOutput>,
+) -> Vec<DetectionSignal> {
+    let Some(domain_output) = domain_output else {
+        return Vec::new();
+    };
+
+    domain_output
+        .derived_signals
+        .iter()
+        .filter_map(|domain_signal| {
+            let threat_type = domain_signal_threat_type(domain_signal.threat_type.as_deref());
+            (threat_type != ThreatType::None).then(|| {
+                DetectionSignal::context(
+                    threat_type,
+                    domain_signal.score,
+                    domain_signal_confidence(
+                        domain_signal.severity.as_deref(),
+                        domain_signal.score,
+                    ),
+                    SignalFamily::Conversation,
+                    domain_signal_reason_code(domain_signal),
+                    "Domain memory signal after contextual confirmation",
                 )
                 .with_threat_subtype(domain_signal.threat_key.clone())
             })
@@ -1130,13 +1244,13 @@ fn propaganda_source_subtype(rule_id: &str) -> Option<&'static str> {
 mod tests {
     use super::{
         build_blocked_url_signal, build_domain_observations, build_domain_temporal_input,
-        build_domain_temporal_signals, core_action_from_domain_action,
-        decide_action_with_domain_overrides, detection_enabled_for_threat,
-        domain_action_reason_marker, domain_conversation_type, domain_risk_profile_for_mode,
-        domain_signal_confidence, domain_signal_threat_type, domain_threat_priority,
-        event_kind_from_domain, is_domain_threat, is_link_family_threat, is_propaganda_threat,
-        map_domain_threat_to_event_kind, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
-        map_rule_or_threat_to_event_kind, map_threat_to_event_kind,
+        build_domain_temporal_signals, context_confirmed_domain_signals,
+        core_action_from_domain_action, decide_action_with_domain_overrides,
+        detection_enabled_for_threat, domain_action_reason_marker, domain_conversation_type,
+        domain_risk_profile_for_mode, domain_signal_confidence, domain_signal_threat_type,
+        domain_threat_priority, event_kind_from_domain, is_domain_threat, is_link_family_threat,
+        is_propaganda_threat, map_domain_threat_to_event_kind, map_ml_signal_to_event_kind,
+        map_pattern_threat_subtype, map_rule_or_threat_to_event_kind, map_threat_to_event_kind,
         merge_active_domain_temporal_output_effects, merge_domain_output_effects,
         parse_domain_threat_type, parse_threat_type_label, should_skip_pattern_match,
         should_skip_pattern_rule_override, threat_priority_for_sort,
@@ -1148,7 +1262,10 @@ mod tests {
     };
     use crate::context::tracker::{ConversationTracker, TrackerConfig};
     use crate::ids::{ConversationId, SenderId};
-    use crate::types::{Action, ContentType, ConversationType, ProtectionLevel, ThreatType};
+    use crate::types::{
+        Action, Confidence, ContentType, ConversationType, DetectionSignal, ProtectionLevel,
+        SignalFamily, ThreatType,
+    };
     use crate::{AuraConfig, AuraDomainRuntime, DomainMode, MessageInput};
     use aura_domain::{
         DomainAction, DomainEventKind, DomainOutput, DomainSignal, DomainTemporalOutput,
@@ -1487,6 +1604,41 @@ mod tests {
             "domain.propaganda.dehumanization",
         );
         assert_eq!(action, Action::Warn);
+    }
+
+    #[test]
+    fn contextual_confirmation_rejects_absent_candidates_and_neutralizes_softened_overrides() {
+        let candidate = DomainSignal {
+            threat_key: "kids_selfharm_crisis".to_string(),
+            reason_code: "kids.selfharm.crisis".to_string(),
+            score: 0.98,
+            severity: Some("critical".to_string()),
+            priority: Some(100),
+            action: Some(DomainAction::Warn),
+            threat_type: Some("self_harm".to_string()),
+        };
+        let output = DomainOutput::routed(vec![candidate], Some(DomainAction::Warn), |_| {
+            Some(DomainEventKind::SuicidalIdeation)
+        });
+
+        assert!(context_confirmed_domain_signals(Some(&output), &[]).is_empty());
+
+        let active = DetectionSignal::context(
+            ThreatType::SelfHarm,
+            0.42,
+            Confidence::Low,
+            SignalFamily::Content,
+            "domain.kids.selfharm.crisis",
+            "softened by interpreted context",
+        )
+        .with_threat_subtype("kids_selfharm_crisis");
+        let confirmed = context_confirmed_domain_signals(Some(&output), &[active]);
+
+        assert_eq!(confirmed.len(), 1);
+        assert!((confirmed[0].score - 0.42).abs() < f32::EPSILON);
+        assert_eq!(confirmed[0].action, None);
+        assert_eq!(confirmed[0].priority, None);
+        assert_eq!(confirmed[0].severity, None);
     }
 
     #[test]

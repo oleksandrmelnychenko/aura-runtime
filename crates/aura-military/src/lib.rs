@@ -18,8 +18,8 @@ pub mod temporal_shadow_telemetry;
 pub mod temporal_study;
 
 use aura_domain::{
-    DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainTemporalInput,
-    DomainTemporalOutput,
+    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainSignal,
+    DomainTemporalInput, DomainTemporalOutput,
 };
 
 #[derive(Default)]
@@ -30,8 +30,20 @@ impl DomainModule for MilitaryModule {
         DomainModuleId::Military
     }
 
+    fn detect(&self, input: &DomainInput) -> DomainOutput {
+        pipeline::run_military_pipeline(input)
+    }
+
     fn analyze(&self, input: &DomainInput) -> DomainOutput {
         pipeline::run_military_pipeline(input)
+    }
+
+    fn commit_confirmed(
+        &self,
+        _input: &DomainInput,
+        confirmed_signals: &[DomainSignal],
+    ) -> DomainConfirmedOutput {
+        pipeline::commit_confirmed_military_pipeline(confirmed_signals)
     }
 
     fn temporal_enabled(&self) -> bool {

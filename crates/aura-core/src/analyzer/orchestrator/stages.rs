@@ -30,7 +30,7 @@ impl Analyzer {
         };
 
         let domain_mode = self.config.effective_domain_mode();
-        let domain_output = self.domain_runtime.analyze_for_mode_with_hints(
+        let domain_output = self.domain_runtime.detect_for_mode_with_hints(
             domain_mode,
             protection,
             input,
@@ -57,6 +57,19 @@ impl Analyzer {
             self.config.account_type,
             &mut signals,
         );
+        let confirmed_domain_signals =
+            context_confirmed_domain_signals(domain_output.as_ref(), &signals);
+        let confirmed_ml_safety_hint = Self::extract_ml_safety_hint(&signals);
+        let confirmed_domain_output = self.domain_runtime.commit_confirmed_for_mode_with_hints(
+            domain_mode,
+            protection,
+            input,
+            confirmed_ml_safety_hint,
+            &confirmed_domain_signals,
+        );
+        signals.extend(build_domain_memory_signals(
+            confirmed_domain_output.as_ref(),
+        ));
 
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
@@ -73,10 +86,10 @@ impl Analyzer {
             &relationship_metadata_context.context_markers,
         );
         result.context_summary = interpretation_context;
-        result.action = merge_active_domain_output_effects(
+        result.action = merge_active_confirmed_domain_output_effects(
             &mut result.reason_codes,
             result.action,
-            domain_output.as_ref(),
+            confirmed_domain_output.as_ref(),
             &result.signals,
         );
         append_reason_codes(&mut result.reason_codes, &interpretation_reason_codes);
@@ -154,7 +167,7 @@ impl Analyzer {
 
         // Run domain module with ML safety hints.
         let domain_mode = self.config.effective_domain_mode();
-        let domain_output = self.domain_runtime.analyze_for_mode_with_hints(
+        let domain_output = self.domain_runtime.detect_for_mode_with_hints(
             domain_mode,
             protection,
             input,
@@ -274,6 +287,19 @@ impl Analyzer {
             self.config.account_type,
             &mut signals,
         );
+        let confirmed_domain_signals =
+            context_confirmed_domain_signals(domain_output.as_ref(), &signals);
+        let confirmed_ml_safety_hint = Self::extract_ml_safety_hint(&signals);
+        let confirmed_domain_output = self.domain_runtime.commit_confirmed_for_mode_with_hints(
+            domain_mode,
+            protection,
+            input,
+            confirmed_ml_safety_hint,
+            &confirmed_domain_signals,
+        );
+        signals.extend(build_domain_memory_signals(
+            confirmed_domain_output.as_ref(),
+        ));
 
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
@@ -310,10 +336,10 @@ impl Analyzer {
                 &result.inference,
             );
         }
-        result.action = merge_active_domain_output_effects(
+        result.action = merge_active_confirmed_domain_output_effects(
             &mut result.reason_codes,
             result.action,
-            domain_output.as_ref(),
+            confirmed_domain_output.as_ref(),
             &result.signals,
         );
         result.action = merge_active_domain_temporal_output_effects(

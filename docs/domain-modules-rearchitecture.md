@@ -85,6 +85,13 @@ The repository now contains dedicated crates for this model:
 - Rule packs are versioned (`schema_version`) and guarded by tests in CI
 - Domain rule records now include `threat_type`, `severity`, and `priority` metadata
 - Domain action policy is now resolved via shared `aura-domain` policy engine
+- Integrated domain execution is two-phase: `detect` is non-mutating, core
+  interpretation confirms or softens candidates and ML hints, and only
+  `commit_confirmed` may update domain-owned memory.
+- Memory-derived domain signals are added after confirmation as conversation
+  inference only; they are never written back as source events. Domain action
+  policy is recomputed from the confirmed projection, so a rejected or
+  softened candidate cannot restore its original escalation override.
 - Legacy military context detectors in core tracker are fully disabled (military signals come from domain runtime)
 - `AURA.MILITARY` runtime no longer executes legacy kids context detectors in core tracker
 - Core analyzer now resolves domain `ThreatType` from rule metadata (`threat_type`) without `threat_key` fallback mapping

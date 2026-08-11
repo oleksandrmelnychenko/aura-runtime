@@ -4,7 +4,9 @@ pub mod pipeline;
 pub mod policy;
 mod routing;
 
-use aura_domain::{DomainInput, DomainModule, DomainModuleId, DomainOutput};
+use aura_domain::{
+    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainSignal,
+};
 
 #[derive(Default)]
 pub struct KidsModule {
@@ -55,8 +57,20 @@ impl DomainModule for KidsModule {
         DomainModuleId::Kids
     }
 
+    fn detect(&self, input: &DomainInput) -> DomainOutput {
+        pipeline::detect_kids_pipeline(input)
+    }
+
     fn analyze(&self, input: &DomainInput) -> DomainOutput {
         pipeline::run_kids_pipeline_with_memory(input, &self.memory)
+    }
+
+    fn commit_confirmed(
+        &self,
+        input: &DomainInput,
+        confirmed_signals: &[DomainSignal],
+    ) -> DomainConfirmedOutput {
+        pipeline::commit_confirmed_kids_pipeline(input, confirmed_signals, &self.memory)
     }
 }
 
@@ -138,6 +152,40 @@ mod tests {
             &second_output.signals,
             "kids.memory.grooming_progression"
         ));
+    }
+
+    #[test]
+    fn candidate_detection_does_not_mutate_module_memory() {
+        let module = KidsModule::new();
+        let candidate = input("our little secret. don't tell your parents.");
+
+        let output = module.detect(&candidate);
+        let state = module.export_memory();
+
+        assert!(!output.signals.is_empty());
+        assert!(state.conversations.is_empty());
+        assert!(state.senders.is_empty());
+    }
+
+    #[test]
+    fn confirmation_commit_records_only_the_confirmed_projection() {
+        let module = KidsModule::new();
+        let candidate = input("our little secret. don't tell your parents.");
+
+        let detected = module.detect(&candidate);
+        assert!(!detected.signals.is_empty());
+        let committed = module.commit_confirmed(&candidate, &[]);
+        let state = module.export_memory();
+
+        assert!(committed.confirmed_signals.is_empty());
+        assert!(committed.derived_signals.is_empty());
+        assert_eq!(state.conversations.len(), 1);
+        assert_eq!(state.conversations[0].entries.len(), 1);
+        let snapshot = &state.conversations[0].entries[0];
+        assert!(!snapshot.has_grooming);
+        assert!(!snapshot.has_manipulation);
+        assert!(!snapshot.has_bullying);
+        assert!(!snapshot.has_self_harm);
     }
 
     #[test]

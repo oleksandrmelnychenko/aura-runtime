@@ -175,6 +175,21 @@ pub struct DomainOutput {
     pub routes: Vec<DomainSignalRoute>,
 }
 
+/// Domain response produced only after core interpretation confirms source signals.
+///
+/// `confirmed_signals` are the original message-level signals that survived
+/// contextual filtering. `derived_signals` may be produced from domain-owned
+/// memory, but must never be written back as source events.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct DomainConfirmedOutput {
+    /// Source signals accepted by the core interpretation boundary.
+    pub confirmed_signals: Vec<DomainSignal>,
+    /// Memory-derived signals produced after the confirmation boundary.
+    pub derived_signals: Vec<DomainSignal>,
+    /// Strongest monotonic action for the confirmed and derived signal set.
+    pub action: Option<DomainAction>,
+}
+
 impl DomainOutput {
     /// Builds an output and asks the owning domain to classify each signal.
     #[must_use]

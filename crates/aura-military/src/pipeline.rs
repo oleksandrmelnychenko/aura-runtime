@@ -1,4 +1,7 @@
-use aura_domain::{promote_action_to_warn, DomainAction, DomainInput, DomainOutput, DomainSignal};
+use aura_domain::{
+    promote_action_to_warn, DomainAction, DomainConfirmedOutput, DomainInput, DomainOutput,
+    DomainSignal,
+};
 
 use crate::detectors::{coordinate_leak, opsec, psyops, social_eng};
 use crate::lexicon;
@@ -13,6 +16,22 @@ pub fn run_military_pipeline(input: &DomainInput) -> DomainOutput {
     signals.extend(social_eng::detect_all(input));
 
     apply_military_risk_amplifiers(&mut signals);
+    finalize_military_signals(signals)
+}
+
+/// Recomputes Military policy only from signals accepted by core interpretation.
+pub fn commit_confirmed_military_pipeline(
+    confirmed_signals: &[DomainSignal],
+) -> DomainConfirmedOutput {
+    let output = finalize_military_signals(confirmed_signals.to_vec());
+    DomainConfirmedOutput {
+        confirmed_signals: output.signals,
+        derived_signals: Vec::new(),
+        action: output.action,
+    }
+}
+
+fn finalize_military_signals(mut signals: Vec<DomainSignal>) -> DomainOutput {
     signals.sort_by(|left, right| {
         let left_priority = left.priority.unwrap_or(0);
         let right_priority = right.priority.unwrap_or(0);

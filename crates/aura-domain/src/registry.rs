@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{
-    DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainTemporalInput,
-    DomainTemporalOutput,
+    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainSignal,
+    DomainTemporalInput, DomainTemporalOutput,
 };
 
 /// In-process map from stable module identities to thread-safe implementations.
@@ -40,6 +40,29 @@ impl DomainRegistry {
     pub fn run(&self, module_id: DomainModuleId, input: &DomainInput) -> Option<DomainOutput> {
         let module = self.modules.get(&module_id)?;
         Some(module.analyze(input))
+    }
+
+    /// Runs candidate detection without allowing domain-owned memory mutation.
+    #[must_use]
+    pub fn run_detection(
+        &self,
+        module_id: DomainModuleId,
+        input: &DomainInput,
+    ) -> Option<DomainOutput> {
+        let module = self.modules.get(&module_id)?;
+        Some(module.detect(input))
+    }
+
+    /// Commits only signals accepted by the core interpretation boundary.
+    #[must_use]
+    pub fn commit_confirmed(
+        &self,
+        module_id: DomainModuleId,
+        input: &DomainInput,
+        confirmed_signals: &[DomainSignal],
+    ) -> Option<DomainConfirmedOutput> {
+        let module = self.modules.get(&module_id)?;
+        Some(module.commit_confirmed(input, confirmed_signals))
     }
 
     /// Returns whether the registered module has enabled temporal analysis.
@@ -80,6 +103,10 @@ mod tests {
     impl DomainModule for StatelessModule {
         fn id(&self) -> DomainModuleId {
             DomainModuleId::Military
+        }
+
+        fn detect(&self, _input: &DomainInput) -> DomainOutput {
+            DomainOutput::default()
         }
 
         fn analyze(&self, _input: &DomainInput) -> DomainOutput {

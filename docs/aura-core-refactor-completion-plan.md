@@ -416,6 +416,14 @@ crates/aura-core/data/context_policy_rules.json
   KIDS/MILITARY reason-code prefixes;
 - додано negative boundary test та exhaustive lexicon routing tests: кожен
   KIDS і MILITARY lexical rule має typed route.
+- production hardening 11 серпня 2026 року розділив domain runtime на
+  non-mutating `detect` та `commit_confirmed`: KIDS memory приймає лише
+  сигнали й ML-оцінки, що пережили фінальну context interpretation;
+  memory-derived сигнали не матеріалізуються як source events, а MILITARY
+  action повторно обчислюється лише з підтвердженої проєкції;
+- регресійний сценарій доводить, що supportive third-party self-harm report,
+  відфільтрований interpreter, не може засіяти KIDS bullying/self-harm memory
+  і створити наступну хибну каскадну тривогу.
 
 ### Реалізована parity matrix
 

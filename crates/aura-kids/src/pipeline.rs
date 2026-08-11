@@ -6,8 +6,8 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use aura_domain::{
-    promote_action_to_warn, DomainAction, DomainConversationType, DomainInput, DomainOutput,
-    DomainRiskProfile, DomainSignal,
+    promote_action_to_warn, DomainAction, DomainConfirmedOutput, DomainConversationType,
+    DomainInput, DomainOutput, DomainRiskProfile, DomainSignal,
 };
 
 use crate::detectors::{bullying, grooming, manipulation, selfharm};
@@ -23,6 +23,21 @@ pub fn run_kids_pipeline_with_memory(
     input: &DomainInput,
     memory: &KidsPipelineMemory,
 ) -> DomainOutput {
+    let detected = detect_kids_pipeline(input);
+    let committed = commit_confirmed_kids_pipeline(input, &detected.signals, memory);
+    let mut signals = committed.confirmed_signals;
+    signals.extend(committed.derived_signals);
+    sort_signals(&mut signals);
+
+    DomainOutput::routed(
+        signals,
+        committed.action,
+        crate::routing::event_kind_for_signal,
+    )
+}
+
+/// Detects Kids-domain candidates without changing conversation or sender memory.
+pub fn detect_kids_pipeline(input: &DomainInput) -> DomainOutput {
     let mut signals: Vec<DomainSignal> = Vec::new();
 
     signals.extend(grooming::detect_all(input));
@@ -31,19 +46,46 @@ pub fn run_kids_pipeline_with_memory(
     signals.extend(manipulation::detect_all(input));
 
     apply_kids_risk_amplifiers(&mut signals);
-    apply_kids_conversation_memory_amplifiers(input, &mut signals, memory);
+    sort_signals(&mut signals);
+    let action = decide_kids_action(&signals);
+
+    DomainOutput::routed(signals, action, crate::routing::event_kind_for_signal)
+}
+
+/// Updates Kids memory from context-confirmed signals and returns only post-boundary derivatives.
+pub fn commit_confirmed_kids_pipeline(
+    input: &DomainInput,
+    confirmed_signals: &[DomainSignal],
+    memory: &KidsPipelineMemory,
+) -> DomainConfirmedOutput {
+    let mut all_signals = confirmed_signals.to_vec();
+    let confirmed_signal_count = all_signals.len();
+    apply_kids_conversation_memory_amplifiers(input, &mut all_signals, memory);
+    let action = decide_kids_action(&all_signals);
+    let derived_signals = all_signals.split_off(confirmed_signal_count);
+
+    DomainConfirmedOutput {
+        confirmed_signals: confirmed_signals.to_vec(),
+        derived_signals,
+        action,
+    }
+}
+
+fn sort_signals(signals: &mut [DomainSignal]) {
     signals.sort_by(|left, right| {
         let left_priority = left.priority.unwrap_or(0);
         let right_priority = right.priority.unwrap_or(0);
         right_priority.cmp(&left_priority)
     });
+}
 
+fn decide_kids_action(signals: &[DomainSignal]) -> Option<DomainAction> {
     let guardian_escalation = guardian::needs_guardian_escalation_with_priority(
-        &signals,
+        signals,
         lexicon::guardian_escalation_priority(),
     );
-    let mut action = intervention::decide_with_thresholds(&signals, lexicon::policy_thresholds());
-    for signal in &signals {
+    let mut action = intervention::decide_with_thresholds(signals, lexicon::policy_thresholds());
+    for signal in signals {
         let Some(signal_action) = signal.action else {
             continue;
         };
@@ -58,8 +100,7 @@ pub fn run_kids_pipeline_with_memory(
     if guardian_escalation {
         action = promote_action_to_warn(action);
     }
-
-    DomainOutput::routed(signals, action, crate::routing::event_kind_for_signal)
+    action
 }
 
 #[derive(Clone, Copy, Default)]
