@@ -104,7 +104,9 @@ dedicated institutional key and record the commitment digest in an external
 append-only or write-once log with a trusted timestamp. A cryptographic
 signature authenticates a signer but does not, by itself, prove when the file
 existed. Preserve the signature, certificate or public-key identity, timestamp
-receipt, and verification record with the study materials.
+receipt, and verification record with the study materials. The executable
+signing and trusted-key verification procedure is defined in
+`docs/temporal-study-attestation.md`.
 
 ## Populate the v3 review bundle
 
@@ -177,9 +179,11 @@ subgroups must be reported separately from the fixed primary outcomes.
 
 The evidence manifest accepts a passing review for policy activation only when
 all of these hold: packet-bound blinding, packet-bound preregistration, a valid
-study-commitment digest, `embargoed_external` corpus class, finite agreement
-metrics, and both agreement values at least `0.8`. The final evidence manifest
-still requires its separate release attestation.
+study-commitment digest, trusted-key Ed25519 verification,
+`embargoed_external` corpus class, finite agreement metrics, and both agreement
+values at least `0.8`. A passing review without study-attestation verification
+remains `pending`. The final evidence manifest still requires its separate
+release attestation.
 
 Packet binding does not prove reviewer expertise, representative sampling,
 construct validity, ecological validity, or independence of the corpus source.

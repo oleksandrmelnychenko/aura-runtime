@@ -87,6 +87,7 @@ def temporal_review_payload(**overrides):
         "study_corpus_class": "embargoed_external",
         "preregistration_canonical_sha256": "b" * 64,
         "study_commitment_canonical_sha256": "c" * 64,
+        "corpus_sha256": "d" * 64,
         "privacy": {
             "raw_text_present": False,
             "reviewer_tokens_exported": False,
@@ -101,6 +102,27 @@ def temporal_review_payload(**overrides):
             "exact_set_pair_agreement_rate": 0.9,
             "krippendorff_alpha_nominal": 0.85,
         },
+    }
+    payload.update(overrides)
+    return payload
+
+
+def temporal_study_attestation_verification_payload(**overrides):
+    payload = {
+        "schema_version": "aura.military.temporal_study_attestation_verification.v1",
+        "status": "pass",
+        "signature_algorithm": "Ed25519",
+        "key_id": "study-review-key-2026",
+        "study_id": "external_temporal_study_2026",
+        "registered_at_ms": 1780000000000,
+        "corpus_class": "embargoed_external",
+        "commitment_file_sha256": "e" * 64,
+        "commitment_canonical_sha256": "c" * 64,
+        "preregistration_canonical_sha256": "b" * 64,
+        "corpus_sha256": "d" * 64,
+        "packet_canonical_sha256": "a" * 64,
+        "public_key_spki_sha256": "f" * 64,
+        "trusted_timestamp_assurance": "absent",
     }
     payload.update(overrides)
     return payload
@@ -361,18 +383,57 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_shadow_payload(),
                 None,
                 temporal_telemetry_validation_payload(),
+                None,
             ),
             "pending",
         )
 
-    def test_temporal_activation_passes_only_with_independent_review(self):
+    def test_temporal_activation_remains_pending_without_study_attestation(self):
         self.assertEqual(
             generate_evidence_manifest.temporal_policy_activation_readiness(
                 temporal_shadow_payload(),
                 temporal_review_payload(),
                 temporal_telemetry_validation_payload(),
+                None,
+            ),
+            "pending",
+        )
+
+    def test_temporal_activation_passes_with_verified_study_attestation(self):
+        self.assertEqual(
+            generate_evidence_manifest.temporal_policy_activation_readiness(
+                temporal_shadow_payload(),
+                temporal_review_payload(),
+                temporal_telemetry_validation_payload(),
+                temporal_study_attestation_verification_payload(),
             ),
             "pass",
+        )
+
+    def test_temporal_attestation_rejects_review_binding_mismatch(self):
+        payload = temporal_study_attestation_verification_payload(
+            commitment_canonical_sha256="0" * 64
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_attestation_verification_status(
+                payload,
+                temporal_review_payload(),
+            ),
+            "review_binding_mismatch",
+        )
+
+    def test_temporal_attestation_rejects_unearned_timestamp_claim(self):
+        payload = temporal_study_attestation_verification_payload(
+            trusted_timestamp_assurance="rfc3161"
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_attestation_verification_status(
+                payload,
+                temporal_review_payload(),
+            ),
+            "unsupported_timestamp_claim",
         )
 
 
@@ -391,6 +452,8 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 "refactor_diff": root / "refactor-diff.json",
                 "temporal_shadow": root / "temporal-shadow.json",
                 "temporal_telemetry": root / "temporal-telemetry.json",
+                "temporal_review": root / "temporal-review.json",
+                "temporal_attestation": root / "temporal-attestation-verification.json",
                 "manifest": root / "manifest.json",
             }
             write_json(
@@ -459,6 +522,11 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_telemetry"],
                 temporal_telemetry_validation_payload(),
             )
+            write_json(paths["temporal_review"], temporal_review_payload())
+            write_json(
+                paths["temporal_attestation"],
+                temporal_study_attestation_verification_payload(),
+            )
 
             argv = [
                 "generate_evidence_manifest.py",
@@ -486,6 +554,10 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_shadow"].as_posix(),
                 "--temporal-shadow-telemetry-validation",
                 paths["temporal_telemetry"].as_posix(),
+                "--temporal-independent-review-report",
+                paths["temporal_review"].as_posix(),
+                "--temporal-study-attestation-verification",
+                paths["temporal_attestation"].as_posix(),
             ]
             with patch.object(sys, "argv", argv):
                 self.assertEqual(generate_evidence_manifest.main(), 0)
@@ -508,7 +580,19 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
             )
             self.assertEqual(
                 manifest["summary"]["temporal_policy_activation_readiness"],
-                "pending",
+                "pass",
+            )
+            self.assertEqual(
+                manifest["summary"][
+                    "temporal_study_attestation_verification_status"
+                ],
+                "pass",
+            )
+            self.assertEqual(
+                manifest["artifacts"]["temporal_study_attestation_verification"][
+                    "key_id"
+                ],
+                "study-review-key-2026",
             )
             self.assertEqual(
                 manifest["artifacts"]["world_lifecycle_report"]["observed_status"],

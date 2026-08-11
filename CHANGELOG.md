@@ -2,6 +2,12 @@
 
 ## Unreleased — Release Reliability
 
+- Added domain-separated Ed25519 signing and trusted-public-key verification
+  for temporal study commitments. The attestation binds exact file bytes and
+  canonical study, preregistration, corpus, and packet identities.
+- Temporal policy activation now remains pending without a matching study
+  attestation verification report and fails on mismatched trust evidence. The
+  report explicitly records that trusted timestamp assurance is still absent.
 - Added preregistered packet-bound v3 temporal review for caller-supplied,
   embargoed external corpora. Fixed sampling, hypotheses, primary outcomes,
   reviewer separation, missing-data handling, stopping rules, and agreement

@@ -101,6 +101,12 @@ The Apple artifact manifest and
 part of this contract. A dirty artifact may support local exploration but is
 never a shippable or confirmatory research artifact.
 
+Temporal confirmatory review additionally uses a domain-separated Ed25519
+attestation over the preregistration/corpus/packet commitment. This authenticates
+the institutional signer and detects substitution, but it is not a trusted time
+source. Confirmatory claims still require an independently verifiable timestamp
+or immutable-log receipt created before label collection.
+
 ## Evidence Maturity
 
 1. **Engineering evidence** — unit, property, boundary, replay, compatibility,

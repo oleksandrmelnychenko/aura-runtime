@@ -14,6 +14,9 @@ SCHEMA_VERSION = "aura.evidence_manifest.v1"
 PILOT_SHADOW_SCHEMA_VERSION = "aura.shadow_mode_bundle.v1"
 TEMPORAL_SHADOW_SCHEMA_VERSION = "aura.military.temporal_shadow_report.v1"
 TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v3"
+TEMPORAL_STUDY_ATTESTATION_VERIFICATION_SCHEMA_VERSION = (
+    "aura.military.temporal_study_attestation_verification.v1"
+)
 TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
 )
@@ -61,6 +64,11 @@ def parse_args() -> argparse.Namespace:
         "--temporal-independent-review-report",
         default=None,
         help="Optional path to independent temporal review readiness JSON.",
+    )
+    parser.add_argument(
+        "--temporal-study-attestation-verification",
+        default=None,
+        help="Optional path to trusted-key verification of the temporal study commitment.",
     )
     parser.add_argument(
         "--temporal-shadow-telemetry-validation",
@@ -338,6 +346,71 @@ def temporal_independent_review_status(payload: dict | None) -> str | None:
     return status
 
 
+def temporal_study_attestation_verification_status(
+    payload: dict | None,
+    temporal_independent_review_payload: dict | None,
+) -> str | None:
+    if payload is None:
+        return None
+    if (
+        payload.get("schema_version")
+        != TEMPORAL_STUDY_ATTESTATION_VERIFICATION_SCHEMA_VERSION
+    ):
+        return "invalid_schema"
+    if payload.get("status") != "pass":
+        return "fail"
+    if payload.get("signature_algorithm") != "Ed25519":
+        return "invalid_signature_algorithm"
+    key_id = payload.get("key_id")
+    if (
+        not isinstance(key_id, str)
+        or not key_id.isascii()
+        or not 1 <= len(key_id) <= 64
+        or not all(character.isalnum() or character in "_.-" for character in key_id)
+    ):
+        return "invalid_key_identity"
+    for field in (
+        "commitment_file_sha256",
+        "commitment_canonical_sha256",
+        "preregistration_canonical_sha256",
+        "corpus_sha256",
+        "packet_canonical_sha256",
+        "public_key_spki_sha256",
+    ):
+        digest = payload.get(field)
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            return "invalid_attestation_identity"
+    registered_at_ms = payload.get("registered_at_ms")
+    if (
+        isinstance(registered_at_ms, bool)
+        or not isinstance(registered_at_ms, int)
+        or registered_at_ms <= 0
+    ):
+        return "invalid_attestation_identity"
+    if payload.get("trusted_timestamp_assurance") != "absent":
+        return "unsupported_timestamp_claim"
+    if temporal_independent_review_payload is None:
+        return "missing_review_binding"
+    bindings = (
+        ("study_id", "study_id"),
+        ("corpus_class", "study_corpus_class"),
+        ("commitment_canonical_sha256", "study_commitment_canonical_sha256"),
+        ("preregistration_canonical_sha256", "preregistration_canonical_sha256"),
+        ("corpus_sha256", "corpus_sha256"),
+        ("packet_canonical_sha256", "blind_packet_canonical_sha256"),
+    )
+    if any(
+        payload.get(attestation_field) != temporal_independent_review_payload.get(review_field)
+        for attestation_field, review_field in bindings
+    ):
+        return "review_binding_mismatch"
+    return "pass"
+
+
 def temporal_shadow_telemetry_validation_status(payload: dict | None) -> str | None:
     if payload is None:
         return None
@@ -387,6 +460,7 @@ def temporal_policy_activation_readiness(
     temporal_shadow_payload: dict | None,
     temporal_independent_review_payload: dict | None,
     temporal_shadow_telemetry_validation_payload: dict | None,
+    temporal_study_attestation_verification_payload: dict | None,
 ) -> str | None:
     shadow_status = temporal_shadow_status(temporal_shadow_payload)
     review_status = temporal_independent_review_status(
@@ -395,12 +469,27 @@ def temporal_policy_activation_readiness(
     telemetry_status = temporal_shadow_telemetry_validation_status(
         temporal_shadow_telemetry_validation_payload
     )
-    if shadow_status is None and review_status is None and telemetry_status is None:
+    attestation_status = temporal_study_attestation_verification_status(
+        temporal_study_attestation_verification_payload,
+        temporal_independent_review_payload,
+    )
+    if (
+        shadow_status is None
+        and review_status is None
+        and telemetry_status is None
+        and attestation_status is None
+    ):
         return None
     if shadow_status != "pass" or telemetry_status != "pass":
         return "fail"
+    if attestation_status not in (None, "pass"):
+        return "fail"
     if review_status == "pass":
-        return "pass"
+        if attestation_status == "pass":
+            return "pass"
+        if attestation_status is None:
+            return "pending"
+        return "fail"
     if review_status in (None, "pending"):
         return "pending"
     return "fail"
@@ -535,6 +624,11 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["temporal_independent_review_status"] not in (None, "pass"):
         return "fail"
+    if summary["temporal_study_attestation_verification_status"] not in (
+        None,
+        "pass",
+    ):
+        return "fail"
     if summary["temporal_shadow_telemetry_validation_status"] not in (None, "pass"):
         return "fail"
     if summary["pilot_gate_status"] not in (None, "pass"):
@@ -566,6 +660,7 @@ def attach_payload_details(
     pilot_regression_payload: dict | None,
     temporal_shadow_payload: dict | None,
     temporal_independent_review_payload: dict | None,
+    temporal_study_attestation_verification_payload: dict | None,
     temporal_shadow_telemetry_validation_payload: dict | None,
     pilot_gate_payload: dict | None,
     kids_preprod_dry_run_payload: dict | None,
@@ -708,6 +803,23 @@ def attach_payload_details(
         artifacts["temporal_independent_review_report"][
             "krippendorff_alpha_nominal"
         ] = review_metrics.get("krippendorff_alpha_nominal")
+    if temporal_study_attestation_verification_payload is not None:
+        artifact = artifacts["temporal_study_attestation_verification"]
+        artifact["observed_status"] = temporal_study_attestation_verification_status(
+            temporal_study_attestation_verification_payload,
+            temporal_independent_review_payload,
+        )
+        for field in (
+            "schema_version",
+            "signature_algorithm",
+            "key_id",
+            "study_id",
+            "corpus_class",
+            "commitment_canonical_sha256",
+            "public_key_spki_sha256",
+            "trusted_timestamp_assurance",
+        ):
+            artifact[field] = temporal_study_attestation_verification_payload.get(field)
     if temporal_shadow_telemetry_validation_payload is not None:
         artifacts["temporal_shadow_telemetry_validation"][
             "observed_status"
@@ -887,6 +999,17 @@ def main() -> int:
         else (None, None)
     )
     (
+        temporal_study_attestation_verification_payload,
+        temporal_study_attestation_verification_artifact,
+    ) = (
+        load_json_artifact(
+            args.temporal_study_attestation_verification,
+            required=args.temporal_study_attestation_verification is not None,
+        )
+        if args.temporal_study_attestation_verification
+        else (None, None)
+    )
+    (
         temporal_shadow_telemetry_validation_payload,
         temporal_shadow_telemetry_validation_artifact,
     ) = (
@@ -945,6 +1068,10 @@ def main() -> int:
         artifacts[
             "temporal_independent_review_report"
         ] = temporal_independent_review_artifact
+    if temporal_study_attestation_verification_artifact is not None:
+        artifacts[
+            "temporal_study_attestation_verification"
+        ] = temporal_study_attestation_verification_artifact
     if temporal_shadow_telemetry_validation_artifact is not None:
         artifacts[
             "temporal_shadow_telemetry_validation"
@@ -978,6 +1105,9 @@ def main() -> int:
         pilot_regression_payload=pilot_regression_payload,
         temporal_shadow_payload=temporal_shadow_payload,
         temporal_independent_review_payload=temporal_independent_review_payload,
+        temporal_study_attestation_verification_payload=(
+            temporal_study_attestation_verification_payload
+        ),
         temporal_shadow_telemetry_validation_payload=(
             temporal_shadow_telemetry_validation_payload
         ),
@@ -1206,6 +1336,31 @@ def main() -> int:
             if temporal_independent_review_payload
             else None
         ),
+        "temporal_study_attestation_verification_status": (
+            temporal_study_attestation_verification_status(
+                temporal_study_attestation_verification_payload,
+                temporal_independent_review_payload,
+            )
+        ),
+        "temporal_study_attestation_key_id": (
+            temporal_study_attestation_verification_payload.get("key_id")
+            if temporal_study_attestation_verification_payload
+            else None
+        ),
+        "temporal_study_attestation_public_key_spki_sha256": (
+            temporal_study_attestation_verification_payload.get(
+                "public_key_spki_sha256"
+            )
+            if temporal_study_attestation_verification_payload
+            else None
+        ),
+        "temporal_study_attestation_trusted_timestamp_assurance": (
+            temporal_study_attestation_verification_payload.get(
+                "trusted_timestamp_assurance"
+            )
+            if temporal_study_attestation_verification_payload
+            else None
+        ),
         "temporal_shadow_telemetry_validation_status": (
             temporal_shadow_telemetry_validation_status(
                 temporal_shadow_telemetry_validation_payload
@@ -1215,6 +1370,7 @@ def main() -> int:
             temporal_shadow_payload,
             temporal_independent_review_payload,
             temporal_shadow_telemetry_validation_payload,
+            temporal_study_attestation_verification_payload,
         ),
         "temporal_shadow_telemetry_on_prem_inputs": (
             temporal_shadow_telemetry_validation_payload.get("on_prem", {})

@@ -258,11 +258,13 @@ python3 ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.js
 ```
 
 See `docs/temporal-independent-review.md`,
+`docs/temporal-study-attestation.md`,
 `docs/temporal-shadow-telemetry.md`, and
 `docs/evidence-manifest-attestation.md` for the research-readiness and release
 trust boundaries. Confirmatory temporal review uses packet-bound v3 material
-bound to a fixed preregistration, external corpus, and public study commitment;
-legacy or public-seed review cannot satisfy policy activation readiness.
+bound to a fixed preregistration, external corpus, public study commitment, and
+trusted-key study attestation; legacy, unsigned, or public-seed review cannot
+satisfy policy activation readiness.
 
 ## Usage (Rust)
 

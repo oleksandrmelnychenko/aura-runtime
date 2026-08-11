@@ -57,7 +57,7 @@ jobs:
     - name: Lint Domain Lexicons
       run: python3 ci/lint_lexicons.py
     - name: Run CI Helper Tests
-      run: python3 -m unittest ci.test_apple_artifact ci.test_evidence_attestation ci.test_generate_evidence_manifest ci.test_refactor_baseline ci.test_world_performance_gate
+      run: python3 -m unittest ci.test_apple_artifact ci.test_evidence_attestation ci.test_generate_evidence_manifest ci.test_refactor_baseline ci.test_temporal_study_attestation ci.test_world_performance_gate
     - name: Resolve Promotion Target
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
