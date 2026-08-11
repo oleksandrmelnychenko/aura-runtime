@@ -106,10 +106,13 @@ attestation over the preregistration/corpus/packet commitment. This authenticate
 the institutional signer and detects substitution, but it is not a trusted time
 source. The RFC 3161 verification contract now binds the exact commitment to an
 expected timestamp policy, certificate chain, nonce, and pinned TSA signer, and
-requires the `genTime + accuracy` upper bound before the earliest declared
-review completion. The remaining
-research limit is explicit: review completion times are bundle-declared until
-individual signed submission receipts are independently timestamped.
+requires the accuracy-adjusted commitment interval to precede every reviewer
+receipt interval. Reviewer and adjudicator submissions are now independently
+signed, RFC 3161 timestamped, and joined by an exact receipt-digest chain. The
+v5 review report binds its metrics to the canonical input-bundle digest. The
+remaining limit is explicit: this establishes document existence and order,
+not reviewer expertise, actual independence, effective blinding, or absence of
+coordination.
 
 ## Evidence Maturity
 

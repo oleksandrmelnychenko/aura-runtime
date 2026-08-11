@@ -13,12 +13,15 @@ from pathlib import Path
 SCHEMA_VERSION = "aura.evidence_manifest.v1"
 PILOT_SHADOW_SCHEMA_VERSION = "aura.shadow_mode_bundle.v1"
 TEMPORAL_SHADOW_SCHEMA_VERSION = "aura.military.temporal_shadow_report.v1"
-TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v4"
+TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v5"
 TEMPORAL_STUDY_ATTESTATION_VERIFICATION_SCHEMA_VERSION = (
     "aura.military.temporal_study_attestation_verification.v1"
 )
 TEMPORAL_STUDY_TIMESTAMP_VERIFICATION_SCHEMA_VERSION = (
     "aura.military.temporal_study_timestamp_verification.v1"
+)
+TEMPORAL_REVIEW_RECEIPT_CHAIN_VERIFICATION_SCHEMA_VERSION = (
+    "aura.military.temporal_review_receipt_chain_verification.v1"
 )
 TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
@@ -77,6 +80,14 @@ def parse_args() -> argparse.Namespace:
         "--temporal-study-timestamp-verification",
         default=None,
         help="Optional path to RFC 3161 verification of the temporal study commitment.",
+    )
+    parser.add_argument(
+        "--temporal-review-receipt-chain-verification",
+        default=None,
+        help=(
+            "Optional path to aggregate verification of individually signed and "
+            "RFC 3161 timestamped temporal-review receipts."
+        ),
     )
     parser.add_argument(
         "--temporal-shadow-telemetry-validation",
@@ -310,6 +321,7 @@ def temporal_independent_review_status(payload: dict | None) -> str | None:
         study_commitment_digest = payload.get(
             "study_commitment_canonical_sha256"
         )
+        review_bundle_digest = payload.get("review_bundle_canonical_sha256")
         if (
             not isinstance(study_id, str)
             or not 8 <= len(study_id) <= 64
@@ -328,6 +340,8 @@ def temporal_independent_review_status(payload: dict | None) -> str | None:
             or any(char not in "0123456789abcdef" for char in study_commitment_digest)
         ):
             return "invalid_study_commitment"
+        if not lowercase_sha256(review_bundle_digest):
+            return "invalid_review_bundle_identity"
         if payload.get("study_corpus_class") != "embargoed_external":
             return "insufficient_external_validity"
         chronology = payload.get("chronology")
@@ -469,6 +483,14 @@ def valid_oid(value: object) -> bool:
     return first in (0, 1, 2) and (first == 2 or second <= 39)
 
 
+def lowercase_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def temporal_study_timestamp_verification_status(
     payload: dict | None,
     temporal_independent_review_payload: dict | None,
@@ -505,6 +527,7 @@ def temporal_study_timestamp_verification_status(
         return "invalid_timestamp_identity"
     ordering = payload.get("ordering")
     accuracy_micros = payload.get("accuracy_micros")
+    earliest_trusted_time_ms = payload.get("earliest_trusted_time_unix_ms")
     latest_trusted_time_ms = payload.get("latest_trusted_time_unix_ms")
     if (
         not isinstance(ordering, bool)
@@ -553,10 +576,13 @@ def temporal_study_timestamp_verification_status(
     registered_at_ms = payload["registered_at_ms"]
     gen_time_ms = payload["gen_time_unix_ms"]
     verification_time_ms = payload["verification_time_unix_ms"]
-    expected_latest_trusted_time_ms = gen_time_ms + (accuracy_micros + 999) // 1000
+    accuracy_ms = (accuracy_micros + 999) // 1000
+    expected_earliest_trusted_time_ms = max(0, gen_time_ms - accuracy_ms)
+    expected_latest_trusted_time_ms = gen_time_ms + accuracy_ms
     if (
         gen_time_ms + 5 * 60 * 1000 < registered_at_ms
         or gen_time_ms > verification_time_ms + 5 * 60 * 1000
+        or earliest_trusted_time_ms != expected_earliest_trusted_time_ms
         or latest_trusted_time_ms != expected_latest_trusted_time_ms
     ):
         return "invalid_timestamp_chronology"
@@ -606,6 +632,156 @@ def temporal_study_timestamp_verification_status(
         or latest_trusted_time_ms >= earliest_annotation_ms
     ):
         return "timestamp_not_before_review"
+    return "pass"
+
+
+def temporal_review_receipt_chain_verification_status(
+    payload: dict | None,
+    temporal_independent_review_payload: dict | None,
+    temporal_study_timestamp_verification_payload: dict | None,
+) -> str | None:
+    if payload is None:
+        return None
+    if (
+        payload.get("schema_version")
+        != TEMPORAL_REVIEW_RECEIPT_CHAIN_VERIFICATION_SCHEMA_VERSION
+    ):
+        return "invalid_schema"
+    if payload.get("status") != "pass":
+        return "fail"
+    if (
+        payload.get("chronology_assurance")
+        != "individual_signed_rfc3161_receipts"
+        or payload.get("signature_algorithm") != "Ed25519"
+        or payload.get("timestamp_protocol") != "RFC3161"
+        or payload.get("message_imprint_algorithm") != "sha256"
+        or payload.get("certificate_validation_time_basis") != "tsa_gen_time"
+        or payload.get("revocation_assurance") != "not_checked"
+    ):
+        return "invalid_receipt_assurance"
+    for field in (
+        "preregistration_canonical_sha256",
+        "study_commitment_canonical_sha256",
+        "packet_canonical_sha256",
+        "review_bundle_file_sha256",
+        "review_bundle_canonical_sha256",
+        "receipt_index_sha256",
+        "study_timestamp_response_sha256",
+        "receipt_signer_spki_set_sha256",
+    ):
+        if not lowercase_sha256(payload.get(field)):
+            return "invalid_receipt_identity"
+    for field in (
+        "reviewer_receipt_count",
+        "distinct_reviewer_signer_count",
+        "distinct_receipt_signer_count",
+        "distinct_reviewer_affiliation_count",
+        "distinct_participant_affiliation_count",
+        "adjudicator_receipt_count",
+        "reviewed_case_count",
+        "reviewer_decision_count",
+        "adjudication_decision_count",
+        "receipt_timestamp_authority_count",
+    ):
+        value = payload.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            return "invalid_receipt_summary"
+    reviewer_count = payload["reviewer_receipt_count"]
+    participant_count = reviewer_count + payload["adjudicator_receipt_count"]
+    case_count = payload["reviewed_case_count"]
+    if (
+        reviewer_count < 2
+        or payload["adjudicator_receipt_count"] != 1
+        or payload["distinct_reviewer_signer_count"] != reviewer_count
+        or payload["distinct_receipt_signer_count"] != participant_count
+        or payload["distinct_reviewer_affiliation_count"] != reviewer_count
+        or payload["distinct_participant_affiliation_count"] != participant_count
+        or not 1 <= payload["receipt_timestamp_authority_count"] <= participant_count
+        or not 2 * case_count
+        <= payload["reviewer_decision_count"]
+        <= reviewer_count * case_count
+        or payload["adjudication_decision_count"] != case_count
+    ):
+        return "invalid_receipt_summary"
+    proof_fields = (
+        "commitment_before_review_receipts",
+        "review_receipts_before_adjudication",
+        "adjudicator_binds_exact_reviewer_receipts",
+        "review_decisions_after_commitment",
+        "review_decisions_before_receipts",
+        "adjudication_after_review_receipts",
+        "adjudication_before_receipt",
+    )
+    if any(payload.get(field) is not True for field in proof_fields):
+        return "invalid_receipt_chronology"
+    time_fields = (
+        "commitment_latest_trusted_time_unix_ms",
+        "reviewer_earliest_trusted_time_unix_ms",
+        "reviewer_latest_trusted_time_unix_ms",
+        "adjudicator_earliest_trusted_time_unix_ms",
+        "adjudicator_latest_trusted_time_unix_ms",
+    )
+    times = [payload.get(field) for field in time_fields]
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value <= 0
+        for value in times
+    ):
+        return "invalid_receipt_chronology"
+    commitment_upper, reviewer_lower, reviewer_upper, adjudicator_lower, adjudicator_upper = times
+    if not (
+        commitment_upper < reviewer_lower <= reviewer_upper < adjudicator_lower <= adjudicator_upper
+    ):
+        return "invalid_receipt_chronology"
+    privacy = payload.get("privacy")
+    if not isinstance(privacy, dict) or any(
+        privacy.get(field) is not False
+        for field in (
+            "participant_tokens_exported",
+            "affiliation_tokens_exported",
+            "public_key_digests_exported",
+            "case_tokens_exported",
+            "decision_labels_exported",
+            "raw_text_present",
+        )
+    ):
+        return "privacy_fail"
+    if temporal_independent_review_payload is None:
+        return "missing_review_binding"
+    if temporal_study_timestamp_verification_payload is None:
+        return "missing_timestamp_binding"
+    review_bindings = (
+        ("study_id", "study_id"),
+        ("preregistration_canonical_sha256", "preregistration_canonical_sha256"),
+        ("study_commitment_canonical_sha256", "study_commitment_canonical_sha256"),
+        ("packet_id", "blind_packet_id"),
+        ("packet_canonical_sha256", "blind_packet_canonical_sha256"),
+        ("review_bundle_canonical_sha256", "review_bundle_canonical_sha256"),
+    )
+    if any(
+        payload.get(receipt_field) != temporal_independent_review_payload.get(review_field)
+        for receipt_field, review_field in review_bindings
+    ):
+        return "review_binding_mismatch"
+    metrics = temporal_independent_review_payload.get("metrics")
+    if not isinstance(metrics, dict) or metrics.get("corpus_cases") != case_count:
+        return "review_binding_mismatch"
+    timestamp_bindings = (
+        ("study_id", "study_id"),
+        ("preregistration_canonical_sha256", "preregistration_canonical_sha256"),
+        ("study_commitment_canonical_sha256", "commitment_canonical_sha256"),
+        ("packet_canonical_sha256", "packet_canonical_sha256"),
+        ("study_timestamp_response_sha256", "response_sha256"),
+        (
+            "commitment_latest_trusted_time_unix_ms",
+            "latest_trusted_time_unix_ms",
+        ),
+    )
+    if any(
+        payload.get(receipt_field)
+        != temporal_study_timestamp_verification_payload.get(timestamp_field)
+        for receipt_field, timestamp_field in timestamp_bindings
+    ):
+        return "timestamp_binding_mismatch"
     return "pass"
 
 
@@ -660,6 +836,7 @@ def temporal_policy_activation_readiness(
     temporal_shadow_telemetry_validation_payload: dict | None,
     temporal_study_attestation_verification_payload: dict | None,
     temporal_study_timestamp_verification_payload: dict | None,
+    temporal_review_receipt_chain_verification_payload: dict | None,
 ) -> str | None:
     shadow_status = temporal_shadow_status(temporal_shadow_payload)
     review_status = temporal_independent_review_status(
@@ -677,12 +854,18 @@ def temporal_policy_activation_readiness(
         temporal_independent_review_payload,
         temporal_study_attestation_verification_payload,
     )
+    receipt_chain_status = temporal_review_receipt_chain_verification_status(
+        temporal_review_receipt_chain_verification_payload,
+        temporal_independent_review_payload,
+        temporal_study_timestamp_verification_payload,
+    )
     if (
         shadow_status is None
         and review_status is None
         and telemetry_status is None
         and attestation_status is None
         and timestamp_status is None
+        and receipt_chain_status is None
     ):
         return None
     if shadow_status != "pass" or telemetry_status != "pass":
@@ -691,10 +874,20 @@ def temporal_policy_activation_readiness(
         return "fail"
     if timestamp_status not in (None, "pass"):
         return "fail"
+    if receipt_chain_status not in (None, "pass"):
+        return "fail"
     if review_status == "pass":
-        if attestation_status == "pass" and timestamp_status == "pass":
+        if (
+            attestation_status == "pass"
+            and timestamp_status == "pass"
+            and receipt_chain_status == "pass"
+        ):
             return "pass"
-        if attestation_status is None or timestamp_status is None:
+        if (
+            attestation_status is None
+            or timestamp_status is None
+            or receipt_chain_status is None
+        ):
             return "pending"
         return "fail"
     if review_status in (None, "pending"):
@@ -841,6 +1034,11 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         "pass",
     ):
         return "fail"
+    if summary["temporal_review_receipt_chain_verification_status"] not in (
+        None,
+        "pass",
+    ):
+        return "fail"
     if summary["temporal_shadow_telemetry_validation_status"] not in (None, "pass"):
         return "fail"
     if summary["pilot_gate_status"] not in (None, "pass"):
@@ -874,6 +1072,7 @@ def attach_payload_details(
     temporal_independent_review_payload: dict | None,
     temporal_study_attestation_verification_payload: dict | None,
     temporal_study_timestamp_verification_payload: dict | None,
+    temporal_review_receipt_chain_verification_payload: dict | None,
     temporal_shadow_telemetry_validation_payload: dict | None,
     pilot_gate_payload: dict | None,
     kids_preprod_dry_run_payload: dict | None,
@@ -1003,6 +1202,11 @@ def attach_payload_details(
         ] = temporal_independent_review_payload.get(
             "study_commitment_canonical_sha256"
         )
+        artifacts["temporal_independent_review_report"][
+            "review_bundle_canonical_sha256"
+        ] = temporal_independent_review_payload.get(
+            "review_bundle_canonical_sha256"
+        )
         review_metrics = temporal_independent_review_payload.get("metrics", {})
         artifacts["temporal_independent_review_report"]["corpus_cases"] = review_metrics.get(
             "corpus_cases"
@@ -1075,6 +1279,34 @@ def attach_payload_details(
             "revocation_assurance",
         ):
             artifact[field] = temporal_study_timestamp_verification_payload.get(field)
+    if temporal_review_receipt_chain_verification_payload is not None:
+        artifact = artifacts["temporal_review_receipt_chain_verification"]
+        artifact["observed_status"] = (
+            temporal_review_receipt_chain_verification_status(
+                temporal_review_receipt_chain_verification_payload,
+                temporal_independent_review_payload,
+                temporal_study_timestamp_verification_payload,
+            )
+        )
+        for field in (
+            "schema_version",
+            "chronology_assurance",
+            "signature_algorithm",
+            "timestamp_protocol",
+            "review_bundle_canonical_sha256",
+            "reviewer_receipt_count",
+            "adjudicator_receipt_count",
+            "reviewed_case_count",
+            "commitment_latest_trusted_time_unix_ms",
+            "reviewer_earliest_trusted_time_unix_ms",
+            "reviewer_latest_trusted_time_unix_ms",
+            "adjudicator_earliest_trusted_time_unix_ms",
+            "adjudicator_latest_trusted_time_unix_ms",
+            "revocation_assurance",
+        ):
+            artifact[field] = temporal_review_receipt_chain_verification_payload.get(
+                field
+            )
     if temporal_shadow_telemetry_validation_payload is not None:
         artifacts["temporal_shadow_telemetry_validation"][
             "observed_status"
@@ -1276,6 +1508,17 @@ def main() -> int:
         else (None, None)
     )
     (
+        temporal_review_receipt_chain_verification_payload,
+        temporal_review_receipt_chain_verification_artifact,
+    ) = (
+        load_json_artifact(
+            args.temporal_review_receipt_chain_verification,
+            required=args.temporal_review_receipt_chain_verification is not None,
+        )
+        if args.temporal_review_receipt_chain_verification
+        else (None, None)
+    )
+    (
         temporal_shadow_telemetry_validation_payload,
         temporal_shadow_telemetry_validation_artifact,
     ) = (
@@ -1342,6 +1585,10 @@ def main() -> int:
         artifacts[
             "temporal_study_timestamp_verification"
         ] = temporal_study_timestamp_verification_artifact
+    if temporal_review_receipt_chain_verification_artifact is not None:
+        artifacts[
+            "temporal_review_receipt_chain_verification"
+        ] = temporal_review_receipt_chain_verification_artifact
     if temporal_shadow_telemetry_validation_artifact is not None:
         artifacts[
             "temporal_shadow_telemetry_validation"
@@ -1380,6 +1627,9 @@ def main() -> int:
         ),
         temporal_study_timestamp_verification_payload=(
             temporal_study_timestamp_verification_payload
+        ),
+        temporal_review_receipt_chain_verification_payload=(
+            temporal_review_receipt_chain_verification_payload
         ),
         temporal_shadow_telemetry_validation_payload=(
             temporal_shadow_telemetry_validation_payload
@@ -1688,6 +1938,41 @@ def main() -> int:
             if temporal_study_timestamp_verification_payload
             else None
         ),
+        "temporal_review_receipt_chain_verification_status": (
+            temporal_review_receipt_chain_verification_status(
+                temporal_review_receipt_chain_verification_payload,
+                temporal_independent_review_payload,
+                temporal_study_timestamp_verification_payload,
+            )
+        ),
+        "temporal_review_receipt_chronology_assurance": (
+            temporal_review_receipt_chain_verification_payload.get(
+                "chronology_assurance"
+            )
+            if temporal_review_receipt_chain_verification_payload
+            else None
+        ),
+        "temporal_review_receipt_reviewer_count": (
+            temporal_review_receipt_chain_verification_payload.get(
+                "reviewer_receipt_count"
+            )
+            if temporal_review_receipt_chain_verification_payload
+            else None
+        ),
+        "temporal_review_receipt_reviewer_earliest_trusted_time_unix_ms": (
+            temporal_review_receipt_chain_verification_payload.get(
+                "reviewer_earliest_trusted_time_unix_ms"
+            )
+            if temporal_review_receipt_chain_verification_payload
+            else None
+        ),
+        "temporal_review_receipt_adjudicator_latest_trusted_time_unix_ms": (
+            temporal_review_receipt_chain_verification_payload.get(
+                "adjudicator_latest_trusted_time_unix_ms"
+            )
+            if temporal_review_receipt_chain_verification_payload
+            else None
+        ),
         "temporal_shadow_telemetry_validation_status": (
             temporal_shadow_telemetry_validation_status(
                 temporal_shadow_telemetry_validation_payload
@@ -1699,6 +1984,7 @@ def main() -> int:
             temporal_shadow_telemetry_validation_payload,
             temporal_study_attestation_verification_payload,
             temporal_study_timestamp_verification_payload,
+            temporal_review_receipt_chain_verification_payload,
         ),
         "temporal_shadow_telemetry_on_prem_inputs": (
             temporal_shadow_telemetry_validation_payload.get("on_prem", {})

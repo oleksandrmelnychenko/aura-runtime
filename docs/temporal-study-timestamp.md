@@ -72,7 +72,8 @@ Omit `--untrusted-chain` only when no intermediate chain is needed. Retain the
 commitment, request, response, signer and chain certificates, trust-policy
 record, verification report, and the OpenSSL version used for verification.
 
-Provide all three temporal artifacts to the evidence manifest:
+Provide the trusted study artifacts, v5 review report, and aggregate receipt
+chain to the evidence manifest:
 
 ```sh
 python3 ci/generate_evidence_manifest.py \
@@ -82,29 +83,33 @@ python3 ci/generate_evidence_manifest.py \
   --temporal-study-attestation-verification \
     artifacts/temporal-study-attestation-verification.json \
   --temporal-study-timestamp-verification \
-    artifacts/temporal-study-timestamp-verification.json
+    artifacts/temporal-study-timestamp-verification.json \
+  --temporal-review-receipt-chain-verification \
+    artifacts/temporal-review-receipt-chain-verification.json
 ```
 
 Policy activation passes this part of the gate only when the trusted timestamp
-matches the study commitment, attestation, and review report, and the upper
-bound `genTime + accuracy` is earlier than the earliest declared annotation
-completion time. The verifier requires an explicit accuracy no greater than
-five minutes; an unspecified or wider interval cannot establish this ordering.
+matches the study commitment, attestation, review report, and signed receipt
+chain. The commitment upper bound `genTime + accuracy` must be strictly earlier
+than every reviewer receipt lower bound. The verifier requires an explicit
+accuracy no greater than five minutes; an unspecified, wider, equal, or
+overlapping interval cannot establish ordering.
 
 ## Exact claim and remaining boundary
 
 The timestamp verifies that the exact commitment bytes existed no later than
 the upper end of the TSA interval at `genTime + accuracy`, subject to the
-authority, certificate, clock, and selected policy. The v4 aggregate review
+authority, certificate, clock, and selected policy. The v5 aggregate review
 report exposes the earliest and
 latest annotation and adjudication completion times with
 `decision_time_assurance = bundle_declared`.
 
-Consequently, the current evidence supports **commitment before declared review
-completion**. It does not independently prove when each reviewer began or
-completed work, that a reviewer never saw labels earlier, or that a local clock
-was honest. A stronger future experiment should timestamp or append-only-log a
-signed receipt for every frozen reviewer submission and adjudication.
+The separate receipt protocol now timestamps the exact signed reviewer and
+adjudicator attestations and verifies strict trusted-time interval precedence.
+See `docs/temporal-review-receipts.md`. This independently witnesses when each
+complete signed submission existed, but does not prove when work began, that a
+reviewer never saw labels earlier, that participant affiliations are genuine,
+or that the human-entered completion time is honest.
 
 Certificate revocation is intentionally reported as `not_checked`. Validation
 at `genTime` supports historical certificate validity but is not long-term

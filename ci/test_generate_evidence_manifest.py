@@ -77,7 +77,7 @@ def temporal_telemetry_validation_payload(**overrides):
 
 def temporal_review_payload(**overrides):
     payload = {
-        "schema_version": "aura.military.temporal_review_report.v4",
+        "schema_version": "aura.military.temporal_review_report.v5",
         "overall_status": "pass",
         "blinding_assurance": "packet_bound",
         "blind_packet_id": "blind_round_alpha",
@@ -87,6 +87,7 @@ def temporal_review_payload(**overrides):
         "study_corpus_class": "embargoed_external",
         "preregistration_canonical_sha256": "b" * 64,
         "study_commitment_canonical_sha256": "c" * 64,
+        "review_bundle_canonical_sha256": "f" * 64,
         "corpus_sha256": "d" * 64,
         "chronology": {
             "decision_time_assurance": "bundle_declared",
@@ -147,6 +148,7 @@ def temporal_study_timestamp_verification_payload(**overrides):
         "serial_hex": "0x01",
         "gen_time_unix_ms": 1780000001000,
         "accuracy_micros": 1000000,
+        "earliest_trusted_time_unix_ms": 1780000000000,
         "latest_trusted_time_unix_ms": 1780000002000,
         "ordering": True,
         "request_nonce_present": True,
@@ -168,6 +170,61 @@ def temporal_study_timestamp_verification_payload(**overrides):
         "revocation_assurance": "not_checked",
         "verification_time_unix_ms": 1780000002000,
         "verification_tool": "OpenSSL test",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def temporal_review_receipt_chain_verification_payload(**overrides):
+    payload = {
+        "schema_version": "aura.military.temporal_review_receipt_chain_verification.v1",
+        "status": "pass",
+        "chronology_assurance": "individual_signed_rfc3161_receipts",
+        "signature_algorithm": "Ed25519",
+        "timestamp_protocol": "RFC3161",
+        "message_imprint_algorithm": "sha256",
+        "certificate_validation_time_basis": "tsa_gen_time",
+        "revocation_assurance": "not_checked",
+        "study_id": "external_temporal_study_2026",
+        "preregistration_canonical_sha256": "b" * 64,
+        "study_commitment_canonical_sha256": "c" * 64,
+        "packet_id": "blind_round_alpha",
+        "packet_canonical_sha256": "a" * 64,
+        "review_bundle_file_sha256": "e" * 64,
+        "review_bundle_canonical_sha256": "f" * 64,
+        "receipt_index_sha256": "7" * 64,
+        "study_timestamp_response_sha256": "2" * 64,
+        "reviewer_receipt_count": 2,
+        "distinct_reviewer_signer_count": 2,
+        "distinct_receipt_signer_count": 3,
+        "distinct_reviewer_affiliation_count": 2,
+        "distinct_participant_affiliation_count": 3,
+        "adjudicator_receipt_count": 1,
+        "reviewed_case_count": 37,
+        "reviewer_decision_count": 74,
+        "adjudication_decision_count": 37,
+        "receipt_signer_spki_set_sha256": "8" * 64,
+        "receipt_timestamp_authority_count": 1,
+        "commitment_latest_trusted_time_unix_ms": 1780000002000,
+        "reviewer_earliest_trusted_time_unix_ms": 1780000130000,
+        "reviewer_latest_trusted_time_unix_ms": 1780000170000,
+        "adjudicator_earliest_trusted_time_unix_ms": 1780000250000,
+        "adjudicator_latest_trusted_time_unix_ms": 1780000260000,
+        "commitment_before_review_receipts": True,
+        "review_receipts_before_adjudication": True,
+        "adjudicator_binds_exact_reviewer_receipts": True,
+        "review_decisions_after_commitment": True,
+        "review_decisions_before_receipts": True,
+        "adjudication_after_review_receipts": True,
+        "adjudication_before_receipt": True,
+        "privacy": {
+            "participant_tokens_exported": False,
+            "affiliation_tokens_exported": False,
+            "public_key_digests_exported": False,
+            "case_tokens_exported": False,
+            "decision_labels_exported": False,
+            "raw_text_present": False,
+        },
     }
     payload.update(overrides)
     return payload
@@ -441,6 +498,7 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_telemetry_validation_payload(),
                 None,
                 None,
+                None,
             ),
             "pending",
         )
@@ -451,6 +509,7 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_shadow_payload(),
                 temporal_review_payload(),
                 temporal_telemetry_validation_payload(),
+                None,
                 None,
                 None,
             ),
@@ -465,11 +524,12 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_telemetry_validation_payload(),
                 temporal_study_attestation_verification_payload(),
                 None,
+                None,
             ),
             "pending",
         )
 
-    def test_temporal_activation_passes_with_verified_timestamp_precedence(self):
+    def test_temporal_activation_remains_pending_without_review_receipts(self):
         self.assertEqual(
             generate_evidence_manifest.temporal_policy_activation_readiness(
                 temporal_shadow_payload(),
@@ -477,6 +537,20 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_telemetry_validation_payload(),
                 temporal_study_attestation_verification_payload(),
                 temporal_study_timestamp_verification_payload(),
+                None,
+            ),
+            "pending",
+        )
+
+    def test_temporal_activation_passes_with_verified_receipt_chain(self):
+        self.assertEqual(
+            generate_evidence_manifest.temporal_policy_activation_readiness(
+                temporal_shadow_payload(),
+                temporal_review_payload(),
+                temporal_telemetry_validation_payload(),
+                temporal_study_attestation_verification_payload(),
+                temporal_study_timestamp_verification_payload(),
+                temporal_review_receipt_chain_verification_payload(),
             ),
             "pass",
         )
@@ -484,6 +558,7 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
     def test_temporal_timestamp_must_precede_first_declared_review(self):
         payload = temporal_study_timestamp_verification_payload(
             gen_time_unix_ms=1780000059000,
+            earliest_trusted_time_unix_ms=1780000058000,
             latest_trusted_time_unix_ms=1780000060000,
         )
 
@@ -494,6 +569,47 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_study_attestation_verification_payload(),
             ),
             "timestamp_not_before_review",
+        )
+
+    def test_temporal_receipt_chain_rejects_review_bundle_substitution(self):
+        payload = temporal_review_receipt_chain_verification_payload(
+            review_bundle_canonical_sha256="0" * 64
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_timestamp_verification_payload(),
+            ),
+            "review_binding_mismatch",
+        )
+
+    def test_temporal_receipt_chain_rejects_overlapping_intervals(self):
+        payload = temporal_review_receipt_chain_verification_payload(
+            adjudicator_earliest_trusted_time_unix_ms=1780000170000
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_timestamp_verification_payload(),
+            ),
+            "invalid_receipt_chronology",
+        )
+
+    def test_temporal_receipt_chain_rejects_identifier_export(self):
+        payload = temporal_review_receipt_chain_verification_payload()
+        payload["privacy"]["participant_tokens_exported"] = True
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_timestamp_verification_payload(),
+            ),
+            "privacy_fail",
         )
 
     def test_temporal_timestamp_requires_bounded_declared_accuracy(self):
@@ -584,6 +700,7 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 "temporal_review": root / "temporal-review.json",
                 "temporal_attestation": root / "temporal-attestation-verification.json",
                 "temporal_timestamp": root / "temporal-timestamp-verification.json",
+                "temporal_receipts": root / "temporal-review-receipts-verification.json",
                 "manifest": root / "manifest.json",
             }
             write_json(
@@ -661,6 +778,10 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_timestamp"],
                 temporal_study_timestamp_verification_payload(),
             )
+            write_json(
+                paths["temporal_receipts"],
+                temporal_review_receipt_chain_verification_payload(),
+            )
 
             argv = [
                 "generate_evidence_manifest.py",
@@ -694,6 +815,8 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_attestation"].as_posix(),
                 "--temporal-study-timestamp-verification",
                 paths["temporal_timestamp"].as_posix(),
+                "--temporal-review-receipt-chain-verification",
+                paths["temporal_receipts"].as_posix(),
             ]
             with patch.object(sys, "argv", argv):
                 self.assertEqual(generate_evidence_manifest.main(), 0)
@@ -717,6 +840,12 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
             self.assertEqual(
                 manifest["summary"][
                     "temporal_study_timestamp_verification_status"
+                ],
+                "pass",
+            )
+            self.assertEqual(
+                manifest["summary"][
+                    "temporal_review_receipt_chain_verification_status"
                 ],
                 "pass",
             )

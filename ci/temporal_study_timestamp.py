@@ -263,21 +263,20 @@ def write_bytes_atomic(path: Path, payload: bytes) -> None:
         raise
 
 
-def create_request(commitment_path: Path, policy_oid: str) -> bytes:
+def create_request_for_document(document: bytes, policy_oid: str) -> bytes:
     if not safe_oid(policy_oid):
         raise TimestampError("timestamp policy OID is malformed")
-    commitment_raw, _ = read_commitment(commitment_path)
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary = Path(temporary_directory)
-        commitment_snapshot = temporary / "commitment.json"
+        document_snapshot = temporary / "timestamped-document.bin"
         request_snapshot = temporary / "request.tsq"
-        write_bytes_atomic(commitment_snapshot, commitment_raw)
+        write_bytes_atomic(document_snapshot, document)
         request = run_openssl(
             [
                 "ts",
                 "-query",
                 "-data",
-                commitment_snapshot.as_posix(),
+                document_snapshot.as_posix(),
                 "-sha256",
                 "-tspolicy",
                 policy_oid,
@@ -291,6 +290,11 @@ def create_request(commitment_path: Path, policy_oid: str) -> bytes:
     if parsed["policy_oid"] != policy_oid:
         raise TimestampError("generated RFC 3161 request policy does not match")
     return request
+
+
+def create_request(commitment_path: Path, policy_oid: str) -> bytes:
+    commitment_raw, _ = read_commitment(commitment_path)
+    return create_request_for_document(commitment_raw, policy_oid)
 
 
 def signer_identity(response_path: Path, untrusted_chain_path: Path | None) -> dict:
@@ -376,8 +380,8 @@ def verification_arguments(
     return arguments
 
 
-def verify_timestamp(
-    commitment_path: Path,
+def verify_document_timestamp(
+    document: bytes,
     request_path: Path,
     response_path: Path,
     ca_file_path: Path,
@@ -389,7 +393,6 @@ def verify_timestamp(
         raise TimestampError("expected timestamp policy OID is malformed")
     if not lowercase_sha256(expected_tsa_spki_sha256):
         raise TimestampError("expected TSA SPKI SHA-256 is malformed")
-    commitment_raw, commitment = read_commitment(commitment_path)
     request_raw = crypto_support.read_bounded(
         request_path, MAX_REQUEST_BYTES, "RFC 3161 request"
     )
@@ -410,7 +413,7 @@ def verify_timestamp(
     )
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary = Path(temporary_directory)
-        commitment_snapshot = temporary / "commitment.json"
+        document_snapshot = temporary / "timestamped-document.bin"
         request_snapshot = temporary / "request.tsq"
         response_snapshot = temporary / "response.tsr"
         ca_snapshot = temporary / "trust-anchors.pem"
@@ -420,7 +423,7 @@ def verify_timestamp(
             else None
         )
         for snapshot, contents in (
-            (commitment_snapshot, commitment_raw),
+            (document_snapshot, document),
             (request_snapshot, request_raw),
             (response_snapshot, response_raw),
             (ca_snapshot, ca_bundle),
@@ -447,11 +450,6 @@ def verify_timestamp(
             raise TimestampError("RFC 3161 timestamp accuracy exceeds five minutes")
         if gen_time_ms > now_ms + MAX_FUTURE_SKEW_MS:
             raise TimestampError("RFC 3161 genTime is implausibly in the future")
-        if gen_time_ms + MAX_DECLARED_CLOCK_SKEW_MS < commitment["registered_at_ms"]:
-            raise TimestampError(
-                "RFC 3161 genTime precedes the declared registration time beyond clock skew"
-            )
-
         run_openssl(
             verification_arguments(
                 "-queryfile",
@@ -465,7 +463,7 @@ def verify_timestamp(
         run_openssl(
             verification_arguments(
                 "-data",
-                commitment_snapshot,
+                document_snapshot,
                 response_snapshot,
                 ca_snapshot,
                 chain_snapshot,
@@ -476,11 +474,9 @@ def verify_timestamp(
     if not hmac.compare_digest(signer["spki_sha256"], expected_tsa_spki_sha256):
         raise TimestampError("RFC 3161 signer does not match the expected TSA SPKI")
 
-    canonical_commitment = study_support.canonical_commitment(commitment)
     openssl_version = run_openssl(["version"]).decode("utf-8", errors="strict").strip()
+    accuracy_ms = (accuracy_micros + 999) // 1000
     return {
-        "schema_version": VERIFICATION_SCHEMA_VERSION,
-        "status": "pass",
         "timestamp_protocol": TIMESTAMP_PROTOCOL,
         "trusted_timestamp_assurance": TRUSTED_TIMESTAMP_ASSURANCE,
         "message_imprint_algorithm": HASH_ALGORITHM,
@@ -488,20 +484,11 @@ def verify_timestamp(
         "serial_hex": response["serial_hex"],
         "gen_time_unix_ms": gen_time_ms,
         "accuracy_micros": accuracy_micros,
-        "latest_trusted_time_unix_ms": gen_time_ms
-        + (accuracy_micros + 999) // 1000,
+        "earliest_trusted_time_unix_ms": max(0, gen_time_ms - accuracy_ms),
+        "latest_trusted_time_unix_ms": gen_time_ms + accuracy_ms,
         "ordering": response["ordering"],
         "request_nonce_present": True,
-        "study_id": commitment["study_id"],
-        "registered_at_ms": commitment["registered_at_ms"],
-        "corpus_class": commitment["corpus_class"],
-        "commitment_file_sha256": sha256(commitment_raw).hexdigest(),
-        "commitment_canonical_sha256": sha256(canonical_commitment).hexdigest(),
-        "preregistration_canonical_sha256": commitment[
-            "preregistration_canonical_sha256"
-        ],
-        "corpus_sha256": commitment["corpus_sha256"],
-        "packet_canonical_sha256": commitment["packet_canonical_sha256"],
+        "timestamped_document_sha256": sha256(document).hexdigest(),
         "request_sha256": sha256(request_raw).hexdigest(),
         "response_sha256": sha256(response_raw).hexdigest(),
         "tsa_signer_certificate_sha256": signer["certificate_sha256"],
@@ -514,6 +501,51 @@ def verify_timestamp(
         "revocation_assurance": "not_checked",
         "verification_time_unix_ms": now_ms,
         "verification_tool": openssl_version,
+    }
+
+
+def verify_timestamp(
+    commitment_path: Path,
+    request_path: Path,
+    response_path: Path,
+    ca_file_path: Path,
+    untrusted_chain_path: Path | None,
+    expected_policy_oid: str,
+    expected_tsa_spki_sha256: str,
+) -> dict:
+    commitment_raw, commitment = read_commitment(commitment_path)
+    timestamp = verify_document_timestamp(
+        commitment_raw,
+        request_path,
+        response_path,
+        ca_file_path,
+        untrusted_chain_path,
+        expected_policy_oid,
+        expected_tsa_spki_sha256,
+    )
+    if (
+        timestamp["gen_time_unix_ms"] + MAX_DECLARED_CLOCK_SKEW_MS
+        < commitment["registered_at_ms"]
+    ):
+        raise TimestampError(
+            "RFC 3161 genTime precedes the declared registration time beyond clock skew"
+        )
+    commitment_file_sha256 = timestamp.pop("timestamped_document_sha256")
+    canonical_commitment = study_support.canonical_commitment(commitment)
+    return {
+        "schema_version": VERIFICATION_SCHEMA_VERSION,
+        "status": "pass",
+        **timestamp,
+        "study_id": commitment["study_id"],
+        "registered_at_ms": commitment["registered_at_ms"],
+        "corpus_class": commitment["corpus_class"],
+        "commitment_file_sha256": commitment_file_sha256,
+        "commitment_canonical_sha256": sha256(canonical_commitment).hexdigest(),
+        "preregistration_canonical_sha256": commitment[
+            "preregistration_canonical_sha256"
+        ],
+        "corpus_sha256": commitment["corpus_sha256"],
+        "packet_canonical_sha256": commitment["packet_canonical_sha256"],
     }
 
 

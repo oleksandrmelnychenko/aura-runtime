@@ -301,6 +301,18 @@ class TemporalStudyTimestampTests(unittest.TestCase):
     def test_declared_registration_cannot_postdate_timestamp_beyond_skew(self):
         self.commitment_payload["registered_at_ms"] += 60 * 60 * 1000
         self.write_commitment()
+        temporal_study_timestamp.write_bytes_atomic(
+            self.request,
+            temporal_study_timestamp.create_request(
+                self.commitment, self.policy_oid
+            ),
+        )
+        self.issue_response(
+            self.request,
+            self.response,
+            self.tsa_certificate,
+            self.tsa_key,
+        )
 
         with self.assertRaisesRegex(
             temporal_study_timestamp.TimestampError, "declared registration time"

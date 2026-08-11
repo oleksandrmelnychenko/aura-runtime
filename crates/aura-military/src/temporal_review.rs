@@ -12,7 +12,7 @@ use crate::temporal_eval::{
 use crate::temporal_study::TemporalStudyCorpusClass;
 
 const REVIEW_SCHEMA_VERSION: &str = "aura.military.temporal_independent_review.v1";
-const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_review_report.v4";
+const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_review_report.v5";
 const MIN_REVIEWERS_PER_CASE: usize = 2;
 const MAX_REVIEWERS_PER_CASE: usize = 5;
 
@@ -103,6 +103,7 @@ pub struct TemporalReviewReport {
     pub dataset_id: String,
     pub corpus_sha256: String,
     pub review_bundle_id: String,
+    pub review_bundle_canonical_sha256: Option<String>,
     pub label_blinding_declared: bool,
     pub blinding_assurance: &'static str,
     pub blind_packet_id: Option<String>,
@@ -473,6 +474,7 @@ pub(crate) fn evaluate_temporal_review_against_target(
         dataset_id: target.dataset_id.clone(),
         corpus_sha256: target.corpus_sha256.clone(),
         review_bundle_id: bundle.review_bundle_id,
+        review_bundle_canonical_sha256: None,
         label_blinding_declared: bundle.protocol.label_blinding,
         blinding_assurance: "declared_only",
         blind_packet_id: None,

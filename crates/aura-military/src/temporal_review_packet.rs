@@ -550,6 +550,8 @@ fn evaluate_temporal_blind_review_for_target(
     )?;
     let bundle: TemporalBlindReviewBundle = serde_json::from_str(review_bundle_json)?;
     validate_blind_review_bundle(&bundle, &packet, &coordinator_map, preregistration)?;
+    let canonical_review_bundle: serde_json::Value = serde_json::from_str(review_bundle_json)?;
+    let review_bundle_canonical_sha256 = canonical_sha256(&canonical_review_bundle)?;
 
     let internal_case_ids = coordinator_map
         .cases
@@ -590,6 +592,7 @@ fn evaluate_temporal_blind_review_for_target(
     });
     let mut report = evaluate_temporal_review_against_target(&legacy_bundle.to_string(), target)?;
     report.blinding_assurance = BLINDING_ASSURANCE;
+    report.review_bundle_canonical_sha256 = Some(review_bundle_canonical_sha256);
     report.blind_packet_id = Some(packet.packet_id);
     report.blind_packet_canonical_sha256 = Some(coordinator_map.packet_canonical_sha256);
     report.preregistration_assurance = "packet_bound";
@@ -1209,6 +1212,10 @@ mod tests {
 
         assert_eq!(report.overall_status, "pass");
         assert!(report.study_commitment_canonical_sha256.is_some());
+        assert_eq!(
+            report.review_bundle_canonical_sha256,
+            Some(canonical_sha256(&bundle).expect("canonical review bundle digest"))
+        );
         assert_eq!(report.chronology.decision_time_assurance, "bundle_declared");
         assert_eq!(report.chronology.declared_preregistration_at_ms, Some(1));
         assert_eq!(

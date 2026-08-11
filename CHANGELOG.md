@@ -2,11 +2,20 @@
 
 ## Unreleased — Release Reliability
 
+- Added distinct Ed25519 signatures and RFC 3161 timestamps for complete
+  reviewer and adjudicator submissions. The aggregate verifier requires strict
+  non-overlap between the trusted commitment, reviewer-receipt, and
+  adjudicator-receipt intervals and exports no participant, affiliation, case,
+  label, or individual-key identity.
+- Temporal review report v5 binds computed metrics to the canonical SHA-256 of
+  the exact review bundle. Policy activation now remains pending without a
+  matching signed receipt chain and fails on bundle substitution, time overlap,
+  invalid receipt trust, or privacy-unsafe aggregate evidence.
 - Added nonce-bound RFC 3161 requests and strict trusted timestamp verification
   for temporal study commitments. Verification binds the original bytes and
   request, expected policy OID, explicit trust chain, TSA `genTime`, and a
   separately pinned TSA signer SPKI digest.
-- Temporal review report v4 exposes declared review chronology without
+- Temporal review report v4 introduced declared review chronology without
   overstating it as trusted time. Policy activation now requires the trusted
   commitment timestamp's `genTime + accuracy` upper bound to precede the
   earliest declared annotation completion; certificate revocation remains

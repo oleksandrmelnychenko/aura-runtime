@@ -108,6 +108,9 @@ receipt, and verification record with the study materials. The executable
 signing and trusted-key verification procedure is defined in
 `docs/temporal-study-attestation.md`; RFC 3161 request and trusted-time
 verification are defined in `docs/temporal-study-timestamp.md`.
+Individual reviewer and adjudicator signing, timestamping, deterministic
+assembly, and chain verification are defined in
+`docs/temporal-review-receipts.md`.
 
 ## Populate the v3 review bundle
 
@@ -161,7 +164,8 @@ The evaluator rejects altered commitments, preregistrations, packets or maps;
 unknown or duplicate tokens; affiliation overlap; unsupported labels; and
 review decisions timestamped at or before preregistration; and adjudication
 that precedes label freeze. The report contains aggregate metrics and canonical
-digests but no blind mapping or internal case identifiers. Report schema v4
+digests but no blind mapping or internal case identifiers. Report schema v5
+adds the canonical SHA-256 digest of the exact input review bundle and
 also publishes the declared preregistration time and the earliest/latest
 annotation and adjudication completion times. These values are marked
 `decision_time_assurance = bundle_declared`; they are chronology inputs, not
@@ -185,13 +189,15 @@ subgroups must be reported separately from the fixed primary outcomes.
 The evidence manifest accepts a passing review for policy activation only when
 all of these hold: packet-bound blinding, packet-bound preregistration, a valid
 study-commitment digest, trusted-key Ed25519 verification, a matching RFC 3161
-verification whose upper time bound (`genTime + accuracy`) precedes the earliest
-declared annotation,
+commitment verification, and a matching chain of individually signed and
+RFC 3161 timestamped reviewer and adjudicator receipts with strictly
+non-overlapping accuracy-adjusted intervals,
 `embargoed_external` corpus class, finite agreement metrics, and both agreement
-values at least `0.8`. A passing review without either study-attestation or
-trusted-timestamp verification remains `pending`. Invalid or mismatched
-supplied trust evidence fails the activation gate. The final evidence manifest
-still requires its separate release attestation.
+values at least `0.8`. A passing review without study attestation, trusted
+commitment timestamp, or review-receipt chain remains `pending`. Invalid,
+privacy-unsafe, chronologically overlapping, or mismatched supplied trust
+evidence fails the activation gate. The final evidence manifest still requires
+its separate release attestation.
 
 Packet binding does not prove reviewer expertise, representative sampling,
 construct validity, ecological validity, or independence of the corpus source.
@@ -203,11 +209,12 @@ requires multiple difficult corpora, independent annotation, documented
 sampling frames, uncertainty analysis, attack variations, and replication in
 another setting.
 
-The timestamp proves existence of the frozen commitment no later than the
-accuracy-adjusted TSA upper time bound; it does not turn bundle-declared
-reviewer times into independently witnessed events. For a stronger
-temporal-precedence claim, collect signed and individually timestamped
-reviewer-submission and adjudication receipts.
+The commitment timestamp and receipt chain prove a bounded order between the
+frozen commitment, signed reviewer submissions, and signed adjudication
+submission. They do not prove when work began, reviewer expertise, genuine
+institutional independence, absence of coordination, or truthful local
+completion-time declarations. Those remain governance and experimental-design
+claims that require separate records and oversight.
 
 Omitting `--corpus` uses the embedded public seed for regression only. The
 legacy declaration-only path remains available for old material, but neither
