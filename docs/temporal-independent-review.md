@@ -1,78 +1,115 @@
 # Temporal independent-review protocol
 
-This protocol separates machine-generated seed labels from independently
-produced human labels. The committed temporal seed corpus is synthetic and its
-case identifiers reveal expected classes. A declaration such as
-`label_blinding: true` is therefore insufficient by itself.
+This protocol produces confirmatory evidence for the content-free temporal
+decision layer. It separates the frozen corpus, the machine-generated target
+labels, two or more independent human reviews, and a separate adjudication.
+The release gate accepts only a preregistered, packet-bound v3 result from an
+embargoed external corpus. The public repository seed remains regression
+evidence and cannot authorize policy activation.
 
-Temporal policy activation remains `pending` until a packet-bound v2 review
-reports `pass`. The disabled Shadow implementation may still be released
-because it has no action-execution path.
+## Scientific status and roles
 
-## Roles and frozen decisions
+The workflow distinguishes four claims:
 
-- At least two human reviewers label every case without the coordinator map,
-  source corpus, seed expectations, or another reviewer's labels.
-- Reviewers use distinct pseudonymous reviewer and affiliation tokens.
-- A third human from another affiliation acts only as adjudicator.
-- Reviewer labels are frozen before the adjudicator receives them.
-- Adjudication occurs strictly after all reviewer labels for that case.
-- Names, email addresses, message text, source identifiers, and content hashes
-  must not be placed in the review bundle.
+- packet binding supports internal integrity and makes later substitution of
+  the corpus, preregistration, or review packet detectable;
+- reviewer agreement measures reproducibility of the labeling decision;
+- exact adjudicated agreement measures reproduction of the frozen target;
+- an external corpus supports broader validity only to the extent that its
+  sampling frame and collection setting are genuinely independent.
 
-The study protocol, inclusion criteria, primary metrics, and stopping rules
-should be preregistered before labels are collected. Reviewer disagreements
-must be retained in the aggregate metrics rather than silently overwritten.
+Use separate people or teams for these roles:
+
+- the corpus custodian freezes the external corpus and its sampling frame;
+- the coordinator generates blind material and retains the secret map;
+- at least two reviewers from distinct affiliations label every case without
+  the map, corpus target labels, or another reviewer's decisions;
+- an adjudicator from another affiliation sees reviewer decisions only after
+  they are frozen and does not serve as a reviewer.
+
+Names, email addresses, message text, source identifiers, absolute event
+times, and content hashes must not be placed in the review bundle. Recruitment,
+training, exclusions, conflicts, and deviations are retained in a separate
+controlled study record.
+
+## Freeze the corpus and preregistration
+
+The external corpus uses the same strict schema as the repository temporal
+corpus, but it must have a different `dataset_id` and different canonical
+digest. Before collecting reviewer labels:
+
+1. Freeze the inclusion and exclusion rules, fixed case count, negative-control
+   minimum, per-reason positive minimum, required coverage tags, and planned
+   subgroup tags. The high-assurance floor is 30 total cases, 18 negative
+   controls, and four positive cases for every supported reason code.
+2. Copy `docs/temporal-review-preregistration.template.json` and replace its
+   study identity, registration time, hypotheses, counts, and tags.
+3. Keep the exact three primary outcomes. The validator rejects optional
+   stopping, imputation of missing reviews, undeclared handling of undefined
+   agreement, or agreement thresholds below `0.8`.
+4. Ensure the corpus is inaccessible to reviewers before packet distribution.
+
+The preregistration is serialized by AURA into a deterministic field order and
+its SHA-256 digest is bound into every generated artifact. Changing any parsed
+field after generation invalidates the packet.
 
 ## Generate packet-bound material
 
-Create a fresh 32-byte secret for each review round outside the repository:
+Create a fresh 32-byte secret outside the repository for every review round:
 
 ```sh
 openssl rand -out /protected/temporal-review-round.key 32
 chmod 600 /protected/temporal-review-round.key
 ```
 
-The generator rejects symbolic-link keys, keys accessible by group or world,
-and pre-existing output files; use new paths for every round.
-
-Generate three separate outputs:
+Generate four outputs from the frozen corpus and preregistration:
 
 ```sh
 cargo run --locked -p aura-military --features evaluation \
   --example temporal_blind_review_packet -- \
   --packet-id temporal_round_2026_01 \
+  --corpus /protected/external-temporal-corpus.json \
+  --preregistration review/temporal-review-preregistration.json \
   --blinding-key /protected/temporal-review-round.key \
   --packet-output review/temporal-review-packet.json \
   --coordinator-map-output /protected/temporal-review-coordinator-map.json \
-  --review-template-output review/temporal-review-bundle.json
+  --review-template-output review/temporal-review-bundle.json \
+  --study-commitment-output review/temporal-study-commitment.json
 ```
 
-The reviewer packet contains:
+The command refuses symbolic-link keys, group/world-readable keys, output paths
+that overwrite inputs, duplicate output paths, and pre-existing outputs.
 
-- a 128-bit HMAC-derived token for each case;
-- per-case actor and content-reference tokens with no cross-case stability;
-- event times relative to the current event, not absolute timestamps;
-- interpreted event kind and context required to assess the temporal chain;
-- binary evidence-eligibility flags required by the frozen temporal policy;
-- the allowed non-content reason-code catalog.
+The reviewer packet contains per-round HMAC-derived case tokens, case-local
+actor and content-reference tokens, event times relative to the current event,
+the interpreted event context needed by the temporal layer, binary evidence
+eligibility decisions, and the allowed reason-code catalog. It omits internal
+case identifiers, corpus tags, target labels, absolute timestamps, source
+identifiers, event identifiers, content hashes, and numeric upstream confidence.
 
-It does not contain internal case identifiers, corpus tags, seed expectations,
-absolute timestamps, source actor numbers, source content hashes, event IDs, or
-numeric upstream machine-confidence values. The packet exposes only the frozen
-threshold decisions needed to reproduce the temporal layer. Case order and
-tokens change between review rounds.
+The owner-only coordinator map binds blind tokens to internal case identifiers.
+It and the blinding key must never be distributed to reviewers or uploaded as
+release evidence.
 
-The coordinator map binds the exact corpus digest to the canonical packet
-digest and maps blind tokens back to internal case identifiers. It is written
-with owner-only permissions and must not be distributed to reviewers, uploaded
-as release evidence, or committed. Keep the blinding key and coordinator map
-separate from the packet until reviewer labels are frozen.
+The public study commitment binds:
 
-## Populate the v2 review bundle
+- study and packet identities;
+- registration time and corpus class;
+- preregistration, corpus, and packet digests;
+- fixed case count and minimum reviewer count;
+- both prespecified minimum agreement thresholds.
 
-The generated template is bound to `packet_id` and
-`packet_canonical_sha256`. Each case uses only `blind_case_token`:
+Before labels are collected, have the exact commitment bytes signed with a
+dedicated institutional key and record the commitment digest in an external
+append-only or write-once log with a trusted timestamp. A cryptographic
+signature authenticates a signer but does not, by itself, prove when the file
+existed. Preserve the signature, certificate or public-key identity, timestamp
+receipt, and verification record with the study materials.
+
+## Populate the v3 review bundle
+
+The generated bundle is already bound to `study_id`, the preregistration
+digest, `packet_id`, and the packet digest. Each case uses only its blind token:
 
 ```json
 {
@@ -97,15 +134,19 @@ The generated template is bound to `packet_id` and
 }
 ```
 
-Negative cases use an empty `expected_reason_codes` array. Reviewer and
+Negative decisions use an empty `expected_reason_codes` array. Reviewer and
 affiliation tokens contain only ASCII letters, digits, `_`, `-`, or `.`. They
-are validated but never exported in the aggregate report.
+are validated but omitted from the aggregate report. Reviewer labels must not
+be replaced with the adjudicated result.
 
-## Validate after label freeze
+## Evaluate after label freeze
 
 ```sh
 cargo run --locked -p aura-military --features evaluation \
   --example temporal_independent_review -- \
+  --corpus /protected/external-temporal-corpus.json \
+  --preregistration review/temporal-review-preregistration.json \
+  --study-commitment review/temporal-study-commitment.json \
   --blind-packet review/temporal-review-packet.json \
   --coordinator-map /protected/temporal-review-coordinator-map.json \
   --review-bundle review/temporal-review-bundle.json \
@@ -113,28 +154,43 @@ cargo run --locked -p aura-military --features evaluation \
   --require-pass
 ```
 
-The validator rejects packet or mapping tampering, unknown or duplicate blind
-tokens, stale corpus bindings, unknown reviewers, affiliation overlap,
-adjudication performed before label freeze, and unsupported reason codes. The
-generated report contains aggregate metrics and packet commitments but no
-blind-token mapping or internal case identifiers.
+The evaluator rejects altered commitments, preregistrations, packets or maps;
+unknown or duplicate tokens; affiliation overlap; unsupported labels; and
+review decisions timestamped at or before preregistration; and adjudication
+that precedes label freeze. The report contains aggregate metrics and canonical
+digests but no blind mapping or internal case identifiers.
 
-The legacy v1 bundle validator remains available for old material, but its
-report has `blinding_assurance: declared_only` and cannot satisfy temporal
-policy activation readiness. Packet-aware reports use the v2 report schema.
+Primary metrics are:
 
-## Evidence limits
+- adjudicated exact-set match against the fixed target for every case;
+- exact-set agreement for every reviewer pair, reported as agreements divided
+  by all pair comparisons;
+- nominal Krippendorff alpha over binary present/absent decisions for every
+  case and reason code, plus per-reason summaries.
 
-Packet binding prevents accidental label leakage through case names and makes
-post-review substitution detectable. It does not by itself prove external
-validity, ecological validity, reviewer expertise, or representative sampling.
-It evaluates the temporal decision layer over already interpreted, content-free
-event features; it is not an independent end-to-end validation of upstream text
-interpretation.
+Undefined alpha is serialized as `null` with its unit and decision counts; it
+is never converted to zero. A complete exact adjudication can still fail when
+reviewer agreement is below either preregistered threshold. Exploratory
+subgroups must be reported separately from the fixed primary outcomes.
 
-The committed seed corpus is public, so a determined reviewer could still
-attempt structural matching against the repository. Results from that corpus
-remain release-regression evidence only. Strong research evidence requires a
-new difficult corpus that is inaccessible to reviewers before packet creation,
-independent recruitment and training records, prespecified analysis, reported
-agreement and disagreement, and replication on data from another setting.
+## Release and research limits
+
+The evidence manifest accepts a passing review for policy activation only when
+all of these hold: packet-bound blinding, packet-bound preregistration, a valid
+study-commitment digest, `embargoed_external` corpus class, finite agreement
+metrics, and both agreement values at least `0.8`. The final evidence manifest
+still requires its separate release attestation.
+
+Packet binding does not prove reviewer expertise, representative sampling,
+construct validity, ecological validity, or independence of the corpus source.
+This study evaluates the temporal decision layer over already interpreted,
+content-free features; it is not end-to-end validation of text interpretation.
+Report missing data, exclusions, protocol deviations, disagreement, and failed
+replications without rewriting the preregistration. Strong doctoral evidence
+requires multiple difficult corpora, independent annotation, documented
+sampling frames, uncertainty analysis, attack variations, and replication in
+another setting.
+
+Omitting `--corpus` uses the embedded public seed for regression only. The
+legacy declaration-only path remains available for old material, but neither
+legacy review nor the public seed can satisfy activation readiness.

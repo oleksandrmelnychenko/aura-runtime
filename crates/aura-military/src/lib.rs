@@ -14,6 +14,8 @@ pub mod temporal_review;
 pub mod temporal_review_packet;
 #[cfg(feature = "shadow-telemetry")]
 pub mod temporal_shadow_telemetry;
+#[cfg(feature = "evaluation")]
+pub mod temporal_study;
 
 use aura_domain::{
     DomainInput, DomainModule, DomainModuleId, DomainOutput, DomainTemporalInput,

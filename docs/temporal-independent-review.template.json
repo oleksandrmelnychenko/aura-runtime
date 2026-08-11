@@ -1,5 +1,7 @@
 {
-  "schema_version": "aura.military.temporal_independent_review.v2",
+  "schema_version": "aura.military.temporal_independent_review.v3",
+  "study_id": "replace_with_preregistered_study_id",
+  "preregistration_canonical_sha256": "replace_with_generated_preregistration_digest",
   "review_bundle_id": "replace_with_review_round_id",
   "packet_id": "replace_with_generated_packet_id",
   "packet_canonical_sha256": "replace_with_generated_packet_digest",

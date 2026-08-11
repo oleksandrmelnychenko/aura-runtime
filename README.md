@@ -238,7 +238,8 @@ example output. The current release bundle includes:
 - contract evidence for protobuf, ABI, request limits, and state schema
 - dataset evidence with coverage snapshot and changelog linkage
 - audit evidence proving forbidden plaintext fields are absent
-- temporal Shadow evaluation and on-prem/ADK telemetry validation evidence
+- temporal Shadow evaluation, on-prem/ADK telemetry validation, and optional
+  preregistered independent-review evidence from an embargoed external corpus
 - FFI header smoke evidence
 - FFI state-sync soak evidence
 - unified evidence manifest (`aura.evidence_manifest.v1`)
@@ -259,8 +260,9 @@ python3 ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.js
 See `docs/temporal-independent-review.md`,
 `docs/temporal-shadow-telemetry.md`, and
 `docs/evidence-manifest-attestation.md` for the research-readiness and release
-trust boundaries. Independent temporal review uses packet-bound v2 material;
-legacy declaration-only review cannot satisfy policy activation readiness.
+trust boundaries. Confirmatory temporal review uses packet-bound v3 material
+bound to a fixed preregistration, external corpus, and public study commitment;
+legacy or public-seed review cannot satisfy policy activation readiness.
 
 ## Usage (Rust)
 

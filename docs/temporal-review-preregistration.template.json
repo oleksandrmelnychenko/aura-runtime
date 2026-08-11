@@ -1,0 +1,49 @@
+{
+  "schema_version": "aura.military.temporal_review_preregistration.v1",
+  "study_id": "external_temporal_study_2026_01",
+  "registered_at_ms": 1780000000000,
+  "corpus_class": "embargoed_external",
+  "research_question": "Do independent reviewers reproduce the frozen reason-code sets for a fixed external corpus of content-free temporal event chains?",
+  "confirmatory_hypotheses": [
+    {
+      "hypothesis_id": "temporal_exact_match",
+      "statement": "Adjudicated reason-code sets will exactly match the frozen target labels for every submitted corpus case."
+    },
+    {
+      "hypothesis_id": "temporal_reviewer_agreement",
+      "statement": "Independent reviewer decisions will meet both prespecified minimum agreement thresholds on the fixed corpus."
+    }
+  ],
+  "primary_outcomes": [
+    "adjudicated_exact_match_rate",
+    "exact_set_pair_agreement_rate",
+    "krippendorff_alpha_nominal"
+  ],
+  "planned_subgroups": [
+    "time_window"
+  ],
+  "sampling": {
+    "fixed_case_count": 37,
+    "minimum_negative_controls": 18,
+    "minimum_positive_cases_per_reason_code": 4,
+    "required_coverage_tags": [
+      "positive",
+      "negative_control"
+    ]
+  },
+  "review_design": {
+    "minimum_reviewers_per_case": 2,
+    "distinct_reviewer_affiliations": true,
+    "independent_adjudicator": true,
+    "labels_frozen_before_adjudication": true
+  },
+  "analysis": {
+    "missing_data_rule": "no_imputation_report_incomplete",
+    "undefined_alpha_rule": "report_null_with_counts",
+    "multiplicity_rule": "descriptive_per_label_no_null_hypothesis_tests",
+    "exploratory_analyses_reported_separately": true,
+    "minimum_acceptable_exact_set_pair_agreement_rate": 0.8,
+    "minimum_acceptable_krippendorff_alpha": 0.8
+  },
+  "fixed_corpus_no_optional_stopping": true
+}

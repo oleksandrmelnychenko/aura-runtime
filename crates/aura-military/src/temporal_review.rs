@@ -5,10 +5,14 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::temporal_eval::{embedded_temporal_review_target, TemporalShadowError};
+use crate::temporal_eval::{
+    embedded_temporal_review_target, temporal_review_target, TemporalReviewTarget,
+    TemporalShadowError,
+};
+use crate::temporal_study::TemporalStudyCorpusClass;
 
 const REVIEW_SCHEMA_VERSION: &str = "aura.military.temporal_independent_review.v1";
-const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_review_report.v2";
+const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_review_report.v3";
 const MIN_REVIEWERS_PER_CASE: usize = 2;
 const MAX_REVIEWERS_PER_CASE: usize = 5;
 
@@ -24,7 +28,7 @@ pub enum TemporalReviewError {
 }
 
 /// Aggregate review-readiness metrics without reviewer identities.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TemporalReviewMetrics {
     pub corpus_cases: usize,
     pub submitted_cases: usize,
@@ -36,6 +40,26 @@ pub struct TemporalReviewMetrics {
     pub reviewer_affiliations: usize,
     pub direct_agreement_cases: usize,
     pub resolved_disagreement_cases: usize,
+    pub reviewer_pair_comparisons: usize,
+    pub exact_set_pair_agreements: usize,
+    pub exact_set_pair_disagreements: usize,
+    pub exact_set_pair_agreement_rate: Option<f64>,
+    pub krippendorff_units: usize,
+    pub krippendorff_reviewer_decisions: usize,
+    pub krippendorff_alpha_nominal: Option<f64>,
+    pub by_reason_code_agreement: Vec<TemporalReasonCodeAgreementMetrics>,
+}
+
+/// Inter-rater agreement for one binary reason-code decision.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TemporalReasonCodeAgreementMetrics {
+    pub reason_code: String,
+    pub units_with_complete_reviews: usize,
+    pub reviewer_decisions: usize,
+    pub present_decisions: usize,
+    pub absent_decisions: usize,
+    pub observed_agreement: Option<f64>,
+    pub krippendorff_alpha_nominal: Option<f64>,
 }
 
 /// One aggregated research-readiness assertion.
@@ -58,7 +82,7 @@ pub struct TemporalReviewPrivacy {
 }
 
 /// Machine-readable status of independent human review for the temporal corpus.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TemporalReviewReport {
     pub schema_version: &'static str,
     pub overall_status: &'static str,
@@ -69,6 +93,11 @@ pub struct TemporalReviewReport {
     pub blinding_assurance: &'static str,
     pub blind_packet_id: Option<String>,
     pub blind_packet_canonical_sha256: Option<String>,
+    pub preregistration_assurance: &'static str,
+    pub study_id: Option<String>,
+    pub study_corpus_class: Option<TemporalStudyCorpusClass>,
+    pub preregistration_canonical_sha256: Option<String>,
+    pub study_commitment_canonical_sha256: Option<String>,
     pub metrics: TemporalReviewMetrics,
     pub checks: Vec<TemporalReviewCheck>,
     pub privacy: TemporalReviewPrivacy,
@@ -137,6 +166,49 @@ struct TemporalAdjudication {
     completed_at_ms: u64,
 }
 
+#[derive(Debug, Default)]
+struct NominalAgreementAccumulator {
+    units: usize,
+    decisions: usize,
+    present_decisions: usize,
+    absent_decisions: usize,
+    observed_disagreement_coincidences: f64,
+}
+
+impl NominalAgreementAccumulator {
+    fn observe_binary(&mut self, present_decisions: usize, total_decisions: usize) {
+        if total_decisions < 2 || present_decisions > total_decisions {
+            return;
+        }
+        let absent_decisions = total_decisions - present_decisions;
+        self.units += 1;
+        self.decisions += total_decisions;
+        self.present_decisions += present_decisions;
+        self.absent_decisions += absent_decisions;
+        self.observed_disagreement_coincidences +=
+            2.0 * present_decisions as f64 * absent_decisions as f64 / (total_decisions - 1) as f64;
+    }
+
+    fn observed_agreement(&self) -> Option<f64> {
+        (self.decisions > 0)
+            .then(|| 1.0 - self.observed_disagreement_coincidences / self.decisions as f64)
+    }
+
+    fn krippendorff_alpha_nominal(&self) -> Option<f64> {
+        if self.decisions < 2 {
+            return None;
+        }
+        let expected_disagreement =
+            2.0 * self.present_decisions as f64 * self.absent_decisions as f64
+                / (self.decisions as f64 * (self.decisions - 1) as f64);
+        if expected_disagreement == 0.0 {
+            return None;
+        }
+        let observed_disagreement = self.observed_disagreement_coincidences / self.decisions as f64;
+        Some(1.0 - observed_disagreement / expected_disagreement)
+    }
+}
+
 /// Evaluates a review bundle against the exact embedded temporal corpus.
 ///
 /// A passing report requires two blinded reviewers from distinct affiliations
@@ -145,11 +217,27 @@ struct TemporalAdjudication {
 pub fn evaluate_embedded_temporal_review(
     json: &str,
 ) -> Result<TemporalReviewReport, TemporalReviewError> {
+    let target = embedded_temporal_review_target()?;
+    evaluate_temporal_review_against_target(json, &target)
+}
+
+/// Evaluates a review bundle against a caller-supplied content-free corpus.
+pub fn evaluate_temporal_review(
+    corpus_json: &str,
+    review_json: &str,
+) -> Result<TemporalReviewReport, TemporalReviewError> {
+    let target = temporal_review_target(corpus_json)?;
+    evaluate_temporal_review_against_target(review_json, &target)
+}
+
+pub(crate) fn evaluate_temporal_review_against_target(
+    json: &str,
+    target: &TemporalReviewTarget,
+) -> Result<TemporalReviewReport, TemporalReviewError> {
     let bundle: TemporalReviewBundle = serde_json::from_str(json)?;
     validate_bundle_identity(&bundle)?;
-    let target = embedded_temporal_review_target()?;
     if bundle.dataset_id != target.dataset_id || bundle.corpus_sha256 != target.corpus_sha256 {
-        return invalid_bundle("review bundle is not bound to the embedded corpus identity");
+        return invalid_bundle("review bundle is not bound to the supplied corpus identity");
     }
 
     let reviewer_registry = validate_reviewer_registry(&bundle.reviewers)?;
@@ -166,6 +254,14 @@ pub fn evaluate_embedded_temporal_review(
     let mut matching_label_cases = 0usize;
     let mut direct_agreement_cases = 0usize;
     let mut resolved_disagreement_cases = 0usize;
+    let mut reviewer_pair_comparisons = 0usize;
+    let mut exact_set_pair_agreements = 0usize;
+    let mut overall_agreement = NominalAgreementAccumulator::default();
+    let mut agreement_by_reason_code = known_labels
+        .iter()
+        .cloned()
+        .map(|reason_code| (reason_code, NominalAgreementAccumulator::default()))
+        .collect::<BTreeMap<_, _>>();
     let required_reviewers = bundle.protocol.minimum_reviewers_per_case;
 
     for (case_id, expected_labels) in &target.expected_labels {
@@ -210,6 +306,41 @@ pub fn evaluate_embedded_temporal_review(
                 .all(|(annotation, _)| annotation.completed_at_ms > 0);
         independent_review_cases += usize::from(annotations_are_complete);
 
+        let annotation_labels = valid_annotations
+            .iter()
+            .map(|(annotation, _)| {
+                annotation
+                    .expected_reason_codes
+                    .iter()
+                    .cloned()
+                    .collect::<BTreeSet<_>>()
+            })
+            .collect::<Vec<_>>();
+        let direct_agreement = annotations_are_complete
+            && annotation_labels
+                .first()
+                .is_some_and(|first| annotation_labels.iter().all(|labels| labels == first));
+        direct_agreement_cases += usize::from(direct_agreement);
+        if annotations_are_complete {
+            for (index, left) in annotation_labels.iter().enumerate() {
+                for right in annotation_labels.iter().skip(index + 1) {
+                    reviewer_pair_comparisons += 1;
+                    exact_set_pair_agreements += usize::from(left == right);
+                }
+            }
+            for reason_code in &known_labels {
+                let present_decisions = annotation_labels
+                    .iter()
+                    .filter(|labels| labels.contains(reason_code))
+                    .count();
+                let total_decisions = annotation_labels.len();
+                overall_agreement.observe_binary(present_decisions, total_decisions);
+                if let Some(accumulator) = agreement_by_reason_code.get_mut(reason_code) {
+                    accumulator.observe_binary(present_decisions, total_decisions);
+                }
+            }
+        }
+
         let Some(adjudication) = reviewed_case.adjudication.as_ref() else {
             continue;
         };
@@ -245,27 +376,29 @@ pub fn evaluate_embedded_temporal_review(
             .cloned()
             .collect::<BTreeSet<_>>();
         matching_label_cases += usize::from(adjudicated_labels == *expected_labels);
-
-        let annotation_labels = valid_annotations
-            .iter()
-            .map(|(annotation, _)| {
-                annotation
-                    .expected_reason_codes
-                    .iter()
-                    .cloned()
-                    .collect::<BTreeSet<_>>()
-            })
-            .collect::<Vec<_>>();
-        let direct_agreement = annotations_are_complete
-            && annotation_labels
-                .first()
-                .is_some_and(|first| annotation_labels.iter().all(|labels| labels == first));
-        direct_agreement_cases += usize::from(direct_agreement);
         resolved_disagreement_cases +=
             usize::from(annotations_are_complete && !direct_agreement && adjudication_is_complete);
     }
 
     let corpus_cases = target.expected_labels.len();
+    let exact_set_pair_disagreements =
+        reviewer_pair_comparisons.saturating_sub(exact_set_pair_agreements);
+    let exact_set_pair_agreement_rate = (reviewer_pair_comparisons > 0)
+        .then(|| exact_set_pair_agreements as f64 / reviewer_pair_comparisons as f64);
+    let by_reason_code_agreement = agreement_by_reason_code
+        .into_iter()
+        .map(
+            |(reason_code, accumulator)| TemporalReasonCodeAgreementMetrics {
+                reason_code,
+                units_with_complete_reviews: accumulator.units,
+                reviewer_decisions: accumulator.decisions,
+                present_decisions: accumulator.present_decisions,
+                absent_decisions: accumulator.absent_decisions,
+                observed_agreement: accumulator.observed_agreement(),
+                krippendorff_alpha_nominal: accumulator.krippendorff_alpha_nominal(),
+            },
+        )
+        .collect();
     let metrics = TemporalReviewMetrics {
         corpus_cases,
         submitted_cases: submitted_cases.len(),
@@ -281,6 +414,14 @@ pub fn evaluate_embedded_temporal_review(
             .len(),
         direct_agreement_cases,
         resolved_disagreement_cases,
+        reviewer_pair_comparisons,
+        exact_set_pair_agreements,
+        exact_set_pair_disagreements,
+        exact_set_pair_agreement_rate,
+        krippendorff_units: overall_agreement.units,
+        krippendorff_reviewer_decisions: overall_agreement.decisions,
+        krippendorff_alpha_nominal: overall_agreement.krippendorff_alpha_nominal(),
+        by_reason_code_agreement,
     };
     let checks = build_checks(&bundle.protocol, &metrics);
     let overall_status = if checks.iter().all(|check| check.passed) {
@@ -296,13 +437,18 @@ pub fn evaluate_embedded_temporal_review(
     Ok(TemporalReviewReport {
         schema_version: REPORT_SCHEMA_VERSION,
         overall_status,
-        dataset_id: target.dataset_id,
-        corpus_sha256: target.corpus_sha256,
+        dataset_id: target.dataset_id.clone(),
+        corpus_sha256: target.corpus_sha256.clone(),
         review_bundle_id: bundle.review_bundle_id,
         label_blinding_declared: bundle.protocol.label_blinding,
         blinding_assurance: "declared_only",
         blind_packet_id: None,
         blind_packet_canonical_sha256: None,
+        preregistration_assurance: "absent",
+        study_id: None,
+        study_corpus_class: None,
+        preregistration_canonical_sha256: None,
+        study_commitment_canonical_sha256: None,
         metrics,
         checks,
         privacy: TemporalReviewPrivacy {
@@ -539,7 +685,7 @@ mod tests {
 
         let error = evaluate_embedded_temporal_review(&raw).expect_err("corpus mismatch");
 
-        assert!(error.to_string().contains("embedded corpus identity"));
+        assert!(error.to_string().contains("supplied corpus identity"));
     }
 
     #[test]
@@ -605,5 +751,67 @@ mod tests {
             .expect("structurally valid review bundle");
 
         assert_eq!(report.metrics.cases_with_complete_adjudication, 0);
+    }
+
+    #[test]
+    fn reviewer_agreement_is_reported_before_adjudication() {
+        let target = embedded_temporal_review_target().expect("embedded review target");
+        let (case_id, labels) = target.expected_labels.iter().next().expect("corpus case");
+        let labels = labels.iter().collect::<Vec<_>>();
+        let mut bundle: serde_json::Value =
+            serde_json::from_str(&pending_bundle()).expect("pending bundle JSON");
+        bundle["cases"] = serde_json::json!([{
+            "case_id": case_id,
+            "annotations": [
+                {
+                    "reviewer_token": "reviewer_a_8f2c10",
+                    "expected_reason_codes": labels,
+                    "completed_at_ms": 10
+                },
+                {
+                    "reviewer_token": "reviewer_b_41ad22",
+                    "expected_reason_codes": labels,
+                    "completed_at_ms": 20
+                }
+            ],
+            "adjudication": null
+        }]);
+
+        let report = evaluate_embedded_temporal_review(&bundle.to_string())
+            .expect("structurally valid review bundle");
+
+        assert_eq!(report.overall_status, "pending");
+        assert_eq!(report.metrics.reviewer_pair_comparisons, 1);
+        assert_eq!(report.metrics.exact_set_pair_agreement_rate, Some(1.0));
+    }
+
+    #[test]
+    fn nominal_alpha_is_one_for_perfect_binary_agreement_with_variation() {
+        let mut accumulator = NominalAgreementAccumulator::default();
+        accumulator.observe_binary(2, 2);
+        accumulator.observe_binary(0, 2);
+
+        assert_eq!(accumulator.krippendorff_alpha_nominal(), Some(1.0));
+    }
+
+    #[test]
+    fn nominal_alpha_is_undefined_without_category_variation() {
+        let mut accumulator = NominalAgreementAccumulator::default();
+        accumulator.observe_binary(2, 2);
+        accumulator.observe_binary(2, 2);
+
+        assert_eq!(accumulator.krippendorff_alpha_nominal(), None);
+    }
+
+    #[test]
+    fn nominal_alpha_reports_negative_systematic_disagreement() {
+        let mut accumulator = NominalAgreementAccumulator::default();
+        accumulator.observe_binary(1, 2);
+        accumulator.observe_binary(1, 2);
+
+        let alpha = accumulator
+            .krippendorff_alpha_nominal()
+            .expect("defined alpha");
+        assert!((alpha + 0.5).abs() < f64::EPSILON);
     }
 }

@@ -77,11 +77,16 @@ def temporal_telemetry_validation_payload(**overrides):
 
 def temporal_review_payload(**overrides):
     payload = {
-        "schema_version": "aura.military.temporal_review_report.v2",
+        "schema_version": "aura.military.temporal_review_report.v3",
         "overall_status": "pass",
         "blinding_assurance": "packet_bound",
         "blind_packet_id": "blind_round_alpha",
         "blind_packet_canonical_sha256": "a" * 64,
+        "preregistration_assurance": "packet_bound",
+        "study_id": "external_temporal_study_2026",
+        "study_corpus_class": "embargoed_external",
+        "preregistration_canonical_sha256": "b" * 64,
+        "study_commitment_canonical_sha256": "c" * 64,
         "privacy": {
             "raw_text_present": False,
             "reviewer_tokens_exported": False,
@@ -92,6 +97,9 @@ def temporal_review_payload(**overrides):
         "metrics": {
             "corpus_cases": 37,
             "cases_with_two_independent_reviews": 37,
+            "reviewer_pair_comparisons": 37,
+            "exact_set_pair_agreement_rate": 0.9,
+            "krippendorff_alpha_nominal": 0.85,
         },
     }
     payload.update(overrides)
@@ -303,6 +311,48 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 )
             ),
             "invalid_blind_packet_identity",
+        )
+
+    def test_temporal_review_rejects_public_seed_as_activation_evidence(self):
+        self.assertEqual(
+            generate_evidence_manifest.temporal_independent_review_status(
+                temporal_review_payload(study_corpus_class="public_seed")
+            ),
+            "insufficient_external_validity",
+        )
+
+    def test_temporal_review_rejects_missing_preregistration_binding(self):
+        self.assertEqual(
+            generate_evidence_manifest.temporal_independent_review_status(
+                temporal_review_payload(preregistration_assurance="absent")
+            ),
+            "insufficient_preregistration",
+        )
+
+    def test_temporal_review_rejects_undefined_agreement(self):
+        payload = temporal_review_payload()
+        payload["metrics"]["krippendorff_alpha_nominal"] = None
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_independent_review_status(payload),
+            "invalid_agreement_summary",
+        )
+
+    def test_temporal_review_rejects_missing_study_commitment(self):
+        self.assertEqual(
+            generate_evidence_manifest.temporal_independent_review_status(
+                temporal_review_payload(study_commitment_canonical_sha256=None)
+            ),
+            "invalid_study_commitment",
+        )
+
+    def test_temporal_review_rejects_insufficient_interreviewer_agreement(self):
+        payload = temporal_review_payload()
+        payload["metrics"]["krippendorff_alpha_nominal"] = 0.79
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_independent_review_status(payload),
+            "insufficient_interreviewer_agreement",
         )
 
     def test_temporal_activation_stays_pending_without_independent_review(self):

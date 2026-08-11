@@ -2,6 +2,20 @@
 
 ## Unreleased — Release Reliability
 
+- Added preregistered packet-bound v3 temporal review for caller-supplied,
+  embargoed external corpora. Fixed sampling, hypotheses, primary outcomes,
+  reviewer separation, missing-data handling, stopping rules, and agreement
+  thresholds are digest-bound before labels are collected.
+- Added a public temporal study commitment binding the preregistration, corpus,
+  packet, case count, reviewer minimum, and acceptance thresholds; report
+  evaluation rejects any altered commitment.
+- Added exact-set reviewer-pair agreement and nominal Krippendorff alpha,
+  including per-reason summaries and honest `null` output when alpha is
+  undefined. A correct adjudication now still fails when prespecified reviewer
+  agreement thresholds are not met.
+- Restricted temporal activation evidence to an embargoed external corpus with
+  valid preregistration and commitment digests and agreement of at least 0.8;
+  the embedded public seed remains a release-regression guard only.
 - Replaced declaration-only temporal review blinding with a packet-bound v2
   flow: per-round HMAC case tokens, randomized case order, per-case identifier
   remapping, relative event times, a separate owner-only coordinator map, and

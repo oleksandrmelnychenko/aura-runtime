@@ -218,6 +218,7 @@ pub(crate) struct TemporalReviewTarget {
     pub dataset_id: String,
     pub corpus_sha256: String,
     pub expected_labels: BTreeMap<String, BTreeSet<String>>,
+    pub case_tags: BTreeMap<String, BTreeSet<String>>,
     pub cases: BTreeMap<String, DomainTemporalInput>,
 }
 
@@ -246,7 +247,12 @@ pub fn run_embedded_temporal_shadow_report() -> Result<TemporalShadowReport, Tem
 
 pub(crate) fn embedded_temporal_review_target() -> Result<TemporalReviewTarget, TemporalShadowError>
 {
-    let raw = include_str!("../data/temporal_shadow_corpus.json");
+    temporal_review_target(include_str!("../data/temporal_shadow_corpus.json"))
+}
+
+pub(crate) fn temporal_review_target(
+    raw: &str,
+) -> Result<TemporalReviewTarget, TemporalShadowError> {
     let file: TemporalShadowCorpusFile = serde_json::from_str(raw)?;
     validate_corpus(&file)?;
     let expected_labels = file
@@ -259,6 +265,11 @@ pub(crate) fn embedded_temporal_review_target() -> Result<TemporalReviewTarget, 
             )
         })
         .collect();
+    let case_tags = file
+        .cases
+        .iter()
+        .map(|case| (case.id.clone(), case.tags.iter().cloned().collect()))
+        .collect();
     let cases = file
         .cases
         .iter()
@@ -268,6 +279,7 @@ pub(crate) fn embedded_temporal_review_target() -> Result<TemporalReviewTarget, 
         dataset_id: file.dataset_id,
         corpus_sha256: sha256_hex(raw.as_bytes()),
         expected_labels,
+        case_tags,
         cases,
     })
 }

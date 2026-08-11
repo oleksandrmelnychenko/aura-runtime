@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -12,7 +13,7 @@ from pathlib import Path
 SCHEMA_VERSION = "aura.evidence_manifest.v1"
 PILOT_SHADOW_SCHEMA_VERSION = "aura.shadow_mode_bundle.v1"
 TEMPORAL_SHADOW_SCHEMA_VERSION = "aura.military.temporal_shadow_report.v1"
-TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v2"
+TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v3"
 TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
 )
@@ -286,6 +287,54 @@ def temporal_independent_review_status(payload: dict | None) -> str | None:
             or any(char not in "0123456789abcdef" for char in packet_digest)
         ):
             return "invalid_blind_packet_identity"
+        if payload.get("preregistration_assurance") != "packet_bound":
+            return "insufficient_preregistration"
+        study_id = payload.get("study_id")
+        preregistration_digest = payload.get("preregistration_canonical_sha256")
+        study_commitment_digest = payload.get(
+            "study_commitment_canonical_sha256"
+        )
+        if (
+            not isinstance(study_id, str)
+            or not 8 <= len(study_id) <= 64
+            or not all(
+                char.isascii() and (char.isalnum() or char in "_-.")
+                for char in study_id
+            )
+            or not isinstance(preregistration_digest, str)
+            or len(preregistration_digest) != 64
+            or any(char not in "0123456789abcdef" for char in preregistration_digest)
+        ):
+            return "invalid_preregistration_identity"
+        if (
+            not isinstance(study_commitment_digest, str)
+            or len(study_commitment_digest) != 64
+            or any(char not in "0123456789abcdef" for char in study_commitment_digest)
+        ):
+            return "invalid_study_commitment"
+        if payload.get("study_corpus_class") != "embargoed_external":
+            return "insufficient_external_validity"
+        metrics = payload.get("metrics")
+        if not isinstance(metrics, dict) or metrics.get("reviewer_pair_comparisons", 0) <= 0:
+            return "invalid_agreement_summary"
+        for field in (
+            "exact_set_pair_agreement_rate",
+            "krippendorff_alpha_nominal",
+        ):
+            value = metrics.get(field)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value > 1.0
+                or (field == "exact_set_pair_agreement_rate" and value < 0.0)
+            ):
+                return "invalid_agreement_summary"
+        if (
+            metrics["exact_set_pair_agreement_rate"] < 0.8
+            or metrics["krippendorff_alpha_nominal"] < 0.8
+        ):
+            return "insufficient_interreviewer_agreement"
     return status
 
 
@@ -635,6 +684,17 @@ def attach_payload_details(
         artifacts["temporal_independent_review_report"][
             "blinding_assurance"
         ] = temporal_independent_review_payload.get("blinding_assurance")
+        artifacts["temporal_independent_review_report"][
+            "preregistration_assurance"
+        ] = temporal_independent_review_payload.get("preregistration_assurance")
+        artifacts["temporal_independent_review_report"][
+            "study_corpus_class"
+        ] = temporal_independent_review_payload.get("study_corpus_class")
+        artifacts["temporal_independent_review_report"][
+            "study_commitment_canonical_sha256"
+        ] = temporal_independent_review_payload.get(
+            "study_commitment_canonical_sha256"
+        )
         review_metrics = temporal_independent_review_payload.get("metrics", {})
         artifacts["temporal_independent_review_report"]["corpus_cases"] = review_metrics.get(
             "corpus_cases"
@@ -642,6 +702,12 @@ def attach_payload_details(
         artifacts["temporal_independent_review_report"][
             "independently_reviewed_cases"
         ] = review_metrics.get("cases_with_two_independent_reviews")
+        artifacts["temporal_independent_review_report"][
+            "exact_set_pair_agreement_rate"
+        ] = review_metrics.get("exact_set_pair_agreement_rate")
+        artifacts["temporal_independent_review_report"][
+            "krippendorff_alpha_nominal"
+        ] = review_metrics.get("krippendorff_alpha_nominal")
     if temporal_shadow_telemetry_validation_payload is not None:
         artifacts["temporal_shadow_telemetry_validation"][
             "observed_status"
@@ -1084,6 +1150,47 @@ def main() -> int:
         ),
         "temporal_independent_review_blind_packet_sha256": (
             temporal_independent_review_payload.get("blind_packet_canonical_sha256")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_preregistration_assurance": (
+            temporal_independent_review_payload.get("preregistration_assurance")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_study_id": (
+            temporal_independent_review_payload.get("study_id")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_study_corpus_class": (
+            temporal_independent_review_payload.get("study_corpus_class")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_preregistration_sha256": (
+            temporal_independent_review_payload.get("preregistration_canonical_sha256")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_study_commitment_sha256": (
+            temporal_independent_review_payload.get(
+                "study_commitment_canonical_sha256"
+            )
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_exact_set_pair_agreement_rate": (
+            temporal_independent_review_payload.get("metrics", {}).get(
+                "exact_set_pair_agreement_rate"
+            )
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_krippendorff_alpha_nominal": (
+            temporal_independent_review_payload.get("metrics", {}).get(
+                "krippendorff_alpha_nominal"
+            )
             if temporal_independent_review_payload
             else None
         ),
