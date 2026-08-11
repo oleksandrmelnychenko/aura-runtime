@@ -139,3 +139,14 @@ The repository now contains dedicated crates for this model:
 - Legacy shared Layer 1 rule routing and military subtype compatibility are
   owned by `aura-patterns`, without adding a dependency on domain crates
 - Full detector logic migration and differential parity validation: complete
+- Shared action aggregation is monotonic: an `allow`/`mark` hint cannot suppress
+  a threshold-derived warning, and a weaker high-priority hint cannot replace a
+  stronger `block` hint.
+- Non-finite or out-of-range ML score channels are neutralized by the shared
+  contract without discarding other valid channels; duplicate lexical
+  threat/reason identities are rejected during pack loading.
+- Temporal registry execution is gated by `temporal_enabled`, and Military
+  temporal fusion requires both event confidence and interpreted-context
+  confidence to meet the configured floor.
+- `aura-domain` now forbids unsafe code, denies missing public documentation,
+  and passes strict pedantic, nursery, and performance Clippy review.

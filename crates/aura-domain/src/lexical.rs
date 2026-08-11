@@ -1,35 +1,55 @@
+use std::collections::HashSet;
+
 use serde::Deserialize;
 
 use crate::{DomainAction, DomainSignal};
 
+/// Supported schema version for embedded lexical rule packs.
 pub const LEXICON_SCHEMA_VERSION: u32 = 1;
 
+/// Static phrase rule retained for small compile-time detector tables.
 pub struct PhraseRule {
+    /// Stable detector identity.
     pub threat_key: &'static str,
+    /// Stable explainability identity.
     pub reason_code: &'static str,
+    /// Normalized detector score.
     pub score: f32,
+    /// Phrases that must all be present.
     pub all_of: &'static [&'static str],
+    /// Alternative phrases of which at least one must be present.
     pub any_of: &'static [&'static str],
 }
 
+/// Deserialized lexical rule with policy and taxonomy metadata.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LexicalRuleRecord {
+    /// Stable detector identity.
     pub threat_key: String,
+    /// Stable explainability identity.
     pub reason_code: String,
+    /// Normalized detector score in `0..=1`.
     pub score: f32,
+    /// Domain-neutral threat taxonomy label.
     #[serde(default)]
     pub threat_type: Option<String>,
+    /// Severity label used by shared policy.
     #[serde(default)]
     pub severity: Option<String>,
+    /// Rule priority used by shared policy.
     #[serde(default)]
     pub priority: Option<u8>,
+    /// Optional serialized action hint.
     #[serde(default)]
     pub action: Option<String>,
+    /// Phrases that must all match.
     #[serde(default)]
     pub all_of: Vec<String>,
+    /// Alternative phrases of which at least one must match.
     #[serde(default)]
     pub any_of: Vec<String>,
+    /// Conjunctive groups, each containing alternative phrases.
     #[serde(default)]
     pub any_groups: Vec<Vec<String>>,
 }
@@ -53,6 +73,8 @@ impl PhraseRule {
     }
 }
 
+/// Returns the first matching static phrase rule.
+#[must_use]
 pub fn match_phrase_rules(text: &str, rules: &[PhraseRule]) -> Option<DomainSignal> {
     if text.is_empty() {
         return None;
@@ -74,6 +96,8 @@ pub fn match_phrase_rules(text: &str, rules: &[PhraseRule]) -> Option<DomainSign
     None
 }
 
+/// Converts a static phrase rule to a normalized domain signal.
+#[must_use]
 pub fn signal_from_rule(rule: &PhraseRule) -> DomainSignal {
     DomainSignal {
         threat_key: rule.threat_key.to_string(),
@@ -86,6 +110,8 @@ pub fn signal_from_rule(rule: &PhraseRule) -> DomainSignal {
     }
 }
 
+/// Returns whether any phrase is contained in the already-normalized text.
+#[must_use]
 pub fn contains_any(text: &str, phrases: &[&str]) -> bool {
     for phrase in phrases {
         if text.contains(phrase) {
@@ -95,6 +121,8 @@ pub fn contains_any(text: &str, phrases: &[&str]) -> bool {
     false
 }
 
+/// Returns the first matching lexical rule in pack order.
+#[must_use]
 pub fn match_lexical_rules(text: &str, rules: &[LexicalRuleRecord]) -> Option<DomainSignal> {
     let hits = match_all_lexical_rules(text, rules);
     if hits.is_empty() {
@@ -103,6 +131,8 @@ pub fn match_lexical_rules(text: &str, rules: &[LexicalRuleRecord]) -> Option<Do
     Some(hits[0].clone())
 }
 
+/// Returns every matching lexical rule in deterministic pack order.
+#[must_use]
 pub fn match_all_lexical_rules(text: &str, rules: &[LexicalRuleRecord]) -> Vec<DomainSignal> {
     if text.is_empty() {
         return Vec::new();
@@ -174,12 +204,10 @@ fn compact_for_lexical_match(text: &str) -> String {
             '0' => 'o',
             '1' => 'i',
             '3' => 'e',
-            '4' => 'a',
-            '5' => 's',
+            '4' | '@' => 'a',
+            '5' | '$' => 's',
             '7' => 't',
             '8' => 'b',
-            '@' => 'a',
-            '$' => 's',
             _ => ch,
         };
         if mapped.is_alphanumeric() {
@@ -189,13 +217,33 @@ fn compact_for_lexical_match(text: &str) -> String {
     compact
 }
 
+/// Validates the metadata and match expressions in one lexical rule family.
+///
+/// # Errors
+///
+/// Returns a descriptive error for malformed metadata, invalid numeric bounds,
+/// empty match expressions, or duplicate threat and reason identities.
 pub fn validate_lexical_rules(rules: &[LexicalRuleRecord]) -> Result<(), String> {
+    let mut threat_keys = HashSet::with_capacity(rules.len());
+    let mut reason_codes = HashSet::with_capacity(rules.len());
     for (idx, rule) in rules.iter().enumerate() {
         if rule.threat_key.trim().is_empty() {
             return Err(format!("rule[{idx}] has empty threat_key"));
         }
         if rule.reason_code.trim().is_empty() {
             return Err(format!("rule[{idx}] has empty reason_code"));
+        }
+        if !threat_keys.insert(rule.threat_key.as_str()) {
+            return Err(format!(
+                "rule[{idx}] duplicates threat_key `{}`",
+                rule.threat_key
+            ));
+        }
+        if !reason_codes.insert(rule.reason_code.as_str()) {
+            return Err(format!(
+                "rule[{idx}] duplicates reason_code `{}`",
+                rule.reason_code
+            ));
         }
         if !(0.0..=1.0).contains(&rule.score) {
             return Err(format!(
@@ -254,44 +302,47 @@ pub fn validate_lexical_rules(rules: &[LexicalRuleRecord]) -> Result<(), String>
                 return Err(format!("rule[{idx}] has invalid action `{action}`"));
             }
         }
-        let has_matchers =
-            !rule.all_of.is_empty() || !rule.any_of.is_empty() || !rule.any_groups.is_empty();
-        if !has_matchers {
+        validate_matchers(idx, rule)?;
+    }
+    Ok(())
+}
+
+fn validate_matchers(idx: usize, rule: &LexicalRuleRecord) -> Result<(), String> {
+    let has_matchers =
+        !rule.all_of.is_empty() || !rule.any_of.is_empty() || !rule.any_groups.is_empty();
+    if !has_matchers {
+        return Err(format!(
+            "rule[{idx}] must define all_of, any_of, or any_groups"
+        ));
+    }
+    if rule.all_of.iter().any(|needle| needle.trim().is_empty()) {
+        return Err(format!("rule[{idx}] has empty all_of phrase"));
+    }
+    if rule.any_of.iter().any(|needle| needle.trim().is_empty()) {
+        return Err(format!("rule[{idx}] has empty any_of phrase"));
+    }
+    for (group_idx, group) in rule.any_groups.iter().enumerate() {
+        if group.is_empty() {
+            return Err(format!("rule[{idx}] has empty any_groups[{group_idx}]"));
+        }
+        if group.iter().any(|needle| needle.trim().is_empty()) {
             return Err(format!(
-                "rule[{idx}] must define all_of, any_of, or any_groups"
+                "rule[{idx}] has empty phrase in any_groups[{group_idx}]"
             ));
-        }
-        for needle in &rule.all_of {
-            if needle.trim().is_empty() {
-                return Err(format!("rule[{idx}] has empty all_of phrase"));
-            }
-        }
-        for needle in &rule.any_of {
-            if needle.trim().is_empty() {
-                return Err(format!("rule[{idx}] has empty any_of phrase"));
-            }
-        }
-        for (group_idx, group) in rule.any_groups.iter().enumerate() {
-            if group.is_empty() {
-                return Err(format!("rule[{idx}] has empty any_groups[{group_idx}]"));
-            }
-            for needle in group {
-                if needle.trim().is_empty() {
-                    return Err(format!(
-                        "rule[{idx}] has empty phrase in any_groups[{group_idx}]"
-                    ));
-                }
-            }
         }
     }
     Ok(())
 }
 
+/// Verifies that a rule pack uses the only schema understood by this crate.
+///
+/// # Errors
+///
+/// Returns an error when `actual` differs from [`LEXICON_SCHEMA_VERSION`].
 pub fn validate_schema_version(actual: u32, pack_name: &str) -> Result<(), String> {
     if actual != LEXICON_SCHEMA_VERSION {
         return Err(format!(
-            "{pack_name} schema_version mismatch: expected {}, got {}",
-            LEXICON_SCHEMA_VERSION, actual
+            "{pack_name} schema_version mismatch: expected {LEXICON_SCHEMA_VERSION}, got {actual}"
         ));
     }
     Ok(())
@@ -466,6 +517,26 @@ mod tests {
         }];
         let error = validate_lexical_rules(&rules).expect_err("must fail");
         assert!(error.contains("must define threat_type"));
+    }
+
+    #[test]
+    fn validation_rejects_duplicate_rule_identity() {
+        let rule = LexicalRuleRecord {
+            threat_key: "duplicate".to_string(),
+            reason_code: "x.duplicate".to_string(),
+            score: 0.8,
+            threat_type: Some("grooming".to_string()),
+            severity: Some("high".to_string()),
+            priority: Some(90),
+            action: None,
+            all_of: vec!["x".to_string()],
+            any_of: vec![],
+            any_groups: vec![],
+        };
+
+        let error = validate_lexical_rules(&[rule.clone(), rule]).expect_err("must fail");
+
+        assert!(error.contains("duplicates threat_key"));
     }
 
     #[test]

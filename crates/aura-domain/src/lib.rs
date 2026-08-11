@@ -1,9 +1,25 @@
+//! Shared, domain-neutral contracts for AURA safety modules.
+//!
+//! The crate owns module registration, bounded inputs and outputs, lexical rule
+//! validation, monotonic action policy, and content-free temporal projections.
+//! Domain-specific detectors remain in `aura-kids` and `aura-military`.
+
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
+
+/// Bounded message-level inputs and model hints.
 pub mod input;
+/// Lexical rule representation, matching, and validation.
 pub mod lexical;
+/// Domain module identity and execution trait.
 pub mod module;
+/// Domain signals, actions, and typed event routing.
 pub mod output;
+/// Shared monotonic action policy.
 pub mod policy;
+/// Runtime module registry.
 pub mod registry;
+/// Content-free temporal projection contracts.
 pub mod temporal;
 
 pub use input::*;

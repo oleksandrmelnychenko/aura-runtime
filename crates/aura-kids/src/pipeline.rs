@@ -247,7 +247,10 @@ fn apply_kids_conversation_memory_amplifiers(
         return;
     };
 
-    let ml_hint = input.ml_safety_hint.unwrap_or_default();
+    let ml_hint = input
+        .ml_safety_hint
+        .map(aura_domain::MlSafetyHint::sanitized)
+        .unwrap_or_default();
     // ML scores above this threshold count as a detection for memory tracking,
     // even when no lexicon rule fired. This closes the evasion gap where
     // paraphrased/novel threats bypass the lexicon but the ML model catches them.
@@ -1911,6 +1914,30 @@ mod tests {
             !has_grooming,
             "ML hint at 0.1 should not trigger grooming detection"
         );
+    }
+
+    #[test]
+    fn invalid_ml_hint_does_not_enter_conversation_memory() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let msg = DomainInput {
+            text: Some("ordinary conversation".to_string()),
+            language: None,
+            sender_id: Some("ml_invalid".to_string()),
+            conversation_id: Some("conv_ml_invalid".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+            ml_safety_hint: Some(aura_domain::MlSafetyHint {
+                grooming: f32::NAN,
+                bullying: 1.5,
+                self_harm: 0.0,
+                manipulation: 0.0,
+            }),
+        };
+
+        let _ = run_kids_pipeline(&msg);
+
+        assert!(super::conversation_risk_score("conv_ml_invalid").abs() < f32::EPSILON);
     }
 
     #[test]

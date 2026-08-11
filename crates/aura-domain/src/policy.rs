@@ -1,8 +1,11 @@
 use crate::{DomainAction, DomainSignal};
 
+/// Priority thresholds used by the shared monotonic action policy.
 #[derive(Debug, Clone, Copy)]
 pub struct DomainPolicyThresholds {
+    /// Minimum priority at which a high-severity signal warns.
     pub warn_priority: u8,
+    /// Minimum priority at which a critical-severity signal warns.
     pub critical_warn_priority: u8,
 }
 
@@ -15,10 +18,17 @@ impl Default for DomainPolicyThresholds {
     }
 }
 
+/// Resolves the strongest action using the default thresholds.
+#[must_use]
 pub fn decide_action(signals: &[DomainSignal]) -> Option<DomainAction> {
     decide_action_with_thresholds(signals, DomainPolicyThresholds::default())
 }
 
+/// Resolves a monotonic action using explicit domain-owned thresholds.
+///
+/// Explicit rule actions can strengthen the threshold result but cannot weaken
+/// it; therefore an `allow` or `mark` hint never suppresses a computed warning.
+#[must_use]
 pub fn decide_action_with_thresholds(
     signals: &[DomainSignal],
     thresholds: DomainPolicyThresholds,
@@ -29,23 +39,17 @@ pub fn decide_action_with_thresholds(
 
     let mut max_priority: u8 = 0;
     let mut max_severity_rank: u8 = 0;
-    let mut action_hint: Option<(u8, DomainAction)> = None;
+    let mut strongest_action_hint: Option<DomainAction> = None;
     for signal in signals {
         let priority = signal_priority(signal);
         if priority > max_priority {
             max_priority = priority;
         }
         if let Some(action) = signal.action {
-            let replace = match action_hint {
-                Some((hint_priority, hint_action)) => {
-                    priority > hint_priority
-                        || (priority == hint_priority
-                            && action_rank(action) > action_rank(hint_action))
-                }
-                None => true,
-            };
+            let replace = strongest_action_hint
+                .is_none_or(|hint_action| action_rank(action) > action_rank(hint_action));
             if replace {
-                action_hint = Some((priority, action));
+                strongest_action_hint = Some(action);
             }
         }
 
@@ -55,35 +59,44 @@ pub fn decide_action_with_thresholds(
         }
     }
 
-    if let Some((_, action)) = action_hint {
-        return Some(action);
-    }
-
     let high_or_above = max_severity_rank >= 3;
     let critical = max_severity_rank >= 4;
     let should_warn = (high_or_above && max_priority >= thresholds.warn_priority)
         || (critical && max_priority >= thresholds.critical_warn_priority);
 
-    if should_warn {
-        return Some(DomainAction::Warn);
-    }
-
-    Some(DomainAction::Mark)
+    let threshold_action = if should_warn {
+        DomainAction::Warn
+    } else {
+        DomainAction::Mark
+    };
+    Some(match strongest_action_hint {
+        Some(action) if action_rank(action) > action_rank(threshold_action) => action,
+        Some(_) | None => threshold_action,
+    })
 }
 
-pub fn promote_action_to_warn(action: Option<DomainAction>) -> Option<DomainAction> {
+/// Raises any non-blocking action to `warn` while preserving `block`.
+#[must_use]
+pub const fn promote_action_to_warn(action: Option<DomainAction>) -> Option<DomainAction> {
     match action {
-        Some(DomainAction::Allow) => Some(DomainAction::Warn),
-        Some(DomainAction::Mark) => Some(DomainAction::Warn),
-        Some(DomainAction::Warn) => Some(DomainAction::Warn),
         Some(DomainAction::Block) => Some(DomainAction::Block),
-        None => Some(DomainAction::Warn),
+        Some(DomainAction::Allow | DomainAction::Mark | DomainAction::Warn) | None => {
+            Some(DomainAction::Warn)
+        }
     }
 }
 
 fn signal_priority(signal: &DomainSignal) -> u8 {
     let Some(priority) = signal.priority else {
+        if !signal.score.is_finite() {
+            return 0;
+        }
         let bounded = (signal.score * 100.0).clamp(1.0, 100.0);
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "the finite value is rounded after being bounded to 1..=100"
+        )]
         return bounded.round() as u8;
     };
     priority
@@ -102,7 +115,7 @@ fn signal_severity_rank(signal: &DomainSignal) -> u8 {
     }
 }
 
-fn action_rank(action: DomainAction) -> u8 {
+const fn action_rank(action: DomainAction) -> u8 {
     match action {
         DomainAction::Allow => 0,
         DomainAction::Mark => 1,
@@ -173,12 +186,22 @@ mod tests {
     }
 
     #[test]
-    fn higher_priority_action_hint_wins() {
+    fn strongest_action_hint_wins_regardless_of_priority() {
         let mut low = signal(0.72, "grooming", "medium", 70);
         low.action = Some(crate::DomainAction::Block);
         let mut high = signal(0.80, "manipulation", "medium", 90);
         high.action = Some(crate::DomainAction::Warn);
         let action = decide_action(&[low, high]);
+        assert_eq!(action, Some(crate::DomainAction::Block));
+    }
+
+    #[test]
+    fn allow_hint_cannot_downgrade_threshold_warning() {
+        let mut hinted = signal(0.98, "grooming", "critical", 100);
+        hinted.action = Some(crate::DomainAction::Allow);
+
+        let action = decide_action(&[hinted]);
+
         assert_eq!(action, Some(crate::DomainAction::Warn));
     }
 

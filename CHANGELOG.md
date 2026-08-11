@@ -2,6 +2,12 @@
 
 ## Unreleased — Release Reliability
 
+- Hardened the shared domain contract: action hints now combine monotonically,
+  invalid ML scores cannot enter signal decisions, lexical rule families reject
+  duplicate identities, disabled temporal modules cannot execute, and Military
+  temporal fusion requires the context interpretation itself to meet the
+  configured confidence floor. The public `aura-domain` API now denies unsafe
+  code and missing documentation.
 - Added a fail-closed `aura.release_decision.v1` aggregator and detached
   Ed25519 operator attestation. A GO now requires one exact signed evidence,
   Apple, pilot/signoff, rollback, and external client-acceptance set; missing

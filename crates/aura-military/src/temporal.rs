@@ -214,7 +214,9 @@ fn bounded_events<'a>(
                 && event.timestamp_ms <= input.as_of_ms
                 && event.confidence >= policy.min_event_confidence
                 && event.content_hash.is_some()
-                && event.context.supports_temporal_inference()
+                && event
+                    .context
+                    .supports_temporal_inference_at(policy.min_event_confidence)
         })
         .collect();
     events.sort_by_key(|event| (event.timestamp_ms, event.event_id));
@@ -536,6 +538,17 @@ mod tests {
         let mut events = influence_events();
         events[1].context.speech_act = DomainTemporalSpeechAct::Counter;
         events[1].context.stance = DomainTemporalStance::Oppose;
+        let input = input(2_000, EXTERNAL_ACTOR, 22, events);
+
+        let output = evaluate_with_policy(&input, &policy_enabled());
+
+        assert!(output.signals.is_empty());
+    }
+
+    #[test]
+    fn weak_context_interpretation_does_not_enter_influence_support() {
+        let mut events = influence_events();
+        events[1].context.confidence = 0.1;
         let input = input(2_000, EXTERNAL_ACTOR, 22, events);
 
         let output = evaluate_with_policy(&input, &policy_enabled());
