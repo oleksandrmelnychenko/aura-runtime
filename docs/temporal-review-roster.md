@@ -114,6 +114,8 @@ python3 ci/temporal_review_roster.py verify \
   --timestamp-response review/temporal-review-roster.tsr \
   --ca-file trust/tsa-roots.pem \
   --untrusted-chain trust/tsa-intermediates.pem \
+  --revocation-crl trust/tsa-issuer.crl.pem \
+  --revocation-crl trust/intermediate-issuer.crl.pem \
   --expected-policy-oid 1.2.3.4.1 \
   --expected-tsa-spki-sha256 '<TSA SPKI SHA-256>' \
   --output /protected/temporal-review-roster-verification.json \
@@ -121,13 +123,13 @@ python3 ci/temporal_review_roster.py verify \
 ```
 
 The roster receipt is included directly in
-`aura.military.temporal_review_receipt_index.v2`. Full chain verification
+`aura.military.temporal_review_receipt_index.v3`. Full chain verification
 repeats the signature and timestamp checks from the raw inputs; it does not
 trust a copied `status=pass` report.
 
 ## Supported claim and boundary
 
-A passing v2 receipt-chain report proves that the roster existed after the
+A passing v3 receipt-chain report proves that the roster existed after the
 trusted study commitment and before every declared review completion and
 signed reviewer receipt. It also proves exact identity/key consistency between
 the roster and signed submissions.

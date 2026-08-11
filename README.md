@@ -260,6 +260,7 @@ python3 ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.js
 See `docs/temporal-independent-review.md`,
 `docs/temporal-study-attestation.md`,
 `docs/temporal-study-timestamp.md`,
+`docs/rfc3161-historical-revocation.md`,
 `docs/temporal-review-roster.md`,
 `docs/temporal-review-receipts.md`,
 `docs/temporal-shadow-telemetry.md`, and
@@ -268,7 +269,9 @@ trust boundaries. Confirmatory temporal review uses packet-bound v3 material
 bound to a fixed preregistration, external corpus, public study commitment,
 trusted-key study attestation, RFC 3161 commitment timestamp, and a chain of
 an independently signed/timestamped participant-key roster plus individually
-signed and RFC 3161 timestamped reviewer/adjudicator receipts. The
+signed and RFC 3161 timestamped reviewer/adjudicator receipts. Every timestamp
+requires offline full-chain CRL evidence covering its `genTime`; copied
+timestamp-verification reports are not trusted by receipt-chain v3. The
 v5 report binds computed metrics to the exact canonical review bundle; legacy,
 unsigned, untimestamped, receipt-free, or public-seed review cannot satisfy
 policy activation readiness.

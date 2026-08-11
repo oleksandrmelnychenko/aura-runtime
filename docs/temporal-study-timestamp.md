@@ -62,15 +62,18 @@ python3 ci/temporal_study_timestamp.py verify \
   --response review/temporal-study-commitment.tsr \
   --ca-file /trusted/tsa-roots.pem \
   --untrusted-chain /trusted/tsa-intermediates.pem \
+  --revocation-crl /trusted/tsa-issuer.crl.pem \
+  --revocation-crl /trusted/intermediate-issuer.crl.pem \
   --expected-policy-oid 1.2.3.4.5 \
   --expected-tsa-spki-sha256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   --output artifacts/temporal-study-timestamp-verification.json \
   --require-pass
 ```
 
-Omit `--untrusted-chain` only when no intermediate chain is needed. Retain the
-commitment, request, response, signer and chain certificates, trust-policy
-record, verification report, and the OpenSSL version used for verification.
+Omit `--untrusted-chain` only when no intermediate chain is needed. Supply one
+complete CRL for each non-anchor certificate issuer. Retain the commitment,
+request, response, signer and chain certificates, CRLs, trust-policy record,
+verification report, and the OpenSSL version used for verification.
 
 Provide the trusted study artifacts, v5 review report, and aggregate receipt
 chain to the evidence manifest:
@@ -112,10 +115,12 @@ complete signed submission existed, but does not prove when work began, that a
 reviewer never saw labels earlier, that participant affiliations are genuine,
 or that the human-entered completion time is honest.
 
-Certificate revocation is intentionally reported as `not_checked`. Validation
-at `genTime` supports historical certificate validity but is not long-term
-validation. Preserve contemporaneous CRL or OCSP evidence under the study
-governance protocol before making a stronger revocation or archival claim.
+Certificate revocation is reported as `full_chain_crl_at_gen_time` only after
+offline full-chain CRL validation at the token's `genTime`. See
+`docs/rfc3161-historical-revocation.md` for the exact evidence contract and
+limitations. This is not perpetual validity: later revocation information,
+compromise discovery, CA/TSA policy failure, and algorithm aging remain outside
+the proved claim.
 
 The wire and verification rules follow [RFC 3161](https://www.rfc-editor.org/rfc/rfc3161.html),
 the modern signer-certificate identifier is covered by

@@ -195,9 +195,11 @@ study-commitment digest, trusted-key Ed25519 verification, a matching RFC 3161
 commitment verification, and a matching chain of individually signed and
 RFC 3161 timestamped reviewer and adjudicator receipts with strictly
 non-overlapping accuracy-adjusted intervals. The chain must include a signed,
-timestamped roster fixed before declared review completion,
-`embargoed_external` corpus class, finite agreement metrics, and both agreement
-values at least `0.8`. A passing review without study attestation, trusted
+timestamped roster fixed before declared review completion and offline
+complete-CRL coverage for every timestamp's non-anchor TSA chain at `genTime`.
+The review must also use the `embargoed_external` corpus class, finite agreement
+metrics, and both agreement values at least `0.8`. A passing review without
+study attestation, trusted
 commitment timestamp, or review-receipt chain remains `pending`. Invalid,
 privacy-unsafe, chronologically overlapping, or mismatched supplied trust
 evidence fails the activation gate. The final evidence manifest still requires
@@ -220,6 +222,9 @@ when work began, reviewer expertise, genuine
 institutional independence, absence of coordination, or truthful local
 completion-time declarations. Those remain governance and experimental-design
 claims that require separate records and oversight.
+Archived CRLs prove the PKIX status represented by those issuer-signed lists at
+the checked time; they do not establish that compromise was impossible or that
+later revocation information cannot affect interpretation.
 
 Omitting `--corpus` uses the embedded public seed for regression only. The
 legacy declaration-only path remains available for old material, but neither

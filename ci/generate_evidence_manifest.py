@@ -18,10 +18,10 @@ TEMPORAL_STUDY_ATTESTATION_VERIFICATION_SCHEMA_VERSION = (
     "aura.military.temporal_study_attestation_verification.v1"
 )
 TEMPORAL_STUDY_TIMESTAMP_VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_study_timestamp_verification.v1"
+    "aura.military.temporal_study_timestamp_verification.v2"
 )
 TEMPORAL_REVIEW_RECEIPT_CHAIN_VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_review_receipt_chain_verification.v2"
+    "aura.military.temporal_review_receipt_chain_verification.v3"
 )
 TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
@@ -491,6 +491,84 @@ def lowercase_sha256(value: object) -> bool:
     )
 
 
+def historical_crl_claims_valid(payload: dict) -> bool:
+    if (
+        payload.get("revocation_assurance") != "full_chain_crl_at_gen_time"
+        or payload.get("revocation_evidence_kind") != "offline_complete_crl"
+        or payload.get("revocation_validation_time_basis") != "tsa_gen_time"
+        or payload.get("revocation_scope") != "full_non_anchor_chain"
+        or payload.get("revocation_network_fetch_used") is not False
+        or payload.get("revocation_delta_crls_used") is not False
+        or payload.get("revocation_indirect_crls_used") is not False
+    ):
+        return False
+    gen_time = payload.get("gen_time_unix_ms")
+    checked_count = payload.get("revocation_checked_certificate_count")
+    crl_count = payload.get("revocation_crl_count")
+    crls = payload.get("revocation_crls")
+    digests = payload.get("revocation_crl_der_sha256s")
+    if (
+        isinstance(gen_time, bool)
+        or not isinstance(gen_time, int)
+        or gen_time <= 0
+        or isinstance(checked_count, bool)
+        or not isinstance(checked_count, int)
+        or checked_count <= 0
+        or isinstance(crl_count, bool)
+        or not isinstance(crl_count, int)
+        or crl_count > 6
+        or crl_count != checked_count
+        or not isinstance(crls, list)
+        or len(crls) != crl_count
+        or not isinstance(digests, list)
+        or len(digests) != crl_count
+        or digests != sorted(set(digests))
+        or any(not lowercase_sha256(digest) for digest in digests)
+    ):
+        return False
+    expected_fields = {
+        "issuer_name_sha256",
+        "this_update_unix_ms",
+        "next_update_unix_ms",
+        "crl_number_hex",
+        "der_sha256",
+    }
+    issuer_digests = set()
+    observed_digests = []
+    for crl in crls:
+        if not isinstance(crl, dict) or set(crl) != expected_fields:
+            return False
+        issuer_digest = crl.get("issuer_name_sha256")
+        der_digest = crl.get("der_sha256")
+        this_update = crl.get("this_update_unix_ms")
+        next_update = crl.get("next_update_unix_ms")
+        number = crl.get("crl_number_hex")
+        if (
+            not lowercase_sha256(issuer_digest)
+            or issuer_digest in issuer_digests
+            or not lowercase_sha256(der_digest)
+            or isinstance(this_update, bool)
+            or not isinstance(this_update, int)
+            or isinstance(next_update, bool)
+            or not isinstance(next_update, int)
+            or not this_update <= gen_time <= next_update
+            or next_update <= this_update
+            or not isinstance(number, str)
+            or not number.startswith("0x")
+            or not 1 <= len(number[2:]) <= 40
+            or any(character not in "0123456789abcdef" for character in number[2:])
+        ):
+            return False
+        issuer_digests.add(issuer_digest)
+        observed_digests.append(der_digest)
+    return (
+        observed_digests == digests
+        and lowercase_sha256(payload.get("revocation_crl_set_sha256"))
+        and payload["revocation_crl_set_sha256"]
+        == sha256("\n".join(digests).encode("ascii")).hexdigest()
+    )
+
+
 def temporal_study_timestamp_verification_status(
     payload: dict | None,
     temporal_independent_review_payload: dict | None,
@@ -511,10 +589,12 @@ def temporal_study_timestamp_verification_status(
         != "rfc3161_trusted_chain"
         or payload.get("message_imprint_algorithm") != "sha256"
         or payload.get("certificate_validation_time_basis") != "tsa_gen_time"
-        or payload.get("revocation_assurance") != "not_checked"
+        or payload.get("revocation_assurance") != "full_chain_crl_at_gen_time"
         or payload.get("request_nonce_present") is not True
     ):
         return "invalid_timestamp_assurance"
+    if not historical_crl_claims_valid(payload):
+        return "invalid_timestamp_revocation_evidence"
     if not valid_oid(payload.get("policy_oid")):
         return "invalid_timestamp_identity"
     serial = payload.get("serial_hex")
@@ -657,7 +737,13 @@ def temporal_review_receipt_chain_verification_status(
         or payload.get("timestamp_protocol") != "RFC3161"
         or payload.get("message_imprint_algorithm") != "sha256"
         or payload.get("certificate_validation_time_basis") != "tsa_gen_time"
-        or payload.get("revocation_assurance") != "not_checked"
+        or payload.get("revocation_assurance") != "full_chain_crl_at_gen_time"
+        or payload.get("revocation_evidence_kind") != "offline_complete_crl"
+        or payload.get("revocation_validation_time_basis") != "tsa_gen_time"
+        or payload.get("revocation_scope") != "full_non_anchor_chain"
+        or payload.get("revocation_network_fetch_used") is not False
+        or payload.get("revocation_delta_crls_used") is not False
+        or payload.get("revocation_indirect_crls_used") is not False
     ):
         return "invalid_receipt_assurance"
     for field in (
@@ -668,6 +754,8 @@ def temporal_review_receipt_chain_verification_status(
         "review_bundle_canonical_sha256",
         "receipt_index_sha256",
         "study_timestamp_response_sha256",
+        "study_timestamp_revocation_crl_set_sha256",
+        "revocation_crl_evidence_set_sha256",
         "receipt_signer_spki_set_sha256",
         "participant_signer_spki_set_sha256",
         "roster_canonical_sha256",
@@ -690,6 +778,8 @@ def temporal_review_receipt_chain_verification_status(
         "adjudication_decision_count",
         "receipt_timestamp_authority_count",
         "governance_record_count",
+        "revocation_checked_timestamp_count",
+        "revocation_unique_crl_count",
     ):
         value = payload.get(field)
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -714,6 +804,9 @@ def temporal_review_receipt_chain_verification_status(
         or payload["governance_record_count"] != 4 * participant_count
         or payload["participant_signer_spki_set_sha256"]
         != payload["receipt_signer_spki_set_sha256"]
+        or payload["revocation_checked_timestamp_count"] != participant_count + 2
+        or payload["revocation_unique_crl_count"]
+        > payload["revocation_checked_timestamp_count"] * 6
     ):
         return "invalid_receipt_summary"
     proof_fields = (
@@ -807,6 +900,10 @@ def temporal_review_receipt_chain_verification_status(
         (
             "commitment_latest_trusted_time_unix_ms",
             "latest_trusted_time_unix_ms",
+        ),
+        (
+            "study_timestamp_revocation_crl_set_sha256",
+            "revocation_crl_set_sha256",
         ),
     )
     if any(
@@ -1310,6 +1407,10 @@ def attach_payload_details(
             "tsa_signer_spki_sha256",
             "trust_anchor_bundle_sha256",
             "revocation_assurance",
+            "revocation_evidence_kind",
+            "revocation_checked_certificate_count",
+            "revocation_crl_count",
+            "revocation_crl_set_sha256",
         ):
             artifact[field] = temporal_study_timestamp_verification_payload.get(field)
     if temporal_review_receipt_chain_verification_payload is not None:
@@ -1341,6 +1442,10 @@ def attach_payload_details(
             "adjudicator_earliest_trusted_time_unix_ms",
             "adjudicator_latest_trusted_time_unix_ms",
             "revocation_assurance",
+            "revocation_evidence_kind",
+            "revocation_checked_timestamp_count",
+            "revocation_unique_crl_count",
+            "revocation_crl_evidence_set_sha256",
         ):
             artifact[field] = temporal_review_receipt_chain_verification_payload.get(
                 field
@@ -1976,6 +2081,13 @@ def main() -> int:
             if temporal_study_timestamp_verification_payload
             else None
         ),
+        "temporal_study_timestamp_revocation_crl_set_sha256": (
+            temporal_study_timestamp_verification_payload.get(
+                "revocation_crl_set_sha256"
+            )
+            if temporal_study_timestamp_verification_payload
+            else None
+        ),
         "temporal_review_receipt_chain_verification_status": (
             temporal_review_receipt_chain_verification_status(
                 temporal_review_receipt_chain_verification_payload,
@@ -1993,6 +2105,20 @@ def main() -> int:
         "temporal_review_roster_assurance": (
             temporal_review_receipt_chain_verification_payload.get(
                 "roster_assurance"
+            )
+            if temporal_review_receipt_chain_verification_payload
+            else None
+        ),
+        "temporal_review_receipt_revocation_assurance": (
+            temporal_review_receipt_chain_verification_payload.get(
+                "revocation_assurance"
+            )
+            if temporal_review_receipt_chain_verification_payload
+            else None
+        ),
+        "temporal_review_receipt_revocation_checked_timestamp_count": (
+            temporal_review_receipt_chain_verification_payload.get(
+                "revocation_checked_timestamp_count"
             )
             if temporal_review_receipt_chain_verification_payload
             else None

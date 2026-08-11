@@ -2,10 +2,15 @@
 
 ## Unreleased — Release Reliability
 
+- Added offline historical revocation verification for every RFC 3161 token.
+  Complete issuer CRLs must cover the TSA chain at `genTime`; delta, indirect,
+  missing, expired, future, duplicate, or unrelated CRLs fail closed. Receipt
+  chain v3 re-verifies the raw study commitment timestamp instead of trusting a
+  copied JSON report and binds aggregate CRL evidence into the release manifest.
 - Added a privacy-minimized, coordinator-signed and RFC 3161 timestamped review
   roster that precommits participant roles, affiliation claims, pinned Ed25519
   keys, and digests of eligibility, conflict, affiliation, and blinding records.
-  Receipt-chain v2 directly verifies the roster and rejects post-result key or
+  Receipt-chain v3 directly verifies the roster and rejects post-result key or
   participant substitution.
 - Added distinct Ed25519 signatures and RFC 3161 timestamps for complete
   reviewer and adjudicator submissions. The aggregate verifier requires strict
@@ -21,10 +26,9 @@
   request, expected policy OID, explicit trust chain, TSA `genTime`, and a
   separately pinned TSA signer SPKI digest.
 - Temporal review report v4 introduced declared review chronology without
-  overstating it as trusted time. Policy activation now requires the trusted
+  overstating it as trusted time. Policy activation requires the trusted
   commitment timestamp's `genTime + accuracy` upper bound to precede the
-  earliest declared annotation completion; certificate revocation remains
-  explicitly `not_checked`.
+  earliest declared annotation completion.
 - Added domain-separated Ed25519 signing and trusted-public-key verification
   for temporal study commitments. The attestation binds exact file bytes and
   canonical study, preregistration, corpus, and packet identities.

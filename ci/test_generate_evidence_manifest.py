@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import unittest
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
@@ -138,8 +139,9 @@ def temporal_study_attestation_verification_payload(**overrides):
 
 
 def temporal_study_timestamp_verification_payload(**overrides):
+    crl_digest = "7" * 64
     payload = {
-        "schema_version": "aura.military.temporal_study_timestamp_verification.v1",
+        "schema_version": "aura.military.temporal_study_timestamp_verification.v2",
         "status": "pass",
         "timestamp_protocol": "RFC3161",
         "trusted_timestamp_assurance": "rfc3161_trusted_chain",
@@ -167,7 +169,26 @@ def temporal_study_timestamp_verification_payload(**overrides):
         "trust_anchor_bundle_sha256": "5" * 64,
         "untrusted_chain_sha256": "6" * 64,
         "certificate_validation_time_basis": "tsa_gen_time",
-        "revocation_assurance": "not_checked",
+        "revocation_assurance": "full_chain_crl_at_gen_time",
+        "revocation_evidence_kind": "offline_complete_crl",
+        "revocation_validation_time_basis": "tsa_gen_time",
+        "revocation_scope": "full_non_anchor_chain",
+        "revocation_network_fetch_used": False,
+        "revocation_delta_crls_used": False,
+        "revocation_indirect_crls_used": False,
+        "revocation_checked_certificate_count": 1,
+        "revocation_crl_count": 1,
+        "revocation_crl_der_sha256s": [crl_digest],
+        "revocation_crl_set_sha256": sha256(crl_digest.encode("ascii")).hexdigest(),
+        "revocation_crls": [
+            {
+                "issuer_name_sha256": "9" * 64,
+                "this_update_unix_ms": 1780000000000,
+                "next_update_unix_ms": 1780003600000,
+                "crl_number_hex": "0x1000",
+                "der_sha256": crl_digest,
+            }
+        ],
         "verification_time_unix_ms": 1780000002000,
         "verification_tool": "OpenSSL test",
     }
@@ -176,8 +197,10 @@ def temporal_study_timestamp_verification_payload(**overrides):
 
 
 def temporal_review_receipt_chain_verification_payload(**overrides):
+    crl_digest = "7" * 64
+    crl_set_digest = sha256(crl_digest.encode("ascii")).hexdigest()
     payload = {
-        "schema_version": "aura.military.temporal_review_receipt_chain_verification.v2",
+        "schema_version": "aura.military.temporal_review_receipt_chain_verification.v3",
         "status": "pass",
         "chronology_assurance": "individual_signed_rfc3161_receipts",
         "roster_assurance": "signed_rfc3161_precommitted",
@@ -185,7 +208,16 @@ def temporal_review_receipt_chain_verification_payload(**overrides):
         "timestamp_protocol": "RFC3161",
         "message_imprint_algorithm": "sha256",
         "certificate_validation_time_basis": "tsa_gen_time",
-        "revocation_assurance": "not_checked",
+        "revocation_assurance": "full_chain_crl_at_gen_time",
+        "revocation_evidence_kind": "offline_complete_crl",
+        "revocation_validation_time_basis": "tsa_gen_time",
+        "revocation_scope": "full_non_anchor_chain",
+        "revocation_network_fetch_used": False,
+        "revocation_delta_crls_used": False,
+        "revocation_indirect_crls_used": False,
+        "revocation_checked_timestamp_count": 5,
+        "revocation_unique_crl_count": 1,
+        "revocation_crl_evidence_set_sha256": crl_set_digest,
         "study_id": "external_temporal_study_2026",
         "preregistration_canonical_sha256": "b" * 64,
         "study_commitment_canonical_sha256": "c" * 64,
@@ -195,6 +227,7 @@ def temporal_review_receipt_chain_verification_payload(**overrides):
         "review_bundle_canonical_sha256": "f" * 64,
         "receipt_index_sha256": "7" * 64,
         "study_timestamp_response_sha256": "2" * 64,
+        "study_timestamp_revocation_crl_set_sha256": crl_set_digest,
         "reviewer_receipt_count": 2,
         "distinct_reviewer_signer_count": 2,
         "distinct_receipt_signer_count": 3,
@@ -641,6 +674,34 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
             "invalid_receipt_assurance",
         )
 
+    def test_temporal_receipt_chain_requires_every_timestamp_revocation_check(self):
+        payload = temporal_review_receipt_chain_verification_payload(
+            revocation_checked_timestamp_count=4
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_timestamp_verification_payload(),
+            ),
+            "invalid_receipt_summary",
+        )
+
+    def test_temporal_receipt_chain_binds_study_crl_set(self):
+        payload = temporal_review_receipt_chain_verification_payload(
+            study_timestamp_revocation_crl_set_sha256="0" * 64
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_timestamp_verification_payload(),
+            ),
+            "timestamp_binding_mismatch",
+        )
+
     def test_temporal_receipt_chain_rejects_identifier_export(self):
         payload = temporal_review_receipt_chain_verification_payload()
         payload["privacy"]["participant_tokens_exported"] = True
@@ -681,6 +742,20 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_study_attestation_verification_payload(),
             ),
             "invalid_timestamp_assurance",
+        )
+
+    def test_temporal_timestamp_rejects_inconsistent_crl_set(self):
+        payload = temporal_study_timestamp_verification_payload(
+            revocation_crl_set_sha256="0" * 64
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_timestamp_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_attestation_verification_payload(),
+            ),
+            "invalid_timestamp_revocation_evidence",
         )
 
     def test_temporal_timestamp_rejects_attestation_binding_mismatch(self):

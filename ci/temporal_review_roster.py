@@ -24,7 +24,7 @@ except ModuleNotFoundError:  # Direct execution from the ci/ directory.
 
 ROSTER_SCHEMA_VERSION = "aura.military.temporal_review_roster.v1"
 ATTESTATION_SCHEMA_VERSION = "aura.military.temporal_review_roster_attestation.v1"
-VERIFICATION_SCHEMA_VERSION = "aura.military.temporal_review_roster_verification.v1"
+VERIFICATION_SCHEMA_VERSION = "aura.military.temporal_review_roster_verification.v2"
 SIGNATURE_ALGORITHM = "Ed25519"
 ROSTER_ASSURANCE = "signed_rfc3161_precommitted"
 SIGNED_PAYLOAD_DOMAIN = b"aura.temporal-review.roster-attestation.v1\x00"
@@ -112,6 +112,7 @@ def parse_args() -> argparse.Namespace:
     verify_parser.add_argument("--timestamp-response", required=True)
     verify_parser.add_argument("--ca-file", required=True)
     verify_parser.add_argument("--untrusted-chain", default=None)
+    verify_parser.add_argument("--revocation-crl", action="append", required=True)
     verify_parser.add_argument("--expected-policy-oid", required=True)
     verify_parser.add_argument("--expected-tsa-spki-sha256", required=True)
     verify_parser.add_argument("--output", default=None)
@@ -359,6 +360,7 @@ def verify_roster(
     untrusted_chain_path: Path | None,
     expected_policy_oid: str,
     expected_tsa_spki_sha256: str,
+    revocation_crl_paths: list[Path],
 ) -> dict:
     if not crypto_support.safe_key_id(expected_key_id):
         raise RosterError("expected roster key_id is invalid")
@@ -431,6 +433,7 @@ def verify_roster(
         untrusted_chain_path,
         expected_policy_oid,
         expected_tsa_spki_sha256,
+        revocation_crl_paths,
     )
     roster_attestation_sha256 = timestamp.pop("timestamped_document_sha256")
     participants = roster["participants"]
@@ -532,6 +535,7 @@ def main() -> int:
         ]
         if args.untrusted_chain:
             protected.append(Path(args.untrusted_chain))
+        protected.extend(Path(path) for path in args.revocation_crl)
         if args.output:
             crypto_support.ensure_distinct_output(Path(args.output), protected)
         report = verify_roster(
@@ -546,6 +550,7 @@ def main() -> int:
             Path(args.untrusted_chain) if args.untrusted_chain else None,
             args.expected_policy_oid,
             args.expected_tsa_spki_sha256,
+            [Path(path) for path in args.revocation_crl],
         )
         if args.output:
             crypto_support.write_json_atomic(Path(args.output), report)

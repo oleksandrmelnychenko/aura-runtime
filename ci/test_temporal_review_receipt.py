@@ -37,11 +37,17 @@ class TemporalReviewReceiptTests(unittest.TestCase):
         cls.tsa_key = cls.fixture / "tsa-key.pem"
         cls.tsa_request = cls.fixture / "tsa-request.pem"
         cls.tsa_certificate = cls.fixture / "tsa-certificate.pem"
+        cls.revocation_crl = cls.fixture / "ca-revocation.crl.pem"
+        cls.ca_database = cls.fixture / "ca-database"
+        cls.ca_config = cls.fixture / "ca.cnf"
         cls.generate_ca()
         cls.generate_tsa()
+        cls.prepare_ca_database()
+        cls.generate_crl()
         cls.expected_tsa_spki = cls.spki_sha256(cls.tsa_certificate)
         cls.participant_spki = {}
         cls.write_base_material()
+        time.sleep(7.0)
         for participant in (
             "reviewer_a_8f2c10",
             "reviewer_b_41ad22",
@@ -183,6 +189,48 @@ class TemporalReviewReceiptTests(unittest.TestCase):
         )
 
     @classmethod
+    def prepare_ca_database(cls):
+        cls.ca_database.mkdir()
+        (cls.ca_database / "newcerts").mkdir()
+        (cls.ca_database / "index.txt").write_text("", encoding="ascii")
+        (cls.ca_database / "crlnumber").write_text("1000\n", encoding="ascii")
+        cls.ca_config.write_text(
+            "\n".join(
+                [
+                    "[ ca ]",
+                    "default_ca = local_ca",
+                    "[ local_ca ]",
+                    f"database = {cls.ca_database / 'index.txt'}",
+                    f"new_certs_dir = {cls.ca_database / 'newcerts'}",
+                    f"certificate = {cls.ca_certificate}",
+                    f"private_key = {cls.ca_key}",
+                    f"crlnumber = {cls.ca_database / 'crlnumber'}",
+                    "default_md = sha256",
+                    "default_crl_days = 1",
+                    "policy = policy_any",
+                    "[ policy_any ]",
+                    "commonName = supplied",
+                    "",
+                ]
+            ),
+            encoding="ascii",
+        )
+
+    @classmethod
+    def generate_crl(cls):
+        cls.run_openssl(
+            [
+                "ca",
+                "-gencrl",
+                "-batch",
+                "-config",
+                cls.ca_config.as_posix(),
+                "-out",
+                cls.revocation_crl.as_posix(),
+            ]
+        )
+
+    @classmethod
     def spki_sha256(cls, certificate):
         public_key = cls.run_openssl(
             ["x509", "-in", certificate.as_posix(), "-pubkey", "-noout"]
@@ -222,33 +270,44 @@ class TemporalReviewReceiptTests(unittest.TestCase):
             ],
         }
         cls.write_json(cls.fixture / "review-template.json", template)
-        study_gen_time = int(time.time() * 1000) - 5_400_000
-        study_accuracy_micros = 1_500_100
-        study_accuracy_ms = (study_accuracy_micros + 999) // 1000
-        cls.write_json(
-            cls.fixture / "study-timestamp.json",
-            {
-                "schema_version": "aura.military.temporal_study_timestamp_verification.v1",
-                "status": "pass",
-                "timestamp_protocol": "RFC3161",
-                "trusted_timestamp_assurance": "rfc3161_trusted_chain",
-                "message_imprint_algorithm": "sha256",
-                "certificate_validation_time_basis": "tsa_gen_time",
-                "revocation_assurance": "not_checked",
-                "request_nonce_present": True,
-                "study_id": cls.study_id,
-                "preregistration_canonical_sha256": cls.preregistration_sha256,
-                "commitment_canonical_sha256": cls.commitment_sha256,
-                "packet_canonical_sha256": cls.packet_sha256,
-                "response_sha256": "d" * 64,
-                "gen_time_unix_ms": study_gen_time,
-                "accuracy_micros": study_accuracy_micros,
-                "earliest_trusted_time_unix_ms": study_gen_time
-                - study_accuracy_ms,
-                "latest_trusted_time_unix_ms": study_gen_time
-                + study_accuracy_ms,
-            },
+        commitment = {
+            "schema_version": "aura.military.temporal_study_commitment.v1",
+            "study_id": cls.study_id,
+            "registered_at_ms": int(time.time() * 1000) - 60_000,
+            "corpus_class": "embargoed_external",
+            "preregistration_canonical_sha256": cls.preregistration_sha256,
+            "dataset_id": "external_temporal_holdout_2026",
+            "corpus_sha256": "e" * 64,
+            "packet_id": cls.packet_id,
+            "packet_canonical_sha256": cls.packet_sha256,
+            "case_count": len(cls.case_tokens),
+            "minimum_reviewers_per_case": 2,
+            "minimum_acceptable_exact_set_pair_agreement_rate": 0.8,
+            "minimum_acceptable_krippendorff_alpha": 0.8,
+        }
+        commitment_path = cls.fixture / "study-commitment.json"
+        request_path = cls.fixture / "study-commitment.tsq"
+        response_path = cls.fixture / "study-commitment.tsr"
+        cls.write_json(commitment_path, commitment)
+        cls.commitment_sha256 = sha256(
+            temporal_study_timestamp.study_support.canonical_commitment(commitment)
+        ).hexdigest()
+        temporal_study_timestamp.write_bytes_atomic(
+            request_path,
+            temporal_study_timestamp.create_request(commitment_path, cls.policy_oid),
         )
+        cls.issue_response(request_path, response_path)
+        report = temporal_study_timestamp.verify_timestamp(
+            commitment_path,
+            request_path,
+            response_path,
+            cls.ca_certificate,
+            cls.tsa_certificate,
+            cls.policy_oid,
+            cls.expected_tsa_spki,
+            [cls.revocation_crl],
+        )
+        cls.write_json(cls.fixture / "study-timestamp.json", report)
 
     @classmethod
     def submission(cls, participant, role, completed_at, links=None):
@@ -471,6 +530,7 @@ class TemporalReviewReceiptTests(unittest.TestCase):
             root / "tsa-certificate.pem",
             cls.policy_oid,
             cls.expected_tsa_spki,
+            [root / "ca-revocation.crl.pem"],
         )
 
     @classmethod
@@ -485,6 +545,7 @@ class TemporalReviewReceiptTests(unittest.TestCase):
             "timestamp_response": f"{participant}.tsr",
             "ca_file": "ca-certificate.pem",
             "untrusted_chain": "tsa-certificate.pem",
+            "revocation_crls": ["ca-revocation.crl.pem"],
             "expected_policy_oid": cls.policy_oid,
             "expected_tsa_spki_sha256": cls.expected_tsa_spki,
         }
@@ -501,6 +562,20 @@ class TemporalReviewReceiptTests(unittest.TestCase):
             "timestamp_response": "review-roster.tsr",
             "ca_file": "ca-certificate.pem",
             "untrusted_chain": "tsa-certificate.pem",
+            "revocation_crls": ["ca-revocation.crl.pem"],
+            "expected_policy_oid": cls.policy_oid,
+            "expected_tsa_spki_sha256": cls.expected_tsa_spki,
+        }
+
+    @classmethod
+    def study_timestamp_package(cls):
+        return {
+            "commitment": "study-commitment.json",
+            "timestamp_request": "study-commitment.tsq",
+            "timestamp_response": "study-commitment.tsr",
+            "ca_file": "ca-certificate.pem",
+            "untrusted_chain": "tsa-certificate.pem",
+            "revocation_crls": ["ca-revocation.crl.pem"],
             "expected_policy_oid": cls.policy_oid,
             "expected_tsa_spki_sha256": cls.expected_tsa_spki,
         }
@@ -532,9 +607,9 @@ class TemporalReviewReceiptTests(unittest.TestCase):
         cls.write_json(
             cls.fixture / "receipt-index.json",
             {
-                "schema_version": "aura.military.temporal_review_receipt_index.v2",
+                "schema_version": "aura.military.temporal_review_receipt_index.v3",
                 "review_bundle": "review-bundle.json",
-                "study_timestamp_verification": "study-timestamp.json",
+                "study_timestamp_receipt": cls.study_timestamp_package(),
                 "review_roster_receipt": cls.roster_package(),
                 "reviewer_receipts": [
                     cls.receipt_package("reviewer_a_8f2c10"),
@@ -562,6 +637,12 @@ class TemporalReviewReceiptTests(unittest.TestCase):
         )
         self.assertEqual(report["reviewer_receipt_count"], 2)
         self.assertEqual(report["roster_assurance"], "signed_rfc3161_precommitted")
+        self.assertEqual(
+            report["revocation_assurance"], "full_chain_crl_at_gen_time"
+        )
+        self.assertEqual(report["revocation_checked_timestamp_count"], 5)
+        self.assertEqual(report["revocation_unique_crl_count"], 1)
+        self.assertFalse(report["revocation_network_fetch_used"])
         self.assertTrue(report["commitment_before_roster"])
         self.assertTrue(report["roster_before_review_decisions"])
         self.assertTrue(report["commitment_before_review_receipts"])
@@ -588,16 +669,7 @@ class TemporalReviewReceiptTests(unittest.TestCase):
             ],
         )
         review["metrics"]["corpus_cases"] = len(self.case_tokens)
-        timestamp = manifest_fixtures.temporal_study_timestamp_verification_payload(
-            study_id=self.study_id,
-            preregistration_canonical_sha256=self.preregistration_sha256,
-            commitment_canonical_sha256=self.commitment_sha256,
-            packet_canonical_sha256=self.packet_sha256,
-            response_sha256=report["study_timestamp_response_sha256"],
-            latest_trusted_time_unix_ms=report[
-                "commitment_latest_trusted_time_unix_ms"
-            ],
-        )
+        timestamp = self.load_json("study-timestamp.json")
 
         self.assertEqual(
             generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
@@ -711,20 +783,17 @@ class TemporalReviewReceiptTests(unittest.TestCase):
         ):
             temporal_review_receipt.verify_chain(self.root / "receipt-index.json")
 
-    def test_commitment_interval_must_precede_reviewer_receipts(self):
+    def test_fabricated_study_timestamp_report_is_not_trusted_by_chain(self):
         study_timestamp = self.load_json("study-timestamp.json")
-        reviewer = self.verify_participant("reviewer_a_8f2c10", self.root)
-        reviewer_earliest = reviewer["earliest_trusted_time_unix_ms"]
-        study_timestamp["gen_time_unix_ms"] = reviewer_earliest
-        study_timestamp["accuracy_micros"] = 0
-        study_timestamp["earliest_trusted_time_unix_ms"] = reviewer_earliest
-        study_timestamp["latest_trusted_time_unix_ms"] = reviewer_earliest
+        study_timestamp["status"] = "fail"
+        study_timestamp["latest_trusted_time_unix_ms"] = 2**63 - 1
         self.save_json("study-timestamp.json", study_timestamp)
 
-        with self.assertRaisesRegex(
-            temporal_review_receipt.ReceiptError, "overlaps reviewer receipts"
-        ):
-            temporal_review_receipt.verify_chain(self.root / "receipt-index.json")
+        report = temporal_review_receipt.verify_chain(
+            self.root / "receipt-index.json"
+        )
+
+        self.assertEqual(report["status"], "pass")
 
     def test_adjudicator_must_bind_exact_reviewer_receipts(self):
         submission = self.load_json("adjudicator_c_77b901.submission.json")
@@ -756,13 +825,30 @@ class TemporalReviewReceiptTests(unittest.TestCase):
                 self.root / "reviewer_a_8f2c10.submission.json",
             )
 
-    def test_inconsistent_study_timestamp_interval_is_rejected(self):
-        study_timestamp = self.load_json("study-timestamp.json")
-        study_timestamp["latest_trusted_time_unix_ms"] += 1
-        self.save_json("study-timestamp.json", study_timestamp)
+    def test_chain_output_cannot_overwrite_revocation_evidence(self):
+        with self.assertRaisesRegex(
+            temporal_review_receipt.ReceiptError, "must not overwrite"
+        ):
+            temporal_review_receipt.verify_chain(
+                self.root / "receipt-index.json",
+                self.root / "ca-revocation.crl.pem",
+            )
+
+    def test_tampered_study_commitment_is_rejected_from_raw_receipt(self):
+        commitment = self.load_json("study-commitment.json")
+        commitment["case_count"] += 1
+        self.save_json("study-commitment.json", commitment)
+
+        with self.assertRaises(temporal_review_receipt.ReceiptError):
+            temporal_review_receipt.verify_chain(self.root / "receipt-index.json")
+
+    def test_missing_nested_crl_is_rejected(self):
+        index = self.load_json("receipt-index.json")
+        index["reviewer_receipts"][0]["revocation_crls"] = []
+        self.save_json("receipt-index.json", index)
 
         with self.assertRaisesRegex(
-            temporal_review_receipt.ReceiptError, "interval is inconsistent"
+            temporal_review_receipt.ReceiptError, "revocation_crls"
         ):
             temporal_review_receipt.verify_chain(self.root / "receipt-index.json")
 

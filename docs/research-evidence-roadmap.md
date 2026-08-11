@@ -111,11 +111,16 @@ receipt interval. Participant roles, affiliation claims, signing keys, and
 governance-record digests are fixed in a separately signed and RFC 3161
 timestamped roster before declared review completion. Reviewer and adjudicator
 submissions are independently signed, timestamped, and joined by an exact
-receipt-digest chain. The
+receipt-digest chain. Every RFC 3161 verification now requires offline complete
+CRLs for the full non-anchor TSA chain at `genTime`; receipt-chain v3 also
+re-verifies the raw study timestamp package instead of trusting a derived JSON
+status. The
 v5 review report binds its metrics to the canonical input-bundle digest. The
 remaining limit is explicit: this establishes document existence and order,
 not the truth of governance declarations, reviewer expertise, actual
 independence, effective blinding, or absence of coordination.
+Historical CRL status likewise does not prove absence of undiscovered key
+compromise or future backdated revocation and is not perpetual validity.
 
 ## Evidence Maturity
 

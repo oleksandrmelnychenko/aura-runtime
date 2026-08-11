@@ -14,7 +14,7 @@ the claim that the complete label set was frozen before adjudication.
 
 ## What the chain proves
 
-A passing `aura.military.temporal_review_receipt_chain_verification.v2` report
+A passing `aura.military.temporal_review_receipt_chain_verification.v3` report
 proves all of the following:
 
 - the study commitment's accuracy-adjusted trusted upper time is earlier than
@@ -29,6 +29,8 @@ proves all of the following:
 - every reviewer attestation is bound to a nonce-bearing RFC 3161 response, a
   pinned policy OID, a trusted certificate chain at `genTime`, and a pinned TSA
   SPKI digest;
+- every timestamp has issuer-signed complete CRLs covering every non-anchor
+  certificate in the selected TSA chain at `genTime`;
 - the adjudicator submission names the exact reviewer participant token,
   attestation digest, and timestamp-response digest for every reviewer;
 - all reviewer receipt upper bounds are earlier than every adjudication
@@ -51,10 +53,10 @@ interest declarations, access controls, blinding records, and independent
 study oversight. The bundle's participant and affiliation tokens are
 pseudonymous claims whose real-world mapping remains controlled study material.
 
-Certificate revocation is currently reported as `not_checked`. Archive the TSA
-certificate chain, applicable CRL or OCSP material, policy statement, request,
-and response with the controlled evidence package. Do not describe this phase
-as revocation-checked until an explicit historical revocation verifier exists.
+The chain reports `full_chain_crl_at_gen_time` after offline CRL validation.
+This proves PKIX revocation status under the archived CRLs at `genTime`; it does
+not rule out later backdated revocation, undiscovered compromise, or CA/TSA
+policy failure. See `docs/rfc3161-historical-revocation.md`.
 
 ## Participant keys
 
@@ -136,6 +138,8 @@ python3 ci/temporal_review_receipt.py verify \
   --timestamp-response review/reviewer-a.tsr \
   --ca-file trust/tsa-roots.pem \
   --untrusted-chain trust/tsa-intermediates.pem \
+  --revocation-crl trust/tsa-issuer.crl.pem \
+  --revocation-crl trust/intermediate-issuer.crl.pem \
   --expected-policy-oid 1.2.3.4.1 \
   --expected-tsa-spki-sha256 '<64 lowercase hex>' \
   --output /protected/reviewer-a.receipt-verification.json \
@@ -191,16 +195,25 @@ different label bundle.
 
 ## Chain index and aggregate verification
 
-The controlled v2 receipt index names the review bundle, trusted study
-timestamp verification, precommitted roster receipt, every reviewer package,
-and the single adjudicator package.
+The controlled v3 receipt index names the review bundle and raw trusted study
+timestamp receipt, precommitted roster receipt, every reviewer package, and the
+single adjudicator package. A copied study timestamp report is not trusted.
 Relative paths are resolved from the index directory.
 
 ```json
 {
-  "schema_version": "aura.military.temporal_review_receipt_index.v2",
+  "schema_version": "aura.military.temporal_review_receipt_index.v3",
   "review_bundle": "temporal-review-bundle.json",
-  "study_timestamp_verification": "temporal-study-timestamp-verification.json",
+  "study_timestamp_receipt": {
+    "commitment": "temporal-study-commitment.json",
+    "timestamp_request": "temporal-study-commitment.tsq",
+    "timestamp_response": "temporal-study-commitment.tsr",
+    "ca_file": "tsa-roots.pem",
+    "untrusted_chain": "tsa-intermediates.pem",
+    "revocation_crls": ["tsa-issuer.crl.pem", "intermediate-issuer.crl.pem"],
+    "expected_policy_oid": "1.2.3.4.1",
+    "expected_tsa_spki_sha256": "<64 lowercase hex>"
+  },
   "review_roster_receipt": {
     "roster": "temporal-review-roster.json",
     "attestation": "temporal-review-roster.attestation.json",
@@ -211,6 +224,7 @@ Relative paths are resolved from the index directory.
     "timestamp_response": "temporal-review-roster.tsr",
     "ca_file": "tsa-roots.pem",
     "untrusted_chain": "tsa-intermediates.pem",
+    "revocation_crls": ["tsa-issuer.crl.pem", "intermediate-issuer.crl.pem"],
     "expected_policy_oid": "1.2.3.4.1",
     "expected_tsa_spki_sha256": "<64 lowercase hex>"
   },
@@ -225,6 +239,7 @@ Relative paths are resolved from the index directory.
       "timestamp_response": "reviewer-a.tsr",
       "ca_file": "tsa-roots.pem",
       "untrusted_chain": "tsa-intermediates.pem",
+      "revocation_crls": ["tsa-issuer.crl.pem", "intermediate-issuer.crl.pem"],
       "expected_policy_oid": "1.2.3.4.1",
       "expected_tsa_spki_sha256": "<64 lowercase hex>"
     }
@@ -239,6 +254,7 @@ Relative paths are resolved from the index directory.
     "timestamp_response": "adjudicator.tsr",
     "ca_file": "tsa-roots.pem",
     "untrusted_chain": "tsa-intermediates.pem",
+    "revocation_crls": ["tsa-issuer.crl.pem", "intermediate-issuer.crl.pem"],
     "expected_policy_oid": "1.2.3.4.1",
     "expected_tsa_spki_sha256": "<64 lowercase hex>"
   }
@@ -259,8 +275,8 @@ The output is aggregate and release-safe: it contains counts, study and packet
 bindings, bundle digests, trusted interval boundaries, and proof flags. It does
 not contain participant tokens, affiliation tokens, individual public-key
 digests, case tokens, decision labels, or raw text. Keep submissions,
-attestations, public keys, timestamp requests and responses, and the index in
-controlled evidence storage.
+attestations, public keys, timestamp requests and responses, CRLs, and the index
+in controlled evidence storage.
 
 ## Release evidence gate
 

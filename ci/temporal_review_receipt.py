@@ -30,15 +30,15 @@ ATTESTATION_SCHEMA_VERSION = (
     "aura.military.temporal_review_submission_attestation.v1"
 )
 VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_review_receipt_verification.v1"
+    "aura.military.temporal_review_receipt_verification.v2"
 )
-INDEX_SCHEMA_VERSION = "aura.military.temporal_review_receipt_index.v2"
+INDEX_SCHEMA_VERSION = "aura.military.temporal_review_receipt_index.v3"
 CHAIN_VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_review_receipt_chain_verification.v2"
+    "aura.military.temporal_review_receipt_chain_verification.v3"
 )
 REVIEW_BUNDLE_SCHEMA_VERSION = "aura.military.temporal_independent_review.v3"
 STUDY_TIMESTAMP_SCHEMA_VERSION = (
-    "aura.military.temporal_study_timestamp_verification.v1"
+    "aura.military.temporal_study_timestamp_verification.v2"
 )
 SIGNATURE_ALGORITHM = "Ed25519"
 TIMESTAMP_ASSURANCE = "rfc3161_trusted_chain"
@@ -101,13 +101,14 @@ PACKAGE_FIELDS = {
     "timestamp_response",
     "ca_file",
     "untrusted_chain",
+    "revocation_crls",
     "expected_policy_oid",
     "expected_tsa_spki_sha256",
 }
 INDEX_FIELDS = {
     "schema_version",
     "review_bundle",
-    "study_timestamp_verification",
+    "study_timestamp_receipt",
     "review_roster_receipt",
     "reviewer_receipts",
     "adjudicator_receipt",
@@ -122,6 +123,17 @@ ROSTER_PACKAGE_FIELDS = {
     "timestamp_response",
     "ca_file",
     "untrusted_chain",
+    "revocation_crls",
+    "expected_policy_oid",
+    "expected_tsa_spki_sha256",
+}
+STUDY_TIMESTAMP_PACKAGE_FIELDS = {
+    "commitment",
+    "timestamp_request",
+    "timestamp_response",
+    "ca_file",
+    "untrusted_chain",
+    "revocation_crls",
     "expected_policy_oid",
     "expected_tsa_spki_sha256",
 }
@@ -205,6 +217,7 @@ def add_receipt_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--timestamp-response", required=True)
     parser.add_argument("--ca-file", required=True)
     parser.add_argument("--untrusted-chain", default=None)
+    parser.add_argument("--revocation-crl", action="append", required=True)
     parser.add_argument("--expected-policy-oid", required=True)
     parser.add_argument("--expected-tsa-spki-sha256", required=True)
 
@@ -535,6 +548,7 @@ def verify_receipt(
     untrusted_chain_path: Path | None,
     expected_policy_oid: str,
     expected_tsa_spki_sha256: str,
+    revocation_crl_paths: list[Path],
 ) -> dict:
     if not timestamp_support.lowercase_sha256(expected_signer_spki_sha256):
         raise ReceiptError("expected review signer SPKI digest is malformed")
@@ -562,6 +576,7 @@ def verify_receipt(
         untrusted_chain_path,
         expected_policy_oid,
         expected_tsa_spki_sha256,
+        revocation_crl_paths,
     )
     attestation_file_sha256 = timestamp.pop("timestamped_document_sha256")
     return {
@@ -800,6 +815,9 @@ def load_package(package: object, base: Path) -> dict:
         package.get("expected_tsa_spki_sha256")
     ):
         raise ReceiptError("review receipt package TSA SPKI digest is invalid")
+    result["revocation_crls"] = resolve_crl_paths(
+        package.get("revocation_crls"), base, "review receipt"
+    )
     return result
 
 
@@ -839,6 +857,63 @@ def load_roster_package(package: object, base: Path) -> dict:
             raise ReceiptError(f"review roster receipt package {field} is invalid")
     if not timestamp_support.safe_oid(package.get("expected_policy_oid")):
         raise ReceiptError("review roster receipt policy OID is invalid")
+    result["revocation_crls"] = resolve_crl_paths(
+        package.get("revocation_crls"), base, "review roster receipt"
+    )
+    return result
+
+
+def resolve_crl_paths(value: object, base: Path, label: str) -> list[Path]:
+    if (
+        not isinstance(value, list)
+        or not 1 <= len(value) <= timestamp_support.MAX_CRL_COUNT
+        or any(not isinstance(item, str) or not item for item in value)
+    ):
+        raise ReceiptError(f"{label} revocation_crls are invalid")
+    paths = []
+    for item in value:
+        path = Path(item)
+        paths.append(
+            (base / path).resolve() if not path.is_absolute() else path.resolve()
+        )
+    if len(set(paths)) != len(paths):
+        raise ReceiptError(f"{label} repeats a revocation CRL path")
+    return paths
+
+
+def load_study_timestamp_package(package: object, base: Path) -> dict:
+    if not isinstance(package, dict) or set(package) != STUDY_TIMESTAMP_PACKAGE_FIELDS:
+        raise ReceiptError("study timestamp receipt package fields are invalid")
+    result = dict(package)
+    for field in ("commitment", "timestamp_request", "timestamp_response", "ca_file"):
+        value = package.get(field)
+        if not isinstance(value, str) or not value:
+            raise ReceiptError(f"study timestamp receipt {field} is invalid")
+        path = Path(value)
+        result[field] = (
+            (base / path).resolve() if not path.is_absolute() else path.resolve()
+        )
+    chain = package.get("untrusted_chain")
+    if chain is not None and (not isinstance(chain, str) or not chain):
+        raise ReceiptError("study timestamp receipt untrusted_chain is invalid")
+    result["untrusted_chain"] = (
+        None
+        if chain is None
+        else (
+            (base / Path(chain)).resolve()
+            if not Path(chain).is_absolute()
+            else Path(chain).resolve()
+        )
+    )
+    result["revocation_crls"] = resolve_crl_paths(
+        package.get("revocation_crls"), base, "study timestamp receipt"
+    )
+    if not timestamp_support.safe_oid(package.get("expected_policy_oid")):
+        raise ReceiptError("study timestamp receipt policy OID is invalid")
+    if not timestamp_support.lowercase_sha256(
+        package.get("expected_tsa_spki_sha256")
+    ):
+        raise ReceiptError("study timestamp receipt TSA SPKI digest is invalid")
     return result
 
 
@@ -859,6 +934,7 @@ def verify_package(package: dict) -> tuple[dict, dict]:
         package["untrusted_chain"],
         package["expected_policy_oid"],
         package["expected_tsa_spki_sha256"],
+        package["revocation_crls"],
     )
     if not hmac.compare_digest(
         sha256(submission_raw).hexdigest(), report["submission_file_sha256"]
@@ -875,10 +951,12 @@ def validate_study_timestamp(payload: dict) -> None:
         or payload.get("trusted_timestamp_assurance") != TIMESTAMP_ASSURANCE
         or payload.get("message_imprint_algorithm") != "sha256"
         or payload.get("certificate_validation_time_basis") != "tsa_gen_time"
-        or payload.get("revocation_assurance") != "not_checked"
+        or payload.get("revocation_assurance")
+        != timestamp_support.REVOCATION_ASSURANCE
         or payload.get("request_nonce_present") is not True
     ):
         raise ReceiptError("study timestamp verification is not high assurance")
+    timestamp_support.validate_revocation_claims(payload)
     for field in (
         "commitment_canonical_sha256",
         "preregistration_canonical_sha256",
@@ -921,18 +999,15 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         raise ReceiptError("temporal review receipt index reviewer count is invalid")
     base = index_path.parent.resolve()
     review_bundle_value = index.get("review_bundle")
-    study_timestamp_value = index.get("study_timestamp_verification")
-    if not isinstance(review_bundle_value, str) or not isinstance(study_timestamp_value, str):
-        raise ReceiptError("temporal review receipt index paths are invalid")
+    if not isinstance(review_bundle_value, str):
+        raise ReceiptError("temporal review receipt index review bundle path is invalid")
     review_bundle_path = (
         (base / review_bundle_value).resolve()
         if not Path(review_bundle_value).is_absolute()
         else Path(review_bundle_value)
     )
-    study_timestamp_path = (
-        (base / study_timestamp_value).resolve()
-        if not Path(study_timestamp_value).is_absolute()
-        else Path(study_timestamp_value)
+    study_timestamp_package = load_study_timestamp_package(
+        index.get("study_timestamp_receipt"), base
     )
     reviewer_packages = [load_package(package, base) for package in reviewer_packages_raw]
     adjudicator_package = load_package(index.get("adjudicator_receipt"), base)
@@ -952,6 +1027,11 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
             )
             if package[field] is not None
         ]
+        package_crl_paths = [
+            crl
+            for package in [*reviewer_packages, adjudicator_package]
+            for crl in package["revocation_crls"]
+        ]
         roster_paths = [
             roster_package[field]
             for field in (
@@ -965,14 +1045,28 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
             )
             if roster_package[field] is not None
         ]
+        study_paths = [
+            study_timestamp_package[field]
+            for field in (
+                "commitment",
+                "timestamp_request",
+                "timestamp_response",
+                "ca_file",
+                "untrusted_chain",
+            )
+            if study_timestamp_package[field] is not None
+        ]
         crypto_support.ensure_distinct_output(
             output_path,
             [
                 index_path,
                 review_bundle_path,
-                study_timestamp_path,
+                *study_paths,
+                *study_timestamp_package["revocation_crls"],
                 *roster_paths,
+                *roster_package["revocation_crls"],
                 *package_paths,
+                *package_crl_paths,
             ],
         )
 
@@ -980,10 +1074,15 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         review_bundle_path, MAX_REVIEW_BUNDLE_BYTES, "temporal review bundle"
     )
     template = blank_template_from_bundle(review_bundle)
-    _, study_timestamp = read_json(
-        study_timestamp_path,
-        MAX_TIMESTAMP_REPORT_BYTES,
-        "temporal study timestamp verification",
+    study_timestamp = timestamp_support.verify_timestamp(
+        study_timestamp_package["commitment"],
+        study_timestamp_package["timestamp_request"],
+        study_timestamp_package["timestamp_response"],
+        study_timestamp_package["ca_file"],
+        study_timestamp_package["untrusted_chain"],
+        study_timestamp_package["expected_policy_oid"],
+        study_timestamp_package["expected_tsa_spki_sha256"],
+        study_timestamp_package["revocation_crls"],
     )
     validate_study_timestamp(study_timestamp)
 
@@ -1000,6 +1099,7 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         roster_package["untrusted_chain"],
         roster_package["expected_policy_oid"],
         roster_package["expected_tsa_spki_sha256"],
+        roster_package["revocation_crls"],
     )
     if not hmac.compare_digest(
         sha256(roster_raw).hexdigest(), roster_report["roster_file_sha256"]
@@ -1151,6 +1251,21 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         for report in [*reviewer_reports, adjudicator_report]
     }
     tsa_spki.add(roster_report["tsa_signer_spki_sha256"])
+    timestamp_reports = [
+        study_timestamp,
+        roster_report,
+        *reviewer_reports,
+        adjudicator_report,
+    ]
+    for report in timestamp_reports:
+        timestamp_support.validate_revocation_claims(report)
+    revocation_crl_digests = sorted(
+        {
+            digest
+            for report in timestamp_reports
+            for digest in report["revocation_crl_der_sha256s"]
+        }
+    )
     return {
         "schema_version": CHAIN_VERIFICATION_SCHEMA_VERSION,
         "status": "pass",
@@ -1159,7 +1274,18 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         "timestamp_protocol": "RFC3161",
         "message_imprint_algorithm": "sha256",
         "certificate_validation_time_basis": "tsa_gen_time",
-        "revocation_assurance": "not_checked",
+        "revocation_assurance": timestamp_support.REVOCATION_ASSURANCE,
+        "revocation_evidence_kind": timestamp_support.REVOCATION_EVIDENCE_KIND,
+        "revocation_validation_time_basis": "tsa_gen_time",
+        "revocation_scope": "full_non_anchor_chain",
+        "revocation_network_fetch_used": False,
+        "revocation_delta_crls_used": False,
+        "revocation_indirect_crls_used": False,
+        "revocation_checked_timestamp_count": len(timestamp_reports),
+        "revocation_unique_crl_count": len(revocation_crl_digests),
+        "revocation_crl_evidence_set_sha256": sha256(
+            "\n".join(revocation_crl_digests).encode("ascii")
+        ).hexdigest(),
         "study_id": review_bundle["study_id"],
         "preregistration_canonical_sha256": review_bundle[
             "preregistration_canonical_sha256"
@@ -1180,6 +1306,9 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         ).hexdigest(),
         "receipt_index_sha256": sha256(index_raw).hexdigest(),
         "study_timestamp_response_sha256": study_timestamp["response_sha256"],
+        "study_timestamp_revocation_crl_set_sha256": study_timestamp[
+            "revocation_crl_set_sha256"
+        ],
         "roster_assurance": roster_report["roster_assurance"],
         "roster_canonical_sha256": roster_report["roster_canonical_sha256"],
         "roster_attestation_sha256": roster_report["roster_attestation_sha256"],
@@ -1256,6 +1385,7 @@ def package_from_args(args: argparse.Namespace) -> dict:
         "timestamp_response": Path(args.timestamp_response),
         "ca_file": Path(args.ca_file),
         "untrusted_chain": Path(args.untrusted_chain) if args.untrusted_chain else None,
+        "revocation_crls": [Path(path) for path in args.revocation_crl],
         "expected_policy_oid": args.expected_policy_oid,
         "expected_tsa_spki_sha256": args.expected_tsa_spki_sha256,
     }
@@ -1314,7 +1444,8 @@ def main() -> int:
                             "untrusted_chain",
                         )
                         if package[field] is not None
-                    ],
+                    ]
+                    + package["revocation_crls"],
                 )
             print_or_write_report(report, args.output, "temporal review receipt verification")
             return 0
