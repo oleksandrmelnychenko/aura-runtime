@@ -23,7 +23,7 @@ use crate::context::tracker::{
     ConversationTracker, TrackerConfig, TrackerWireState, TRACKER_STATE_VERSION,
 };
 use crate::domain_runtime::{
-    build_blocked_url_signal, build_domain_memory_signals, build_domain_observations,
+    build_blocked_url_signal, build_domain_memory_observations, build_domain_observations,
     build_domain_temporal_signals, confidence_from_score as score_to_confidence,
     context_confirmed_domain_signals, decide_action_with_domain_overrides,
     detection_enabled_for_threat, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
@@ -1119,6 +1119,31 @@ impl Analyzer {
         } else {
             None
         }
+    }
+
+    fn retain_confirmed_ml_safety_hint(
+        original: Option<MlSafetyHint>,
+        active_signals: &[DetectionSignal],
+    ) -> Option<MlSafetyHint> {
+        let original = original?.sanitized();
+        let mut confirmed = MlSafetyHint::default();
+        let mut found = false;
+
+        for signal in active_signals {
+            if signal.layer != DetectionLayer::MlClassification {
+                continue;
+            }
+            match signal.threat_type {
+                ThreatType::Grooming => confirmed.grooming = original.grooming,
+                ThreatType::Bullying => confirmed.bullying = original.bullying,
+                ThreatType::SelfHarm => confirmed.self_harm = original.self_harm,
+                ThreatType::Manipulation => confirmed.manipulation = original.manipulation,
+                _ => continue,
+            }
+            found = true;
+        }
+
+        found.then_some(confirmed)
     }
 }
 

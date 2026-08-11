@@ -41,6 +41,30 @@ impl Analyzer {
             .context_tracker
             .contact_profiler()
             .snapshot(&input.sender_id);
+        let confirmation = self.context_interpreter.interpret_observations(
+            input,
+            input.text.as_deref().map(truncate_text),
+            None,
+            None,
+            raw_observations.clone(),
+            contact_snapshot.as_ref(),
+        );
+        let confirmed_domain_signals = context_confirmed_domain_signals(
+            domain_output.as_ref(),
+            &confirmation.adjusted_signals,
+        );
+        let confirmed_ml_safety_hint =
+            Self::retain_confirmed_ml_safety_hint(ml_safety_hint, &confirmation.adjusted_signals);
+        let confirmed_domain_output = self.domain_runtime.commit_confirmed_for_mode_with_hints(
+            domain_mode,
+            protection,
+            input,
+            confirmed_ml_safety_hint,
+            &confirmed_domain_signals,
+        );
+        raw_observations.extend(build_domain_memory_observations(
+            confirmed_domain_output.as_ref(),
+        ));
         let interpretation = self.context_interpreter.interpret_observations(
             input,
             input.text.as_deref().map(truncate_text),
@@ -57,19 +81,6 @@ impl Analyzer {
             self.config.account_type,
             &mut signals,
         );
-        let confirmed_domain_signals =
-            context_confirmed_domain_signals(domain_output.as_ref(), &signals);
-        let confirmed_ml_safety_hint = Self::extract_ml_safety_hint(&signals);
-        let confirmed_domain_output = self.domain_runtime.commit_confirmed_for_mode_with_hints(
-            domain_mode,
-            protection,
-            input,
-            confirmed_ml_safety_hint,
-            &confirmed_domain_signals,
-        );
-        signals.extend(build_domain_memory_signals(
-            confirmed_domain_output.as_ref(),
-        ));
 
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;
@@ -188,6 +199,33 @@ impl Analyzer {
             .context_tracker
             .contact_profiler()
             .snapshot(&input.sender_id);
+        let confirmation = {
+            let timeline = self.context_tracker.timeline(&input.conversation_id);
+            self.context_interpreter.interpret_observations(
+                input,
+                input.text.as_deref().map(truncate_text),
+                Some(timestamp_ms),
+                timeline,
+                raw_observations.clone(),
+                contact_snapshot.as_ref(),
+            )
+        };
+        let confirmed_domain_signals = context_confirmed_domain_signals(
+            domain_output.as_ref(),
+            &confirmation.adjusted_signals,
+        );
+        let confirmed_ml_safety_hint =
+            Self::retain_confirmed_ml_safety_hint(ml_safety_hint, &confirmation.adjusted_signals);
+        let confirmed_domain_output = self.domain_runtime.commit_confirmed_for_mode_with_hints(
+            domain_mode,
+            protection,
+            input,
+            confirmed_ml_safety_hint,
+            &confirmed_domain_signals,
+        );
+        raw_observations.extend(build_domain_memory_observations(
+            confirmed_domain_output.as_ref(),
+        ));
         let interpretation_reason_codes;
         let interpretation = {
             let timeline = self.context_tracker.timeline(&input.conversation_id);
@@ -287,19 +325,6 @@ impl Analyzer {
             self.config.account_type,
             &mut signals,
         );
-        let confirmed_domain_signals =
-            context_confirmed_domain_signals(domain_output.as_ref(), &signals);
-        let confirmed_ml_safety_hint = Self::extract_ml_safety_hint(&signals);
-        let confirmed_domain_output = self.domain_runtime.commit_confirmed_for_mode_with_hints(
-            domain_mode,
-            protection,
-            input,
-            confirmed_ml_safety_hint,
-            &confirmed_domain_signals,
-        );
-        signals.extend(build_domain_memory_signals(
-            confirmed_domain_output.as_ref(),
-        ));
 
         let elapsed = start.elapsed();
         let analysis_time_us = elapsed.as_micros() as u64;

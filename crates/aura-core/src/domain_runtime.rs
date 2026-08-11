@@ -801,12 +801,11 @@ fn domain_signal_reason_code(signal: &aura_domain::DomainSignal) -> String {
     }
 }
 
-/// Projects domain candidates through the final core signal set.
+/// Selects only domain candidates accepted by contextual interpretation.
 ///
-/// Candidates absent from `active_signals` were rejected by contextual
-/// interpretation. When context lowered a candidate's score, domain-owned
-/// action, priority, and severity overrides are removed so they cannot undo
-/// that decision during the post-confirmation policy pass.
+/// Confirmation is intentionally binary. A surviving candidate retains its
+/// domain-owned policy metadata while a rejected candidate is excluded from
+/// both memory and the post-confirmation action pass.
 pub(crate) fn context_confirmed_domain_signals(
     domain_output: Option<&DomainOutput>,
     active_signals: &[DetectionSignal],
@@ -820,24 +819,12 @@ pub(crate) fn context_confirmed_domain_signals(
         .iter()
         .filter_map(|candidate| {
             let reason_code = domain_signal_reason_code(candidate);
-            let active = active_signals.iter().find(|active| {
+            active_signals.iter().find(|active| {
                 active.reason_code == reason_code
                     && (active.threat_subtype.is_empty()
                         || active.threat_subtype == candidate.threat_key)
             })?;
-            let mut confirmed = candidate.clone();
-            let adjusted_score = if active.score.is_finite() {
-                active.score.clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            if adjusted_score + f32::EPSILON < confirmed.score {
-                confirmed.action = None;
-                confirmed.priority = None;
-                confirmed.severity = None;
-            }
-            confirmed.score = adjusted_score;
-            Some(confirmed)
+            Some(candidate.clone())
         })
         .collect()
 }
@@ -1055,9 +1042,9 @@ pub fn build_domain_temporal_signals(
         .collect()
 }
 
-pub(crate) fn build_domain_memory_signals(
+pub(crate) fn build_domain_memory_observations(
     domain_output: Option<&DomainConfirmedOutput>,
-) -> Vec<DetectionSignal> {
+) -> Vec<RawObservation> {
     let Some(domain_output) = domain_output else {
         return Vec::new();
     };
@@ -1068,7 +1055,7 @@ pub(crate) fn build_domain_memory_signals(
         .filter_map(|domain_signal| {
             let threat_type = domain_signal_threat_type(domain_signal.threat_type.as_deref());
             (threat_type != ThreatType::None).then(|| {
-                DetectionSignal::context(
+                let signal = DetectionSignal::context(
                     threat_type,
                     domain_signal.score,
                     domain_signal_confidence(
@@ -1079,7 +1066,8 @@ pub(crate) fn build_domain_memory_signals(
                     domain_signal_reason_code(domain_signal),
                     "Domain memory signal after contextual confirmation",
                 )
-                .with_threat_subtype(domain_signal.threat_key.clone())
+                .with_threat_subtype(domain_signal.threat_key.clone());
+                RawObservation::signal(signal)
             })
         })
         .collect()
@@ -1243,14 +1231,15 @@ fn propaganda_source_subtype(rule_id: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_blocked_url_signal, build_domain_observations, build_domain_temporal_input,
-        build_domain_temporal_signals, context_confirmed_domain_signals,
-        core_action_from_domain_action, decide_action_with_domain_overrides,
-        detection_enabled_for_threat, domain_action_reason_marker, domain_conversation_type,
-        domain_risk_profile_for_mode, domain_signal_confidence, domain_signal_threat_type,
-        domain_threat_priority, event_kind_from_domain, is_domain_threat, is_link_family_threat,
-        is_propaganda_threat, map_domain_threat_to_event_kind, map_ml_signal_to_event_kind,
-        map_pattern_threat_subtype, map_rule_or_threat_to_event_kind, map_threat_to_event_kind,
+        build_blocked_url_signal, build_domain_memory_observations, build_domain_observations,
+        build_domain_temporal_input, build_domain_temporal_signals,
+        context_confirmed_domain_signals, core_action_from_domain_action,
+        decide_action_with_domain_overrides, detection_enabled_for_threat,
+        domain_action_reason_marker, domain_conversation_type, domain_risk_profile_for_mode,
+        domain_signal_confidence, domain_signal_threat_type, domain_threat_priority,
+        event_kind_from_domain, is_domain_threat, is_link_family_threat, is_propaganda_threat,
+        map_domain_threat_to_event_kind, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
+        map_rule_or_threat_to_event_kind, map_threat_to_event_kind,
         merge_active_domain_temporal_output_effects, merge_domain_output_effects,
         parse_domain_threat_type, parse_threat_type_label, should_skip_pattern_match,
         should_skip_pattern_rule_override, threat_priority_for_sort,
@@ -1268,7 +1257,8 @@ mod tests {
     };
     use crate::{AuraConfig, AuraDomainRuntime, DomainMode, MessageInput};
     use aura_domain::{
-        DomainAction, DomainEventKind, DomainOutput, DomainSignal, DomainTemporalOutput,
+        DomainAction, DomainConfirmedOutput, DomainEventKind, DomainOutput, DomainSignal,
+        DomainTemporalOutput,
     };
     use aura_patterns::BlockedUrlMatch;
     use std::collections::HashSet;
@@ -1607,7 +1597,7 @@ mod tests {
     }
 
     #[test]
-    fn contextual_confirmation_rejects_absent_candidates_and_neutralizes_softened_overrides() {
+    fn contextual_confirmation_rejects_absent_candidates_and_preserves_confirmed_policy() {
         let candidate = DomainSignal {
             threat_key: "kids_selfharm_crisis".to_string(),
             reason_code: "kids.selfharm.crisis".to_string(),
@@ -1635,10 +1625,33 @@ mod tests {
         let confirmed = context_confirmed_domain_signals(Some(&output), &[active]);
 
         assert_eq!(confirmed.len(), 1);
-        assert!((confirmed[0].score - 0.42).abs() < f32::EPSILON);
-        assert_eq!(confirmed[0].action, None);
-        assert_eq!(confirmed[0].priority, None);
-        assert_eq!(confirmed[0].severity, None);
+        assert!((confirmed[0].score - 0.98).abs() < f32::EPSILON);
+        assert_eq!(confirmed[0].action, Some(DomainAction::Warn));
+        assert_eq!(confirmed[0].priority, Some(100));
+        assert_eq!(confirmed[0].severity.as_deref(), Some("critical"));
+    }
+
+    #[test]
+    fn memory_derived_domain_signal_never_becomes_a_source_event() {
+        let output = DomainConfirmedOutput {
+            confirmed_signals: Vec::new(),
+            derived_signals: vec![DomainSignal {
+                threat_key: "kids_grooming_trajectory".to_string(),
+                reason_code: "kids.memory.grooming_trajectory".to_string(),
+                score: 0.87,
+                severity: Some("high".to_string()),
+                priority: Some(80),
+                action: Some(DomainAction::Warn),
+                threat_type: Some("grooming".to_string()),
+            }],
+            action: Some(DomainAction::Warn),
+        };
+
+        let observations = build_domain_memory_observations(Some(&output));
+
+        assert_eq!(observations.len(), 1);
+        assert!(observations[0].signal.is_some());
+        assert!(observations[0].event_hint.is_none());
     }
 
     #[test]

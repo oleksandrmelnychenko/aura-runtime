@@ -90,8 +90,9 @@ The repository now contains dedicated crates for this model:
   `commit_confirmed` may update domain-owned memory.
 - Memory-derived domain signals are added after confirmation as conversation
   inference only; they are never written back as source events. Domain action
-  policy is recomputed from the confirmed projection, so a rejected or
-  softened candidate cannot restore its original escalation override.
+  policy is recomputed from the confirmed projection: a rejected candidate
+  cannot mutate memory or drive an action, while an accepted candidate keeps
+  the domain-owned policy metadata reviewed with its rule.
 - Legacy military context detectors in core tracker are fully disabled (military signals come from domain runtime)
 - `AURA.MILITARY` runtime no longer executes legacy kids context detectors in core tracker
 - Core analyzer now resolves domain `ThreatType` from rule metadata (`threat_type`) without `threat_key` fallback mapping
