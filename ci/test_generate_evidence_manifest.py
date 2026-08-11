@@ -77,13 +77,17 @@ def temporal_telemetry_validation_payload(**overrides):
 
 def temporal_review_payload(**overrides):
     payload = {
-        "schema_version": "aura.military.temporal_review_report.v1",
+        "schema_version": "aura.military.temporal_review_report.v2",
         "overall_status": "pass",
+        "blinding_assurance": "packet_bound",
+        "blind_packet_id": "blind_round_alpha",
+        "blind_packet_canonical_sha256": "a" * 64,
         "privacy": {
             "raw_text_present": False,
             "reviewer_tokens_exported": False,
             "affiliation_tokens_exported": False,
             "stable_actor_identifiers_present": False,
+            "internal_case_ids_exported": False,
         },
         "metrics": {
             "corpus_cases": 37,
@@ -281,6 +285,24 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_review_payload(overall_status="pending")
             ),
             "pending",
+        )
+
+    def test_temporal_review_rejects_declared_only_blinding(self):
+        self.assertEqual(
+            generate_evidence_manifest.temporal_independent_review_status(
+                temporal_review_payload(blinding_assurance="declared_only")
+            ),
+            "insufficient_blinding",
+        )
+
+    def test_temporal_review_rejects_noncanonical_packet_digest(self):
+        self.assertEqual(
+            generate_evidence_manifest.temporal_independent_review_status(
+                temporal_review_payload(
+                    blind_packet_canonical_sha256=("a" * 62) + "  "
+                )
+            ),
+            "invalid_blind_packet_identity",
         )
 
     def test_temporal_activation_stays_pending_without_independent_review(self):

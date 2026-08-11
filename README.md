@@ -259,7 +259,8 @@ python3 ci/generate_evidence_manifest.py --output artifacts/evidence-manifest.js
 See `docs/temporal-independent-review.md`,
 `docs/temporal-shadow-telemetry.md`, and
 `docs/evidence-manifest-attestation.md` for the research-readiness and release
-trust boundaries.
+trust boundaries. Independent temporal review uses packet-bound v2 material;
+legacy declaration-only review cannot satisfy policy activation readiness.
 
 ## Usage (Rust)
 

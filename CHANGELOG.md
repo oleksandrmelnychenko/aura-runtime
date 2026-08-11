@@ -2,6 +2,12 @@
 
 ## Unreleased — Release Reliability
 
+- Replaced declaration-only temporal review blinding with a packet-bound v2
+  flow: per-round HMAC case tokens, randomized case order, per-case identifier
+  remapping, relative event times, a separate owner-only coordinator map, and
+  digest-bound review bundles.
+- Kept legacy v1 review compatibility while preventing a declaration-only v1
+  result from satisfying temporal policy activation readiness.
 - Expanded the disabled Military temporal Shadow gate with 259 metamorphic
   adversarial checks covering storage order, identifier remapping, time shift,
   filtered decoys, and replay duplication.

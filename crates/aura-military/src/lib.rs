@@ -10,6 +10,8 @@ mod text;
 pub mod temporal_eval;
 #[cfg(feature = "evaluation")]
 pub mod temporal_review;
+#[cfg(feature = "evaluation")]
+pub mod temporal_review_packet;
 #[cfg(feature = "shadow-telemetry")]
 pub mod temporal_shadow_telemetry;
 

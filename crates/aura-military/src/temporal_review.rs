@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::temporal_eval::{embedded_temporal_review_target, TemporalShadowError};
 
 const REVIEW_SCHEMA_VERSION: &str = "aura.military.temporal_independent_review.v1";
-const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_review_report.v1";
+const REPORT_SCHEMA_VERSION: &str = "aura.military.temporal_review_report.v2";
 const MIN_REVIEWERS_PER_CASE: usize = 2;
 const MAX_REVIEWERS_PER_CASE: usize = 5;
 
@@ -54,6 +54,7 @@ pub struct TemporalReviewPrivacy {
     pub reviewer_tokens_exported: bool,
     pub affiliation_tokens_exported: bool,
     pub stable_actor_identifiers_present: bool,
+    pub internal_case_ids_exported: bool,
 }
 
 /// Machine-readable status of independent human review for the temporal corpus.
@@ -65,6 +66,9 @@ pub struct TemporalReviewReport {
     pub corpus_sha256: String,
     pub review_bundle_id: String,
     pub label_blinding_declared: bool,
+    pub blinding_assurance: &'static str,
+    pub blind_packet_id: Option<String>,
+    pub blind_packet_canonical_sha256: Option<String>,
     pub metrics: TemporalReviewMetrics,
     pub checks: Vec<TemporalReviewCheck>,
     pub privacy: TemporalReviewPrivacy,
@@ -296,6 +300,9 @@ pub fn evaluate_embedded_temporal_review(
         corpus_sha256: target.corpus_sha256,
         review_bundle_id: bundle.review_bundle_id,
         label_blinding_declared: bundle.protocol.label_blinding,
+        blinding_assurance: "declared_only",
+        blind_packet_id: None,
+        blind_packet_canonical_sha256: None,
         metrics,
         checks,
         privacy: TemporalReviewPrivacy {
@@ -303,6 +310,7 @@ pub fn evaluate_embedded_temporal_review(
             reviewer_tokens_exported: false,
             affiliation_tokens_exported: false,
             stable_actor_identifiers_present: false,
+            internal_case_ids_exported: false,
         },
     })
 }

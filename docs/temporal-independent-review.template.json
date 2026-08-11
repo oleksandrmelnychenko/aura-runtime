@@ -1,8 +1,8 @@
 {
-  "schema_version": "aura.military.temporal_independent_review.v1",
+  "schema_version": "aura.military.temporal_independent_review.v2",
   "review_bundle_id": "replace_with_review_round_id",
-  "dataset_id": "aura_military_temporal_shadow_seed_v1",
-  "corpus_sha256": "ca502f671dccaa6d712751c71d6b77a12e7b8c1ad88613a4e9f4fc83afba3d2d",
+  "packet_id": "replace_with_generated_packet_id",
+  "packet_canonical_sha256": "replace_with_generated_packet_digest",
   "protocol": {
     "label_blinding": true,
     "minimum_reviewers_per_case": 2,

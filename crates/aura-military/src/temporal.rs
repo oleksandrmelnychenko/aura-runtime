@@ -124,6 +124,13 @@ pub(crate) fn temporal_enabled() -> bool {
     military_temporal_policy().is_ok_and(|policy| policy.enabled)
 }
 
+#[cfg(feature = "evaluation")]
+pub(crate) fn temporal_event_evidence_threshold_met(confidence: f32) -> Result<bool, String> {
+    military_temporal_policy()
+        .map(|policy| confidence >= policy.min_event_confidence)
+        .map_err(ToString::to_string)
+}
+
 pub(crate) fn run_military_temporal_pipeline(input: &DomainTemporalInput) -> DomainTemporalOutput {
     let Ok(policy) = military_temporal_policy() else {
         return DomainTemporalOutput::default();

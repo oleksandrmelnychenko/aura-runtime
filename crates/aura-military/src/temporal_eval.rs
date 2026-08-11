@@ -218,6 +218,7 @@ pub(crate) struct TemporalReviewTarget {
     pub dataset_id: String,
     pub corpus_sha256: String,
     pub expected_labels: BTreeMap<String, BTreeSet<String>>,
+    pub cases: BTreeMap<String, DomainTemporalInput>,
 }
 
 #[derive(Default)]
@@ -258,10 +259,16 @@ pub(crate) fn embedded_temporal_review_target() -> Result<TemporalReviewTarget, 
             )
         })
         .collect();
+    let cases = file
+        .cases
+        .iter()
+        .map(|case| (case.id.clone(), case.to_input()))
+        .collect();
     Ok(TemporalReviewTarget {
         dataset_id: file.dataset_id,
         corpus_sha256: sha256_hex(raw.as_bytes()),
         expected_labels,
+        cases,
     })
 }
 

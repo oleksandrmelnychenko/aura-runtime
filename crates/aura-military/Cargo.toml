@@ -7,7 +7,7 @@ description = "AURA.MILITARY domain module"
 [features]
 default = []
 shadow-telemetry = ["dep:thiserror"]
-evaluation = ["shadow-telemetry", "dep:sha2"]
+evaluation = ["shadow-telemetry", "dep:hmac", "dep:sha2"]
 
 [dependencies]
 aura-domain = { path = "../aura-domain" }
@@ -15,6 +15,7 @@ serde.workspace = true
 serde_json.workspace = true
 regex.workspace = true
 sha2 = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 
 [[example]]
@@ -25,6 +26,11 @@ required-features = ["evaluation"]
 [[example]]
 name = "temporal_independent_review"
 path = "examples/temporal_independent_review.rs"
+required-features = ["evaluation"]
+
+[[example]]
+name = "temporal_blind_review_packet"
+path = "examples/temporal_blind_review_packet.rs"
 required-features = ["evaluation"]
 
 [[example]]

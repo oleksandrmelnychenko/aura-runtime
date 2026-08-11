@@ -12,7 +12,7 @@ from pathlib import Path
 SCHEMA_VERSION = "aura.evidence_manifest.v1"
 PILOT_SHADOW_SCHEMA_VERSION = "aura.shadow_mode_bundle.v1"
 TEMPORAL_SHADOW_SCHEMA_VERSION = "aura.military.temporal_shadow_report.v1"
-TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v1"
+TEMPORAL_REVIEW_SCHEMA_VERSION = "aura.military.temporal_review_report.v2"
 TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
 )
@@ -261,10 +261,32 @@ def temporal_independent_review_status(payload: dict | None) -> str | None:
             "reviewer_tokens_exported",
             "affiliation_tokens_exported",
             "stable_actor_identifiers_present",
+            "internal_case_ids_exported",
         )
     ):
         return "privacy_fail"
-    return payload.get("overall_status")
+    status = payload.get("overall_status")
+    if status == "pass":
+        if payload.get("blinding_assurance") != "packet_bound":
+            return "insufficient_blinding"
+        packet_id = payload.get("blind_packet_id")
+        packet_digest = payload.get("blind_packet_canonical_sha256")
+        if (
+            not isinstance(packet_id, str)
+            or not 8 <= len(packet_id) <= 64
+            or not all(
+                char.isascii() and (char.isalnum() or char in "_-.")
+                for char in packet_id
+            )
+        ):
+            return "invalid_blind_packet_identity"
+        if (
+            not isinstance(packet_digest, str)
+            or len(packet_digest) != 64
+            or any(char not in "0123456789abcdef" for char in packet_digest)
+        ):
+            return "invalid_blind_packet_identity"
+    return status
 
 
 def temporal_shadow_telemetry_validation_status(payload: dict | None) -> str | None:
@@ -610,6 +632,9 @@ def attach_payload_details(
         artifacts["temporal_independent_review_report"][
             "schema_version"
         ] = temporal_independent_review_payload.get("schema_version")
+        artifacts["temporal_independent_review_report"][
+            "blinding_assurance"
+        ] = temporal_independent_review_payload.get("blinding_assurance")
         review_metrics = temporal_independent_review_payload.get("metrics", {})
         artifacts["temporal_independent_review_report"]["corpus_cases"] = review_metrics.get(
             "corpus_cases"
@@ -1044,6 +1069,21 @@ def main() -> int:
         ),
         "temporal_independent_review_schema_version": (
             temporal_independent_review_payload.get("schema_version")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_blinding_assurance": (
+            temporal_independent_review_payload.get("blinding_assurance")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_blind_packet_id": (
+            temporal_independent_review_payload.get("blind_packet_id")
+            if temporal_independent_review_payload
+            else None
+        ),
+        "temporal_independent_review_blind_packet_sha256": (
+            temporal_independent_review_payload.get("blind_packet_canonical_sha256")
             if temporal_independent_review_payload
             else None
         ),
