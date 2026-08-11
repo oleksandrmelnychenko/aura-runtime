@@ -2,6 +2,10 @@
 
 ## Unreleased — Release Reliability
 
+- Added a deterministic long-term evidence-renewal envelope. It rehashes a
+  fixed raw-evidence set, binds contiguous predecessor commitments and RFC
+  3161 responses, re-verifies every chain link with historical full-chain CRLs,
+  and explicitly declares that the AURA profile is not RFC 4998 ERS/XMLERS.
 - Added offline historical revocation verification for every RFC 3161 token.
   Complete issuer CRLs must cover the TSA chain at `genTime`; delta, indirect,
   missing, expired, future, duplicate, or unrelated CRLs fail closed. Receipt

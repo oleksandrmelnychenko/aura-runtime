@@ -121,6 +121,11 @@ not the truth of governance declarations, reviewer expertise, actual
 independence, effective blinding, or absence of coordination.
 Historical CRL status likewise does not prove absence of undiscovered key
 compromise or future backdated revocation and is not perpetual validity.
+Long-term retention can use the AURA RFC 3161 renewal envelope to rehash a
+fixed raw-evidence set and build a strictly ordered sequence of independently
+reverified timestamps. The envelope explicitly declares that it is not RFC
+4998 ERS or RFC 6283 XMLERS; standards-conformant hash-tree renewal remains a
+separate archival-system concern.
 
 ## Evidence Maturity
 
