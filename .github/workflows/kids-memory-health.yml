@@ -28,24 +28,26 @@ jobs:
     timeout-minutes: 35
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
     - name: Build pilot shadow bundle A
       run: |
-        cargo run --quiet --example world_sim -p aura-core -- \
+        cargo run --locked --quiet --example world_sim -p aura-core -- \
           --input "$AURA_PILOT_SHADOW_INPUT" \
           --summary-only \
           --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH_A" \
           --require-clean
     - name: Build pilot shadow bundle B
       run: |
-        cargo run --quiet --example world_sim -p aura-core -- \
+        cargo run --locked --quiet --example world_sim -p aura-core -- \
           --input "$AURA_PILOT_SHADOW_INPUT" \
           --summary-only \
           --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH_B" \
           --require-clean
     - name: Build pilot regression report
       run: |
-        cargo run --quiet --example pilot_regression -p aura-core -- \
+        cargo run --locked --quiet --example pilot_regression -p aura-core -- \
           --output "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           --require-pass
     - name: Build KIDS memory health snapshot
@@ -129,7 +131,7 @@ jobs:
         PY
     - name: Upload KIDS memory health artifacts
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-kids-memory-health
         path: |

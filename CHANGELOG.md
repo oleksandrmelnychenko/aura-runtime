@@ -2,6 +2,10 @@
 
 ## Unreleased — Release Reliability
 
+- Pinned the Rust toolchain, GitHub Actions, and `cargo-audit` installer;
+  disabled persisted checkout credentials, restricted every workflow token to
+  read-only repository contents, required `Cargo.lock` resolution in CI, and
+  changed helper gates to discover every Python test automatically.
 - Added a deterministic long-term evidence-renewal envelope. It rehashes a
   fixed raw-evidence set, binds contiguous predecessor commitments and RFC
   3161 responses, re-verifies every chain link with historical full-chain CRLs,

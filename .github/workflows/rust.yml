@@ -36,38 +36,41 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
     - name: Lint Domain Lexicons
       run: python3 ci/lint_lexicons.py
     - name: Run CI Helper Tests
-      run: python3 -m unittest ci.test_apple_artifact ci.test_evidence_attestation ci.test_generate_evidence_manifest ci.test_refactor_baseline ci.test_temporal_review_receipt ci.test_temporal_review_roster ci.test_temporal_study_attestation ci.test_temporal_study_timestamp ci.test_world_performance_gate
+      run: python3 -m unittest discover -s ci -p 'test_*.py'
     - name: Audit Dependencies
       run: |
-        cargo install cargo-audit --quiet 2>/dev/null || true
+        cargo install cargo-audit --version 0.22.1 --locked --quiet
         cargo audit --deny warnings
     - name: Build
-      run: cargo build --workspace --all-features --all-targets --verbose
+      run: cargo build --locked --workspace --all-features --all-targets --verbose
     - name: Clippy
-      run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+      run: cargo clippy --locked --workspace --all-features --all-targets -- -D warnings
     - name: Run tests
-      run: cargo test --workspace --all-features --all-targets --verbose
+      run: cargo test --locked --workspace --all-features --all-targets --verbose
     - name: Run Military Temporal Shadow Gate
       run: bash ci/temporal_shadow_gate.sh
     - name: Run Analyzer Microbenchmark Gate
       run: bash ci/analyzer_microbenchmark_gate.sh
     - name: Run Community Surface Gate
       run: |
-        cargo run --quiet --example community_surface_sim -p aura-core -- \
+        cargo run --locked --quiet --example community_surface_sim -p aura-core -- \
           --profile ci \
           --json "$AURA_COMMUNITY_SURFACE_REPORT_PATH" \
           --fail-on-gate
     - name: Run World Lifecycle Gate
       run: |
-        cargo run --quiet --example world_sim -p aura-core -- \
+        cargo run --locked --quiet --example world_sim -p aura-core -- \
           --input "$AURA_WORLD_LIFECYCLE_INPUT" \
           --summary-only \
           --output "$AURA_WORLD_LIFECYCLE_REPORT_PATH" \
@@ -86,20 +89,20 @@ jobs:
         if [ -f "$AURA_WORLD_LIFECYCLE_REPORT_PATH" ]; then
           WORLD_LIFECYCLE_ARGS="--world-lifecycle-report $AURA_WORLD_LIFECYCLE_REPORT_PATH"
         fi
-        cargo run --quiet --example release_report -p aura-core -- $WORLD_LIFECYCLE_ARGS --output "$AURA_RELEASE_REPORT_PATH" --require-pass
+        cargo run --locked --quiet --example release_report -p aura-core -- $WORLD_LIFECYCLE_ARGS --output "$AURA_RELEASE_REPORT_PATH" --require-pass
     - name: Generate Contract Evidence
       if: ${{ always() }}
-      run: cargo run --quiet --example contract_evidence -p aura-core -- --output "$AURA_CONTRACT_EVIDENCE_PATH"
+      run: cargo run --locked --quiet --example contract_evidence -p aura-core -- --output "$AURA_CONTRACT_EVIDENCE_PATH"
     - name: Generate Dataset Evidence
       if: ${{ always() }}
       run: python3 ci/generate_dataset_evidence.py --output "$AURA_DATASET_EVIDENCE_PATH"
     - name: Generate Audit Evidence
       if: ${{ always() }}
-      run: cargo run --quiet --example audit_evidence -p aura-core -- --output "$AURA_AUDIT_EVIDENCE_PATH"
+      run: cargo run --locked --quiet --example audit_evidence -p aura-core -- --output "$AURA_AUDIT_EVIDENCE_PATH"
     - name: Generate Pilot Shadow Bundle
       if: ${{ always() }}
       run: |
-        cargo run --quiet --example world_sim -p aura-core -- \
+        cargo run --locked --quiet --example world_sim -p aura-core -- \
           --input "$AURA_PILOT_SHADOW_INPUT" \
           --summary-only \
           --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
@@ -107,7 +110,7 @@ jobs:
     - name: Generate Pilot Regression Report
       if: ${{ always() }}
       run: |
-        cargo run --quiet --example pilot_regression -p aura-core -- \
+        cargo run --locked --quiet --example pilot_regression -p aura-core -- \
           --output "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           --require-pass
     - name: Generate Pilot Gate Report
@@ -118,7 +121,7 @@ jobs:
           exit 0
         fi
 
-        cargo run --quiet --example world_sim -p aura-core -- \
+        cargo run --locked --quiet --example world_sim -p aura-core -- \
           --input "$AURA_PILOT_SHADOW_INPUT" \
           --summary-only \
           --shadow-output "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
@@ -137,7 +140,7 @@ jobs:
           --kids-memory-health "$AURA_KIDS_MEMORY_HEALTH_PATH" \
           --output "$AURA_KIDS_PREPROD_DRY_RUN_PATH"
 
-        cargo run --quiet --example pilot_gate -p aura-core -- \
+        cargo run --locked --quiet --example pilot_gate -p aura-core -- \
           --release-report "$AURA_RELEASE_REPORT_PATH" \
           --pilot-regression-report "$AURA_PILOT_REGRESSION_REPORT_PATH" \
           --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
@@ -333,84 +336,84 @@ jobs:
         PY
     - name: Upload Release Report
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-release-report
         path: ${{ env.AURA_RELEASE_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload FFI State Sync Soak
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-ffi-state-sync-soak
         path: ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}
         if-no-files-found: warn
     - name: Upload Dataset Evidence
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-dataset-evidence
         path: ${{ env.AURA_DATASET_EVIDENCE_PATH }}
         if-no-files-found: warn
     - name: Upload Audit Evidence
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-audit-evidence
         path: ${{ env.AURA_AUDIT_EVIDENCE_PATH }}
         if-no-files-found: warn
     - name: Upload Pilot Shadow Bundle
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-pilot-shadow-bundle
         path: ${{ env.AURA_PILOT_SHADOW_BUNDLE_PATH }}
         if-no-files-found: warn
     - name: Upload Pilot Regression Report
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-pilot-regression-report
         path: ${{ env.AURA_PILOT_REGRESSION_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload Military Temporal Shadow Report
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-military-temporal-shadow-report
         path: ${{ env.AURA_TEMPORAL_SHADOW_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload Military Temporal Shadow Telemetry Validation
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-military-temporal-shadow-telemetry-validation
         path: ${{ env.AURA_TEMPORAL_SHADOW_TELEMETRY_VALIDATION_PATH }}
         if-no-files-found: warn
     - name: Upload Pilot Gate Report
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-pilot-gate-report
         path: ${{ env.AURA_PILOT_GATE_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload Community Surface Report
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-community-surface-report
         path: ${{ env.AURA_COMMUNITY_SURFACE_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload World Lifecycle Suite Report
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-world-lifecycle-suite-report
         path: ${{ env.AURA_WORLD_LIFECYCLE_REPORT_PATH }}
         if-no-files-found: warn
     - name: Upload Evidence Manifest
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: aura-evidence-manifest
         path: |

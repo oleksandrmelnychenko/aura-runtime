@@ -20,9 +20,23 @@ just refactor-baseline-gate
 ## Core Release Gates
 
 ```bash
-cargo run --quiet --example release_report -p aura-core -- --require-pass
-cargo run --quiet --example pilot_regression -p aura-core -- --require-pass
+cargo run --locked --quiet --example release_report -p aura-core -- --require-pass
+cargo run --locked --quiet --example pilot_regression -p aura-core -- --require-pass
 ```
+
+## CI and Supply-Chain Contract
+
+```bash
+python3 -m unittest ci.test_ci_supply_chain
+python3 -m unittest discover -s ci -p 'test_*.py'
+```
+
+The repository fixes Rust to the exact version in `rust-toolchain.toml`, pins
+every external GitHub Action to a full commit SHA, prevents checkout from
+retaining credentials, grants jobs read-only repository access, and requires
+all CI Cargo resolution to use `Cargo.lock`. The discovery command is the
+canonical Python helper gate so newly added evidence tests cannot be omitted by
+an outdated hand-maintained module list.
 
 ## AURA Core Refactor Differential Gate
 
@@ -39,9 +53,9 @@ stale approvals, and performance envelope violations fail the command. See
 ## Focused Gate Smoke Tests
 
 ```bash
-cargo test -p aura-core eval_external::tests::external_curated_suite_passes_pre_release_gates
-cargo test -p aura-core eval_social_context::tests::social_context_pre_release_gates_pass
-cargo test -p aura-ml
+cargo test --locked -p aura-core eval_external::tests::external_curated_suite_passes_pre_release_gates
+cargo test --locked -p aura-core eval_social_context::tests::social_context_pre_release_gates_pass
+cargo test --locked -p aura-ml
 ```
 
 ## Safety World v2 Smoke Gate
@@ -53,18 +67,18 @@ bash ci/safety_world_v2_smoke.sh
 Expanded commands:
 
 ```bash
-cargo test -p aura-core --example safety_world_v2_project
-cargo run -p aura-core --example safety_world_v2_validate -- \
+cargo test --locked -p aura-core --example safety_world_v2_project
+cargo run --locked -p aura-core --example safety_world_v2_validate -- \
   --input crates/aura-core/data/safety_world_v2_schema.example.json
-cargo run -p aura-core --example safety_world_v2_project -- \
+cargo run --locked -p aura-core --example safety_world_v2_project -- \
   --input crates/aura-core/data/safety_world_v2_schema.example.json \
   --output /tmp/safety_world_v2_projected_world_sim.json
-cargo run -p aura-core --example world_sim -- \
+cargo run --locked -p aura-core --example world_sim -- \
   --input /tmp/safety_world_v2_projected_world_sim.json \
   --summary-only \
   --require-clean
-cargo test -p aura-core --example safety_world_v2_platform_seed
-cargo run -p aura-core --example safety_world_v2_platform_seed -- \
+cargo test --locked -p aura-core --example safety_world_v2_platform_seed
+cargo run --locked -p aura-core --example safety_world_v2_platform_seed -- \
   --input crates/aura-core/data/safety_world_v2_schema.example.json \
   --output /tmp/safety_world_v2_platform_seed.json
 ```
@@ -82,7 +96,7 @@ and `artifacts/world-lifecycle-suite-report.json`. For nightly scale, raise
 ## Release Report With World Metrics
 
 ```bash
-cargo run --quiet --example release_report -p aura-core -- \
+cargo run --locked --quiet --example release_report -p aura-core -- \
   --world-lifecycle-report artifacts/world-lifecycle-suite-report.json \
   --output artifacts/release-report.json \
   --require-pass
@@ -185,7 +199,7 @@ exact Aura export allowlist.
 ## Full Workspace Validation
 
 ```bash
-cargo test --workspace --all-features --all-targets
+cargo test --locked --workspace --all-features --all-targets
 ```
 
 ## ONNX-Specific Checks
@@ -193,19 +207,19 @@ cargo test --workspace --all-features --all-targets
 Default runs include baseline ONNX coverage. Safety/intent ONNX load checks are opt-in.
 
 ```bash
-AURA_RUN_SAFETY_INTENT_ONNX=1 cargo test -p aura-ml --features onnx --test onnx_integration
+AURA_RUN_SAFETY_INTENT_ONNX=1 cargo test --locked -p aura-ml --features onnx --test onnx_integration
 ```
 
 If missing ONNX models must fail the run (instead of skipping):
 
 ```bash
-AURA_REQUIRE_ONNX_MODELS=1 cargo test -p aura-ml --features onnx --test onnx_integration
+AURA_REQUIRE_ONNX_MODELS=1 cargo test --locked -p aura-ml --features onnx --test onnx_integration
 ```
 
 ## Pilot Gate Artifact Decision
 
 ```bash
-cargo run --example pilot_gate -p aura-core -- \
+cargo run --locked --example pilot_gate -p aura-core -- \
   --release-report artifacts/release-report.json \
   --pilot-regression-report artifacts/pilot-regression-report.json \
   --shadow-bundle artifacts/pilot-shadow-run-a.json \
