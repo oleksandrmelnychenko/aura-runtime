@@ -21,7 +21,7 @@ TEMPORAL_STUDY_TIMESTAMP_VERIFICATION_SCHEMA_VERSION = (
     "aura.military.temporal_study_timestamp_verification.v1"
 )
 TEMPORAL_REVIEW_RECEIPT_CHAIN_VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_review_receipt_chain_verification.v1"
+    "aura.military.temporal_review_receipt_chain_verification.v2"
 )
 TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
@@ -652,6 +652,7 @@ def temporal_review_receipt_chain_verification_status(
     if (
         payload.get("chronology_assurance")
         != "individual_signed_rfc3161_receipts"
+        or payload.get("roster_assurance") != "signed_rfc3161_precommitted"
         or payload.get("signature_algorithm") != "Ed25519"
         or payload.get("timestamp_protocol") != "RFC3161"
         or payload.get("message_imprint_algorithm") != "sha256"
@@ -668,6 +669,12 @@ def temporal_review_receipt_chain_verification_status(
         "receipt_index_sha256",
         "study_timestamp_response_sha256",
         "receipt_signer_spki_set_sha256",
+        "participant_signer_spki_set_sha256",
+        "roster_canonical_sha256",
+        "roster_attestation_sha256",
+        "roster_timestamp_response_sha256",
+        "roster_coordinator_public_key_spki_sha256",
+        "governance_record_set_sha256",
     ):
         if not lowercase_sha256(payload.get(field)):
             return "invalid_receipt_identity"
@@ -682,6 +689,7 @@ def temporal_review_receipt_chain_verification_status(
         "reviewer_decision_count",
         "adjudication_decision_count",
         "receipt_timestamp_authority_count",
+        "governance_record_count",
     ):
         value = payload.get(field)
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -696,15 +704,23 @@ def temporal_review_receipt_chain_verification_status(
         or payload["distinct_receipt_signer_count"] != participant_count
         or payload["distinct_reviewer_affiliation_count"] != reviewer_count
         or payload["distinct_participant_affiliation_count"] != participant_count
-        or not 1 <= payload["receipt_timestamp_authority_count"] <= participant_count
+        or not 1
+        <= payload["receipt_timestamp_authority_count"]
+        <= participant_count + 1
         or not 2 * case_count
         <= payload["reviewer_decision_count"]
         <= reviewer_count * case_count
         or payload["adjudication_decision_count"] != case_count
+        or payload["governance_record_count"] != 4 * participant_count
+        or payload["participant_signer_spki_set_sha256"]
+        != payload["receipt_signer_spki_set_sha256"]
     ):
         return "invalid_receipt_summary"
     proof_fields = (
         "commitment_before_review_receipts",
+        "commitment_before_roster",
+        "roster_before_review_decisions",
+        "roster_changes_after_timestamp_forbidden",
         "review_receipts_before_adjudication",
         "adjudicator_binds_exact_reviewer_receipts",
         "review_decisions_after_commitment",
@@ -716,6 +732,8 @@ def temporal_review_receipt_chain_verification_status(
         return "invalid_receipt_chronology"
     time_fields = (
         "commitment_latest_trusted_time_unix_ms",
+        "roster_earliest_trusted_time_unix_ms",
+        "roster_latest_trusted_time_unix_ms",
         "reviewer_earliest_trusted_time_unix_ms",
         "reviewer_latest_trusted_time_unix_ms",
         "adjudicator_earliest_trusted_time_unix_ms",
@@ -727,9 +745,23 @@ def temporal_review_receipt_chain_verification_status(
         for value in times
     ):
         return "invalid_receipt_chronology"
-    commitment_upper, reviewer_lower, reviewer_upper, adjudicator_lower, adjudicator_upper = times
+    (
+        commitment_upper,
+        roster_lower,
+        roster_upper,
+        reviewer_lower,
+        reviewer_upper,
+        adjudicator_lower,
+        adjudicator_upper,
+    ) = times
     if not (
-        commitment_upper < reviewer_lower <= reviewer_upper < adjudicator_lower <= adjudicator_upper
+        commitment_upper
+        < roster_lower
+        <= roster_upper
+        < reviewer_lower
+        <= reviewer_upper
+        < adjudicator_lower
+        <= adjudicator_upper
     ):
         return "invalid_receipt_chronology"
     privacy = payload.get("privacy")
@@ -738,7 +770,8 @@ def temporal_review_receipt_chain_verification_status(
         for field in (
             "participant_tokens_exported",
             "affiliation_tokens_exported",
-            "public_key_digests_exported",
+            "individual_participant_key_digests_exported",
+            "governance_record_digests_exported",
             "case_tokens_exported",
             "decision_labels_exported",
             "raw_text_present",
@@ -1291,13 +1324,18 @@ def attach_payload_details(
         for field in (
             "schema_version",
             "chronology_assurance",
+            "roster_assurance",
             "signature_algorithm",
             "timestamp_protocol",
             "review_bundle_canonical_sha256",
+            "roster_canonical_sha256",
+            "governance_record_count",
             "reviewer_receipt_count",
             "adjudicator_receipt_count",
             "reviewed_case_count",
             "commitment_latest_trusted_time_unix_ms",
+            "roster_earliest_trusted_time_unix_ms",
+            "roster_latest_trusted_time_unix_ms",
             "reviewer_earliest_trusted_time_unix_ms",
             "reviewer_latest_trusted_time_unix_ms",
             "adjudicator_earliest_trusted_time_unix_ms",
@@ -1948,6 +1986,20 @@ def main() -> int:
         "temporal_review_receipt_chronology_assurance": (
             temporal_review_receipt_chain_verification_payload.get(
                 "chronology_assurance"
+            )
+            if temporal_review_receipt_chain_verification_payload
+            else None
+        ),
+        "temporal_review_roster_assurance": (
+            temporal_review_receipt_chain_verification_payload.get(
+                "roster_assurance"
+            )
+            if temporal_review_receipt_chain_verification_payload
+            else None
+        ),
+        "temporal_review_roster_latest_trusted_time_unix_ms": (
+            temporal_review_receipt_chain_verification_payload.get(
+                "roster_latest_trusted_time_unix_ms"
             )
             if temporal_review_receipt_chain_verification_payload
             else None

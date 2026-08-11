@@ -14,11 +14,15 @@ the claim that the complete label set was frozen before adjudication.
 
 ## What the chain proves
 
-A passing `aura.military.temporal_review_receipt_chain_verification.v1` report
+A passing `aura.military.temporal_review_receipt_chain_verification.v2` report
 proves all of the following:
 
 - the study commitment's accuracy-adjusted trusted upper time is earlier than
-  every reviewer's accuracy-adjusted trusted lower time;
+  the precommitted roster and every reviewer's trusted lower time;
+- the roster's participant roles, affiliations, key identifiers, and pinned
+  SPKI digests exactly match all signed submissions;
+- the roster timestamp is earlier than every declared review completion and
+  reviewer receipt;
 - each review decision declares a completion time after the trusted commitment
   and before the lower time bound of its own signed receipt;
 - every reviewer attestation has a valid Ed25519 signature from its pinned key;
@@ -187,15 +191,29 @@ different label bundle.
 
 ## Chain index and aggregate verification
 
-The controlled receipt index names the review bundle, trusted study timestamp
-verification, every reviewer package, and the single adjudicator package.
+The controlled v2 receipt index names the review bundle, trusted study
+timestamp verification, precommitted roster receipt, every reviewer package,
+and the single adjudicator package.
 Relative paths are resolved from the index directory.
 
 ```json
 {
-  "schema_version": "aura.military.temporal_review_receipt_index.v1",
+  "schema_version": "aura.military.temporal_review_receipt_index.v2",
   "review_bundle": "temporal-review-bundle.json",
   "study_timestamp_verification": "temporal-study-timestamp-verification.json",
+  "review_roster_receipt": {
+    "roster": "temporal-review-roster.json",
+    "attestation": "temporal-review-roster.attestation.json",
+    "public_key": "roster-coordinator.public.pem",
+    "expected_key_id": "study-coordinator-roster-2026",
+    "expected_signer_spki_sha256": "<independently provisioned 64 lowercase hex>",
+    "timestamp_request": "temporal-review-roster.tsq",
+    "timestamp_response": "temporal-review-roster.tsr",
+    "ca_file": "tsa-roots.pem",
+    "untrusted_chain": "tsa-intermediates.pem",
+    "expected_policy_oid": "1.2.3.4.1",
+    "expected_tsa_spki_sha256": "<64 lowercase hex>"
+  },
   "reviewer_receipts": [
     {
       "submission": "reviewer-a.submission.json",

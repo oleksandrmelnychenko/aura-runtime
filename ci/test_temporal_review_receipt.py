@@ -9,7 +9,10 @@ from hashlib import sha256
 from pathlib import Path
 
 from ci import temporal_review_receipt
+from ci import temporal_review_roster
 from ci import temporal_study_timestamp
+from ci import generate_evidence_manifest
+from ci import test_generate_evidence_manifest as manifest_fixtures
 
 
 @unittest.skipUnless(shutil.which("openssl"), "OpenSSL is required")
@@ -39,7 +42,15 @@ class TemporalReviewReceiptTests(unittest.TestCase):
         cls.expected_tsa_spki = cls.spki_sha256(cls.tsa_certificate)
         cls.participant_spki = {}
         cls.write_base_material()
-        reviewer_completed_at = int(time.time() * 1000) - 5_000
+        for participant in (
+            "reviewer_a_8f2c10",
+            "reviewer_b_41ad22",
+            "adjudicator_c_77b901",
+        ):
+            cls.generate_participant_key(participant)
+        cls.write_roster_material()
+        time.sleep(7.0)
+        reviewer_completed_at = int(time.time() * 1000) - 3_000
         cls.write_participant_material(
             "reviewer_a_8f2c10", "reviewer", reviewer_completed_at
         )
@@ -284,6 +295,24 @@ class TemporalReviewReceiptTests(unittest.TestCase):
     def write_participant_material(cls, participant, role, completed_at, links=None):
         paths = cls.participant_paths(participant)
         cls.write_json(paths["submission"], cls.submission(participant, role, completed_at, links))
+        if not paths["private_key"].exists():
+            cls.generate_participant_key(participant)
+        key_id = f"{participant}.key"
+        attestation = temporal_review_receipt.sign_submission(
+            paths["submission"], paths["private_key"], key_id
+        )
+        temporal_study_timestamp.crypto_support.write_json_atomic(
+            paths["attestation"], attestation
+        )
+        request = temporal_study_timestamp.create_request_for_document(
+            paths["attestation"].read_bytes(), cls.policy_oid
+        )
+        temporal_study_timestamp.write_bytes_atomic(paths["request"], request)
+        cls.issue_response(paths["request"], paths["response"])
+
+    @classmethod
+    def generate_participant_key(cls, participant):
+        paths = cls.participant_paths(participant)
         cls.run_openssl(
             [
                 "genpkey",
@@ -309,9 +338,92 @@ class TemporalReviewReceiptTests(unittest.TestCase):
                 paths["public_key"]
             )
         ).hexdigest()
-        key_id = f"{participant}.key"
-        attestation = temporal_review_receipt.sign_submission(
-            paths["submission"], paths["private_key"], key_id
+
+    @classmethod
+    def roster_paths(cls, root=None):
+        root = root or cls.fixture
+        return {
+            "roster": root / "review-roster.json",
+            "private_key": root / "roster-coordinator.private.pem",
+            "public_key": root / "roster-coordinator.public.pem",
+            "attestation": root / "review-roster.attestation.json",
+            "request": root / "review-roster.tsq",
+            "response": root / "review-roster.tsr",
+        }
+
+    @classmethod
+    def write_roster_material(cls, root=None):
+        root = root or cls.fixture
+        paths = cls.roster_paths(root)
+        participants = []
+        for participant, role, seed in (
+            ("adjudicator_c_77b901", "adjudicator", "1"),
+            ("reviewer_a_8f2c10", "reviewer", "2"),
+            ("reviewer_b_41ad22", "reviewer", "3"),
+        ):
+            participants.append(
+                {
+                    "participant_token": participant,
+                    "affiliation_token": participant.replace(
+                        "reviewer", "affiliation"
+                    ).replace("adjudicator", "affiliation"),
+                    "role": role,
+                    "signing_key_id": f"{participant}.key",
+                    "signing_key_spki_sha256": cls.participant_spki[participant],
+                    "eligibility_record_sha256": seed * 64,
+                    "affiliation_evidence_sha256": str(int(seed) + 3) * 64,
+                    "conflict_declaration_sha256": str(int(seed) + 6) * 64,
+                    "blinding_acknowledgement_sha256": chr(96 + int(seed)) * 64,
+                }
+            )
+        cls.write_json(
+            paths["roster"],
+            {
+                "schema_version": "aura.military.temporal_review_roster.v1",
+                "roster_id": "temporal_roster_2026_01",
+                "study_id": cls.study_id,
+                "preregistration_canonical_sha256": cls.preregistration_sha256,
+                "study_commitment_canonical_sha256": cls.commitment_sha256,
+                "packet_id": cls.packet_id,
+                "packet_canonical_sha256": cls.packet_sha256,
+                "protocol": {
+                    "distinct_reviewer_affiliations": True,
+                    "independent_adjudicator": True,
+                    "conflict_screening_records": True,
+                    "blinding_acknowledgements": True,
+                    "post_timestamp_changes_forbidden": True,
+                },
+                "participants": participants,
+            },
+        )
+        if not paths["private_key"].exists():
+            cls.run_openssl(
+                [
+                    "genpkey",
+                    "-algorithm",
+                    "Ed25519",
+                    "-out",
+                    paths["private_key"].as_posix(),
+                ]
+            )
+            paths["private_key"].chmod(0o600)
+            cls.run_openssl(
+                [
+                    "pkey",
+                    "-in",
+                    paths["private_key"].as_posix(),
+                    "-pubout",
+                    "-out",
+                    paths["public_key"].as_posix(),
+                ]
+            )
+        cls.roster_coordinator_spki = sha256(
+            temporal_study_timestamp.crypto_support.public_key_der_from_public(
+                paths["public_key"]
+            )
+        ).hexdigest()
+        attestation = temporal_review_roster.sign_roster(
+            paths["roster"], paths["private_key"], "study_coordinator_roster_2026"
         )
         temporal_study_timestamp.crypto_support.write_json_atomic(
             paths["attestation"], attestation
@@ -378,6 +490,22 @@ class TemporalReviewReceiptTests(unittest.TestCase):
         }
 
     @classmethod
+    def roster_package(cls):
+        return {
+            "roster": "review-roster.json",
+            "attestation": "review-roster.attestation.json",
+            "public_key": "roster-coordinator.public.pem",
+            "expected_key_id": "study_coordinator_roster_2026",
+            "expected_signer_spki_sha256": cls.roster_coordinator_spki,
+            "timestamp_request": "review-roster.tsq",
+            "timestamp_response": "review-roster.tsr",
+            "ca_file": "ca-certificate.pem",
+            "untrusted_chain": "tsa-certificate.pem",
+            "expected_policy_oid": cls.policy_oid,
+            "expected_tsa_spki_sha256": cls.expected_tsa_spki,
+        }
+
+    @classmethod
     def write_bundle_and_index(cls):
         _, template = temporal_review_receipt.read_json(
             cls.fixture / "review-template.json",
@@ -404,9 +532,10 @@ class TemporalReviewReceiptTests(unittest.TestCase):
         cls.write_json(
             cls.fixture / "receipt-index.json",
             {
-                "schema_version": "aura.military.temporal_review_receipt_index.v1",
+                "schema_version": "aura.military.temporal_review_receipt_index.v2",
                 "review_bundle": "review-bundle.json",
                 "study_timestamp_verification": "study-timestamp.json",
+                "review_roster_receipt": cls.roster_package(),
                 "reviewer_receipts": [
                     cls.receipt_package("reviewer_a_8f2c10"),
                     cls.receipt_package("reviewer_b_41ad22"),
@@ -432,12 +561,111 @@ class TemporalReviewReceiptTests(unittest.TestCase):
             "individual_signed_rfc3161_receipts",
         )
         self.assertEqual(report["reviewer_receipt_count"], 2)
+        self.assertEqual(report["roster_assurance"], "signed_rfc3161_precommitted")
+        self.assertTrue(report["commitment_before_roster"])
+        self.assertTrue(report["roster_before_review_decisions"])
         self.assertTrue(report["commitment_before_review_receipts"])
         self.assertTrue(report["review_receipts_before_adjudication"])
         self.assertFalse(report["privacy"]["participant_tokens_exported"])
+        self.assertFalse(report["privacy"]["governance_record_digests_exported"])
         serialized = json.dumps(report)
         self.assertNotIn("reviewer_a_8f2c10", serialized)
         self.assertNotIn("affiliation_a_8f2c10", serialized)
+        self.assertNotIn("1" * 64, serialized)
+
+    def test_real_chain_report_satisfies_manifest_contract(self):
+        report = temporal_review_receipt.verify_chain(
+            self.root / "receipt-index.json"
+        )
+        review = manifest_fixtures.temporal_review_payload(
+            study_id=self.study_id,
+            preregistration_canonical_sha256=self.preregistration_sha256,
+            study_commitment_canonical_sha256=self.commitment_sha256,
+            blind_packet_id=self.packet_id,
+            blind_packet_canonical_sha256=self.packet_sha256,
+            review_bundle_canonical_sha256=report[
+                "review_bundle_canonical_sha256"
+            ],
+        )
+        review["metrics"]["corpus_cases"] = len(self.case_tokens)
+        timestamp = manifest_fixtures.temporal_study_timestamp_verification_payload(
+            study_id=self.study_id,
+            preregistration_canonical_sha256=self.preregistration_sha256,
+            commitment_canonical_sha256=self.commitment_sha256,
+            packet_canonical_sha256=self.packet_sha256,
+            response_sha256=report["study_timestamp_response_sha256"],
+            latest_trusted_time_unix_ms=report[
+                "commitment_latest_trusted_time_unix_ms"
+            ],
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
+                report, review, timestamp
+            ),
+            "pass",
+        )
+
+    def test_untrusted_roster_coordinator_key_is_rejected(self):
+        index = self.load_json("receipt-index.json")
+        index["review_roster_receipt"]["expected_signer_spki_sha256"] = "0" * 64
+        self.save_json("receipt-index.json", index)
+
+        with self.assertRaisesRegex(
+            temporal_review_receipt.ReceiptError, "expected SPKI"
+        ):
+            temporal_review_receipt.verify_chain(self.root / "receipt-index.json")
+
+    def test_participant_key_cannot_sign_the_roster(self):
+        roster_paths = self.roster_paths(self.root)
+        reviewer_paths = self.participant_paths("reviewer_a_8f2c10", self.root)
+        shutil.copyfile(reviewer_paths["private_key"], roster_paths["private_key"])
+        shutil.copyfile(reviewer_paths["public_key"], roster_paths["public_key"])
+        attestation = temporal_review_roster.sign_roster(
+            roster_paths["roster"],
+            roster_paths["private_key"],
+            "study_coordinator_roster_2026",
+        )
+        temporal_study_timestamp.crypto_support.write_json_atomic(
+            roster_paths["attestation"], attestation
+        )
+        request = temporal_study_timestamp.create_request_for_document(
+            roster_paths["attestation"].read_bytes(), self.policy_oid
+        )
+        temporal_study_timestamp.write_bytes_atomic(roster_paths["request"], request)
+        self.issue_response(roster_paths["request"], roster_paths["response"])
+        index = self.load_json("receipt-index.json")
+        index["review_roster_receipt"]["expected_signer_spki_sha256"] = (
+            self.participant_spki["reviewer_a_8f2c10"]
+        )
+        self.save_json("receipt-index.json", index)
+
+        with self.assertRaisesRegex(
+            temporal_review_receipt.ReceiptError, "distinct from participant keys"
+        ):
+            temporal_review_receipt.verify_chain(self.root / "receipt-index.json")
+
+    def test_roster_key_substitution_is_rejected_after_resigning(self):
+        roster = self.load_json("review-roster.json")
+        roster["participants"][1]["signing_key_spki_sha256"] = "0" * 64
+        self.save_json("review-roster.json", roster)
+        paths = self.roster_paths(self.root)
+        attestation = temporal_review_roster.sign_roster(
+            paths["roster"], paths["private_key"], "study_coordinator_roster_2026"
+        )
+        temporal_study_timestamp.crypto_support.write_json_atomic(
+            paths["attestation"], attestation
+        )
+        request = temporal_study_timestamp.create_request_for_document(
+            paths["attestation"].read_bytes(), self.policy_oid
+        )
+        temporal_study_timestamp.write_bytes_atomic(paths["request"], request)
+        self.issue_response(paths["request"], paths["response"])
+
+        with self.assertRaisesRegex(
+            temporal_review_receipt.ReceiptError, "frozen roster"
+        ):
+            temporal_review_receipt.verify_chain(self.root / "receipt-index.json")
 
     def test_tampered_reviewer_submission_is_rejected(self):
         submission = self.load_json("reviewer_a_8f2c10.submission.json")

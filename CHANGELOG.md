@@ -2,6 +2,11 @@
 
 ## Unreleased — Release Reliability
 
+- Added a privacy-minimized, coordinator-signed and RFC 3161 timestamped review
+  roster that precommits participant roles, affiliation claims, pinned Ed25519
+  keys, and digests of eligibility, conflict, affiliation, and blinding records.
+  Receipt-chain v2 directly verifies the roster and rejects post-result key or
+  participant substitution.
 - Added distinct Ed25519 signatures and RFC 3161 timestamps for complete
   reviewer and adjudicator submissions. The aggregate verifier requires strict
   non-overlap between the trusted commitment, reviewer-receipt, and

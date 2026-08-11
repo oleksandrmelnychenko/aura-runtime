@@ -111,6 +111,9 @@ verification are defined in `docs/temporal-study-timestamp.md`.
 Individual reviewer and adjudicator signing, timestamping, deterministic
 assembly, and chain verification are defined in
 `docs/temporal-review-receipts.md`.
+Precommitment of participant roles, affiliation claims, signing keys, and
+controlled governance-record digests is defined in
+`docs/temporal-review-roster.md`.
 
 ## Populate the v3 review bundle
 
@@ -191,7 +194,8 @@ all of these hold: packet-bound blinding, packet-bound preregistration, a valid
 study-commitment digest, trusted-key Ed25519 verification, a matching RFC 3161
 commitment verification, and a matching chain of individually signed and
 RFC 3161 timestamped reviewer and adjudicator receipts with strictly
-non-overlapping accuracy-adjusted intervals,
+non-overlapping accuracy-adjusted intervals. The chain must include a signed,
+timestamped roster fixed before declared review completion,
 `embargoed_external` corpus class, finite agreement metrics, and both agreement
 values at least `0.8`. A passing review without study attestation, trusted
 commitment timestamp, or review-receipt chain remains `pending`. Invalid,
@@ -209,9 +213,10 @@ requires multiple difficult corpora, independent annotation, documented
 sampling frames, uncertainty analysis, attack variations, and replication in
 another setting.
 
-The commitment timestamp and receipt chain prove a bounded order between the
-frozen commitment, signed reviewer submissions, and signed adjudication
-submission. They do not prove when work began, reviewer expertise, genuine
+The commitment timestamp, roster timestamp, and receipt chain prove a bounded
+order between the frozen commitment, fixed participant/key roster, signed
+reviewer submissions, and signed adjudication submission. They do not prove
+when work began, reviewer expertise, genuine
 institutional independence, absence of coordination, or truthful local
 completion-time declarations. Those remain governance and experimental-design
 claims that require separate records and oversight.

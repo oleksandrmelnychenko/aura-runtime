@@ -107,12 +107,15 @@ the institutional signer and detects substitution, but it is not a trusted time
 source. The RFC 3161 verification contract now binds the exact commitment to an
 expected timestamp policy, certificate chain, nonce, and pinned TSA signer, and
 requires the accuracy-adjusted commitment interval to precede every reviewer
-receipt interval. Reviewer and adjudicator submissions are now independently
-signed, RFC 3161 timestamped, and joined by an exact receipt-digest chain. The
+receipt interval. Participant roles, affiliation claims, signing keys, and
+governance-record digests are fixed in a separately signed and RFC 3161
+timestamped roster before declared review completion. Reviewer and adjudicator
+submissions are independently signed, timestamped, and joined by an exact
+receipt-digest chain. The
 v5 review report binds its metrics to the canonical input-bundle digest. The
 remaining limit is explicit: this establishes document existence and order,
-not reviewer expertise, actual independence, effective blinding, or absence of
-coordination.
+not the truth of governance declarations, reviewer expertise, actual
+independence, effective blinding, or absence of coordination.
 
 ## Evidence Maturity
 

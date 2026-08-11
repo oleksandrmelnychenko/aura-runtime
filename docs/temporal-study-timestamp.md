@@ -104,9 +104,10 @@ report exposes the earliest and
 latest annotation and adjudication completion times with
 `decision_time_assurance = bundle_declared`.
 
-The separate receipt protocol now timestamps the exact signed reviewer and
-adjudicator attestations and verifies strict trusted-time interval precedence.
-See `docs/temporal-review-receipts.md`. This independently witnesses when each
+The roster and receipt protocols now timestamp the fixed participant/key roster
+and exact signed reviewer/adjudicator attestations, then verify strict
+trusted-time interval precedence. See `docs/temporal-review-roster.md` and
+`docs/temporal-review-receipts.md`. This independently witnesses when each
 complete signed submission existed, but does not prove when work began, that a
 reviewer never saw labels earlier, that participant affiliations are genuine,
 or that the human-entered completion time is honest.

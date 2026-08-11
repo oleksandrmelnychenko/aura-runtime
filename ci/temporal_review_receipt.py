@@ -15,10 +15,12 @@ from pathlib import Path
 
 try:
     from ci import evidence_attestation as crypto_support
+    from ci import temporal_review_roster as roster_support
     from ci import temporal_study_attestation as study_support
     from ci import temporal_study_timestamp as timestamp_support
 except ModuleNotFoundError:  # Direct execution from the ci/ directory.
     import evidence_attestation as crypto_support
+    import temporal_review_roster as roster_support
     import temporal_study_attestation as study_support
     import temporal_study_timestamp as timestamp_support
 
@@ -30,9 +32,9 @@ ATTESTATION_SCHEMA_VERSION = (
 VERIFICATION_SCHEMA_VERSION = (
     "aura.military.temporal_review_receipt_verification.v1"
 )
-INDEX_SCHEMA_VERSION = "aura.military.temporal_review_receipt_index.v1"
+INDEX_SCHEMA_VERSION = "aura.military.temporal_review_receipt_index.v2"
 CHAIN_VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_review_receipt_chain_verification.v1"
+    "aura.military.temporal_review_receipt_chain_verification.v2"
 )
 REVIEW_BUNDLE_SCHEMA_VERSION = "aura.military.temporal_independent_review.v3"
 STUDY_TIMESTAMP_SCHEMA_VERSION = (
@@ -106,8 +108,22 @@ INDEX_FIELDS = {
     "schema_version",
     "review_bundle",
     "study_timestamp_verification",
+    "review_roster_receipt",
     "reviewer_receipts",
     "adjudicator_receipt",
+}
+ROSTER_PACKAGE_FIELDS = {
+    "roster",
+    "attestation",
+    "public_key",
+    "expected_key_id",
+    "expected_signer_spki_sha256",
+    "timestamp_request",
+    "timestamp_response",
+    "ca_file",
+    "untrusted_chain",
+    "expected_policy_oid",
+    "expected_tsa_spki_sha256",
 }
 REVIEW_BUNDLE_FIELDS = {
     "schema_version",
@@ -787,6 +803,45 @@ def load_package(package: object, base: Path) -> dict:
     return result
 
 
+def load_roster_package(package: object, base: Path) -> dict:
+    if not isinstance(package, dict) or set(package) != ROSTER_PACKAGE_FIELDS:
+        raise ReceiptError("review roster receipt package fields are invalid")
+    result = dict(package)
+    for field in (
+        "roster",
+        "attestation",
+        "public_key",
+        "timestamp_request",
+        "timestamp_response",
+        "ca_file",
+    ):
+        value = package.get(field)
+        if not isinstance(value, str) or not value:
+            raise ReceiptError(f"review roster receipt package {field} is invalid")
+        path = Path(value)
+        result[field] = (base / path).resolve() if not path.is_absolute() else path.resolve()
+    chain = package.get("untrusted_chain")
+    if chain is not None and (not isinstance(chain, str) or not chain):
+        raise ReceiptError("review roster receipt untrusted_chain is invalid")
+    result["untrusted_chain"] = (
+        None
+        if chain is None
+        else (
+            (base / Path(chain)).resolve()
+            if not Path(chain).is_absolute()
+            else Path(chain).resolve()
+        )
+    )
+    if not crypto_support.safe_key_id(package.get("expected_key_id", "")):
+        raise ReceiptError("review roster receipt expected_key_id is invalid")
+    for field in ("expected_signer_spki_sha256", "expected_tsa_spki_sha256"):
+        if not timestamp_support.lowercase_sha256(package.get(field)):
+            raise ReceiptError(f"review roster receipt package {field} is invalid")
+    if not timestamp_support.safe_oid(package.get("expected_policy_oid")):
+        raise ReceiptError("review roster receipt policy OID is invalid")
+    return result
+
+
 def verify_package(package: dict) -> tuple[dict, dict]:
     submission_raw, submission = read_json(
         package["submission"], MAX_SUBMISSION_BYTES, "temporal review submission"
@@ -881,6 +936,7 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
     )
     reviewer_packages = [load_package(package, base) for package in reviewer_packages_raw]
     adjudicator_package = load_package(index.get("adjudicator_receipt"), base)
+    roster_package = load_roster_package(index.get("review_roster_receipt"), base)
     if output_path is not None:
         package_paths = [
             package[field]
@@ -896,9 +952,28 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
             )
             if package[field] is not None
         ]
+        roster_paths = [
+            roster_package[field]
+            for field in (
+                "roster",
+                "attestation",
+                "public_key",
+                "timestamp_request",
+                "timestamp_response",
+                "ca_file",
+                "untrusted_chain",
+            )
+            if roster_package[field] is not None
+        ]
         crypto_support.ensure_distinct_output(
             output_path,
-            [index_path, review_bundle_path, study_timestamp_path, *package_paths],
+            [
+                index_path,
+                review_bundle_path,
+                study_timestamp_path,
+                *roster_paths,
+                *package_paths,
+            ],
         )
 
     review_bundle_raw, review_bundle = read_json(
@@ -911,6 +986,25 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         "temporal study timestamp verification",
     )
     validate_study_timestamp(study_timestamp)
+
+    roster_raw, roster = roster_support.load_roster(roster_package["roster"])
+    roster_report = roster_support.verify_roster(
+        roster_package["roster"],
+        roster_package["attestation"],
+        roster_package["public_key"],
+        roster_package["expected_key_id"],
+        roster_package["expected_signer_spki_sha256"],
+        roster_package["timestamp_request"],
+        roster_package["timestamp_response"],
+        roster_package["ca_file"],
+        roster_package["untrusted_chain"],
+        roster_package["expected_policy_oid"],
+        roster_package["expected_tsa_spki_sha256"],
+    )
+    if not hmac.compare_digest(
+        sha256(roster_raw).hexdigest(), roster_report["roster_file_sha256"]
+    ):
+        raise ReceiptError("review roster changed while it was being verified")
 
     reviewer_reports = []
     reviewer_submissions = []
@@ -943,6 +1037,17 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         for review_field, timestamp_field in study_bindings
     ):
         raise ReceiptError("review bundle does not match the trusted study timestamp")
+    roster_bindings = (
+        ("study_id", "study_id"),
+        ("preregistration_canonical_sha256", "preregistration_canonical_sha256"),
+        ("study_commitment_canonical_sha256", "commitment_canonical_sha256"),
+        ("packet_canonical_sha256", "packet_canonical_sha256"),
+    )
+    if any(
+        roster_report[roster_field] != study_timestamp[timestamp_field]
+        for roster_field, timestamp_field in roster_bindings
+    ) or roster_report["packet_id"] != review_bundle["packet_id"]:
+        raise ReceiptError("review roster does not match the trusted study packet")
 
     reviewer_tokens = [report["participant_token"] for report in reviewer_reports]
     if len(set(reviewer_tokens)) != len(reviewer_tokens):
@@ -955,6 +1060,34 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
     key_ids.append(adjudicator_report["key_id"])
     if len(set(key_ids)) != len(key_ids):
         raise ReceiptError("review participants must use distinct key identifiers")
+    all_reports = [*reviewer_reports, adjudicator_report]
+    all_submissions = [*reviewer_submissions, adjudicator_submission]
+    roster_by_token = {
+        participant["participant_token"]: participant
+        for participant in roster["participants"]
+    }
+    if set(roster_by_token) != {
+        report["participant_token"] for report in all_reports
+    }:
+        raise ReceiptError("review receipts do not match the frozen roster participants")
+    for report, submission in zip(all_reports, all_submissions, strict=True):
+        participant = roster_by_token[report["participant_token"]]
+        if (
+            participant["role"] != report["role"]
+            or participant["affiliation_token"] != submission["affiliation_token"]
+            or participant["signing_key_id"] != report["key_id"]
+            or participant["signing_key_spki_sha256"]
+            != report["public_key_spki_sha256"]
+        ):
+            raise ReceiptError("review receipt identity does not match the frozen roster")
+    expected_signer_set_sha256 = sha256(
+        "\n".join(sorted(signer_spki)).encode("ascii")
+    ).hexdigest()
+    if not hmac.compare_digest(
+        expected_signer_set_sha256,
+        roster_report["participant_signer_spki_set_sha256"],
+    ):
+        raise ReceiptError("review receipt signer set does not match the frozen roster")
 
     expected_links = sorted(
         (
@@ -973,6 +1106,8 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         raise ReceiptError("adjudicator submission does not bind the exact reviewer receipts")
 
     commitment_upper = study_timestamp["latest_trusted_time_unix_ms"]
+    roster_lower = roster_report["earliest_trusted_time_unix_ms"]
+    roster_upper = roster_report["latest_trusted_time_unix_ms"]
     reviewer_lower = min(
         report["earliest_trusted_time_unix_ms"] for report in reviewer_reports
     )
@@ -983,6 +1118,8 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
     adjudicator_upper = adjudicator_report["latest_trusted_time_unix_ms"]
     if commitment_upper >= reviewer_lower:
         raise ReceiptError("study commitment time interval overlaps reviewer receipts")
+    if commitment_upper >= roster_lower:
+        raise ReceiptError("study commitment time interval overlaps the review roster")
     if reviewer_upper >= adjudicator_lower:
         raise ReceiptError("reviewer receipt intervals overlap adjudication")
     reviewer_decision_times = [
@@ -992,6 +1129,8 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
     ]
     if min(reviewer_decision_times) <= commitment_upper:
         raise ReceiptError("a reviewer decision predates the trusted study commitment")
+    if roster_upper >= min(reviewer_decision_times):
+        raise ReceiptError("review roster was not frozen before reviewer decisions")
     for report, submission in zip(reviewer_reports, reviewer_submissions, strict=True):
         if max(
             decision["completed_at_ms"] for decision in submission["decisions"]
@@ -1006,13 +1145,12 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
     if max(adjudication_times) >= adjudicator_lower:
         raise ReceiptError("an adjudication decision is not earlier than its receipt")
 
-    receipt_spki_set_sha256 = sha256(
-        "\n".join(sorted(signer_spki)).encode("ascii")
-    ).hexdigest()
+    receipt_spki_set_sha256 = expected_signer_set_sha256
     tsa_spki = {
         report["tsa_signer_spki_sha256"]
         for report in [*reviewer_reports, adjudicator_report]
     }
+    tsa_spki.add(roster_report["tsa_signer_spki_sha256"])
     return {
         "schema_version": CHAIN_VERIFICATION_SCHEMA_VERSION,
         "status": "pass",
@@ -1042,6 +1180,20 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         ).hexdigest(),
         "receipt_index_sha256": sha256(index_raw).hexdigest(),
         "study_timestamp_response_sha256": study_timestamp["response_sha256"],
+        "roster_assurance": roster_report["roster_assurance"],
+        "roster_canonical_sha256": roster_report["roster_canonical_sha256"],
+        "roster_attestation_sha256": roster_report["roster_attestation_sha256"],
+        "roster_timestamp_response_sha256": roster_report["response_sha256"],
+        "roster_coordinator_public_key_spki_sha256": roster_report[
+            "coordinator_public_key_spki_sha256"
+        ],
+        "governance_record_count": roster_report["governance_record_count"],
+        "governance_record_set_sha256": roster_report[
+            "governance_record_set_sha256"
+        ],
+        "roster_changes_after_timestamp_forbidden": roster_report[
+            "roster_changes_after_timestamp_forbidden"
+        ],
         "reviewer_receipt_count": len(reviewer_reports),
         "distinct_reviewer_signer_count": len(set(signer_spki[:-1])),
         "distinct_receipt_signer_count": len(set(signer_spki)),
@@ -1061,13 +1213,20 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         ),
         "adjudication_decision_count": adjudicator_report["decision_count"],
         "receipt_signer_spki_set_sha256": receipt_spki_set_sha256,
+        "participant_signer_spki_set_sha256": roster_report[
+            "participant_signer_spki_set_sha256"
+        ],
         "receipt_timestamp_authority_count": len(tsa_spki),
         "commitment_latest_trusted_time_unix_ms": commitment_upper,
+        "roster_earliest_trusted_time_unix_ms": roster_lower,
+        "roster_latest_trusted_time_unix_ms": roster_upper,
         "reviewer_earliest_trusted_time_unix_ms": reviewer_lower,
         "reviewer_latest_trusted_time_unix_ms": reviewer_upper,
         "adjudicator_earliest_trusted_time_unix_ms": adjudicator_lower,
         "adjudicator_latest_trusted_time_unix_ms": adjudicator_upper,
         "commitment_before_review_receipts": True,
+        "commitment_before_roster": True,
+        "roster_before_review_decisions": True,
         "review_receipts_before_adjudication": True,
         "adjudicator_binds_exact_reviewer_receipts": True,
         "review_decisions_after_commitment": True,
@@ -1077,7 +1236,8 @@ def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:
         "privacy": {
             "participant_tokens_exported": False,
             "affiliation_tokens_exported": False,
-            "public_key_digests_exported": False,
+            "individual_participant_key_digests_exported": False,
+            "governance_record_digests_exported": False,
             "case_tokens_exported": False,
             "decision_labels_exported": False,
             "raw_text_present": False,

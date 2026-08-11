@@ -177,9 +177,10 @@ def temporal_study_timestamp_verification_payload(**overrides):
 
 def temporal_review_receipt_chain_verification_payload(**overrides):
     payload = {
-        "schema_version": "aura.military.temporal_review_receipt_chain_verification.v1",
+        "schema_version": "aura.military.temporal_review_receipt_chain_verification.v2",
         "status": "pass",
         "chronology_assurance": "individual_signed_rfc3161_receipts",
+        "roster_assurance": "signed_rfc3161_precommitted",
         "signature_algorithm": "Ed25519",
         "timestamp_protocol": "RFC3161",
         "message_imprint_algorithm": "sha256",
@@ -204,13 +205,25 @@ def temporal_review_receipt_chain_verification_payload(**overrides):
         "reviewer_decision_count": 74,
         "adjudication_decision_count": 37,
         "receipt_signer_spki_set_sha256": "8" * 64,
+        "participant_signer_spki_set_sha256": "8" * 64,
+        "roster_canonical_sha256": "9" * 64,
+        "roster_attestation_sha256": "a" * 64,
+        "roster_timestamp_response_sha256": "b" * 64,
+        "roster_coordinator_public_key_spki_sha256": "c" * 64,
+        "governance_record_count": 12,
+        "governance_record_set_sha256": "d" * 64,
         "receipt_timestamp_authority_count": 1,
         "commitment_latest_trusted_time_unix_ms": 1780000002000,
+        "roster_earliest_trusted_time_unix_ms": 1780000030000,
+        "roster_latest_trusted_time_unix_ms": 1780000040000,
         "reviewer_earliest_trusted_time_unix_ms": 1780000130000,
         "reviewer_latest_trusted_time_unix_ms": 1780000170000,
         "adjudicator_earliest_trusted_time_unix_ms": 1780000250000,
         "adjudicator_latest_trusted_time_unix_ms": 1780000260000,
         "commitment_before_review_receipts": True,
+        "commitment_before_roster": True,
+        "roster_before_review_decisions": True,
+        "roster_changes_after_timestamp_forbidden": True,
         "review_receipts_before_adjudication": True,
         "adjudicator_binds_exact_reviewer_receipts": True,
         "review_decisions_after_commitment": True,
@@ -220,7 +233,8 @@ def temporal_review_receipt_chain_verification_payload(**overrides):
         "privacy": {
             "participant_tokens_exported": False,
             "affiliation_tokens_exported": False,
-            "public_key_digests_exported": False,
+            "individual_participant_key_digests_exported": False,
+            "governance_record_digests_exported": False,
             "case_tokens_exported": False,
             "decision_labels_exported": False,
             "raw_text_present": False,
@@ -597,6 +611,34 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_study_timestamp_verification_payload(),
             ),
             "invalid_receipt_chronology",
+        )
+
+    def test_temporal_receipt_chain_rejects_roster_review_overlap(self):
+        payload = temporal_review_receipt_chain_verification_payload(
+            roster_latest_trusted_time_unix_ms=1780000130000
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_timestamp_verification_payload(),
+            ),
+            "invalid_receipt_chronology",
+        )
+
+    def test_temporal_receipt_chain_requires_precommitted_roster(self):
+        payload = temporal_review_receipt_chain_verification_payload(
+            roster_assurance="absent"
+        )
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_review_receipt_chain_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_timestamp_verification_payload(),
+            ),
+            "invalid_receipt_assurance",
         )
 
     def test_temporal_receipt_chain_rejects_identifier_export(self):
