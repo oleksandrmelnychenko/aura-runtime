@@ -33,16 +33,18 @@ The controlled research environment supplies a strict bundle containing:
 6. governed reviewer-agreement claims bound to the frozen statistic, BCa
    method, repetition count, seed, reviewer receipts, and coverage matrix, plus
    a trusted timestamp proving completion before adjudication;
-7. a private adjudication manifest whose exact digest is signed by the separate
+7. a domain-separated adjudicator-signed start authorization and trusted
+   timestamp issued only after the agreement-analysis interval ends;
+8. a private adjudication manifest whose exact digest is signed by the separate
    adjudicator and whose case set must exactly match the coverage matrix;
-8. a separately signed adjudication receipt bound to the complete reviewer
+9. a separately signed adjudication receipt bound to the complete reviewer
    receipt set and frozen adjudication manifest;
-9. an RFC 3161 verification receipt for adjudication;
-10. a content-free aggregate result bundle with integer confusion counts,
+10. an RFC 3161 verification receipt for adjudication;
+11. a content-free aggregate result bundle with integer confusion counts,
    exclusions, incomplete cases, safe-boundary counts, per-family
    attack-variant counts, review coverage, protocol deviations, and exact input
    digests;
-11. an institutionally signed final evidence manifest and its own RFC 3161
+12. an institutionally signed final evidence manifest and its own RFC 3161
    verification receipt.
 
 The signed final manifest also binds the canonical digest of the complete trust
@@ -60,9 +62,10 @@ self-declared timestamp JSON is not accepted.
 The validator uses timestamp uncertainty intervals. The latest possible
 preregistration time must be earlier than the earliest possible reviewer time;
 all reviewer intervals must end before the agreement analysis; that analysis
-must end before adjudication can begin; adjudication must precede the signed
-final manifest. Declared application clocks never replace these trusted
-intervals.
+must end before the separately signed and timestamped authorization to begin
+adjudication; adjudication completion must follow that authorization and
+precede the signed final manifest. Declared application clocks never replace
+these trusted intervals.
 
 The entry point rejects empty inputs, preregistrations larger than 2 MiB, and
 result evidence larger than 8 MiB. All count arithmetic is checked; overflow is

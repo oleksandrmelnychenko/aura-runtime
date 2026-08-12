@@ -26,6 +26,9 @@ pub const DOMAIN_STUDY_RESULT_SCHEMA_VERSION: &str = "aura.domain.independent_ev
 /// Supported schema for governed reviewer-agreement analysis claims.
 pub const DOMAIN_STUDY_AGREEMENT_ANALYSIS_SCHEMA_VERSION: &str =
     "aura.domain.reviewer_agreement_analysis.v1";
+/// Supported schema for signed adjudication-start authorizations.
+pub const DOMAIN_STUDY_ADJUDICATION_START_SCHEMA_VERSION: &str =
+    "aura.domain.adjudication_start_authorization.v1";
 /// Supported schema for institutional preregistration attestations.
 pub const DOMAIN_STUDY_PREREGISTRATION_ATTESTATION_SCHEMA_VERSION: &str =
     "aura.domain.preregistration_attestation.v1";
@@ -54,6 +57,7 @@ const WILSON_95_Z: f64 = 1.959_963_984_540_054;
 const PREREGISTRATION_ATTESTATION_DOMAIN: &[u8] = b"aura.domain.preregistration-attestation.v1\0";
 const TRUSTED_TIMESTAMP_DOMAIN: &[u8] = b"aura.domain.trusted-timestamp.v1\0";
 const REVIEWER_RECEIPT_DOMAIN: &[u8] = b"aura.domain.reviewer-receipt.v1\0";
+const ADJUDICATION_START_DOMAIN: &[u8] = b"aura.domain.adjudication-start.v1\0";
 const ADJUDICATION_RECEIPT_DOMAIN: &[u8] = b"aura.domain.adjudication-receipt.v1\0";
 const FINAL_MANIFEST_DOMAIN: &[u8] = b"aura.domain.final-evidence-manifest.v1\0";
 
@@ -152,6 +156,8 @@ pub enum DomainStudyTimestampSubjectKind {
     ReviewerReceipt,
     /// Governed reviewer-agreement analysis claims.
     ReviewerAgreementAnalysis,
+    /// Signed authorization fixing the earliest admissible adjudication start.
+    AdjudicationStartAuthorization,
     /// Signed independent adjudication receipt.
     AdjudicationReceipt,
     /// Signed final evidence manifest.
@@ -288,6 +294,34 @@ pub struct DomainStudyAdjudicationManifest {
     pub blind_case_token_sha256: Vec<String>,
     /// Digest of the complete private adjudication decisions.
     pub decision_bundle_sha256: String,
+}
+
+/// Claims authorizing adjudication only after agreement analysis is frozen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DomainStudyAdjudicationStartClaims {
+    /// Schema identity.
+    pub schema_version: String,
+    /// Stable study identity.
+    pub study_id: String,
+    /// Exact preregistration digest.
+    pub preregistration_canonical_sha256: String,
+    /// Digest of the sorted signed reviewer-receipt set.
+    pub reviewer_receipt_set_sha256: String,
+    /// Digest of the governed agreement-analysis claims.
+    pub agreement_analysis_sha256: String,
+    /// Declared authorization time; trusted chronology comes from the timestamp.
+    pub authorized_at_ms: u64,
+}
+
+/// Adjudicator-signed start authorization.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DomainStudyAdjudicationStartAuthorization {
+    /// Signed start claims.
+    pub claims: DomainStudyAdjudicationStartClaims,
+    /// Independent adjudicator signature under a start-specific domain.
+    pub signature: DomainStudyDetachedSignature,
 }
 
 /// Claims signed by an adjudicator who is not a reviewer.
@@ -548,6 +582,10 @@ pub struct DomainStudyFinalManifestClaims {
     pub reviewer_timestamp_set_sha256: String,
     /// Digest of the trusted reviewer-agreement analysis timestamp.
     pub agreement_analysis_timestamp_sha256: String,
+    /// Digest of the signed adjudication-start authorization.
+    pub adjudication_start_authorization_sha256: String,
+    /// Digest of the trusted adjudication-start timestamp.
+    pub adjudication_start_timestamp_sha256: String,
     /// Digest of the signed adjudication receipt.
     pub adjudication_receipt_sha256: String,
     /// Digest of the adjudication timestamp receipt.
@@ -608,6 +646,10 @@ pub struct DomainStudyResultEvidenceBundle {
     pub result: DomainStudyResultBundle,
     /// Trusted timestamp covering the governed agreement-analysis claims.
     pub review_agreement_analysis_timestamp: DomainStudyTrustedTimestampReceipt,
+    /// Signed authorization that must precede all adjudication work.
+    pub adjudication_start_authorization: DomainStudyAdjudicationStartAuthorization,
+    /// Trusted timestamp covering the adjudication-start authorization.
+    pub adjudication_start_timestamp: DomainStudyTrustedTimestampReceipt,
     /// Signed final evidence manifest.
     pub final_manifest: DomainStudyFinalManifest,
     /// Trusted timestamp of the signed final manifest.
@@ -681,6 +723,8 @@ pub struct DomainStudyResultReport {
     pub adjudication_earliest_ms: u64,
     /// Trusted upper bound on reviewer-agreement analysis completion.
     pub agreement_analysis_latest_ms: u64,
+    /// Trusted lower bound on authorized adjudication start.
+    pub adjudication_start_earliest_ms: u64,
     /// Trusted lower bound on final-manifest time.
     pub final_manifest_earliest_ms: u64,
     /// Number of independently signed reviewer receipts.
@@ -781,6 +825,14 @@ pub fn domain_study_reviewer_receipt_signing_payload(
     key_id: &str,
 ) -> Result<Vec<u8>, DomainStudyResultError> {
     signing_payload(REVIEWER_RECEIPT_DOMAIN, claims, key_id)
+}
+
+/// Produces the domain-separated payload for an adjudication-start authorization.
+pub fn domain_study_adjudication_start_signing_payload(
+    claims: &DomainStudyAdjudicationStartClaims,
+    key_id: &str,
+) -> Result<Vec<u8>, DomainStudyResultError> {
+    signing_payload(ADJUDICATION_START_DOMAIN, claims, key_id)
 }
 
 /// Produces the domain-separated payload for an adjudication receipt.
@@ -886,6 +938,34 @@ pub fn validate_domain_study_result_evidence(
     {
         return invalid("agreement analysis does not provably follow frozen reviewer decisions");
     }
+    let adjudication_start_sha256 = validate_adjudication_start_authorization(
+        &evidence.adjudication_start_authorization,
+        &binding.study_id,
+        &binding.preregistration_canonical_sha256,
+        &reviewer_chain.receipt_set_sha256,
+        &agreement_analysis_sha256,
+        &trust_policy.adjudicator,
+    )?;
+    let adjudication_start_time = validate_timestamp_receipt(
+        &evidence.adjudication_start_timestamp,
+        DomainStudyTimestampSubjectKind::AdjudicationStartAuthorization,
+        &adjudication_start_sha256,
+        trust_policy,
+    )?;
+    if agreement_analysis_time.latest_ms >= adjudication_start_time.earliest_ms
+        || evidence
+            .adjudication_start_authorization
+            .claims
+            .authorized_at_ms
+            <= agreement_analysis_time.latest_ms
+        || evidence
+            .adjudication_start_authorization
+            .claims
+            .authorized_at_ms
+            > adjudication_start_time.latest_ms
+    {
+        return invalid("adjudication start is not provably after frozen agreement analysis");
+    }
     validate_adjudication_manifest(
         &evidence.adjudication_manifest,
         &evidence.adjudication_receipt,
@@ -907,15 +987,17 @@ pub fn validate_domain_study_result_evidence(
         &adjudication_receipt_sha256,
         trust_policy,
     )?;
-    if agreement_analysis_time.latest_ms >= adjudication_time.earliest_ms {
+    if adjudication_start_time.latest_ms >= adjudication_time.earliest_ms {
         return invalid(
-            "agreement-analysis timestamp overlaps adjudication; pre-adjudication analysis is not proven",
+            "adjudication-start timestamp overlaps completion; ordered adjudication is not proven",
         );
     }
-    if evidence.adjudication_receipt.claims.completed_at_ms <= reviewer_chain.latest_time.latest_ms
+    if evidence.adjudication_receipt.claims.completed_at_ms <= adjudication_start_time.latest_ms
         || evidence.adjudication_receipt.claims.completed_at_ms > adjudication_time.latest_ms
     {
-        return invalid("adjudication declared time is outside the trusted post-review interval");
+        return invalid(
+            "adjudication declared time is outside the trusted post-agreement interval",
+        );
     }
 
     let metric_decision = validate_result_bundle(
@@ -936,6 +1018,8 @@ pub fn validate_domain_study_result_evidence(
     let preregistration_timestamp_sha256 = canonical_sha256(&evidence.preregistration_timestamp)?;
     let agreement_analysis_timestamp_sha256 =
         canonical_sha256(&evidence.review_agreement_analysis_timestamp)?;
+    let adjudication_start_timestamp_sha256 =
+        canonical_sha256(&evidence.adjudication_start_timestamp)?;
     let adjudication_timestamp_sha256 = canonical_sha256(&evidence.adjudication_timestamp)?;
     let expected_manifest_claims = DomainStudyFinalManifestClaims {
         schema_version: DOMAIN_STUDY_FINAL_MANIFEST_SCHEMA_VERSION.to_string(),
@@ -951,6 +1035,8 @@ pub fn validate_domain_study_result_evidence(
         reviewer_receipt_set_sha256: reviewer_chain.receipt_set_sha256.clone(),
         reviewer_timestamp_set_sha256: reviewer_chain.timestamp_set_sha256,
         agreement_analysis_timestamp_sha256,
+        adjudication_start_authorization_sha256: adjudication_start_sha256,
+        adjudication_start_timestamp_sha256,
         adjudication_receipt_sha256,
         adjudication_timestamp_sha256,
         result_bundle_sha256: result_bundle_sha256.clone(),
@@ -1003,6 +1089,7 @@ pub fn validate_domain_study_result_evidence(
         last_review_latest_ms: reviewer_chain.latest_time.latest_ms,
         adjudication_earliest_ms: adjudication_time.earliest_ms,
         agreement_analysis_latest_ms: agreement_analysis_time.latest_ms,
+        adjudication_start_earliest_ms: adjudication_start_time.earliest_ms,
         final_manifest_earliest_ms: final_manifest_time.earliest_ms,
         reviewer_receipt_count: evidence.reviewer_receipts.len(),
         total_case_count: evidence.result.metrics.total_case_count,
@@ -1219,6 +1306,34 @@ fn validate_adjudication_receipt(
         "adjudication receipt",
     )?;
     canonical_sha256(receipt)
+}
+
+fn validate_adjudication_start_authorization(
+    authorization: &DomainStudyAdjudicationStartAuthorization,
+    study_id: &str,
+    preregistration_sha256: &str,
+    reviewer_receipt_set_sha256: &str,
+    agreement_analysis_sha256: &str,
+    trusted_key: &DomainStudyTrustedKey,
+) -> Result<String, DomainStudyResultError> {
+    let claims = &authorization.claims;
+    if claims.schema_version != DOMAIN_STUDY_ADJUDICATION_START_SCHEMA_VERSION
+        || claims.study_id != study_id
+        || claims.preregistration_canonical_sha256 != preregistration_sha256
+        || claims.reviewer_receipt_set_sha256 != reviewer_receipt_set_sha256
+        || claims.agreement_analysis_sha256 != agreement_analysis_sha256
+        || claims.authorized_at_ms == 0
+    {
+        return invalid("adjudication-start authorization does not bind the frozen study");
+    }
+    verify_signed_claims(
+        ADJUDICATION_START_DOMAIN,
+        claims,
+        &authorization.signature,
+        trusted_key,
+        "adjudication-start authorization",
+    )?;
+    canonical_sha256(authorization)
 }
 
 fn validate_adjudication_manifest(
@@ -2537,6 +2652,30 @@ mod tests {
             REGISTERED_AT_MS + 25_500,
             &keys,
         );
+        let adjudication_start_claims = DomainStudyAdjudicationStartClaims {
+            schema_version: DOMAIN_STUDY_ADJUDICATION_START_SCHEMA_VERSION.to_string(),
+            study_id: binding.study_id.clone(),
+            preregistration_canonical_sha256: binding.preregistration_canonical_sha256.clone(),
+            reviewer_receipt_set_sha256: result.reviewer_receipt_set_sha256.clone(),
+            agreement_analysis_sha256: canonical_sha256(&result.review_agreement_analysis)
+                .expect("agreement analysis digest"),
+            authorized_at_ms: REGISTERED_AT_MS + 27_000,
+        };
+        let adjudication_start_authorization = DomainStudyAdjudicationStartAuthorization {
+            signature: signature(
+                ADJUDICATION_START_DOMAIN,
+                &adjudication_start_claims,
+                "independent_adjudicator",
+                &keys.adjudicator,
+            ),
+            claims: adjudication_start_claims,
+        };
+        let adjudication_start_timestamp = timestamp(
+            DomainStudyTimestampSubjectKind::AdjudicationStartAuthorization,
+            canonical_sha256(&adjudication_start_authorization).expect("adjudication start digest"),
+            REGISTERED_AT_MS + 27_500,
+            &keys,
+        );
         let mut evidence = DomainStudyResultEvidenceBundle {
             schema_version: DOMAIN_STUDY_RESULT_EVIDENCE_SCHEMA_VERSION.to_string(),
             preregistration_attestation,
@@ -2549,6 +2688,8 @@ mod tests {
             adjudication_timestamp,
             result,
             review_agreement_analysis_timestamp,
+            adjudication_start_authorization,
+            adjudication_start_timestamp,
             final_manifest: DomainStudyFinalManifest {
                 claims: placeholder_manifest_claims(&binding),
                 signature: DomainStudyDetachedSignature {
@@ -2623,6 +2764,8 @@ mod tests {
             reviewer_receipt_set_sha256: SHA_A.to_string(),
             reviewer_timestamp_set_sha256: SHA_A.to_string(),
             agreement_analysis_timestamp_sha256: SHA_A.to_string(),
+            adjudication_start_authorization_sha256: SHA_A.to_string(),
+            adjudication_start_timestamp_sha256: SHA_A.to_string(),
             adjudication_receipt_sha256: SHA_A.to_string(),
             adjudication_timestamp_sha256: SHA_A.to_string(),
             result_bundle_sha256: SHA_A.to_string(),
@@ -2648,6 +2791,31 @@ mod tests {
             canonical_sha256(&evidence.result.review_agreement_analysis)
                 .expect("agreement analysis digest"),
             REGISTERED_AT_MS + 25_500,
+            keys,
+        );
+        let start_claims = DomainStudyAdjudicationStartClaims {
+            schema_version: DOMAIN_STUDY_ADJUDICATION_START_SCHEMA_VERSION.to_string(),
+            study_id: binding.study_id.clone(),
+            preregistration_canonical_sha256: binding.preregistration_canonical_sha256.clone(),
+            reviewer_receipt_set_sha256: evidence.result.reviewer_receipt_set_sha256.clone(),
+            agreement_analysis_sha256: canonical_sha256(&evidence.result.review_agreement_analysis)
+                .expect("agreement analysis digest"),
+            authorized_at_ms: REGISTERED_AT_MS + 27_000,
+        };
+        evidence.adjudication_start_authorization = DomainStudyAdjudicationStartAuthorization {
+            signature: signature(
+                ADJUDICATION_START_DOMAIN,
+                &start_claims,
+                "independent_adjudicator",
+                &keys.adjudicator,
+            ),
+            claims: start_claims,
+        };
+        evidence.adjudication_start_timestamp = timestamp(
+            DomainStudyTimestampSubjectKind::AdjudicationStartAuthorization,
+            canonical_sha256(&evidence.adjudication_start_authorization)
+                .expect("adjudication start digest"),
+            REGISTERED_AT_MS + 27_500,
             keys,
         );
         let reviewer_receipt_digests = evidence
@@ -2684,6 +2852,14 @@ mod tests {
                 &evidence.review_agreement_analysis_timestamp,
             )
             .expect("agreement timestamp digest"),
+            adjudication_start_authorization_sha256: canonical_sha256(
+                &evidence.adjudication_start_authorization,
+            )
+            .expect("adjudication start digest"),
+            adjudication_start_timestamp_sha256: canonical_sha256(
+                &evidence.adjudication_start_timestamp,
+            )
+            .expect("adjudication start timestamp digest"),
             adjudication_receipt_sha256: canonical_sha256(&evidence.adjudication_receipt)
                 .expect("adjudication receipt digest"),
             adjudication_timestamp_sha256: canonical_sha256(&evidence.adjudication_timestamp)
@@ -3109,24 +3285,30 @@ mod tests {
     }
 
     #[test]
-    fn agreement_analysis_must_provably_precede_adjudication() {
+    fn adjudication_start_must_provably_follow_agreement_analysis() {
         let mut fixture = fixture();
         fixture
             .evidence
-            .result
-            .review_agreement_analysis
-            .completed_at_ms = REGISTERED_AT_MS + 30_000;
-        fixture.evidence.review_agreement_analysis_timestamp = timestamp(
-            DomainStudyTimestampSubjectKind::ReviewerAgreementAnalysis,
-            canonical_sha256(&fixture.evidence.result.review_agreement_analysis)
-                .expect("agreement digest"),
-            REGISTERED_AT_MS + 30_500,
+            .adjudication_start_authorization
+            .claims
+            .authorized_at_ms = REGISTERED_AT_MS + 24_000;
+        fixture.evidence.adjudication_start_authorization.signature = signature(
+            ADJUDICATION_START_DOMAIN,
+            &fixture.evidence.adjudication_start_authorization.claims,
+            "independent_adjudicator",
+            &fixture.keys.adjudicator,
+        );
+        fixture.evidence.adjudication_start_timestamp = timestamp(
+            DomainStudyTimestampSubjectKind::AdjudicationStartAuthorization,
+            canonical_sha256(&fixture.evidence.adjudication_start_authorization)
+                .expect("adjudication start digest"),
+            REGISTERED_AT_MS + 24_500,
             &fixture.keys,
         );
 
-        let error = validate(&fixture).expect_err("overlapping agreement/adjudication must fail");
+        let error = validate(&fixture).expect_err("early adjudication start must fail");
 
-        assert!(error.to_string().contains("pre-adjudication"));
+        assert!(error.to_string().contains("adjudication start"));
     }
 
     #[test]
