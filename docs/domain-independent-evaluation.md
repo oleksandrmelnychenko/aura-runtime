@@ -75,15 +75,15 @@ let military = aura_military::validate_independent_study_preregistration(
 )?;
 ```
 
-The validator always injects and byte-verifies the committed repository corpus
-registry. Its single manifest covers every JSON artifact under workspace crate
-`data` directories; a discovery test fails if a file is missing or its bytes
-drift. The caller adds every private synthetic, pilot-tuning, and prior
-evaluation digest. The preregistration must contain the exact combined registry
-digest returned by `domain_study_seed_registry_sha256`; omitting or adding a
-private seed later invalidates the binding. This prevents exact corpus reuse,
-but transformed or partially copied seed material still requires independent
-lineage auditing.
+The validator always injects the committed repository data registry. Its single
+embedded manifest covers every JSON artifact under workspace crate `data`
+directories; the CI discovery test byte-verifies every manifest entry and fails
+if a file is missing or drifts. The caller adds every private synthetic,
+pilot-tuning, and prior evaluation digest. The preregistration must contain the
+exact combined registry digest returned by
+`domain_study_seed_registry_sha256`; omitting or adding a private seed later
+invalidates the binding. This prevents exact corpus reuse, but transformed or
+partially copied seed material still requires independent lineage auditing.
 
 The corpus itself stays in the controlled research environment. This phase
 implements the preregistration binding only; the privacy-safe aggregate result

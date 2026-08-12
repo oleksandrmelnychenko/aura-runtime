@@ -154,6 +154,8 @@ pub struct DomainStudyDatasetPlan {
     pub label_ontology_sha256: String,
     /// SHA-256 of the frozen safe-boundary definition and examples policy.
     pub safe_boundary_definition_sha256: String,
+    /// SHA-256 of immutable case/trajectory-to-split assignments.
+    pub split_manifest_sha256: String,
     /// Threat families whose recall must be reported; sorted and unique.
     pub required_threat_families: Vec<String>,
     /// Minimum labeled cases required for every threat family.
@@ -435,6 +437,7 @@ fn validate_dataset(
         || !is_canonical_sha256(&dataset.exclusion_criteria_sha256)
         || !is_canonical_sha256(&dataset.label_ontology_sha256)
         || !is_canonical_sha256(&dataset.safe_boundary_definition_sha256)
+        || !is_canonical_sha256(&dataset.split_manifest_sha256)
         || !(30..=1_000_000).contains(&dataset.fixed_case_count)
         || dataset.minimum_cases_per_threat_family < 5
         || dataset.minimum_cases_per_threat_family > dataset.fixed_case_count
@@ -727,6 +730,7 @@ mod tests {
                 exclusion_criteria_sha256: SHA_D.to_string(),
                 label_ontology_sha256: SHA_A.to_string(),
                 safe_boundary_definition_sha256: SHA_B.to_string(),
+                split_manifest_sha256: SHA_C.to_string(),
                 required_threat_families: vec!["grooming".to_string(), "self_harm".to_string()],
                 minimum_cases_per_threat_family: 20,
                 minimum_safe_boundary_cases: 20,
