@@ -1,0 +1,117 @@
+# Independent domain result evidence
+
+Status: machine-verifiable result-chain contract implemented; no independent
+corpus has yet completed this protocol.
+
+## Claim boundary
+
+This contract answers a narrow question: does one exact frozen AURA domain
+build meet the descriptive thresholds fixed by its v1 preregistration on one
+exact frozen corpus, with a complete and chronologically admissible review
+chain?
+
+It does not establish causality, universal real-world effectiveness,
+representativeness of the sampling frame, reviewer expertise, or the truth of
+institutional independence declarations. Those remain governance and
+replication questions. The strongest machine state is therefore
+`independent_evidence_candidate`, not scientific truth or production
+activation authority.
+
+## Private verification bundle
+
+The controlled research environment supplies a strict bundle containing:
+
+1. an Ed25519 institutional attestation of the canonical preregistration;
+2. an independently verified RFC 3161 trusted-chain receipt for that
+   attestation;
+3. two to five individually signed reviewer receipts, each bound to the study,
+   blind packet, assignment manifest, decision bundle, affiliation commitment,
+   and completed-case count;
+4. an RFC 3161 verification receipt for every reviewer receipt;
+5. a separately signed adjudication receipt bound to the complete reviewer
+   receipt set and frozen adjudication bundle;
+6. an RFC 3161 verification receipt for adjudication;
+7. a content-free aggregate result bundle with integer confusion counts,
+   exclusions, incomplete cases, safe-boundary counts, per-family
+   attack-variant counts, review coverage, protocol deviations, and exact input
+   digests;
+8. an institutionally signed final evidence manifest and its own RFC 3161
+   verification receipt.
+
+The RFC 3161 receipt is a domain-separated Ed25519 attestation produced by a
+trusted timestamp-verification adapter after it verifies the original request,
+response, TSA chain, policy, nonce, and complete revocation evidence. The
+receipt binds the SHA-256 digests of those original artifacts. Trust comes from
+the configured verifier key and TSA SPKI/policy allow-list; a self-declared
+timestamp JSON is not accepted.
+
+The validator uses timestamp uncertainty intervals. The latest possible
+preregistration time must be earlier than the earliest possible reviewer time;
+all reviewer intervals must end before adjudication can begin; adjudication
+must precede the signed final manifest. Declared application clocks never
+replace these trusted intervals.
+
+The entry point rejects empty inputs, preregistrations larger than 2 MiB, and
+result evidence larger than 8 MiB. All count arithmetic is checked; overflow is
+invalid evidence rather than a saturating or wrapping result.
+
+## Recomputed outcomes
+
+The result bundle cannot supply its own pass booleans. The validator recomputes:
+
+- per-threat precision, recall, F1, and macro F1 from integer confusion counts;
+- a conservative per-threat F1 from the precision and recall Wilson lower
+  bounds, plus its macro mean;
+- safe-boundary false-positive rate;
+- total and per-preregistered-family attack-variant consistency coverage;
+- two-sided 95% Wilson bounds for binomial proportions.
+
+An independent candidate requires both the fixed point thresholds and the
+conservative Wilson bounds: every recall lower bound and the attack-consistency
+lower bound must meet their floors, while the safe-boundary false-positive
+upper bound must remain below its ceiling. Krippendorff's nominal alpha is
+checked against the preregistered agreement floor and bound to the frozen
+review-analysis digest. Its lower two-sided 95% bound must also meet that floor.
+The exact statistic, case-resampling BCa bootstrap method, resample count, and
+seed digest are part of the canonical preregistration, so a different agreement
+coefficient or uncertainty procedure cannot be substituted after review.
+
+Any excluded or incomplete fixed case, missing attack variant, insufficient
+review coverage, or incomplete adjudication yields `incomplete`. A complete
+negative study remains valid evidence with `thresholds_not_met`; it is never
+discarded. Repository and internally curated corpora can only produce
+`engineering_only`, regardless of perfect metrics.
+
+The aggregate coverage counts are bound to a private case-to-reviewer coverage
+matrix digest. Each row uses small indices into the sorted signed-receipt array,
+not repeated reviewer key identifiers, and the validator enforces the frozen
+per-case maximum. This makes later audit substitution detectable, but the public
+validator cannot prove that a private assignment or affiliation describes a
+real person or institution; independent governance must inspect those records.
+Likewise, recomputation from signed aggregate counts proves internal arithmetic
+consistency, not that those counts faithfully summarize the private prediction
+and label bundles. The final signed manifest and their digests make that claim
+auditable; an independent reproducer must still recompute the aggregates from
+the governed private artifacts.
+
+## Privacy and activation boundary
+
+Reviewer key identifiers and affiliation commitments exist only in the private
+verification bundle. The returned report and final manifest expose counts and
+cryptographic digests, not reviewer identifiers, raw messages, stable actor
+identifiers, or blind mappings.
+
+For Military temporal evaluation, the exact preregistered policy must still be
+`shadow_only`, with both runtime policy execution and product actions disabled.
+No result status produced by this contract can enable either path.
+
+## Operational prerequisites
+
+Before a real confirmatory run, governance must provision distinct trusted
+keys for the institution, timestamp verifier, reviewers, and adjudicator;
+archive the original RFC 3161 artifacts and revocation material; freeze the
+corpus and review packet; and retain private case-level material under the
+approved ethics, consent, access, and retention controls. Public study and
+result tokens must be non-personal. Affiliation commitments must hash governed
+randomly salted commitment artifacts, never raw institution names that permit
+dictionary recovery.

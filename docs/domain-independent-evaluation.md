@@ -22,7 +22,9 @@ following for later trusted-time verification:
 - two to five reviewers per case, distinct affiliations, independent
   adjudication, label blinding, label freeze, and agreement reporting;
 - macro F1, per-threat recall, safe-boundary false-positive rate, and attack
-  consistency as fixed primary outcomes;
+  consistency as fixed primary outcomes, with nominal Krippendorff alpha fixed
+  as the reviewer-agreement statistic and a fixed case-resampling BCa bootstrap
+  plan for its 95% interval;
 - no optional stopping, no imputation of incomplete review, separation of
   exploratory analyses, and complete reporting of exclusions and deviations.
 
@@ -31,6 +33,10 @@ criteria, ontology, safe-boundary, or attack-manifest change creates a different
 study identity. Values in arrays that define hypotheses, features, threat
 families, strata, attacks, or outcomes must be sorted and unique so semantically
 equivalent documents do not acquire arbitrary orderings.
+
+The bounded JSON v1 contract accepts 30 to 25,000 fixed cases. A larger study
+requires a future streamed or chunked evidence schema rather than silently
+exceeding the verifier's memory bound.
 
 The declared `registered_at_ms` and boolean anti-bias fields are not trusted
 proof that registration preceded label access. A canonical preregistration
@@ -85,10 +91,11 @@ exact combined registry digest returned by
 invalidates the binding. This prevents exact corpus reuse, but transformed or
 partially copied seed material still requires independent lineage auditing.
 
-The corpus itself stays in the controlled research environment. This phase
-implements the preregistration binding only; the privacy-safe aggregate result
-schema, trusted-time verification, and signed final evidence manifest are the
-next code milestone and must not be inferred from a successful binding.
+The corpus itself stays in the controlled research environment. The subsequent
+machine-verifiable result chain is specified in
+`docs/domain-independent-result-evidence.md`. Implementing that validator does
+not mean an independent corpus has completed the protocol; a successful
+preregistration binding alone remains `independent_evidence_pending`.
 
 ## Military temporal boundary
 
@@ -102,8 +109,8 @@ timestamps, receipt chains, and activation-readiness evidence.
 
 ## Next operational artifacts
 
-The preregistration contract is ready; the following inputs and result-layer
-code must exist before a confirmatory run:
+The preregistration and result-chain contracts are ready; the following
+governed inputs and real execution must exist before a confirmatory claim:
 
 1. an independently governed sampling frame and dataset card;
 2. ethics, consent, retention, and access-control records appropriate to each
@@ -114,9 +121,9 @@ code must exist before a confirmatory run:
    attack variations;
 5. a blinded review packet, independently timestamped reviewer decisions, and
    separate adjudication;
-6. a fail-closed content-free result validator, trusted preregistration-time
-   verification, and signed evidence manifest tied to the exact
-   preregistration, build, corpus, reviews, and policy evidence.
+6. a real execution of the fail-closed content-free result validator, including
+   trusted preregistration-time verification and a signed evidence manifest
+   tied to the exact preregistration, build, corpus, reviews, and policy.
 
 Until those artifacts exist, this feature is research infrastructure, not a
 claim of real-world effectiveness.

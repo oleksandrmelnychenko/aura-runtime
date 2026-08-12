@@ -5,6 +5,7 @@ edition.workspace = true
 description = "Domain module contract for AURA extensions"
 
 [dependencies]
+ed25519-dalek.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

@@ -17,6 +17,8 @@ use crate::{
 /// Supported schema for independent-domain evaluation preregistrations.
 pub const DOMAIN_STUDY_PREREGISTRATION_SCHEMA_VERSION: &str =
     "aura.domain.independent_evaluation_preregistration.v1";
+/// Maximum fixed corpus supported by the bounded JSON evidence format v1.
+pub const DOMAIN_STUDY_MAX_FIXED_CASE_COUNT_V1: usize = 25_000;
 
 const REPOSITORY_SEED_MANIFEST_SCHEMA_VERSION: u32 = 1;
 const REPOSITORY_SEED_MANIFEST_JSON: &str = include_str!("../repository_seed_manifest.json");
@@ -88,6 +90,22 @@ pub enum DomainStudyPrimaryOutcome {
 pub enum DomainStudyMissingDataRule {
     /// Do not impute; publish incomplete counts and keep the study non-passing.
     NoImputationReportIncomplete,
+}
+
+/// Prespecified statistic for agreement between independent reviewers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainStudyInterRaterAgreementStatistic {
+    /// Krippendorff's alpha computed for nominal labels.
+    KrippendorffAlphaNominal,
+}
+
+/// Prespecified uncertainty estimator for reviewer agreement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainStudyAgreementUncertaintyMethod {
+    /// Bias-corrected and accelerated 95% bootstrap interval resampling cases.
+    CaseBootstrapBca95,
 }
 
 /// Ceiling on the claim supported immediately after preregistration validation.
@@ -232,6 +250,14 @@ pub struct DomainStudyAnalysisPlan {
     pub minimum_attack_variant_consistency_rate: f64,
     /// Minimum acceptable inter-rater agreement for confirmatory review.
     pub minimum_inter_rater_agreement: f64,
+    /// Exact agreement statistic fixed before confirmatory review.
+    pub inter_rater_agreement_statistic: DomainStudyInterRaterAgreementStatistic,
+    /// Exact uncertainty method fixed before confirmatory review.
+    pub inter_rater_agreement_uncertainty_method: DomainStudyAgreementUncertaintyMethod,
+    /// Fixed number of bootstrap repetitions for the agreement interval.
+    pub inter_rater_agreement_bootstrap_resamples: usize,
+    /// SHA-256 of the fixed bootstrap seed material.
+    pub inter_rater_agreement_bootstrap_seed_sha256: String,
     /// Prespecified handling of incomplete review decisions.
     pub missing_data_rule: DomainStudyMissingDataRule,
     /// Whether exploratory analyses are explicitly separated from confirmation.
@@ -438,7 +464,7 @@ fn validate_dataset(
         || !is_canonical_sha256(&dataset.label_ontology_sha256)
         || !is_canonical_sha256(&dataset.safe_boundary_definition_sha256)
         || !is_canonical_sha256(&dataset.split_manifest_sha256)
-        || !(30..=1_000_000).contains(&dataset.fixed_case_count)
+        || !(30..=DOMAIN_STUDY_MAX_FIXED_CASE_COUNT_V1).contains(&dataset.fixed_case_count)
         || dataset.minimum_cases_per_threat_family < 5
         || dataset.minimum_cases_per_threat_family > dataset.fixed_case_count
         || dataset.minimum_safe_boundary_cases < 10
@@ -536,6 +562,12 @@ fn validate_analysis(analysis: &DomainStudyAnalysisPlan) -> Result<(), DomainStu
         || !low_false_positive_ceiling(analysis.maximum_safe_boundary_false_positive_rate)
         || !high_assurance_floor(analysis.minimum_attack_variant_consistency_rate)
         || !high_assurance_floor(analysis.minimum_inter_rater_agreement)
+        || analysis.inter_rater_agreement_statistic
+            != DomainStudyInterRaterAgreementStatistic::KrippendorffAlphaNominal
+        || analysis.inter_rater_agreement_uncertainty_method
+            != DomainStudyAgreementUncertaintyMethod::CaseBootstrapBca95
+        || !(10_000..=1_000_000).contains(&analysis.inter_rater_agreement_bootstrap_resamples)
+        || !is_canonical_sha256(&analysis.inter_rater_agreement_bootstrap_seed_sha256)
         || analysis.missing_data_rule != DomainStudyMissingDataRule::NoImputationReportIncomplete
         || !analysis.exploratory_analyses_reported_separately
         || !analysis.all_exclusions_and_deviations_reported
@@ -778,6 +810,12 @@ mod tests {
                 maximum_safe_boundary_false_positive_rate: 0.05,
                 minimum_attack_variant_consistency_rate: 0.8,
                 minimum_inter_rater_agreement: 0.8,
+                inter_rater_agreement_statistic:
+                    DomainStudyInterRaterAgreementStatistic::KrippendorffAlphaNominal,
+                inter_rater_agreement_uncertainty_method:
+                    DomainStudyAgreementUncertaintyMethod::CaseBootstrapBca95,
+                inter_rater_agreement_bootstrap_resamples: 20_000,
+                inter_rater_agreement_bootstrap_seed_sha256: SHA_D.to_string(),
                 missing_data_rule: DomainStudyMissingDataRule::NoImputationReportIncomplete,
                 exploratory_analyses_reported_separately: true,
                 all_exclusions_and_deviations_reported: true,
@@ -1001,6 +1039,19 @@ mod tests {
             .expect_err("impossible denominator plan must fail");
 
         assert!(error.to_string().contains("dataset identity"));
+    }
+
+    #[test]
+    fn corpus_above_bounded_v1_result_capacity_is_rejected() {
+        let policy = evidence(DomainModuleId::Kids, false);
+        let build = build_provenance();
+        let mut study = preregistration(policy.clone(), build.clone());
+        study.dataset.fixed_case_count = DOMAIN_STUDY_MAX_FIXED_CASE_COUNT_V1 + 1;
+
+        let error = validate_domain_study_preregistration(&json(&study), &policy, &build, &[])
+            .expect_err("v1 must reject a corpus larger than its evidence capacity");
+
+        assert!(error.to_string().contains("dataset"));
     }
 
     #[test]

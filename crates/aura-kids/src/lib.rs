@@ -5,9 +5,11 @@ pub mod policy;
 mod routing;
 
 use aura_domain::{
-    validate_domain_study_preregistration, DomainConfirmedOutput, DomainInput, DomainModule,
-    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
-    DomainStudyBuildProvenance, DomainStudyError, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+    validate_domain_study_preregistration, validate_domain_study_result_evidence,
+    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
+    DomainOutput, DomainSignal, DomainStudyBinding, DomainStudyBuildProvenance, DomainStudyError,
+    DomainStudyResultError, DomainStudyResultReport, DomainStudyTrustPolicy,
+    DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
 #[derive(Default)]
@@ -83,6 +85,27 @@ pub fn validate_independent_study_preregistration(
         &domain_evidence(),
         expected_build_provenance,
         additional_known_seed_sha256,
+    )
+}
+
+/// Validates a signed Kids result chain against this exact policy and state schema.
+///
+/// A successful return is a content-free evidence report, not production
+/// activation authority or proof of universal real-world effectiveness.
+pub fn validate_independent_study_result(
+    preregistration_json: &str,
+    evidence_json: &str,
+    expected_build_provenance: &DomainStudyBuildProvenance,
+    additional_known_seed_sha256: &[&str],
+    trust_policy: &DomainStudyTrustPolicy,
+) -> Result<DomainStudyResultReport, DomainStudyResultError> {
+    validate_domain_study_result_evidence(
+        preregistration_json,
+        evidence_json,
+        &domain_evidence(),
+        expected_build_provenance,
+        additional_known_seed_sha256,
+        trust_policy,
     )
 }
 

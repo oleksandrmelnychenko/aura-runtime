@@ -142,11 +142,15 @@ level.
 
 ## Planned Research Artifacts
 
-The first shared artifact contract is now implemented in `aura-domain` and
-documented in `docs/domain-independent-evaluation.md`. It binds a fixed corpus,
-attack plan, review design, analysis thresholds, and exact domain policy
-evidence. Its strongest immediate state is `independent_evidence_pending`; it
-does not upgrade the current repository corpora into independent evidence.
+The shared preregistration and signed result-chain contracts are implemented in
+`aura-domain` and documented in `docs/domain-independent-evaluation.md` and
+`docs/domain-independent-result-evidence.md`. They bind a fixed corpus, attack
+plan, review design, analysis thresholds, exact domain policy, reviewer and
+adjudicator receipts, trusted-time intervals, nominal Krippendorff alpha with a
+fixed case-resampling BCa interval, recomputed aggregate metrics with
+conservative uncertainty bounds, and the final evidence manifest. No real
+independent corpus has completed that
+protocol, and repository corpora remain engineering evidence.
 
 Future research work should introduce versioned, reviewable locations for:
 
