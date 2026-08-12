@@ -1,3 +1,4 @@
+import hashlib
 import json
 import shutil
 import subprocess
@@ -5,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -85,6 +87,13 @@ class TemporalStudyTimestampTests(unittest.TestCase):
         )
 
     def generate_ca(self):
+        self.generate_root_certificate(
+            self.ca_key,
+            self.ca_certificate,
+            "AURA Test Timestamp Root",
+        )
+
+    def generate_root_certificate(self, key, certificate, common_name):
         self.run_openssl(
             [
                 "req",
@@ -93,11 +102,11 @@ class TemporalStudyTimestampTests(unittest.TestCase):
                 "rsa:2048",
                 "-nodes",
                 "-keyout",
-                self.ca_key.as_posix(),
+                key.as_posix(),
                 "-out",
-                self.ca_certificate.as_posix(),
+                certificate.as_posix(),
                 "-subj",
-                "/CN=AURA Test Timestamp Root",
+                f"/CN={common_name}",
                 "-days",
                 "2",
                 "-sha256",
@@ -230,9 +239,20 @@ class TemporalStudyTimestampTests(unittest.TestCase):
         public_key_der = self.run_openssl(
             ["pkey", "-pubin", "-outform", "DER"], input_bytes=public_key
         )
-        import hashlib
-
         return hashlib.sha256(public_key_der).hexdigest()
+
+    def certificate_sha256(self, certificate):
+        certificate_der = self.run_openssl(
+            ["x509", "-in", certificate.as_posix(), "-outform", "DER"]
+        )
+        return hashlib.sha256(certificate_der).hexdigest()
+
+    def aggregate_sha256(self, domain, digests):
+        return hashlib.sha256(
+            domain
+            + len(digests).to_bytes(4, byteorder="big")
+            + b"".join(bytes.fromhex(digest) for digest in digests)
+        ).hexdigest()
 
     def verify(self, **overrides):
         arguments = {
@@ -271,9 +291,37 @@ class TemporalStudyTimestampTests(unittest.TestCase):
         self.assertEqual(report["revocation_checked_certificate_count"], 1)
         self.assertEqual(report["revocation_crl_count"], 1)
         self.assertFalse(report["revocation_network_fetch_used"])
+        expected_chain = [
+            self.certificate_sha256(self.tsa_certificate),
+            self.certificate_sha256(self.ca_certificate),
+        ]
+        self.assertEqual(
+            report["certificate_chain_order"], "tsa_signer_to_trust_anchor"
+        )
+        self.assertEqual(report["certificate_chain_der_sha256s"], expected_chain)
+        self.assertEqual(
+            report["certificate_chain_sha256"],
+            self.aggregate_sha256(
+                temporal_study_timestamp.CERTIFICATE_CHAIN_DIGEST_DOMAIN,
+                expected_chain,
+            ),
+        )
+        self.assertEqual(
+            report["revocation_evidence_sha256"],
+            self.aggregate_sha256(
+                temporal_study_timestamp.REVOCATION_EVIDENCE_DIGEST_DOMAIN,
+                report["revocation_crl_der_sha256s"],
+            ),
+        )
         self.assertEqual(
             report["latest_trusted_time_unix_ms"],
-            report["gen_time_unix_ms"] + (report["accuracy_micros"] + 999) // 1000,
+            (
+                report["gen_time_unix_ms"] * 1_000
+                + report["gen_time_submillisecond_micros"]
+                + report["accuracy_micros"]
+                + 999
+            )
+            // 1_000,
         )
 
     def test_commitment_tampering_is_rejected(self):
@@ -344,6 +392,209 @@ class TemporalStudyTimestampTests(unittest.TestCase):
             temporal_study_timestamp.TimestampError, "set digest"
         ):
             temporal_study_timestamp.validate_revocation_claims(report)
+
+    def test_malformed_domain_revocation_digest_is_rejected_cleanly(self):
+        report = self.verify()
+        report["revocation_evidence_sha256"] = "0" * 64
+
+        with self.assertRaisesRegex(
+            temporal_study_timestamp.TimestampError, "evidence digest"
+        ):
+            temporal_study_timestamp.validate_revocation_claims(report)
+
+    def test_persisted_selected_chain_must_start_with_tsa_signer(self):
+        report = self.verify()
+        report["certificate_chain_der_sha256s"][0] = "0" * 64
+        report["certificate_chain_sha256"] = self.aggregate_sha256(
+            temporal_study_timestamp.CERTIFICATE_CHAIN_DIGEST_DOMAIN,
+            report["certificate_chain_der_sha256s"],
+        )
+
+        with self.assertRaisesRegex(
+            temporal_study_timestamp.TimestampError,
+            "certificate-chain claims are invalid",
+        ):
+            temporal_study_timestamp.validate_selected_chain_claims(report)
+
+    def test_persisted_chain_requires_one_crl_check_per_non_anchor(self):
+        report = self.verify()
+        report["certificate_chain_der_sha256s"].insert(1, "0" * 64)
+        report["certificate_chain_sha256"] = self.aggregate_sha256(
+            temporal_study_timestamp.CERTIFICATE_CHAIN_DIGEST_DOMAIN,
+            report["certificate_chain_der_sha256s"],
+        )
+
+        with self.assertRaisesRegex(
+            temporal_study_timestamp.TimestampError,
+            "certificate-chain claims are invalid",
+        ):
+            temporal_study_timestamp.validate_selected_chain_claims(report)
+
+    def test_persisted_revocation_claims_use_exact_fractional_gen_time(self):
+        report = self.verify()
+        report["gen_time_unix_ms"] = report["revocation_crls"][0][
+            "next_update_unix_ms"
+        ]
+        report["gen_time_submillisecond_micros"] = 1
+
+        with self.assertRaisesRegex(
+            temporal_study_timestamp.TimestampError,
+            "CRL claims are inconsistent",
+        ):
+            temporal_study_timestamp.validate_revocation_claims(report)
+
+    def test_zero_declared_accuracy_is_rejected(self):
+        original_inspect_response = temporal_study_timestamp.inspect_response
+
+        def inspect_response_with_zero_accuracy(path):
+            response = original_inspect_response(path)
+            response["accuracy_micros"] = 0
+            return response
+
+        with (
+            mock.patch.object(
+                temporal_study_timestamp,
+                "inspect_response",
+                side_effect=inspect_response_with_zero_accuracy,
+            ),
+            self.assertRaisesRegex(
+                temporal_study_timestamp.TimestampError,
+                "one microsecond and five minutes",
+            ),
+        ):
+            self.verify()
+
+    def test_fractional_gen_time_preserves_conservative_uncertainty(self):
+        floor_ms, remainder_micros = temporal_study_timestamp.parse_timestamp(
+            "Aug 12 12:34:56.999999 2026 GMT"
+        )
+
+        self.assertEqual(remainder_micros, 999)
+        self.assertEqual(
+            floor_ms,
+            temporal_study_timestamp.parse_timestamp_ms(
+                "Aug 12 12:34:56.999999 2026 GMT"
+            ),
+        )
+        exact_upper_micros = floor_ms * 1_000 + remainder_micros + 1_000
+        conservative_upper_micros = floor_ms * 1_000 + 1_999
+        self.assertGreaterEqual(conservative_upper_micros, exact_upper_micros)
+
+    def test_fractional_gen_time_verifies_pkix_at_both_adjacent_seconds(self):
+        original_inspect_response = temporal_study_timestamp.inspect_response
+        original_run_openssl = temporal_study_timestamp.run_openssl
+
+        for millisecond_offset, submillisecond_micros in ((500, 0), (999, 999)):
+            with self.subTest(
+                millisecond_offset=millisecond_offset,
+                submillisecond_micros=submillisecond_micros,
+            ):
+                observed_attimes = []
+
+                def inspect_fractional_response(path):
+                    response = original_inspect_response(path)
+                    response["gen_time_unix_ms"] = (
+                        response["gen_time_unix_ms"] // 1_000 * 1_000
+                        + millisecond_offset
+                    )
+                    response["gen_time_submillisecond_micros"] = (
+                        submillisecond_micros
+                    )
+                    return response
+
+                def record_openssl(arguments, **kwargs):
+                    if "-attime" in arguments:
+                        observed_attimes.append(
+                            arguments[arguments.index("-attime") + 1]
+                        )
+                    return original_run_openssl(arguments, **kwargs)
+
+                with (
+                    mock.patch.object(
+                        temporal_study_timestamp,
+                        "inspect_response",
+                        side_effect=inspect_fractional_response,
+                    ),
+                    mock.patch.object(
+                        temporal_study_timestamp,
+                        "run_openssl",
+                        side_effect=record_openssl,
+                    ),
+                ):
+                    report = self.verify()
+
+                floor_second = report["gen_time_unix_ms"] // 1_000
+                self.assertIn(str(floor_second), observed_attimes)
+                self.assertIn(str(floor_second + 1), observed_attimes)
+
+    def test_fractional_gen_time_rejects_crl_expiring_at_floor_second(self):
+        raw = self.revocation_crl.read_bytes()
+        crl = temporal_study_timestamp.run_openssl(
+            [
+                "crl",
+                "-in",
+                self.revocation_crl.as_posix(),
+                "-noout",
+                "-nextupdate",
+            ]
+        ).decode("ascii")
+        next_update_text = crl.strip().removeprefix("nextUpdate=")
+        next_update_ms = temporal_study_timestamp.parse_crl_time_ms(
+            next_update_text, "nextUpdate"
+        )
+
+        with self.assertRaisesRegex(
+            temporal_study_timestamp.TimestampError,
+            "does not cover",
+        ):
+            temporal_study_timestamp.inspect_complete_crl(
+                self.revocation_crl,
+                raw,
+                next_update_ms * 1_000 + 1,
+            )
+
+    def test_ambiguous_selected_certificate_subject_is_rejected(self):
+        alternate_key = self.root / "ambiguous-root-key.pem"
+        alternate_certificate = self.root / "ambiguous-root-certificate.pem"
+        self.generate_root_certificate(
+            alternate_key,
+            alternate_certificate,
+            "AURA Test Timestamp Root",
+        )
+        ambiguous_bundle = self.root / "ambiguous-trust-anchors.pem"
+        ambiguous_bundle.write_bytes(
+            self.ca_certificate.read_bytes() + alternate_certificate.read_bytes()
+        )
+
+        with self.assertRaisesRegex(
+            temporal_study_timestamp.TimestampError, "zero or ambiguous"
+        ):
+            self.verify(ca_file_path=ambiguous_bundle)
+
+    def test_unselected_certificate_does_not_change_selected_chain_digest(self):
+        baseline = self.verify()
+        alternate_key = self.root / "extra-root-key.pem"
+        alternate_certificate = self.root / "extra-root-certificate.pem"
+        self.generate_root_certificate(
+            alternate_key,
+            alternate_certificate,
+            "AURA Unselected Timestamp Root",
+        )
+        extended_bundle = self.root / "extended-trust-anchors.pem"
+        extended_bundle.write_bytes(
+            self.ca_certificate.read_bytes() + alternate_certificate.read_bytes()
+        )
+
+        report = self.verify(ca_file_path=extended_bundle)
+
+        self.assertEqual(
+            report["certificate_chain_der_sha256s"],
+            baseline["certificate_chain_der_sha256s"],
+        )
+        self.assertEqual(
+            report["certificate_chain_sha256"],
+            baseline["certificate_chain_sha256"],
+        )
 
     def test_duplicate_revocation_crl_path_is_rejected(self):
         with self.assertRaisesRegex(
@@ -588,6 +839,29 @@ class TemporalStudyTimestampTests(unittest.TestCase):
         )
         self.assertEqual(report["revocation_checked_certificate_count"], 2)
         self.assertEqual(report["revocation_crl_count"], 2)
+        expected_chain = [
+            self.certificate_sha256(nested_tsa_certificate),
+            self.certificate_sha256(intermediate_certificate),
+            self.certificate_sha256(self.ca_certificate),
+        ]
+        self.assertEqual(report["certificate_chain_der_sha256s"], expected_chain)
+        self.assertEqual(
+            report["certificate_chain_sha256"],
+            self.aggregate_sha256(
+                temporal_study_timestamp.CERTIFICATE_CHAIN_DIGEST_DOMAIN,
+                expected_chain,
+            ),
+        )
+        permuted_report = self.verify(
+            response_path=nested_response,
+            untrusted_chain_path=intermediate_certificate,
+            expected_tsa_spki_sha256=expected_spki,
+            revocation_crl_paths=[intermediate_crl, self.revocation_crl],
+        )
+        self.assertEqual(
+            report["revocation_evidence_sha256"],
+            permuted_report["revocation_evidence_sha256"],
+        )
 
         with self.assertRaisesRegex(
             temporal_study_timestamp.TimestampError, "exactly every"

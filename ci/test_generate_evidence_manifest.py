@@ -140,8 +140,19 @@ def temporal_study_attestation_verification_payload(**overrides):
 
 def temporal_study_timestamp_verification_payload(**overrides):
     crl_digest = "7" * 64
+    certificate_digests = ["3" * 64, "5" * 64]
+    framed_crl_digest = (
+        b"aura.domain.rfc3161-revocation-evidence.v1\0"
+        + (1).to_bytes(4, byteorder="big")
+        + bytes.fromhex(crl_digest)
+    )
+    framed_certificate_chain = (
+        b"aura.domain.rfc3161-certificate-chain.v1\0"
+        + len(certificate_digests).to_bytes(4, byteorder="big")
+        + b"".join(bytes.fromhex(digest) for digest in certificate_digests)
+    )
     payload = {
-        "schema_version": "aura.military.temporal_study_timestamp_verification.v2",
+        "schema_version": "aura.military.temporal_study_timestamp_verification.v3",
         "status": "pass",
         "timestamp_protocol": "RFC3161",
         "trusted_timestamp_assurance": "rfc3161_trusted_chain",
@@ -149,6 +160,7 @@ def temporal_study_timestamp_verification_payload(**overrides):
         "policy_oid": "1.2.3.4.1",
         "serial_hex": "0x01",
         "gen_time_unix_ms": 1780000001000,
+        "gen_time_submillisecond_micros": 0,
         "accuracy_micros": 1000000,
         "earliest_trusted_time_unix_ms": 1780000000000,
         "latest_trusted_time_unix_ms": 1780000002000,
@@ -169,6 +181,9 @@ def temporal_study_timestamp_verification_payload(**overrides):
         "trust_anchor_bundle_sha256": "5" * 64,
         "untrusted_chain_sha256": "6" * 64,
         "certificate_validation_time_basis": "tsa_gen_time",
+        "certificate_chain_order": "tsa_signer_to_trust_anchor",
+        "certificate_chain_der_sha256s": certificate_digests,
+        "certificate_chain_sha256": sha256(framed_certificate_chain).hexdigest(),
         "revocation_assurance": "full_chain_crl_at_gen_time",
         "revocation_evidence_kind": "offline_complete_crl",
         "revocation_validation_time_basis": "tsa_gen_time",
@@ -180,6 +195,7 @@ def temporal_study_timestamp_verification_payload(**overrides):
         "revocation_crl_count": 1,
         "revocation_crl_der_sha256s": [crl_digest],
         "revocation_crl_set_sha256": sha256(crl_digest.encode("ascii")).hexdigest(),
+        "revocation_evidence_sha256": sha256(framed_crl_digest).hexdigest(),
         "revocation_crls": [
             {
                 "issuer_name_sha256": "9" * 64,
@@ -200,7 +216,7 @@ def temporal_review_receipt_chain_verification_payload(**overrides):
     crl_digest = "7" * 64
     crl_set_digest = sha256(crl_digest.encode("ascii")).hexdigest()
     payload = {
-        "schema_version": "aura.military.temporal_review_receipt_chain_verification.v3",
+        "schema_version": "aura.military.temporal_review_receipt_chain_verification.v4",
         "status": "pass",
         "chronology_assurance": "individual_signed_rfc3161_receipts",
         "roster_assurance": "signed_rfc3161_precommitted",
@@ -756,6 +772,60 @@ class TemporalEvidenceStatusTests(unittest.TestCase):
                 temporal_study_attestation_verification_payload(),
             ),
             "invalid_timestamp_revocation_evidence",
+        )
+
+    def test_temporal_timestamp_crl_coverage_uses_exact_fractional_time(self):
+        payload = temporal_study_timestamp_verification_payload()
+        payload["gen_time_unix_ms"] = payload["revocation_crls"][0][
+            "next_update_unix_ms"
+        ]
+        payload["gen_time_submillisecond_micros"] = 1
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_timestamp_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_attestation_verification_payload(),
+            ),
+            "invalid_timestamp_revocation_evidence",
+        )
+
+    def test_temporal_timestamp_chain_starts_with_tsa_signer(self):
+        payload = temporal_study_timestamp_verification_payload()
+        payload["certificate_chain_der_sha256s"][0] = "0" * 64
+        digests = payload["certificate_chain_der_sha256s"]
+        payload["certificate_chain_sha256"] = sha256(
+            b"aura.domain.rfc3161-certificate-chain.v1\0"
+            + len(digests).to_bytes(4, byteorder="big")
+            + b"".join(bytes.fromhex(digest) for digest in digests)
+        ).hexdigest()
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_timestamp_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_attestation_verification_payload(),
+            ),
+            "invalid_timestamp_identity",
+        )
+
+    def test_temporal_timestamp_chain_requires_full_crl_coverage(self):
+        payload = temporal_study_timestamp_verification_payload()
+        payload["certificate_chain_der_sha256s"].insert(1, "0" * 64)
+        digests = payload["certificate_chain_der_sha256s"]
+        payload["certificate_chain_sha256"] = sha256(
+            b"aura.domain.rfc3161-certificate-chain.v1\0"
+            + len(digests).to_bytes(4, byteorder="big")
+            + b"".join(bytes.fromhex(digest) for digest in digests)
+        ).hexdigest()
+
+        self.assertEqual(
+            generate_evidence_manifest.temporal_study_timestamp_verification_status(
+                payload,
+                temporal_review_payload(),
+                temporal_study_attestation_verification_payload(),
+            ),
+            "invalid_timestamp_identity",
         )
 
     def test_temporal_timestamp_rejects_attestation_binding_mismatch(self):

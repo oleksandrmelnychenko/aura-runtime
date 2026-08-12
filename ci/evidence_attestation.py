@@ -6,9 +6,11 @@ import binascii
 import hmac
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
 
@@ -33,6 +35,29 @@ class AttestationError(Exception):
     pass
 
 
+def _write_private_snapshot(path: Path, payload: bytes) -> None:
+    descriptor = None
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = None
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+@contextmanager
+def private_key_snapshot(payload: bytes):
+    """Expose already validated key bytes through a private immutable snapshot."""
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "private-key.pem"
+        _write_private_snapshot(path, payload)
+        yield path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Sign or verify a detached Ed25519 AURA evidence-manifest attestation."
@@ -55,13 +80,100 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _read_bounded(
+    path: Path,
+    maximum: int,
+    label: str,
+    *,
+    require_private_permissions: bool,
+) -> tuple[bytes, tuple[int, int]]:
+    if maximum <= 0:
+        raise AttestationError(f"{label} byte bound must be positive")
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except (FileNotFoundError, IsADirectoryError, OSError) as error:
+        raise AttestationError(
+            f"{label} is missing, is a symbolic link, or is not a regular file: {path}"
+        ) from error
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise AttestationError(f"{label} is not a regular file: {path}")
+        if (
+            require_private_permissions
+            and os.name != "nt"
+            and (metadata.st_mode & 0o077) != 0
+        ):
+            raise AttestationError(
+                f"{label} permissions must not allow group or world access"
+            )
+        if metadata.st_size <= 0 or metadata.st_size > maximum:
+            raise AttestationError(f"{label} size must be within 1..={maximum} bytes")
+        chunks = []
+        remaining = maximum + 1
+        while remaining:
+            chunk = os.read(descriptor, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if not raw or len(raw) > maximum:
+            raise AttestationError(f"{label} size must be within 1..={maximum} bytes")
+        final_metadata = os.fstat(descriptor)
+        identity_before = (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+        )
+        identity_after = (
+            final_metadata.st_dev,
+            final_metadata.st_ino,
+            final_metadata.st_size,
+            final_metadata.st_mtime_ns,
+            final_metadata.st_ctime_ns,
+        )
+        if len(raw) != metadata.st_size or identity_before != identity_after:
+            raise AttestationError(f"{label} changed while it was being read")
+        return raw, (metadata.st_dev, metadata.st_ino)
+    finally:
+        os.close(descriptor)
+
+
 def read_bounded(path: Path, maximum: int, label: str) -> bytes:
-    if not path.is_file():
-        raise AttestationError(f"{label} is missing or not a regular file: {path}")
-    size = path.stat().st_size
-    if size <= 0 or size > maximum:
-        raise AttestationError(f"{label} size must be within 1..={maximum} bytes")
-    return path.read_bytes()
+    return read_bounded_with_identity(path, maximum, label)[0]
+
+
+def read_bounded_with_identity(
+    path: Path, maximum: int, label: str
+) -> tuple[bytes, tuple[int, int]]:
+    return _read_bounded(
+        path,
+        maximum,
+        label,
+        require_private_permissions=False,
+    )
+
+
+def read_bounded_private(path: Path, maximum: int, label: str) -> bytes:
+    return read_bounded_private_with_identity(path, maximum, label)[0]
+
+
+def read_bounded_private_with_identity(
+    path: Path, maximum: int, label: str
+) -> tuple[bytes, tuple[int, int]]:
+    return _read_bounded(
+        path,
+        maximum,
+        label,
+        require_private_permissions=True,
+    )
 
 
 def safe_key_id(key_id: str) -> bool:
@@ -160,31 +272,32 @@ def sign_manifest(
         )
     manifest = read_bounded(manifest_path, MAX_MANIFEST_BYTES, "evidence manifest")
     validate_release_manifest(manifest)
-    read_bounded(private_key_path, MAX_ATTESTATION_BYTES, "Ed25519 private key")
-    if os.name != "nt" and (private_key_path.stat().st_mode & 0o077) != 0:
-        raise AttestationError("Ed25519 private key permissions must not allow group or world access")
-    public_key_der = public_key_der_from_private(private_key_path)
-    attestation = {
-        "schema_version": SCHEMA_VERSION,
-        "signature_algorithm": SIGNATURE_ALGORITHM,
-        "key_id": key_id,
-        "manifest_sha256": sha256(manifest).hexdigest(),
-        "public_key_spki_sha256": sha256(public_key_der).hexdigest(),
-    }
-    with tempfile.NamedTemporaryFile() as claims_file:
-        claims_file.write(canonical_claims(attestation))
-        claims_file.flush()
-        signature = run_openssl(
-            [
-                "pkeyutl",
-                "-sign",
-                "-rawin",
-                "-inkey",
-                private_key_path.as_posix(),
-                "-in",
-                claims_file.name,
-            ]
-        )
+    private_key = read_bounded_private(
+        private_key_path, MAX_ATTESTATION_BYTES, "Ed25519 private key"
+    )
+    with private_key_snapshot(private_key) as snapshot:
+        public_key_der = public_key_der_from_private(snapshot)
+        attestation = {
+            "schema_version": SCHEMA_VERSION,
+            "signature_algorithm": SIGNATURE_ALGORITHM,
+            "key_id": key_id,
+            "manifest_sha256": sha256(manifest).hexdigest(),
+            "public_key_spki_sha256": sha256(public_key_der).hexdigest(),
+        }
+        with tempfile.NamedTemporaryFile() as claims_file:
+            claims_file.write(canonical_claims(attestation))
+            claims_file.flush()
+            signature = run_openssl(
+                [
+                    "pkeyutl",
+                    "-sign",
+                    "-rawin",
+                    "-inkey",
+                    snapshot.as_posix(),
+                    "-in",
+                    claims_file.name,
+                ]
+            )
     if len(signature) != 64:
         raise AttestationError("OpenSSL returned a malformed Ed25519 signature")
     attestation["signature_base64"] = base64.b64encode(signature).decode("ascii")
@@ -232,7 +345,9 @@ def verify_manifest(
 ) -> dict:
     manifest = read_bounded(manifest_path, MAX_MANIFEST_BYTES, "evidence manifest")
     manifest_payload = validate_release_manifest(manifest)
-    read_bounded(public_key_path, MAX_ATTESTATION_BYTES, "Ed25519 public key")
+    public_key = read_bounded(
+        public_key_path, MAX_ATTESTATION_BYTES, "Ed25519 public key"
+    )
     attestation = load_attestation(attestation_path)
     if expected_key_id is not None and not hmac.compare_digest(
         attestation["key_id"], expected_key_id
@@ -241,35 +356,38 @@ def verify_manifest(
     manifest_digest = sha256(manifest).hexdigest()
     if not hmac.compare_digest(attestation["manifest_sha256"], manifest_digest):
         raise AttestationError("evidence manifest digest does not match its attestation")
-    public_key_digest = sha256(public_key_der_from_public(public_key_path)).hexdigest()
-    if not hmac.compare_digest(
-        attestation["public_key_spki_sha256"], public_key_digest
-    ):
-        raise AttestationError("trusted public key does not match the attestation")
+    with private_key_snapshot(public_key) as public_key_snapshot:
+        public_key_digest = sha256(
+            public_key_der_from_public(public_key_snapshot)
+        ).hexdigest()
+        if not hmac.compare_digest(
+            attestation["public_key_spki_sha256"], public_key_digest
+        ):
+            raise AttestationError("trusted public key does not match the attestation")
 
-    signature = base64.b64decode(attestation["signature_base64"], validate=True)
-    with (
-        tempfile.NamedTemporaryFile() as signature_file,
-        tempfile.NamedTemporaryFile() as claims_file,
-    ):
-        signature_file.write(signature)
-        signature_file.flush()
-        claims_file.write(canonical_claims(attestation))
-        claims_file.flush()
-        run_openssl(
-            [
-                "pkeyutl",
-                "-verify",
-                "-rawin",
-                "-pubin",
-                "-inkey",
-                public_key_path.as_posix(),
-                "-sigfile",
-                signature_file.name,
-                "-in",
-                claims_file.name,
-            ],
-        )
+        signature = base64.b64decode(attestation["signature_base64"], validate=True)
+        with (
+            tempfile.NamedTemporaryFile() as signature_file,
+            tempfile.NamedTemporaryFile() as claims_file,
+        ):
+            signature_file.write(signature)
+            signature_file.flush()
+            claims_file.write(canonical_claims(attestation))
+            claims_file.flush()
+            run_openssl(
+                [
+                    "pkeyutl",
+                    "-verify",
+                    "-rawin",
+                    "-pubin",
+                    "-inkey",
+                    public_key_snapshot.as_posix(),
+                    "-sigfile",
+                    signature_file.name,
+                    "-in",
+                    claims_file.name,
+                ],
+            )
     return {
         "schema_version": VERIFICATION_SCHEMA_VERSION,
         "status": "pass",

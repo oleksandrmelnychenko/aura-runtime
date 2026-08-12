@@ -21,10 +21,10 @@ except ModuleNotFoundError:  # Direct execution from the ci/ directory.
 
 
 COMMITMENT_SCHEMA_VERSION = "aura.research.evidence_renewal_commitment.v1"
-VERIFICATION_SCHEMA_VERSION = "aura.research.evidence_renewal_verification.v1"
+VERIFICATION_SCHEMA_VERSION = "aura.research.evidence_renewal_verification.v2"
 INDEX_SCHEMA_VERSION = "aura.research.evidence_renewal_index.v1"
 CHAIN_VERIFICATION_SCHEMA_VERSION = (
-    "aura.research.evidence_renewal_chain_verification.v1"
+    "aura.research.evidence_renewal_chain_verification.v2"
 )
 RENEWAL_PROFILE = "aura_rfc3161_renewal_envelope_not_rfc4998_ers"
 RENEWAL_ASSURANCE = "rfc3161_full_chain_crl_renewal"
@@ -397,9 +397,16 @@ def inspect_response_bytes(raw: bytes, label: str) -> dict:
         timestamp_support.write_bytes_atomic(snapshot, raw)
         response = timestamp_support.inspect_response(snapshot)
     accuracy_micros = response.get("accuracy_micros")
+    submillisecond_micros = response.get("gen_time_submillisecond_micros")
     if (
         accuracy_micros is None
+        or isinstance(accuracy_micros, bool)
+        or not isinstance(accuracy_micros, int)
+        or accuracy_micros <= 0
         or accuracy_micros > timestamp_support.MAX_TIMESTAMP_ACCURACY_MICROS
+        or isinstance(submillisecond_micros, bool)
+        or not isinstance(submillisecond_micros, int)
+        or not 0 <= submillisecond_micros <= 999
     ):
         raise RenewalError(f"{label} must declare acceptable timestamp accuracy")
     return response
@@ -600,9 +607,16 @@ def inspect_previous_link(
     ):
         raise RenewalError("evidence renewal predecessor sequence is not contiguous")
     accuracy_micros = previous_response["accuracy_micros"]
-    previous_latest = previous_response["gen_time_unix_ms"] + (
-        accuracy_micros + 999
-    ) // 1000
+    submillisecond_micros = previous_response[
+        "gen_time_submillisecond_micros"
+    ]
+    previous_exact_time_micros = (
+        previous_response["gen_time_unix_ms"] * 1_000
+        + submillisecond_micros
+    )
+    previous_latest = (
+        previous_exact_time_micros + accuracy_micros + 999
+    ) // 1_000
     return {
         "previous_commitment_canonical_sha256": descriptor[
             "commitment_canonical_sha256"

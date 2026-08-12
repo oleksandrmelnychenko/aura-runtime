@@ -18,10 +18,10 @@ TEMPORAL_STUDY_ATTESTATION_VERIFICATION_SCHEMA_VERSION = (
     "aura.military.temporal_study_attestation_verification.v1"
 )
 TEMPORAL_STUDY_TIMESTAMP_VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_study_timestamp_verification.v2"
+    "aura.military.temporal_study_timestamp_verification.v3"
 )
 TEMPORAL_REVIEW_RECEIPT_CHAIN_VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_review_receipt_chain_verification.v3"
+    "aura.military.temporal_review_receipt_chain_verification.v4"
 )
 TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
@@ -503,6 +503,7 @@ def historical_crl_claims_valid(payload: dict) -> bool:
     ):
         return False
     gen_time = payload.get("gen_time_unix_ms")
+    submillisecond_micros = payload.get("gen_time_submillisecond_micros")
     checked_count = payload.get("revocation_checked_certificate_count")
     crl_count = payload.get("revocation_crl_count")
     crls = payload.get("revocation_crls")
@@ -511,6 +512,9 @@ def historical_crl_claims_valid(payload: dict) -> bool:
         isinstance(gen_time, bool)
         or not isinstance(gen_time, int)
         or gen_time <= 0
+        or isinstance(submillisecond_micros, bool)
+        or not isinstance(submillisecond_micros, int)
+        or not 0 <= submillisecond_micros <= 999
         or isinstance(checked_count, bool)
         or not isinstance(checked_count, int)
         or checked_count <= 0
@@ -535,6 +539,7 @@ def historical_crl_claims_valid(payload: dict) -> bool:
     }
     issuer_digests = set()
     observed_digests = []
+    exact_gen_time_micros = gen_time * 1_000 + submillisecond_micros
     for crl in crls:
         if not isinstance(crl, dict) or set(crl) != expected_fields:
             return False
@@ -551,7 +556,9 @@ def historical_crl_claims_valid(payload: dict) -> bool:
             or not isinstance(this_update, int)
             or isinstance(next_update, bool)
             or not isinstance(next_update, int)
-            or not this_update <= gen_time <= next_update
+            or not this_update * 1_000
+            <= exact_gen_time_micros
+            <= next_update * 1_000
             or next_update <= this_update
             or not isinstance(number, str)
             or not number.startswith("0x")
@@ -561,12 +568,42 @@ def historical_crl_claims_valid(payload: dict) -> bool:
             return False
         issuer_digests.add(issuer_digest)
         observed_digests.append(der_digest)
+    revocation_evidence_digest = payload.get("revocation_evidence_sha256")
+    if not lowercase_sha256(revocation_evidence_digest):
+        return False
+    framed_revocation = bytearray(
+        b"aura.domain.rfc3161-revocation-evidence.v1\0"
+    )
+    framed_revocation.extend(len(digests).to_bytes(4, byteorder="big"))
+    for digest in digests:
+        framed_revocation.extend(bytes.fromhex(digest))
     return (
         observed_digests == digests
         and lowercase_sha256(payload.get("revocation_crl_set_sha256"))
         and payload["revocation_crl_set_sha256"]
         == sha256("\n".join(digests).encode("ascii")).hexdigest()
+        and revocation_evidence_digest == sha256(framed_revocation).hexdigest()
     )
+
+
+def selected_certificate_chain_claims_valid(payload: dict) -> bool:
+    digests = payload.get("certificate_chain_der_sha256s")
+    if (
+        payload.get("certificate_chain_order") != "tsa_signer_to_trust_anchor"
+        or not isinstance(digests, list)
+        or not 2 <= len(digests) <= 7
+        or len(set(digests)) != len(digests)
+        or any(not lowercase_sha256(digest) for digest in digests)
+        or not lowercase_sha256(payload.get("tsa_signer_certificate_sha256"))
+        or digests[0] != payload.get("tsa_signer_certificate_sha256")
+        or payload.get("revocation_checked_certificate_count") != len(digests) - 1
+    ):
+        return False
+    framed = bytearray(b"aura.domain.rfc3161-certificate-chain.v1\0")
+    framed.extend(len(digests).to_bytes(4, byteorder="big"))
+    for digest in digests:
+        framed.extend(bytes.fromhex(digest))
+    return payload.get("certificate_chain_sha256") == sha256(framed).hexdigest()
 
 
 def temporal_study_timestamp_verification_status(
@@ -595,6 +632,8 @@ def temporal_study_timestamp_verification_status(
         return "invalid_timestamp_assurance"
     if not historical_crl_claims_valid(payload):
         return "invalid_timestamp_revocation_evidence"
+    if not selected_certificate_chain_claims_valid(payload):
+        return "invalid_timestamp_identity"
     if not valid_oid(payload.get("policy_oid")):
         return "invalid_timestamp_identity"
     serial = payload.get("serial_hex")
@@ -606,14 +645,18 @@ def temporal_study_timestamp_verification_status(
     ):
         return "invalid_timestamp_identity"
     ordering = payload.get("ordering")
+    submillisecond_micros = payload.get("gen_time_submillisecond_micros")
     accuracy_micros = payload.get("accuracy_micros")
     earliest_trusted_time_ms = payload.get("earliest_trusted_time_unix_ms")
     latest_trusted_time_ms = payload.get("latest_trusted_time_unix_ms")
     if (
         not isinstance(ordering, bool)
+        or isinstance(submillisecond_micros, bool)
+        or not isinstance(submillisecond_micros, int)
+        or not 0 <= submillisecond_micros <= 999
         or isinstance(accuracy_micros, bool)
         or not isinstance(accuracy_micros, int)
-        or not 0 <= accuracy_micros <= 5 * 60 * 1_000_000
+        or not 0 < accuracy_micros <= 5 * 60 * 1_000_000
     ):
         return "invalid_timestamp_identity"
     for field in (
@@ -656,9 +699,15 @@ def temporal_study_timestamp_verification_status(
     registered_at_ms = payload["registered_at_ms"]
     gen_time_ms = payload["gen_time_unix_ms"]
     verification_time_ms = payload["verification_time_unix_ms"]
-    accuracy_ms = (accuracy_micros + 999) // 1000
-    expected_earliest_trusted_time_ms = max(0, gen_time_ms - accuracy_ms)
-    expected_latest_trusted_time_ms = gen_time_ms + accuracy_ms
+    exact_time_micros = gen_time_ms * 1_000 + submillisecond_micros
+    if exact_time_micros < accuracy_micros:
+        return "invalid_timestamp_chronology"
+    expected_earliest_trusted_time_ms = (
+        exact_time_micros - accuracy_micros
+    ) // 1_000
+    expected_latest_trusted_time_ms = (
+        exact_time_micros + accuracy_micros + 999
+    ) // 1_000
     if (
         gen_time_ms + 5 * 60 * 1000 < registered_at_ms
         or gen_time_ms > verification_time_ms + 5 * 60 * 1000
@@ -1402,6 +1451,7 @@ def attach_payload_details(
             "policy_oid",
             "serial_hex",
             "gen_time_unix_ms",
+            "gen_time_submillisecond_micros",
             "accuracy_micros",
             "latest_trusted_time_unix_ms",
             "tsa_signer_spki_sha256",

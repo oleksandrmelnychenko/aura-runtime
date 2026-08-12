@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from ci import evidence_attestation
@@ -160,6 +161,44 @@ class EvidenceAttestationTests(unittest.TestCase):
                 self.manifest, self.private_key, "release-test-key"
             )
 
+    def test_bounded_reader_rejects_oversized_input(self):
+        with self.assertRaisesRegex(
+            evidence_attestation.AttestationError, "size must be within"
+        ):
+            evidence_attestation.read_bounded(
+                self.manifest,
+                self.manifest.stat().st_size - 1,
+                "test manifest",
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX symbolic-link policy")
+    def test_bounded_reader_rejects_symbolic_link(self):
+        symbolic_link = self.root / "manifest-link.json"
+        symbolic_link.symlink_to(self.manifest)
+
+        with self.assertRaisesRegex(
+            evidence_attestation.AttestationError, "symbolic"
+        ):
+            evidence_attestation.read_bounded(
+                symbolic_link,
+                evidence_attestation.MAX_MANIFEST_BYTES,
+                "test manifest",
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX regular-file policy")
+    def test_bounded_reader_rejects_fifo_without_opening_it(self):
+        fifo = self.root / "manifest.fifo"
+        os.mkfifo(fifo)
+
+        with self.assertRaisesRegex(
+            evidence_attestation.AttestationError, "not a regular file"
+        ):
+            evidence_attestation.read_bounded(
+                fifo,
+                evidence_attestation.MAX_MANIFEST_BYTES,
+                "test manifest",
+            )
+
     @unittest.skipIf(os.name == "nt", "POSIX permission check")
     def test_group_readable_private_key_is_rejected(self):
         os.chmod(self.private_key, 0o640)
@@ -170,6 +209,57 @@ class EvidenceAttestationTests(unittest.TestCase):
             evidence_attestation.sign_manifest(
                 self.manifest, self.private_key, "release-test-key"
             )
+
+    def test_public_key_path_swap_cannot_change_verified_key(self):
+        self.sign()
+        original_public_key = self.public_key.read_bytes()
+        replacement_private = self.root / "replacement-private.pem"
+        replacement_public = self.root / "replacement-public.pem"
+        subprocess.run(
+            [
+                "openssl",
+                "genpkey",
+                "-algorithm",
+                "Ed25519",
+                "-out",
+                replacement_private.as_posix(),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [
+                "openssl",
+                "pkey",
+                "-in",
+                replacement_private.as_posix(),
+                "-pubout",
+                "-out",
+                replacement_public.as_posix(),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        original_snapshot = evidence_attestation.private_key_snapshot
+
+        def swap_path_after_read(payload):
+            self.public_key.write_bytes(replacement_public.read_bytes())
+            return original_snapshot(payload)
+
+        with mock.patch.object(
+            evidence_attestation,
+            "private_key_snapshot",
+            side_effect=swap_path_after_read,
+        ):
+            report = evidence_attestation.verify_manifest(
+                self.manifest,
+                self.attestation,
+                self.public_key,
+                "release-test-key",
+            )
+
+        self.assertEqual(report["status"], "pass")
+        self.assertNotEqual(self.public_key.read_bytes(), original_public_key)
 
 
 if __name__ == "__main__":

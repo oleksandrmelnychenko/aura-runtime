@@ -10,8 +10,10 @@ later than the upper end of its declared `genTime` accuracy interval.
 The verifier accepts only a SHA-256, nonce-bearing request that asks for the TSA
 certificate. It binds the response both to that request and to the original
 commitment file, requires the expected numeric policy OID, validates the
-certificate chain at `genTime`, and pins the timestamp signer by its expected
-SPKI SHA-256 digest.
+certificate chain at the exact fractional `genTime`, and pins the timestamp
+signer by its expected SPKI SHA-256 digest. Schema v3 preserves the
+submillisecond remainder, rounds the trusted interval outward, and repeats
+PKIX/CRL checks at both adjacent seconds when the time is fractional.
 
 ## Establish trust before the study
 

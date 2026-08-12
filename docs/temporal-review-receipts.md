@@ -14,7 +14,7 @@ the claim that the complete label set was frozen before adjudication.
 
 ## What the chain proves
 
-A passing `aura.military.temporal_review_receipt_chain_verification.v3` report
+A passing `aura.military.temporal_review_receipt_chain_verification.v4` report
 proves all of the following:
 
 - the study commitment's accuracy-adjusted trusted upper time is earlier than
@@ -40,8 +40,9 @@ proves all of the following:
 - the v5 independent-review report and the receipt chain carry the same
   canonical review-bundle SHA-256 digest.
 
-Strict interval comparisons are intentional. For a timestamp with `genTime = t`
-and accuracy `a`, the verifier treats trusted time as `[t-a, t+a]`. Equality or
+Strict interval comparisons are intentional. For an exact timestamp with
+`genTime = t` and accuracy `a`, the verifier treats trusted time as
+`[floor_ms(t-a), ceil_ms(t+a)]`. Equality or
 overlap does not establish precedence and therefore fails closed.
 
 ## What the chain does not prove

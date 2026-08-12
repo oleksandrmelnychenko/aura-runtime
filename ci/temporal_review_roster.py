@@ -24,7 +24,7 @@ except ModuleNotFoundError:  # Direct execution from the ci/ directory.
 
 ROSTER_SCHEMA_VERSION = "aura.military.temporal_review_roster.v1"
 ATTESTATION_SCHEMA_VERSION = "aura.military.temporal_review_roster_attestation.v1"
-VERIFICATION_SCHEMA_VERSION = "aura.military.temporal_review_roster_verification.v2"
+VERIFICATION_SCHEMA_VERSION = "aura.military.temporal_review_roster_verification.v3"
 SIGNATURE_ALGORITHM = "Ed25519"
 ROSTER_ASSURANCE = "signed_rfc3161_precommitted"
 SIGNED_PAYLOAD_DOMAIN = b"aura.temporal-review.roster-attestation.v1\x00"

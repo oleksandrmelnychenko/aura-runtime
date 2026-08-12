@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
+import base64
+import binascii
 import hmac
 import os
 import re
@@ -20,7 +22,7 @@ except ModuleNotFoundError:  # Direct execution from the ci/ directory.
 
 
 VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_study_timestamp_verification.v2"
+    "aura.military.temporal_study_timestamp_verification.v3"
 )
 TIMESTAMP_PROTOCOL = "RFC3161"
 HASH_ALGORITHM = "sha256"
@@ -43,9 +45,15 @@ MAX_SIGNER_CERTIFICATE_BYTES = 256 * 1024
 MAX_CRL_BYTES = 4 * 1024 * 1024
 MAX_CRL_COUNT = 6
 MAX_TOTAL_CRL_BYTES = 16 * 1024 * 1024
+MAX_CERTIFICATE_CANDIDATE_COUNT = 256
+MAX_SELECTED_CERTIFICATE_CHAIN_COUNT = 7
 MAX_FUTURE_SKEW_MS = 5 * 60 * 1000
 MAX_DECLARED_CLOCK_SKEW_MS = 5 * 60 * 1000
 MAX_TIMESTAMP_ACCURACY_MICROS = 5 * 60 * 1_000_000
+CERTIFICATE_CHAIN_DIGEST_DOMAIN = b"aura.domain.rfc3161-certificate-chain.v1\0"
+REVOCATION_EVIDENCE_DIGEST_DOMAIN = (
+    b"aura.domain.rfc3161-revocation-evidence.v1\0"
+)
 
 TimestampError = crypto_support.AttestationError
 
@@ -138,6 +146,19 @@ def lowercase_sha256(value: object) -> bool:
     )
 
 
+def aggregate_der_digest(digests: list[str], domain: bytes, label: str) -> str:
+    if (
+        not 1 <= len(digests) <= MAX_CERTIFICATE_CANDIDATE_COUNT
+        or any(not lowercase_sha256(digest) for digest in digests)
+    ):
+        raise TimestampError(f"{label} DER identities are invalid")
+    framed = bytearray(domain)
+    framed.extend(len(digests).to_bytes(4, byteorder="big"))
+    for digest in digests:
+        framed.extend(bytes.fromhex(digest))
+    return sha256(framed).hexdigest()
+
+
 def read_commitment(path: Path) -> tuple[bytes, dict]:
     raw = crypto_support.read_bounded(
         path, MAX_COMMITMENT_BYTES, "temporal study commitment"
@@ -183,7 +204,8 @@ def inspect_request(path: Path) -> dict:
     return request
 
 
-def parse_timestamp_ms(value: str) -> int:
+def parse_timestamp(value: str) -> tuple[int, int]:
+    """Return the floor millisecond and discarded microsecond remainder."""
     normalized = " ".join(value.split())
     formats = (
         "%b %d %H:%M:%S.%f %Y GMT",
@@ -192,10 +214,21 @@ def parse_timestamp_ms(value: str) -> int:
     for format_string in formats:
         try:
             parsed = datetime.strptime(normalized, format_string).replace(tzinfo=timezone.utc)
-            return int(parsed.timestamp() * 1000)
+            epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+            delta = parsed - epoch
+            total_micros = (
+                delta.days * 86_400 * 1_000_000
+                + delta.seconds * 1_000_000
+                + delta.microseconds
+            )
+            return divmod(total_micros, 1_000)
         except ValueError:
             continue
     raise TimestampError("RFC 3161 genTime is not strict UTC text")
+
+
+def parse_timestamp_ms(value: str) -> int:
+    return parse_timestamp(value)[0]
 
 
 def parse_nonnegative_integer(value: str, label: str) -> int:
@@ -255,11 +288,16 @@ def inspect_response(path: Path) -> dict:
         raise TimestampError("RFC 3161 response must contain the request nonce")
     if ordering_text not in ("yes", "no"):
         raise TimestampError("RFC 3161 ordering flag is malformed")
+    gen_time_unix_ms, gen_time_submillisecond_micros = parse_timestamp(
+        gen_time_text
+    )
+    declared_accuracy_micros = parse_accuracy_micros(accuracy_text)
     return {
         "policy_oid": policy_oid,
         "serial_hex": serial.lower(),
-        "gen_time_unix_ms": parse_timestamp_ms(gen_time_text),
-        "accuracy_micros": parse_accuracy_micros(accuracy_text),
+        "gen_time_unix_ms": gen_time_unix_ms,
+        "gen_time_submillisecond_micros": gen_time_submillisecond_micros,
+        "accuracy_micros": declared_accuracy_micros,
         "ordering": ordering_text == "yes",
         "nonce": nonce.lower(),
     }
@@ -375,6 +413,160 @@ def signer_identity(response_path: Path, untrusted_chain_path: Path | None) -> d
     }
 
 
+CERTIFICATE_PEM_PATTERN = re.compile(
+    r"-----BEGIN CERTIFICATE-----\r?\n"
+    r"(?P<body>(?:[A-Za-z0-9+/]{1,64}={0,2}\r?\n)+)"
+    r"-----END CERTIFICATE-----"
+)
+
+
+def strict_pem_certificate_der(raw: bytes, label: str) -> list[bytes]:
+    try:
+        text = raw.decode("ascii", errors="strict")
+    except UnicodeDecodeError as error:
+        raise TimestampError(f"{label} is not strict ASCII PEM") from error
+    matches = list(CERTIFICATE_PEM_PATTERN.finditer(text))
+    if not matches:
+        raise TimestampError(f"{label} contains no PEM certificates")
+    if len(matches) > MAX_CERTIFICATE_CANDIDATE_COUNT:
+        raise TimestampError(f"{label} contains too many PEM certificates")
+    cursor = 0
+    certificates = []
+    for match in matches:
+        if text[cursor : match.start()].strip():
+            raise TimestampError(f"{label} contains non-certificate PEM data")
+        lines = match.group("body").splitlines()
+        if (
+            not lines
+            or any(len(line) != 64 or "=" in line for line in lines[:-1])
+            or not 4 <= len(lines[-1]) <= 64
+            or len(lines[-1]) % 4 != 0
+        ):
+            raise TimestampError(f"{label} certificate PEM wrapping is invalid")
+        encoded = "".join(lines)
+        try:
+            certificate_der = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise TimestampError(f"{label} certificate PEM base64 is invalid") from error
+        normalized_der = run_openssl(
+            ["x509", "-inform", "DER", "-outform", "DER"],
+            input_bytes=certificate_der,
+        )
+        if not hmac.compare_digest(normalized_der, certificate_der):
+            raise TimestampError(f"{label} certificate is not strict DER")
+        certificates.append(certificate_der)
+        cursor = match.end()
+    if text[cursor:].strip():
+        raise TimestampError(f"{label} contains trailing non-certificate PEM data")
+    return certificates
+
+
+def certificate_subject(certificate_der: bytes, label: str) -> str:
+    text = run_openssl(
+        [
+            "x509",
+            "-inform",
+            "DER",
+            "-subject",
+            "-noout",
+            "-nameopt",
+            "RFC2253",
+        ],
+        input_bytes=certificate_der,
+    ).decode("utf-8", errors="strict")
+    values = [
+        line[len("subject=") :].strip()
+        for line in text.splitlines()
+        if line.startswith("subject=")
+    ]
+    if len(values) != 1 or not values[0]:
+        raise TimestampError(f"{label} certificate subject is missing or ambiguous")
+    return values[0]
+
+
+def selected_certificate_chain_claims(
+    signer_pem: bytes,
+    ca_bundle: bytes,
+    untrusted_chain: bytes | None,
+    chain_subjects: list[str],
+) -> dict:
+    if (
+        not 2 <= len(chain_subjects) <= MAX_SELECTED_CERTIFICATE_CHAIN_COUNT
+        or len(set(chain_subjects)) != len(chain_subjects)
+    ):
+        raise TimestampError("selected TSA certificate-chain subjects are invalid")
+
+    signer_der = strict_pem_certificate_der(
+        signer_pem, "RFC 3161 signer certificate"
+    )
+    if len(signer_der) != 1:
+        raise TimestampError("RFC 3161 signer evidence must contain one certificate")
+    sources = [
+        ("signer", signer_der),
+        (
+            "untrusted",
+            strict_pem_certificate_der(
+                untrusted_chain, "RFC 3161 untrusted certificate chain"
+            )
+            if untrusted_chain is not None
+            else [],
+        ),
+        (
+            "trust_anchor",
+            strict_pem_certificate_der(
+                ca_bundle, "RFC 3161 trust-anchor certificate bundle"
+            ),
+        ),
+    ]
+    if sum(len(certificates) for _, certificates in sources) > (
+        MAX_CERTIFICATE_CANDIDATE_COUNT
+    ):
+        raise TimestampError("RFC 3161 certificate evidence has too many candidates")
+
+    candidates = {}
+    for source, certificates in sources:
+        for certificate_der in certificates:
+            digest = sha256(certificate_der).hexdigest()
+            if digest not in candidates:
+                candidates[digest] = {
+                    "subject": certificate_subject(
+                        certificate_der, f"RFC 3161 {source}"
+                    ),
+                    "sources": {source},
+                }
+            else:
+                candidates[digest]["sources"].add(source)
+
+    selected_digests = []
+    for subject in chain_subjects:
+        matches = [
+            digest
+            for digest, candidate in candidates.items()
+            if candidate["subject"] == subject
+        ]
+        if len(matches) != 1:
+            raise TimestampError(
+                "selected TSA certificate-chain subject has zero or ambiguous candidates"
+            )
+        selected_digests.append(matches[0])
+
+    signer_digest = sha256(signer_der[0]).hexdigest()
+    if not hmac.compare_digest(selected_digests[0], signer_digest):
+        raise TimestampError("selected TSA certificate chain does not start with the signer")
+    if "trust_anchor" not in candidates[selected_digests[-1]]["sources"]:
+        raise TimestampError("selected TSA certificate chain does not end in a trust anchor")
+
+    return {
+        "certificate_chain_order": "tsa_signer_to_trust_anchor",
+        "certificate_chain_der_sha256s": selected_digests,
+        "certificate_chain_sha256": aggregate_der_digest(
+            selected_digests,
+            CERTIFICATE_CHAIN_DIGEST_DOMAIN,
+            "selected TSA certificate chain",
+        ),
+    }
+
+
 def parse_crl_time_ms(value: str, label: str) -> int:
     normalized = " ".join(value.split())
     for format_string in ("%b %d %H:%M:%S %Y GMT", "%Y%m%d%H%M%SZ"):
@@ -388,7 +580,7 @@ def parse_crl_time_ms(value: str, label: str) -> int:
     raise TimestampError(f"X.509 CRL {label} is not strict UTC text")
 
 
-def inspect_complete_crl(path: Path, raw: bytes, gen_time_unix_ms: int) -> dict:
+def inspect_complete_crl(path: Path, raw: bytes, gen_time_unix_micros: int) -> dict:
     stripped = raw.strip()
     if (
         stripped.count(b"-----BEGIN X509 CRL-----") != 1
@@ -439,7 +631,12 @@ def inspect_complete_crl(path: Path, raw: bytes, gen_time_unix_ms: int) -> dict:
         )
     this_update_ms = parse_crl_time_ms(values["last_update"], "thisUpdate")
     next_update_ms = parse_crl_time_ms(values["next_update"], "nextUpdate")
-    if this_update_ms > gen_time_unix_ms or next_update_ms < gen_time_unix_ms:
+    this_update_micros = this_update_ms * 1_000
+    next_update_micros = next_update_ms * 1_000
+    if (
+        this_update_micros > gen_time_unix_micros
+        or next_update_micros < gen_time_unix_micros
+    ):
         raise TimestampError("X.509 CRL does not cover the RFC 3161 genTime")
     if next_update_ms <= this_update_ms:
         raise TimestampError("X.509 CRL validity interval is inconsistent")
@@ -512,7 +709,9 @@ def verify_historical_crls(
     untrusted_chain_path: Path | None,
     crl_paths: list[Path],
     gen_time_unix_ms: int,
+    gen_time_submillisecond_micros: int,
     temporary: Path,
+    chain_subjects: list[str],
 ) -> dict:
     if not 1 <= len(crl_paths) <= MAX_CRL_COUNT:
         raise TimestampError(
@@ -534,14 +733,14 @@ def verify_historical_crls(
     for index, raw in enumerate(crl_raw):
         snapshot = temporary / f"revocation-{index:02d}.crl.pem"
         write_bytes_atomic(snapshot, raw)
-        crls.append(inspect_complete_crl(snapshot, raw, gen_time_unix_ms))
+        crls.append(
+            inspect_complete_crl(
+                snapshot,
+                raw,
+                gen_time_unix_ms * 1_000 + gen_time_submillisecond_micros,
+            )
+        )
 
-    chain_subjects = certificate_chain_subjects(
-        signer_path,
-        ca_file_path,
-        untrusted_chain_path,
-        gen_time_unix_ms,
-    )
     required_issuers = chain_subjects[1:]
     observed_issuers = [crl["issuer"] for crl in crls]
     if sorted(observed_issuers) != sorted(required_issuers):
@@ -582,6 +781,11 @@ def verify_historical_crls(
         ]
     )
     run_openssl(arguments)
+    if gen_time_unix_ms % 1_000 != 0 or gen_time_submillisecond_micros:
+        ceiling_arguments = list(arguments)
+        attime_index = ceiling_arguments.index("-attime") + 1
+        ceiling_arguments[attime_index] = str(gen_time_unix_ms // 1_000 + 1)
+        run_openssl(ceiling_arguments)
 
     exported = sorted(
         (
@@ -614,6 +818,11 @@ def verify_historical_crls(
         "revocation_crl_set_sha256": sha256(
             "\n".join(der_digests).encode("ascii")
         ).hexdigest(),
+        "revocation_evidence_sha256": aggregate_der_digest(
+            der_digests,
+            REVOCATION_EVIDENCE_DIGEST_DOMAIN,
+            "RFC 3161 revocation evidence",
+        ),
         "revocation_crls": exported,
     }
 
@@ -630,12 +839,16 @@ def validate_revocation_claims(payload: dict) -> None:
     ):
         raise TimestampError("RFC 3161 revocation assurance claims are invalid")
     gen_time = payload.get("gen_time_unix_ms")
+    submillisecond_micros = payload.get("gen_time_submillisecond_micros")
     checked_count = payload.get("revocation_checked_certificate_count")
     crl_count = payload.get("revocation_crl_count")
     if (
         isinstance(gen_time, bool)
         or not isinstance(gen_time, int)
         or gen_time <= 0
+        or isinstance(submillisecond_micros, bool)
+        or not isinstance(submillisecond_micros, int)
+        or not 0 <= submillisecond_micros <= 999
         or isinstance(checked_count, bool)
         or not isinstance(checked_count, int)
         or checked_count <= 0
@@ -658,6 +871,7 @@ def validate_revocation_claims(payload: dict) -> None:
         raise TimestampError("RFC 3161 revocation CRL identities are invalid")
     issuer_digests = set()
     observed_digests = []
+    exact_gen_time_micros = gen_time * 1_000 + submillisecond_micros
     for crl in crls:
         if not isinstance(crl, dict) or set(crl) != REVOCATION_CRL_FIELDS:
             raise TimestampError("RFC 3161 revocation CRL claims are invalid")
@@ -674,7 +888,9 @@ def validate_revocation_claims(payload: dict) -> None:
             or not isinstance(this_update, int)
             or isinstance(next_update, bool)
             or not isinstance(next_update, int)
-            or not this_update <= gen_time <= next_update
+            or not this_update * 1_000
+            <= exact_gen_time_micros
+            <= next_update * 1_000
             or next_update <= this_update
             or not isinstance(number, str)
             or re.fullmatch(r"0x[0-9a-f]{1,40}", number) is None
@@ -683,6 +899,7 @@ def validate_revocation_claims(payload: dict) -> None:
         issuer_digests.add(issuer_digest)
         observed_digests.append(der_digest)
     set_digest = payload.get("revocation_crl_set_sha256")
+    evidence_digest = payload.get("revocation_evidence_sha256")
     if (
         observed_digests != digests
         or not lowercase_sha256(set_digest)
@@ -692,6 +909,71 @@ def validate_revocation_claims(payload: dict) -> None:
         )
     ):
         raise TimestampError("RFC 3161 revocation CRL set digest is inconsistent")
+    if (
+        not lowercase_sha256(evidence_digest)
+        or not hmac.compare_digest(
+            evidence_digest,
+            aggregate_der_digest(
+                digests,
+                REVOCATION_EVIDENCE_DIGEST_DOMAIN,
+                "RFC 3161 revocation evidence",
+            ),
+        )
+    ):
+        raise TimestampError("RFC 3161 revocation evidence digest is inconsistent")
+
+
+def validate_selected_chain_claims(payload: dict) -> None:
+    digests = payload.get("certificate_chain_der_sha256s")
+    aggregate = payload.get("certificate_chain_sha256")
+    if (
+        payload.get("certificate_chain_order") != "tsa_signer_to_trust_anchor"
+        or not isinstance(digests, list)
+        or not 2 <= len(digests) <= MAX_SELECTED_CERTIFICATE_CHAIN_COUNT
+        or len(set(digests)) != len(digests)
+        or any(not lowercase_sha256(digest) for digest in digests)
+        or not lowercase_sha256(payload.get("tsa_signer_certificate_sha256"))
+        or digests[0] != payload.get("tsa_signer_certificate_sha256")
+        or payload.get("revocation_checked_certificate_count") != len(digests) - 1
+        or not lowercase_sha256(aggregate)
+        or not hmac.compare_digest(
+            aggregate,
+            aggregate_der_digest(
+                digests,
+                CERTIFICATE_CHAIN_DIGEST_DOMAIN,
+                "selected TSA certificate chain",
+            ),
+        )
+    ):
+        raise TimestampError("RFC 3161 selected certificate-chain claims are invalid")
+
+
+def validate_trusted_time_claims(payload: dict) -> None:
+    gen_time_ms = payload.get("gen_time_unix_ms")
+    submillisecond_micros = payload.get("gen_time_submillisecond_micros")
+    accuracy_micros = payload.get("accuracy_micros")
+    if (
+        isinstance(gen_time_ms, bool)
+        or not isinstance(gen_time_ms, int)
+        or gen_time_ms <= 0
+        or isinstance(submillisecond_micros, bool)
+        or not isinstance(submillisecond_micros, int)
+        or not 0 <= submillisecond_micros <= 999
+        or isinstance(accuracy_micros, bool)
+        or not isinstance(accuracy_micros, int)
+        or not 0 < accuracy_micros <= MAX_TIMESTAMP_ACCURACY_MICROS
+    ):
+        raise TimestampError("RFC 3161 trusted-time claims are invalid")
+    exact_time_micros = gen_time_ms * 1_000 + submillisecond_micros
+    if exact_time_micros < accuracy_micros:
+        raise TimestampError("RFC 3161 trusted-time interval underflows Unix time")
+    if (
+        payload.get("earliest_trusted_time_unix_ms")
+        != (exact_time_micros - accuracy_micros) // 1_000
+        or payload.get("latest_trusted_time_unix_ms")
+        != (exact_time_micros + accuracy_micros + 999) // 1_000
+    ):
+        raise TimestampError("RFC 3161 trusted-time interval is inconsistent")
 
 
 def verification_arguments(
@@ -795,11 +1077,18 @@ def verify_document_timestamp(
 
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         gen_time_ms = response["gen_time_unix_ms"]
+        gen_time_submillisecond_micros = response[
+            "gen_time_submillisecond_micros"
+        ]
         accuracy_micros = response["accuracy_micros"]
         if accuracy_micros is None:
             raise TimestampError("RFC 3161 response must declare timestamp accuracy")
-        if accuracy_micros > MAX_TIMESTAMP_ACCURACY_MICROS:
-            raise TimestampError("RFC 3161 timestamp accuracy exceeds five minutes")
+        if not 0 < accuracy_micros <= MAX_TIMESTAMP_ACCURACY_MICROS:
+            raise TimestampError(
+                "RFC 3161 timestamp accuracy must be within one microsecond and five minutes"
+            )
+        if not 0 <= gen_time_submillisecond_micros <= 999:
+            raise TimestampError("RFC 3161 genTime submillisecond remainder is invalid")
         if gen_time_ms > now_ms + MAX_FUTURE_SKEW_MS:
             raise TimestampError("RFC 3161 genTime is implausibly in the future")
         run_openssl(
@@ -812,6 +1101,17 @@ def verify_document_timestamp(
                 gen_time_ms,
             )
         )
+        if gen_time_ms % 1_000 != 0 or gen_time_submillisecond_micros:
+            run_openssl(
+                verification_arguments(
+                    "-queryfile",
+                    request_snapshot,
+                    response_snapshot,
+                    ca_snapshot,
+                    chain_snapshot,
+                    gen_time_ms + 1_000,
+                )
+            )
         run_openssl(
             verification_arguments(
                 "-data",
@@ -822,30 +1122,80 @@ def verify_document_timestamp(
                 gen_time_ms,
             )
         )
+        if gen_time_ms % 1_000 != 0 or gen_time_submillisecond_micros:
+            run_openssl(
+                verification_arguments(
+                    "-data",
+                    document_snapshot,
+                    response_snapshot,
+                    ca_snapshot,
+                    chain_snapshot,
+                    gen_time_ms + 1_000,
+                )
+            )
         signer = signer_identity(response_snapshot, chain_snapshot)
+        signer_snapshot = temporary / "timestamp-signer-for-chain.pem"
+        write_bytes_atomic(signer_snapshot, signer["certificate_pem"])
+        chain_subjects = certificate_chain_subjects(
+            signer_snapshot,
+            ca_snapshot,
+            chain_snapshot,
+            gen_time_ms,
+        )
+        if gen_time_ms % 1_000 != 0 or gen_time_submillisecond_micros:
+            ceiling_chain_subjects = certificate_chain_subjects(
+                signer_snapshot,
+                ca_snapshot,
+                chain_snapshot,
+                gen_time_ms + 1_000,
+            )
+            if ceiling_chain_subjects != chain_subjects:
+                raise TimestampError(
+                    "TSA certificate chain changes across fractional genTime"
+                )
+        certificate_chain = selected_certificate_chain_claims(
+            signer["certificate_pem"],
+            ca_bundle,
+            untrusted_chain,
+            chain_subjects,
+        )
         revocation = verify_historical_crls(
             signer["certificate_pem"],
             ca_snapshot,
             chain_snapshot,
             revocation_crl_paths,
             gen_time_ms,
+            gen_time_submillisecond_micros,
             temporary,
+            chain_subjects,
         )
     if not hmac.compare_digest(signer["spki_sha256"], expected_tsa_spki_sha256):
         raise TimestampError("RFC 3161 signer does not match the expected TSA SPKI")
 
     openssl_version = run_openssl(["version"]).decode("utf-8", errors="strict").strip()
-    accuracy_ms = (accuracy_micros + 999) // 1000
-    return {
+    earliest_time_micros = (
+        gen_time_ms * 1_000
+        + gen_time_submillisecond_micros
+        - accuracy_micros
+    )
+    latest_time_micros = (
+        gen_time_ms * 1_000
+        + gen_time_submillisecond_micros
+        + accuracy_micros
+    )
+    earliest_time_ms = max(0, earliest_time_micros // 1_000)
+    latest_time_ms = max(0, (latest_time_micros + 999) // 1_000)
+    report = {
         "timestamp_protocol": TIMESTAMP_PROTOCOL,
         "trusted_timestamp_assurance": TRUSTED_TIMESTAMP_ASSURANCE,
         "message_imprint_algorithm": HASH_ALGORITHM,
         "policy_oid": expected_policy_oid,
         "serial_hex": response["serial_hex"],
         "gen_time_unix_ms": gen_time_ms,
+        "gen_time_submillisecond_micros": gen_time_submillisecond_micros,
         "accuracy_micros": accuracy_micros,
-        "earliest_trusted_time_unix_ms": max(0, gen_time_ms - accuracy_ms),
-        "latest_trusted_time_unix_ms": gen_time_ms + accuracy_ms,
+        "earliest_trusted_time_unix_ms": earliest_time_ms,
+        "latest_trusted_time_unix_ms": latest_time_ms,
         "ordering": response["ordering"],
         "request_nonce_present": True,
         "timestamped_document_sha256": sha256(document).hexdigest(),
@@ -858,10 +1208,15 @@ def verify_document_timestamp(
             sha256(untrusted_chain).hexdigest() if untrusted_chain is not None else None
         ),
         "certificate_validation_time_basis": "tsa_gen_time",
+        **certificate_chain,
         **revocation,
         "verification_time_unix_ms": now_ms,
         "verification_tool": openssl_version,
     }
+    validate_selected_chain_claims(report)
+    validate_revocation_claims(report)
+    validate_trusted_time_claims(report)
+    return report
 
 
 def verify_timestamp(

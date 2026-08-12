@@ -20,7 +20,7 @@ use crate::{
 
 /// Supported schema for a private independent-domain result evidence bundle.
 pub const DOMAIN_STUDY_RESULT_EVIDENCE_SCHEMA_VERSION: &str =
-    "aura.domain.independent_evaluation_evidence.v1";
+    "aura.domain.independent_evaluation_evidence.v2";
 /// Supported schema for content-free aggregate results.
 pub const DOMAIN_STUDY_RESULT_SCHEMA_VERSION: &str = "aura.domain.independent_evaluation_result.v1";
 /// Supported schema for governed reviewer-agreement analysis claims.
@@ -34,7 +34,7 @@ pub const DOMAIN_STUDY_PREREGISTRATION_ATTESTATION_SCHEMA_VERSION: &str =
     "aura.domain.preregistration_attestation.v1";
 /// Supported schema for trusted timestamp-verification receipts.
 pub const DOMAIN_STUDY_TRUSTED_TIMESTAMP_SCHEMA_VERSION: &str =
-    "aura.domain.trusted_timestamp_verification.v1";
+    "aura.domain.trusted_timestamp_verification.v2";
 /// Supported schema for independently signed reviewer receipts.
 pub const DOMAIN_STUDY_REVIEWER_RECEIPT_SCHEMA_VERSION: &str = "aura.domain.reviewer_receipt.v1";
 /// Supported schema for private reviewer assignment manifests.
@@ -184,9 +184,11 @@ pub struct DomainStudyTrustedTimestampClaims {
     pub subject_canonical_sha256: String,
     /// Verified timestamp protocol.
     pub protocol: DomainStudyTimestampProtocol,
-    /// Trusted generation time in Unix milliseconds.
+    /// Floor of the trusted generation time in Unix milliseconds.
     pub issued_at_ms: u64,
-    /// RFC 3161 accuracy bound in microseconds.
+    /// Microseconds discarded when exact `genTime` is floored to milliseconds.
+    pub gen_time_submillisecond_micros: u16,
+    /// RFC 3161 declared accuracy bound in microseconds.
     pub accuracy_micros: u64,
     /// Digest of the nonce-bearing DER timestamp request.
     pub request_sha256: String,
@@ -856,6 +858,18 @@ pub fn domain_study_result_canonical_sha256<T: Serialize>(
     value: &T,
 ) -> Result<String, DomainStudyResultError> {
     canonical_sha256(value)
+}
+
+/// Returns the exact compact JSON bytes used by result-chain bindings.
+///
+/// Interoperable timestamp subjects must be produced from the typed AURA
+/// evidence structures, not from unordered custom map types. The returned
+/// bytes contain no trailing newline and can be passed directly to the trusted
+/// RFC 3161 adapter.
+pub fn domain_study_result_canonical_json<T: Serialize>(
+    value: &T,
+) -> Result<Vec<u8>, DomainStudyResultError> {
+    Ok(serde_json::to_vec(value)?)
 }
 
 /// Validates a complete signed and timestamped result chain.
@@ -1841,6 +1855,7 @@ fn validate_timestamp_receipt(
         || claims.subject_canonical_sha256 != expected_subject_sha256
         || claims.protocol != DomainStudyTimestampProtocol::Rfc3161TrustedChain
         || claims.issued_at_ms == 0
+        || claims.gen_time_submillisecond_micros > 999
         || claims.accuracy_micros == 0
         || claims.accuracy_micros > MAX_TIMESTAMP_ACCURACY_MICROS
         || !is_canonical_sha256(&claims.request_sha256)
@@ -1859,23 +1874,31 @@ fn validate_timestamp_receipt(
         &trust_policy.timestamp_verifier,
         "trusted timestamp receipt",
     )?;
-    let accuracy_ms = claims.accuracy_micros.div_ceil(1_000);
-    let earliest_ms = claims
+    let exact_time_micros = claims
         .issued_at_ms
-        .checked_sub(accuracy_ms)
+        .checked_mul(1_000)
+        .and_then(|value| value.checked_add(u64::from(claims.gen_time_submillisecond_micros)))
         .ok_or_else(|| {
             DomainStudyResultError::InvalidEvidence(
-                "trusted timestamp uncertainty interval underflows Unix milliseconds".to_string(),
+                "trusted timestamp generation time overflows Unix microseconds".to_string(),
             )
         })?;
-    let latest_ms = claims
-        .issued_at_ms
-        .checked_add(accuracy_ms)
+    let earliest_micros = exact_time_micros
+        .checked_sub(claims.accuracy_micros)
         .ok_or_else(|| {
             DomainStudyResultError::InvalidEvidence(
-                "trusted timestamp uncertainty interval overflows Unix milliseconds".to_string(),
+                "trusted timestamp uncertainty interval underflows Unix microseconds".to_string(),
             )
         })?;
+    let latest_micros = exact_time_micros
+        .checked_add(claims.accuracy_micros)
+        .ok_or_else(|| {
+            DomainStudyResultError::InvalidEvidence(
+                "trusted timestamp uncertainty interval overflows Unix microseconds".to_string(),
+            )
+        })?;
+    let earliest_ms = earliest_micros / 1_000;
+    let latest_ms = latest_micros.div_ceil(1_000);
     Ok(TrustedTimeInterval {
         earliest_ms,
         latest_ms,
@@ -2098,7 +2121,7 @@ fn signed_unit_interval(value: f64) -> bool {
 }
 
 fn canonical_sha256<T: Serialize>(value: &T) -> Result<String, DomainStudyResultError> {
-    let digest = Sha256::digest(serde_json::to_vec(value)?);
+    let digest = Sha256::digest(domain_study_result_canonical_json(value)?);
     Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
@@ -2254,6 +2277,7 @@ mod tests {
             subject_canonical_sha256: subject_sha256,
             protocol: DomainStudyTimestampProtocol::Rfc3161TrustedChain,
             issued_at_ms,
+            gen_time_submillisecond_micros: 0,
             accuracy_micros: 1_000,
             request_sha256: SHA_B.to_string(),
             response_sha256: SHA_C.to_string(),
@@ -3417,6 +3441,192 @@ mod tests {
         .expect_err("underflowing trusted interval must fail");
 
         assert!(error.to_string().contains("underflows"));
+    }
+
+    #[test]
+    fn trusted_timestamp_fractional_gen_time_rounds_outward() {
+        let fixture = fixture();
+        let mut receipt = timestamp(
+            DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            SHA_A.to_string(),
+            1_780_000_000_000,
+            &fixture.keys,
+        );
+        receipt.claims.gen_time_submillisecond_micros = 999;
+        receipt.signature = signature(
+            TRUSTED_TIMESTAMP_DOMAIN,
+            &receipt.claims,
+            "timestamp_verifier",
+            &fixture.keys.timestamp,
+        );
+
+        let interval = validate_timestamp_receipt(
+            &receipt,
+            DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            SHA_A,
+            &fixture.trust,
+        )
+        .expect("fractional timestamp must remain representable");
+
+        assert_eq!(interval.earliest_ms, 1_779_999_999_999);
+        assert_eq!(interval.latest_ms, 1_780_000_000_002);
+    }
+
+    #[test]
+    fn trusted_timestamp_invalid_fractional_remainder_is_rejected() {
+        let fixture = fixture();
+        let mut receipt = timestamp(
+            DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            SHA_A.to_string(),
+            1_780_000_000_000,
+            &fixture.keys,
+        );
+        receipt.claims.gen_time_submillisecond_micros = 1_000;
+        receipt.signature = signature(
+            TRUSTED_TIMESTAMP_DOMAIN,
+            &receipt.claims,
+            "timestamp_verifier",
+            &fixture.keys.timestamp,
+        );
+
+        let error = validate_timestamp_receipt(
+            &receipt,
+            DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            SHA_A,
+            &fixture.trust,
+        )
+        .expect_err("invalid fractional remainder must fail");
+
+        assert!(error.to_string().contains("malformed"));
+    }
+
+    #[test]
+    fn trusted_timestamp_signing_payload_is_cross_language_stable() {
+        let claims = DomainStudyTrustedTimestampClaims {
+            schema_version: DOMAIN_STUDY_TRUSTED_TIMESTAMP_SCHEMA_VERSION.to_string(),
+            subject_kind: DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            subject_canonical_sha256: SHA_A.to_string(),
+            protocol: DomainStudyTimestampProtocol::Rfc3161TrustedChain,
+            issued_at_ms: 1_780_000_000_000,
+            gen_time_submillisecond_micros: 999,
+            accuracy_micros: 1_000,
+            request_sha256: SHA_B.to_string(),
+            response_sha256: SHA_C.to_string(),
+            certificate_chain_sha256: SHA_D.to_string(),
+            revocation_evidence_sha256: SHA_A.to_string(),
+            tsa_spki_sha256: SHA_B.to_string(),
+            tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
+        };
+
+        let payload = domain_study_trusted_timestamp_signing_payload(&claims, "timestamp_verifier")
+            .expect("timestamp signing payload");
+        let expected = concat!(
+            "aura.domain.trusted-timestamp.v1\0",
+            r#"{"key_id":"timestamp_verifier","claims":{"schema_version":"aura.domain.trusted_timestamp_verification.v2","subject_kind":"final_evidence_manifest","subject_canonical_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","protocol":"rfc3161_trusted_chain","issued_at_ms":1780000000000,"gen_time_submillisecond_micros":999,"accuracy_micros":1000,"request_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","response_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","certificate_chain_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","revocation_evidence_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tsa_spki_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","tsa_policy_oid":"1.3.6.1.4.1.57264.1"}}"#,
+        );
+
+        assert_eq!(payload, expected.as_bytes());
+    }
+
+    #[test]
+    fn every_timestamp_subject_kind_has_stable_snake_case_wire_value() {
+        let cases = [
+            (
+                DomainStudyTimestampSubjectKind::PreregistrationAttestation,
+                "\"preregistration_attestation\"",
+            ),
+            (
+                DomainStudyTimestampSubjectKind::ReviewerReceipt,
+                "\"reviewer_receipt\"",
+            ),
+            (
+                DomainStudyTimestampSubjectKind::ReviewerAgreementAnalysis,
+                "\"reviewer_agreement_analysis\"",
+            ),
+            (
+                DomainStudyTimestampSubjectKind::AdjudicationStartAuthorization,
+                "\"adjudication_start_authorization\"",
+            ),
+            (
+                DomainStudyTimestampSubjectKind::AdjudicationReceipt,
+                "\"adjudication_receipt\"",
+            ),
+            (
+                DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+                "\"final_evidence_manifest\"",
+            ),
+        ];
+
+        for (kind, expected) in cases {
+            assert_eq!(
+                serde_json::to_string(&kind).expect("serialize kind"),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn python_openssl_timestamp_signature_verifies_with_dalek() {
+        let claims = DomainStudyTrustedTimestampClaims {
+            schema_version: DOMAIN_STUDY_TRUSTED_TIMESTAMP_SCHEMA_VERSION.to_string(),
+            subject_kind: DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            subject_canonical_sha256: SHA_A.to_string(),
+            protocol: DomainStudyTimestampProtocol::Rfc3161TrustedChain,
+            issued_at_ms: 1_780_000_000_000,
+            gen_time_submillisecond_micros: 999,
+            accuracy_micros: 1_000,
+            request_sha256: SHA_B.to_string(),
+            response_sha256: SHA_C.to_string(),
+            certificate_chain_sha256: SHA_D.to_string(),
+            revocation_evidence_sha256: SHA_A.to_string(),
+            tsa_spki_sha256: SHA_B.to_string(),
+            tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
+        };
+        let receipt = DomainStudyTrustedTimestampReceipt {
+            claims,
+            signature: DomainStudyDetachedSignature {
+                key_id: "timestamp_verifier".to_string(),
+                signature_hex: concat!(
+                    "a09b19f78bceb5a0ab643bf1eeb339ad9efe9fecc2fdda98ecdc25c279a60141",
+                    "35868bb7ac18ea249f029613bdcf7ab878e690ab77cbe6170ed53d33fd19800e"
+                )
+                .to_string(),
+            },
+        };
+        let trust = DomainStudyTrustPolicy {
+            timestamp_verifier: DomainStudyTrustedKey {
+                key_id: "timestamp_verifier".to_string(),
+                public_key_hex: concat!(
+                    "d75a980182b10ab7d54bfed3c964073a",
+                    "0ee172f3daa62325af021a68f707511a"
+                )
+                .to_string(),
+            },
+            trusted_tsa_spki_sha256: SHA_B.to_string(),
+            ..fixture().trust
+        };
+
+        validate_timestamp_receipt(
+            &receipt,
+            DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            SHA_A,
+            &trust,
+        )
+        .expect("Python/OpenSSL Ed25519 receipt must verify in Rust/dalek");
+    }
+
+    #[test]
+    fn timestamp_subject_bytes_match_the_result_chain_digest() {
+        let fixture = fixture();
+        let subject = &fixture.evidence.preregistration_attestation;
+        let canonical_json =
+            domain_study_result_canonical_json(subject).expect("canonical subject JSON");
+
+        assert!(!canonical_json.ends_with(b"\n"));
+        assert_eq!(
+            hex(&Sha256::digest(&canonical_json)),
+            domain_study_result_canonical_sha256(subject).expect("canonical subject digest")
+        );
     }
 
     #[test]

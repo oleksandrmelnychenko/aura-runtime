@@ -30,15 +30,15 @@ ATTESTATION_SCHEMA_VERSION = (
     "aura.military.temporal_review_submission_attestation.v1"
 )
 VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_review_receipt_verification.v2"
+    "aura.military.temporal_review_receipt_verification.v3"
 )
 INDEX_SCHEMA_VERSION = "aura.military.temporal_review_receipt_index.v3"
 CHAIN_VERIFICATION_SCHEMA_VERSION = (
-    "aura.military.temporal_review_receipt_chain_verification.v3"
+    "aura.military.temporal_review_receipt_chain_verification.v4"
 )
 REVIEW_BUNDLE_SCHEMA_VERSION = "aura.military.temporal_independent_review.v3"
 STUDY_TIMESTAMP_SCHEMA_VERSION = (
-    "aura.military.temporal_study_timestamp_verification.v2"
+    "aura.military.temporal_study_timestamp_verification.v3"
 )
 SIGNATURE_ALGORITHM = "Ed25519"
 TIMESTAMP_ASSURANCE = "rfc3161_trusted_chain"
@@ -957,6 +957,8 @@ def validate_study_timestamp(payload: dict) -> None:
     ):
         raise ReceiptError("study timestamp verification is not high assurance")
     timestamp_support.validate_revocation_claims(payload)
+    timestamp_support.validate_selected_chain_claims(payload)
+    timestamp_support.validate_trusted_time_claims(payload)
     for field in (
         "commitment_canonical_sha256",
         "preregistration_canonical_sha256",
@@ -967,22 +969,6 @@ def validate_study_timestamp(payload: dict) -> None:
             raise ReceiptError(f"study timestamp {field} is malformed")
     if not safe_token(payload.get("study_id")):
         raise ReceiptError("study timestamp study_id is invalid")
-    gen_time = payload.get("gen_time_unix_ms")
-    accuracy_micros = payload.get("accuracy_micros")
-    if not positive_integer(gen_time) or (
-        isinstance(accuracy_micros, bool)
-        or not isinstance(accuracy_micros, int)
-        or not 0 <= accuracy_micros <= timestamp_support.MAX_TIMESTAMP_ACCURACY_MICROS
-    ):
-        raise ReceiptError("study timestamp time claims are invalid")
-    accuracy_ms = (accuracy_micros + 999) // 1000
-    expected_earliest = max(0, gen_time - accuracy_ms)
-    expected_latest = gen_time + accuracy_ms
-    if (
-        payload.get("earliest_trusted_time_unix_ms") != expected_earliest
-        or payload.get("latest_trusted_time_unix_ms") != expected_latest
-    ):
-        raise ReceiptError("study timestamp trusted interval is inconsistent")
 
 
 def verify_chain(index_path: Path, output_path: Path | None = None) -> dict:

@@ -273,7 +273,7 @@ trusted-key study attestation, RFC 3161 commitment timestamp, and a chain of
 an independently signed/timestamped participant-key roster plus individually
 signed and RFC 3161 timestamped reviewer/adjudicator receipts. Every timestamp
 requires offline full-chain CRL evidence covering its `genTime`; copied
-timestamp-verification reports are not trusted by receipt-chain v3. The
+timestamp-verification reports are not trusted by receipt-chain v4. The
 v5 report binds computed metrics to the exact canonical review bundle; legacy,
 unsigned, untimestamped, receipt-free, or public-seed review cannot satisfy
 policy activation readiness.

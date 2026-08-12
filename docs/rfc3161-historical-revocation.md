@@ -29,7 +29,8 @@ Verification is offline and fail-closed. It requires:
 
 - exactly one full CRL for every issuer selected in the actual TSA chain;
 - no unrelated or duplicate issuer CRL;
-- `thisUpdate <= genTime <= nextUpdate`;
+- `thisUpdate <=` exact fractional `genTime <= nextUpdate`, with PKIX and CRL
+  verification repeated at both adjacent seconds when `genTime` is fractional;
 - a CRL number no wider than 160 bits;
 - valid CRL and certificate signatures under the pinned trust anchors;
 - `timestampsign` purpose, RFC 5280 strict mode, authentication level 2, and
@@ -41,7 +42,8 @@ The verification report records DER SHA-256 digests, hashed issuer names, CRL
 numbers, coverage intervals, the aggregate CRL-set digest, and the number of
 certificates checked. Raw issuer names are not exported.
 
-The receipt-chain v3 index carries the raw study commitment timestamp package,
+The receipt-chain v4 verification consumes the v3 raw receipt index and carries
+the raw study commitment timestamp package,
 roster package, reviewer packages, and adjudicator package. Every package names
 its CRLs. The aggregate verifier repeats all signature, timestamp, certificate,
 and revocation checks from raw inputs; it does not trust a copied verification

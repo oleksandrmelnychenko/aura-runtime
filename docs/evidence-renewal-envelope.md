@@ -164,7 +164,9 @@ python3 ci/temporal_evidence_renewal.py verify-chain \
 
 The aggregate report is `pass` only after rehashing every preserved file and
 re-verifying every request, response, TSA signer, trust chain, policy, nonce,
-accuracy interval, and historical CRL set from raw inputs.
+exact fractional `genTime`, outward-rounded accuracy interval, and historical
+CRL set from raw inputs. Per-link and chain verification reports use schema v2;
+legacy v1 reports must be regenerated from their raw evidence before release.
 
 ## Exact claim and limitation
 

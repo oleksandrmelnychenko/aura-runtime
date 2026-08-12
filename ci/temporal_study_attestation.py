@@ -223,14 +223,12 @@ def canonical_attestation_claims(attestation: dict) -> bytes:
     ).encode("utf-8")
 
 
-def validate_private_key_file(path: Path) -> None:
-    if path.is_symlink():
-        raise AttestationError("Ed25519 private key must not be a symbolic link")
-    crypto_support.read_bounded(path, MAX_KEY_BYTES, "Ed25519 private key")
-    if os.name != "nt" and (path.stat().st_mode & 0o077) != 0:
-        raise AttestationError(
-            "Ed25519 private key permissions must not allow group or world access"
-        )
+def validate_private_key_file(path: Path) -> bytes:
+    return crypto_support.read_bounded_private(
+        path,
+        MAX_KEY_BYTES,
+        "Ed25519 private key",
+    )
 
 
 def sign_commitment(commitment_path: Path, private_key_path: Path, key_id: str) -> dict:
@@ -242,23 +240,24 @@ def sign_commitment(commitment_path: Path, private_key_path: Path, key_id: str) 
         commitment_path, MAX_COMMITMENT_BYTES, "temporal study commitment"
     )
     payload = load_json(raw, "temporal study commitment")
-    validate_private_key_file(private_key_path)
-    public_key_der = crypto_support.public_key_der_from_private(private_key_path)
-    attestation = commitment_claims(raw, payload, public_key_der, key_id)
-    with tempfile.NamedTemporaryFile() as claims_file:
-        claims_file.write(canonical_attestation_claims(attestation))
-        claims_file.flush()
-        signature = crypto_support.run_openssl(
-            [
-                "pkeyutl",
-                "-sign",
-                "-rawin",
-                "-inkey",
-                private_key_path.as_posix(),
-                "-in",
-                claims_file.name,
-            ]
-        )
+    private_key = validate_private_key_file(private_key_path)
+    with crypto_support.private_key_snapshot(private_key) as snapshot:
+        public_key_der = crypto_support.public_key_der_from_private(snapshot)
+        attestation = commitment_claims(raw, payload, public_key_der, key_id)
+        with tempfile.NamedTemporaryFile() as claims_file:
+            claims_file.write(canonical_attestation_claims(attestation))
+            claims_file.flush()
+            signature = crypto_support.run_openssl(
+                [
+                    "pkeyutl",
+                    "-sign",
+                    "-rawin",
+                    "-inkey",
+                    snapshot.as_posix(),
+                    "-in",
+                    claims_file.name,
+                ]
+            )
     if len(signature) != 64:
         raise AttestationError("OpenSSL returned a malformed Ed25519 signature")
     attestation["signature_base64"] = base64.b64encode(signature).decode("ascii")
@@ -314,48 +313,53 @@ def verify_commitment(
     )
     commitment = load_json(raw, "temporal study commitment")
     validate_commitment(commitment)
-    crypto_support.read_bounded(public_key_path, MAX_KEY_BYTES, "Ed25519 public key")
+    public_key = crypto_support.read_bounded(
+        public_key_path, MAX_KEY_BYTES, "Ed25519 public key"
+    )
     attestation = load_attestation(attestation_path)
     if not hmac.compare_digest(attestation["key_id"], expected_key_id):
         raise AttestationError("temporal study attestation key_id is not trusted")
-    public_key_der = crypto_support.public_key_der_from_public(public_key_path)
-    expected_claims = commitment_claims(
-        raw, commitment, public_key_der, attestation["key_id"]
-    )
-    for field, expected in expected_claims.items():
-        actual = attestation.get(field)
-        if isinstance(expected, str) and isinstance(actual, str):
-            matches = hmac.compare_digest(actual, expected)
-        else:
-            matches = actual == expected
-        if not matches:
-            raise AttestationError(
-                f"temporal study commitment does not match attested field {field}"
-            )
-
-    signature = base64.b64decode(attestation["signature_base64"], validate=True)
-    with (
-        tempfile.NamedTemporaryFile() as signature_file,
-        tempfile.NamedTemporaryFile() as claims_file,
-    ):
-        signature_file.write(signature)
-        signature_file.flush()
-        claims_file.write(canonical_attestation_claims(attestation))
-        claims_file.flush()
-        crypto_support.run_openssl(
-            [
-                "pkeyutl",
-                "-verify",
-                "-rawin",
-                "-pubin",
-                "-inkey",
-                public_key_path.as_posix(),
-                "-sigfile",
-                signature_file.name,
-                "-in",
-                claims_file.name,
-            ]
+    with crypto_support.private_key_snapshot(public_key) as public_key_snapshot:
+        public_key_der = crypto_support.public_key_der_from_public(
+            public_key_snapshot
         )
+        expected_claims = commitment_claims(
+            raw, commitment, public_key_der, attestation["key_id"]
+        )
+        for field, expected in expected_claims.items():
+            actual = attestation.get(field)
+            if isinstance(expected, str) and isinstance(actual, str):
+                matches = hmac.compare_digest(actual, expected)
+            else:
+                matches = actual == expected
+            if not matches:
+                raise AttestationError(
+                    f"temporal study commitment does not match attested field {field}"
+                )
+
+        signature = base64.b64decode(attestation["signature_base64"], validate=True)
+        with (
+            tempfile.NamedTemporaryFile() as signature_file,
+            tempfile.NamedTemporaryFile() as claims_file,
+        ):
+            signature_file.write(signature)
+            signature_file.flush()
+            claims_file.write(canonical_attestation_claims(attestation))
+            claims_file.flush()
+            crypto_support.run_openssl(
+                [
+                    "pkeyutl",
+                    "-verify",
+                    "-rawin",
+                    "-pubin",
+                    "-inkey",
+                    public_key_snapshot.as_posix(),
+                    "-sigfile",
+                    signature_file.name,
+                    "-in",
+                    claims_file.name,
+                ]
+            )
     return {
         "schema_version": VERIFICATION_SCHEMA_VERSION,
         "status": "pass",

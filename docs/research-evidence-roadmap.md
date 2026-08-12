@@ -112,7 +112,7 @@ governance-record digests are fixed in a separately signed and RFC 3161
 timestamped roster before declared review completion. Reviewer and adjudicator
 submissions are independently signed, timestamped, and joined by an exact
 receipt-digest chain. Every RFC 3161 verification now requires offline complete
-CRLs for the full non-anchor TSA chain at `genTime`; receipt-chain v3 also
+CRLs for the full non-anchor TSA chain at exact `genTime`; receipt-chain v4 also
 re-verifies the raw study timestamp package instead of trusting a derived JSON
 status. The
 v5 review report binds its metrics to the canonical input-bundle digest. The

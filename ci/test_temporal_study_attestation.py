@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from ci import evidence_attestation, temporal_study_attestation
@@ -92,6 +93,28 @@ class TemporalStudyAttestationTests(unittest.TestCase):
             self.public_key,
             "study-review-key-2026",
         )
+
+        self.assertEqual(report["status"], "pass")
+
+    def test_public_key_path_swap_cannot_change_verified_key(self):
+        self.sign()
+        original_snapshot = evidence_attestation.private_key_snapshot
+
+        def swap_path_after_read(payload):
+            self.public_key.write_bytes(self.other_public_key.read_bytes())
+            return original_snapshot(payload)
+
+        with mock.patch.object(
+            evidence_attestation,
+            "private_key_snapshot",
+            side_effect=swap_path_after_read,
+        ):
+            report = temporal_study_attestation.verify_commitment(
+                self.commitment,
+                self.attestation,
+                self.public_key,
+                "study-review-key-2026",
+            )
 
         self.assertEqual(report["status"], "pass")
         self.assertEqual(report["study_id"], self.commitment_payload["study_id"])

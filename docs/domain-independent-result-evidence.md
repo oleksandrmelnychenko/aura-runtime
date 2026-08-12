@@ -19,7 +19,14 @@ activation authority.
 
 ## Private verification bundle
 
-The controlled research environment supplies a strict bundle containing:
+The controlled research environment supplies a strict bundle. The required
+top-level schema is
+`aura.domain.independent_evaluation_evidence.v2`. Legacy v1 bundles do not
+contain the exact fractional trusted-time contract and must be regenerated
+from retained RFC 3161, certificate-chain, CRL, and signed-artifact inputs;
+they are never promoted in place to a passing v2 result.
+
+The bundle contains:
 
 1. an Ed25519 institutional attestation of the canonical preregistration;
 2. an independently verified RFC 3161 trusted-chain receipt for that
@@ -58,6 +65,11 @@ response, ordered TSA certificate chain, policy, nonce, and complete revocation
 evidence. The receipt binds the SHA-256 digests of those original artifacts.
 Trust comes from the configured verifier key and TSA SPKI/policy allow-list; a
 self-declared timestamp JSON is not accepted.
+
+The executable bridge and its byte-level certificate/CRL digest framing are
+specified in `docs/domain-result-trusted-timestamp-adapter.md`. Typed subjects
+must be exported with `domain_study_result_canonical_json`; this avoids asking
+an external process to reproduce Rust struct-field ordering by convention.
 
 The validator uses timestamp uncertainty intervals. The latest possible
 preregistration time must be earlier than the earliest possible reviewer time;
@@ -141,3 +153,9 @@ approved ethics, consent, access, and retention controls. Public study and
 result tokens must be non-personal. Affiliation commitments must hash governed
 randomly salted commitment artifacts, never raw institution names that permit
 dictionary recovery.
+
+This adapter completes receipt issuance, not independent reproducibility of the
+study. A subsequent private reproduction-package gate must prove that every
+content-addressed primary decision, prediction, exclusion, deviation, and
+timestamp artifact is present before independent aggregate recomputation can
+be claimed.
