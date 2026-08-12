@@ -28,28 +28,41 @@ The controlled research environment supplies a strict bundle containing:
    blind packet, assignment manifest, decision bundle, affiliation commitment,
    and completed-case count;
 4. an RFC 3161 verification receipt for every reviewer receipt;
-5. a separately signed adjudication receipt bound to the complete reviewer
-   receipt set and frozen adjudication bundle;
-6. an RFC 3161 verification receipt for adjudication;
-7. a content-free aggregate result bundle with integer confusion counts,
+5. private assignment manifests whose exact canonical digests match the signed
+   reviewer receipts, and a case matrix that must be their exact transpose;
+6. governed reviewer-agreement claims bound to the frozen statistic, BCa
+   method, repetition count, seed, reviewer receipts, and coverage matrix, plus
+   a trusted timestamp proving completion before adjudication;
+7. a private adjudication manifest whose exact digest is signed by the separate
+   adjudicator and whose case set must exactly match the coverage matrix;
+8. a separately signed adjudication receipt bound to the complete reviewer
+   receipt set and frozen adjudication manifest;
+9. an RFC 3161 verification receipt for adjudication;
+10. a content-free aggregate result bundle with integer confusion counts,
    exclusions, incomplete cases, safe-boundary counts, per-family
    attack-variant counts, review coverage, protocol deviations, and exact input
    digests;
-8. an institutionally signed final evidence manifest and its own RFC 3161
+11. an institutionally signed final evidence manifest and its own RFC 3161
    verification receipt.
+
+The signed final manifest also binds the canonical digest of the complete trust
+policy used for validation: every role key, the TSA SPKI and policy OID, and all
+reviewer affiliation commitments. A later report can therefore identify the
+exact trust-root snapshot instead of relying on an unnamed verifier setup.
 
 The RFC 3161 receipt is a domain-separated Ed25519 attestation produced by a
 trusted timestamp-verification adapter after it verifies the original request,
-response, TSA chain, policy, nonce, and complete revocation evidence. The
-receipt binds the SHA-256 digests of those original artifacts. Trust comes from
-the configured verifier key and TSA SPKI/policy allow-list; a self-declared
-timestamp JSON is not accepted.
+response, ordered TSA certificate chain, policy, nonce, and complete revocation
+evidence. The receipt binds the SHA-256 digests of those original artifacts.
+Trust comes from the configured verifier key and TSA SPKI/policy allow-list; a
+self-declared timestamp JSON is not accepted.
 
 The validator uses timestamp uncertainty intervals. The latest possible
 preregistration time must be earlier than the earliest possible reviewer time;
-all reviewer intervals must end before adjudication can begin; adjudication
-must precede the signed final manifest. Declared application clocks never
-replace these trusted intervals.
+all reviewer intervals must end before the agreement analysis; that analysis
+must end before adjudication can begin; adjudication must precede the signed
+final manifest. Declared application clocks never replace these trusted
+intervals.
 
 The entry point rejects empty inputs, preregistrations larger than 2 MiB, and
 result evidence larger than 8 MiB. All count arithmetic is checked; overflow is
@@ -68,8 +81,9 @@ The result bundle cannot supply its own pass booleans. The validator recomputes:
 
 An independent candidate requires both the fixed point thresholds and the
 conservative Wilson bounds: every recall lower bound and the attack-consistency
-lower bound must meet their floors, while the safe-boundary false-positive
-upper bound must remain below its ceiling. Krippendorff's nominal alpha is
+lower bound, both globally and for every attack family, must meet their floors,
+while the safe-boundary false-positive upper bound must remain below its
+ceiling. Krippendorff's nominal alpha is
 checked against the preregistered agreement floor and bound to the frozen
 review-analysis digest. Its lower two-sided 95% bound must also meet that floor.
 The exact statistic, case-resampling BCa bootstrap method, resample count, and
@@ -82,12 +96,21 @@ negative study remains valid evidence with `thresholds_not_met`; it is never
 discarded. Repository and internally curated corpora can only produce
 `engineering_only`, regardless of perfect metrics.
 
+The report and final manifest carry outcome status separately from the evidence
+maturity ceiling. Thus an internal corpus remains `engineering_only`, while its
+outcome is still explicitly `incomplete`, `thresholds_not_met`, or
+`thresholds_met`. The public report retains content-free case counts, review
+coverage, strata, attack-family coverage, and deviation counts for negative and
+incomplete studies.
+
 The aggregate coverage counts are bound to a private case-to-reviewer coverage
 matrix digest. Each row uses small indices into the sorted signed-receipt array,
 not repeated reviewer key identifiers, and the validator enforces the frozen
-per-case maximum. This makes later audit substitution detectable, but the public
-validator cannot prove that a private assignment or affiliation describes a
-real person or institution; independent governance must inspect those records.
+per-case maximum. Every row must also be the exact transpose of the
+reviewer-signed assignment manifests. This makes later audit substitution
+detectable, but the public validator cannot prove that a private assignment or
+affiliation describes a real person or institution; independent governance
+must inspect those records.
 Likewise, recomputation from signed aggregate counts proves internal arithmetic
 consistency, not that those counts faithfully summarize the private prediction
 and label bundles. The final signed manifest and their digests make that claim

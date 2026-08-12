@@ -18,7 +18,7 @@ use crate::{
 pub const DOMAIN_STUDY_PREREGISTRATION_SCHEMA_VERSION: &str =
     "aura.domain.independent_evaluation_preregistration.v1";
 /// Maximum fixed corpus supported by the bounded JSON evidence format v1.
-pub const DOMAIN_STUDY_MAX_FIXED_CASE_COUNT_V1: usize = 25_000;
+pub const DOMAIN_STUDY_MAX_FIXED_CASE_COUNT_V1: usize = 10_000;
 
 const REPOSITORY_SEED_MANIFEST_SCHEMA_VERSION: u32 = 1;
 const REPOSITORY_SEED_MANIFEST_JSON: &str = include_str!("../repository_seed_manifest.json");

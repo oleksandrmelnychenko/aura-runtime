@@ -23,6 +23,9 @@ pub const DOMAIN_STUDY_RESULT_EVIDENCE_SCHEMA_VERSION: &str =
     "aura.domain.independent_evaluation_evidence.v1";
 /// Supported schema for content-free aggregate results.
 pub const DOMAIN_STUDY_RESULT_SCHEMA_VERSION: &str = "aura.domain.independent_evaluation_result.v1";
+/// Supported schema for governed reviewer-agreement analysis claims.
+pub const DOMAIN_STUDY_AGREEMENT_ANALYSIS_SCHEMA_VERSION: &str =
+    "aura.domain.reviewer_agreement_analysis.v1";
 /// Supported schema for institutional preregistration attestations.
 pub const DOMAIN_STUDY_PREREGISTRATION_ATTESTATION_SCHEMA_VERSION: &str =
     "aura.domain.preregistration_attestation.v1";
@@ -31,6 +34,12 @@ pub const DOMAIN_STUDY_TRUSTED_TIMESTAMP_SCHEMA_VERSION: &str =
     "aura.domain.trusted_timestamp_verification.v1";
 /// Supported schema for independently signed reviewer receipts.
 pub const DOMAIN_STUDY_REVIEWER_RECEIPT_SCHEMA_VERSION: &str = "aura.domain.reviewer_receipt.v1";
+/// Supported schema for private reviewer assignment manifests.
+pub const DOMAIN_STUDY_REVIEWER_ASSIGNMENT_SCHEMA_VERSION: &str =
+    "aura.domain.reviewer_assignment.v1";
+/// Supported schema for the private adjudication manifest.
+pub const DOMAIN_STUDY_ADJUDICATION_MANIFEST_SCHEMA_VERSION: &str =
+    "aura.domain.adjudication_manifest.v1";
 /// Supported schema for the independent adjudicator receipt.
 pub const DOMAIN_STUDY_ADJUDICATION_RECEIPT_SCHEMA_VERSION: &str =
     "aura.domain.adjudication_receipt.v1";
@@ -63,7 +72,7 @@ pub enum DomainStudyResultError {
 }
 
 /// One Ed25519 public key accepted for a specific evidence role.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DomainStudyTrustedKey {
     /// Stable non-personal key identifier.
     pub key_id: String,
@@ -72,7 +81,7 @@ pub struct DomainStudyTrustedKey {
 }
 
 /// One trusted reviewer key and its non-reversible affiliation commitment.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DomainStudyTrustedReviewer {
     /// Trusted reviewer signing key.
     pub key: DomainStudyTrustedKey,
@@ -81,7 +90,7 @@ pub struct DomainStudyTrustedReviewer {
 }
 
 /// Trust roots supplied by the controlled research environment.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DomainStudyTrustPolicy {
     /// Institution key that attests the frozen preregistration.
     pub preregistration_signer: DomainStudyTrustedKey,
@@ -141,6 +150,8 @@ pub enum DomainStudyTimestampSubjectKind {
     PreregistrationAttestation,
     /// Signed reviewer receipt.
     ReviewerReceipt,
+    /// Governed reviewer-agreement analysis claims.
+    ReviewerAgreementAnalysis,
     /// Signed independent adjudication receipt.
     AdjudicationReceipt,
     /// Signed final evidence manifest.
@@ -175,6 +186,8 @@ pub struct DomainStudyTrustedTimestampClaims {
     pub request_sha256: String,
     /// Digest of the original DER timestamp response.
     pub response_sha256: String,
+    /// Digest of the complete ordered TSA certificate-chain artifact.
+    pub certificate_chain_sha256: String,
     /// Digest of the complete revocation-evidence bundle.
     pub revocation_evidence_sha256: String,
     /// TSA subject-public-key-info digest verified through the trusted chain.
@@ -237,6 +250,20 @@ pub struct DomainStudyTimestampedReviewerReceipt {
     pub trusted_timestamp: DomainStudyTrustedTimestampReceipt,
 }
 
+/// Private frozen assignment for one reviewer receipt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DomainStudyReviewerAssignmentManifest {
+    /// Schema identity.
+    pub schema_version: String,
+    /// Stable study identity.
+    pub study_id: String,
+    /// Index into the sorted reviewer-receipt array.
+    pub reviewer_index: u8,
+    /// Sorted blind case-token digests assigned to this reviewer.
+    pub blind_case_token_sha256: Vec<String>,
+}
+
 /// Private per-case coverage row used to recompute reviewer completeness.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -247,6 +274,20 @@ pub struct DomainStudyCaseReviewCoverage {
     pub reviewer_indices: Vec<u8>,
     /// Whether the independent adjudicator completed this case.
     pub adjudicated: bool,
+}
+
+/// Private frozen mapping from adjudicated cases to the decision artifact.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DomainStudyAdjudicationManifest {
+    /// Schema identity.
+    pub schema_version: String,
+    /// Stable study identity.
+    pub study_id: String,
+    /// Sorted blind case-token digests completed by the adjudicator.
+    pub blind_case_token_sha256: Vec<String>,
+    /// Digest of the complete private adjudication decisions.
+    pub decision_bundle_sha256: String,
 }
 
 /// Claims signed by an adjudicator who is not a reviewer.
@@ -333,6 +374,38 @@ pub struct DomainStudyReviewCoverage {
     pub adjudicated_case_count: usize,
 }
 
+/// Governed claims for the preregistered reviewer-agreement analysis.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DomainStudyAgreementAnalysisClaims {
+    /// Schema identity.
+    pub schema_version: String,
+    /// Stable study identity.
+    pub study_id: String,
+    /// Exact preregistration digest.
+    pub preregistration_canonical_sha256: String,
+    /// Digest of the sorted signed reviewer-receipt set used as input.
+    pub reviewer_receipt_set_sha256: String,
+    /// Digest of the exact private coverage matrix used as input.
+    pub review_coverage_manifest_sha256: String,
+    /// Agreement statistic fixed by the preregistration.
+    pub statistic: DomainStudyInterRaterAgreementStatistic,
+    /// Uncertainty method fixed by the preregistration.
+    pub uncertainty_method: DomainStudyAgreementUncertaintyMethod,
+    /// Fixed bootstrap repetition count.
+    pub bootstrap_resamples: usize,
+    /// Digest of the fixed bootstrap seed material.
+    pub bootstrap_seed_sha256: String,
+    /// Nominal Krippendorff alpha calculated before adjudication.
+    pub agreement: Option<f64>,
+    /// BCa bootstrap lower bound of the two-sided 95% interval.
+    pub agreement_95_lower: Option<f64>,
+    /// Digest of the complete governed analysis output artifact.
+    pub analysis_artifact_sha256: String,
+    /// Declared completion time; trusted chronology comes from the timestamp.
+    pub completed_at_ms: u64,
+}
+
 /// Content-free integer metrics supplied for deterministic recomputation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -359,10 +432,6 @@ pub struct DomainStudyResultMetrics {
     pub consistent_attack_variant_count: usize,
     /// Sorted counts for every preregistered attack family.
     pub per_attack_family: Vec<DomainStudyAttackFamilyCounts>,
-    /// Krippendorff nominal alpha calculated before adjudication.
-    pub inter_rater_agreement: Option<f64>,
-    /// BCa bootstrap lower bound of the two-sided 95% agreement interval.
-    pub inter_rater_agreement_95_lower: Option<f64>,
     /// Fixed review-coverage summary.
     pub review_coverage: DomainStudyReviewCoverage,
     /// Number of fully reported protocol deviations.
@@ -403,8 +472,8 @@ pub struct DomainStudyResultBundle {
     pub prediction_bundle_sha256: String,
     /// Digest of the exact analysis implementation and environment lock.
     pub analysis_environment_sha256: String,
-    /// Digest of the review-agreement analysis output.
-    pub review_agreement_analysis_sha256: String,
+    /// Governed agreement-analysis claims bound to the preregistration.
+    pub review_agreement_analysis: DomainStudyAgreementAnalysisClaims,
     /// Digest of the private case-to-reviewer coverage and completion matrix.
     pub review_coverage_manifest_sha256: String,
     /// Digest of the complete exclusions manifest, including an empty manifest.
@@ -437,6 +506,18 @@ pub enum DomainStudyEvidenceStatus {
     IndependentEvidenceCandidate,
 }
 
+/// Outcome of the frozen analysis, independent of corpus evidence maturity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainStudyOutcomeStatus {
+    /// Fixed cases, attacks, review, adjudication, or agreement are incomplete.
+    Incomplete,
+    /// The complete analysis did not meet every frozen conservative threshold.
+    ThresholdsNotMet,
+    /// The complete analysis met every frozen conservative threshold.
+    ThresholdsMet,
+}
+
 /// Content-free claims signed as the final evidence manifest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -455,6 +536,8 @@ pub struct DomainStudyFinalManifestClaims {
     pub build_provenance_canonical_sha256: String,
     /// Exact corpus digest.
     pub corpus_sha256: String,
+    /// Canonical digest of every trust root used by the verifier.
+    pub trust_policy_canonical_sha256: String,
     /// Digest of the signed preregistration attestation.
     pub preregistration_attestation_sha256: String,
     /// Digest of its trusted timestamp receipt.
@@ -463,6 +546,8 @@ pub struct DomainStudyFinalManifestClaims {
     pub reviewer_receipt_set_sha256: String,
     /// Digest of the sorted reviewer timestamp-receipt set.
     pub reviewer_timestamp_set_sha256: String,
+    /// Digest of the trusted reviewer-agreement analysis timestamp.
+    pub agreement_analysis_timestamp_sha256: String,
     /// Digest of the signed adjudication receipt.
     pub adjudication_receipt_sha256: String,
     /// Digest of the adjudication timestamp receipt.
@@ -471,6 +556,8 @@ pub struct DomainStudyFinalManifestClaims {
     pub result_bundle_sha256: String,
     /// Recomputed evidence status.
     pub evidence_status: DomainStudyEvidenceStatus,
+    /// Recomputed outcome, retained even when evidence maturity is engineering-only.
+    pub outcome_status: DomainStudyOutcomeStatus,
     /// Exact temporal execution boundary.
     pub temporal_mode: DomainStudyTemporalMode,
     /// Must remain false; result evidence cannot enable runtime policy.
@@ -507,14 +594,20 @@ pub struct DomainStudyResultEvidenceBundle {
     pub preregistration_timestamp: DomainStudyTrustedTimestampReceipt,
     /// Private reviewer receipts and timestamps, sorted by key identifier.
     pub reviewer_receipts: Vec<DomainStudyTimestampedReviewerReceipt>,
+    /// Private frozen assignments, sorted by reviewer index.
+    pub reviewer_assignments: Vec<DomainStudyReviewerAssignmentManifest>,
     /// Private case-level matrix used to recompute review coverage.
     pub review_coverage: Vec<DomainStudyCaseReviewCoverage>,
+    /// Private adjudication manifest bound by the adjudicator receipt.
+    pub adjudication_manifest: DomainStudyAdjudicationManifest,
     /// Signed independent adjudication receipt.
     pub adjudication_receipt: DomainStudyAdjudicationReceipt,
     /// Trusted timestamp of adjudication.
     pub adjudication_timestamp: DomainStudyTrustedTimestampReceipt,
     /// Content-free aggregate result bundle.
     pub result: DomainStudyResultBundle,
+    /// Trusted timestamp covering the governed agreement-analysis claims.
+    pub review_agreement_analysis_timestamp: DomainStudyTrustedTimestampReceipt,
     /// Signed final evidence manifest.
     pub final_manifest: DomainStudyFinalManifest,
     /// Trusted timestamp of the signed final manifest.
@@ -542,6 +635,21 @@ pub struct DomainStudyThreatMetricReport {
     pub f1_conservative_95_lower: Option<f64>,
 }
 
+/// Recomputed report for one preregistered attack family.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DomainStudyAttackFamilyMetricReport {
+    /// Attack-family token.
+    pub attack_family: String,
+    /// Evaluated variants in this family.
+    pub evaluated_variant_count: usize,
+    /// Variants preserving the expected decision.
+    pub consistent_variant_count: usize,
+    /// Recomputed consistency rate.
+    pub consistency_rate: Option<f64>,
+    /// Two-sided 95% Wilson lower bound for consistency.
+    pub consistency_wilson_95_lower: Option<f64>,
+}
+
 /// Public content-free validation report.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DomainStudyResultReport {
@@ -553,12 +661,16 @@ pub struct DomainStudyResultReport {
     pub domain: DomainModuleId,
     /// Recomputed evidence status.
     pub evidence_status: DomainStudyEvidenceStatus,
+    /// Recomputed outcome independent of evidence maturity.
+    pub outcome_status: DomainStudyOutcomeStatus,
     /// Canonical preregistration digest.
     pub preregistration_canonical_sha256: String,
     /// Canonical result-bundle digest.
     pub result_bundle_sha256: String,
     /// Canonical signed final-manifest digest.
     pub final_manifest_sha256: String,
+    /// Canonical digest of every trust root used for validation.
+    pub trust_policy_canonical_sha256: String,
     /// Trusted upper bound on preregistration time.
     pub preregistration_latest_ms: u64,
     /// Trusted lower bound on the earliest reviewer receipt.
@@ -567,10 +679,30 @@ pub struct DomainStudyResultReport {
     pub last_review_latest_ms: u64,
     /// Trusted lower bound on adjudication time.
     pub adjudication_earliest_ms: u64,
+    /// Trusted upper bound on reviewer-agreement analysis completion.
+    pub agreement_analysis_latest_ms: u64,
     /// Trusted lower bound on final-manifest time.
     pub final_manifest_earliest_ms: u64,
     /// Number of independently signed reviewer receipts.
     pub reviewer_receipt_count: usize,
+    /// Exact fixed corpus size.
+    pub total_case_count: usize,
+    /// Cases included in the primary analysis.
+    pub analyzed_case_count: usize,
+    /// Fixed cases excluded after freeze.
+    pub excluded_case_count: usize,
+    /// Fixed cases lacking complete primary outcomes.
+    pub incomplete_case_count: usize,
+    /// Recomputed content-free review coverage.
+    pub review_coverage: DomainStudyReviewCoverage,
+    /// Per-stratum analyzed support.
+    pub per_stratum: Vec<DomainStudyStratumCount>,
+    /// Recomputed per-family attack coverage and consistency.
+    pub per_attack_family: Vec<DomainStudyAttackFamilyMetricReport>,
+    /// Fully reported protocol-deviation count.
+    pub protocol_deviation_count: usize,
+    /// Deviations affecting the confirmatory analysis.
+    pub confirmatory_analysis_deviation_count: usize,
     /// Recomputed macro F1.
     pub macro_f1: Option<f64>,
     /// Mean of the per-threat conservative F1 lower bounds.
@@ -622,6 +754,7 @@ struct MetricDecision {
     safe_boundary_false_positive_wilson_95_upper: Option<f64>,
     attack_variant_consistency_rate: Option<f64>,
     attack_variant_consistency_wilson_95_lower: Option<f64>,
+    per_attack_family: Vec<DomainStudyAttackFamilyMetricReport>,
     complete: bool,
     thresholds_met: bool,
 }
@@ -695,6 +828,7 @@ pub fn validate_domain_study_result_evidence(
         return invalid("result evidence JSON is empty or exceeds the 8 MiB bound");
     }
     validate_trust_policy(trust_policy)?;
+    let trust_policy_canonical_sha256 = canonical_sha256(trust_policy)?;
     let binding = validate_domain_study_preregistration(
         preregistration_json,
         expected_policy_evidence,
@@ -733,8 +867,31 @@ pub fn validate_domain_study_result_evidence(
     )?;
     let review_coverage = validate_review_coverage_matrix(
         &evidence.review_coverage,
+        &evidence.reviewer_assignments,
         &preregistration,
         &evidence.reviewer_receipts,
+    )?;
+    let agreement_analysis_sha256 = canonical_sha256(&evidence.result.review_agreement_analysis)?;
+    let agreement_analysis_time = validate_timestamp_receipt(
+        &evidence.review_agreement_analysis_timestamp,
+        DomainStudyTimestampSubjectKind::ReviewerAgreementAnalysis,
+        &agreement_analysis_sha256,
+        trust_policy,
+    )?;
+    if reviewer_chain.latest_time.latest_ms >= agreement_analysis_time.earliest_ms
+        || evidence.result.review_agreement_analysis.completed_at_ms
+            <= reviewer_chain.latest_time.latest_ms
+        || evidence.result.review_agreement_analysis.completed_at_ms
+            > agreement_analysis_time.latest_ms
+    {
+        return invalid("agreement analysis does not provably follow frozen reviewer decisions");
+    }
+    validate_adjudication_manifest(
+        &evidence.adjudication_manifest,
+        &evidence.adjudication_receipt,
+        &evidence.review_coverage,
+        &preregistration,
+        review_coverage.aggregate.adjudicated_case_count,
     )?;
     let adjudication_receipt_sha256 = validate_adjudication_receipt(
         &evidence.adjudication_receipt,
@@ -750,9 +907,9 @@ pub fn validate_domain_study_result_evidence(
         &adjudication_receipt_sha256,
         trust_policy,
     )?;
-    if reviewer_chain.latest_time.latest_ms >= adjudication_time.earliest_ms {
+    if agreement_analysis_time.latest_ms >= adjudication_time.earliest_ms {
         return invalid(
-            "review timestamp uncertainty overlaps adjudication; label freeze is not proven",
+            "agreement-analysis timestamp overlaps adjudication; pre-adjudication analysis is not proven",
         );
     }
     if evidence.adjudication_receipt.claims.completed_at_ms <= reviewer_chain.latest_time.latest_ms
@@ -773,13 +930,12 @@ pub fn validate_domain_study_result_evidence(
     if evidence.result.generated_at_ms < adjudication_time.latest_ms {
         return invalid("aggregate result predates completed adjudication");
     }
-    let evidence_status = evidence_status(
-        binding.corpus_class,
-        metric_decision.complete,
-        metric_decision.thresholds_met,
-    );
+    let outcome_status = outcome_status(metric_decision.complete, metric_decision.thresholds_met);
+    let evidence_status = evidence_status(binding.corpus_class, outcome_status);
     let result_bundle_sha256 = canonical_sha256(&evidence.result)?;
     let preregistration_timestamp_sha256 = canonical_sha256(&evidence.preregistration_timestamp)?;
+    let agreement_analysis_timestamp_sha256 =
+        canonical_sha256(&evidence.review_agreement_analysis_timestamp)?;
     let adjudication_timestamp_sha256 = canonical_sha256(&evidence.adjudication_timestamp)?;
     let expected_manifest_claims = DomainStudyFinalManifestClaims {
         schema_version: DOMAIN_STUDY_FINAL_MANIFEST_SCHEMA_VERSION.to_string(),
@@ -789,14 +945,17 @@ pub fn validate_domain_study_result_evidence(
         policy_evidence_canonical_sha256: binding.policy_evidence_canonical_sha256.clone(),
         build_provenance_canonical_sha256: binding.build_provenance_canonical_sha256.clone(),
         corpus_sha256: binding.corpus_sha256.clone(),
+        trust_policy_canonical_sha256: trust_policy_canonical_sha256.clone(),
         preregistration_attestation_sha256,
         preregistration_timestamp_sha256,
         reviewer_receipt_set_sha256: reviewer_chain.receipt_set_sha256.clone(),
         reviewer_timestamp_set_sha256: reviewer_chain.timestamp_set_sha256,
+        agreement_analysis_timestamp_sha256,
         adjudication_receipt_sha256,
         adjudication_timestamp_sha256,
         result_bundle_sha256: result_bundle_sha256.clone(),
         evidence_status,
+        outcome_status,
         temporal_mode: binding.temporal_mode,
         temporal_runtime_enabled: false,
         action_execution_configured: false,
@@ -834,15 +993,30 @@ pub fn validate_domain_study_result_evidence(
         result_id: evidence.result.result_id,
         domain: binding.domain,
         evidence_status,
+        outcome_status,
         preregistration_canonical_sha256: binding.preregistration_canonical_sha256,
         result_bundle_sha256,
         final_manifest_sha256,
+        trust_policy_canonical_sha256,
         preregistration_latest_ms: preregistration_time.latest_ms,
         first_review_earliest_ms: reviewer_chain.earliest_time.earliest_ms,
         last_review_latest_ms: reviewer_chain.latest_time.latest_ms,
         adjudication_earliest_ms: adjudication_time.earliest_ms,
+        agreement_analysis_latest_ms: agreement_analysis_time.latest_ms,
         final_manifest_earliest_ms: final_manifest_time.earliest_ms,
         reviewer_receipt_count: evidence.reviewer_receipts.len(),
+        total_case_count: evidence.result.metrics.total_case_count,
+        analyzed_case_count: evidence.result.metrics.analyzed_case_count,
+        excluded_case_count: evidence.result.metrics.excluded_case_count,
+        incomplete_case_count: evidence.result.metrics.incomplete_case_count,
+        review_coverage: evidence.result.metrics.review_coverage,
+        per_stratum: evidence.result.metrics.per_stratum,
+        per_attack_family: metric_decision.per_attack_family,
+        protocol_deviation_count: evidence.result.metrics.protocol_deviation_count,
+        confirmatory_analysis_deviation_count: evidence
+            .result
+            .metrics
+            .confirmatory_analysis_deviation_count,
         macro_f1: metric_decision.macro_f1,
         macro_f1_conservative_95_lower: metric_decision.macro_f1_conservative_95_lower,
         per_threat: metric_decision.per_threat,
@@ -852,8 +1026,11 @@ pub fn validate_domain_study_result_evidence(
         attack_variant_consistency_rate: metric_decision.attack_variant_consistency_rate,
         attack_variant_consistency_wilson_95_lower: metric_decision
             .attack_variant_consistency_wilson_95_lower,
-        inter_rater_agreement: evidence.result.metrics.inter_rater_agreement,
-        inter_rater_agreement_95_lower: evidence.result.metrics.inter_rater_agreement_95_lower,
+        inter_rater_agreement: evidence.result.review_agreement_analysis.agreement,
+        inter_rater_agreement_95_lower: evidence
+            .result
+            .review_agreement_analysis
+            .agreement_95_lower,
         inter_rater_agreement_statistic: preregistration.analysis.inter_rater_agreement_statistic,
         inter_rater_agreement_uncertainty_method: preregistration
             .analysis
@@ -875,6 +1052,12 @@ struct ReviewerChain {
 struct ReviewCoverageBinding {
     canonical_sha256: String,
     aggregate: DomainStudyReviewCoverage,
+}
+
+struct AttackFamilyDecision {
+    coverage_complete: bool,
+    thresholds_met: bool,
+    reports: Vec<DomainStudyAttackFamilyMetricReport>,
 }
 
 fn validate_preregistration_attestation(
@@ -917,7 +1100,6 @@ fn validate_reviewer_receipts(
     let mut timestamp_digests = Vec::with_capacity(evidence.len());
     let mut previous_key_id: Option<&str> = None;
     let mut review_packet_sha256: Option<&str> = None;
-    let mut decision_digests = HashSet::with_capacity(evidence.len());
     let mut earliest_time: Option<TrustedTimeInterval> = None;
     let mut latest_time: Option<TrustedTimeInterval> = None;
 
@@ -948,7 +1130,6 @@ fn validate_reviewer_receipts(
             || claims.completed_case_count == 0
             || claims.completed_case_count > preregistration.dataset.fixed_case_count
             || claims.completed_at_ms == 0
-            || !decision_digests.insert(claims.decision_bundle_sha256.as_str())
         {
             return invalid("reviewer receipt identity, coverage, or private binding is invalid");
         }
@@ -1040,13 +1221,83 @@ fn validate_adjudication_receipt(
     canonical_sha256(receipt)
 }
 
+fn validate_adjudication_manifest(
+    manifest: &DomainStudyAdjudicationManifest,
+    receipt: &DomainStudyAdjudicationReceipt,
+    coverage_rows: &[DomainStudyCaseReviewCoverage],
+    preregistration: &DomainStudyPreregistration,
+    expected_adjudicated_case_count: usize,
+) -> Result<(), DomainStudyResultError> {
+    if manifest.schema_version != DOMAIN_STUDY_ADJUDICATION_MANIFEST_SCHEMA_VERSION
+        || manifest.study_id != preregistration.study_id
+        || manifest.blind_case_token_sha256.len() != expected_adjudicated_case_count
+        || !is_canonical_sha256(&manifest.decision_bundle_sha256)
+        || manifest
+            .blind_case_token_sha256
+            .iter()
+            .any(|case| !is_canonical_sha256(case))
+        || manifest
+            .blind_case_token_sha256
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+        || canonical_sha256(manifest)? != receipt.claims.adjudication_bundle_sha256
+    {
+        return invalid("private adjudication manifest does not match its signed receipt");
+    }
+    let adjudicated_cases = manifest
+        .blind_case_token_sha256
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    if coverage_rows.iter().any(|row| {
+        row.adjudicated != adjudicated_cases.contains(row.blind_case_token_sha256.as_str())
+    }) {
+        return invalid("private adjudication manifest does not match case-level coverage");
+    }
+    Ok(())
+}
+
 fn validate_review_coverage_matrix(
     rows: &[DomainStudyCaseReviewCoverage],
+    assignments: &[DomainStudyReviewerAssignmentManifest],
     preregistration: &DomainStudyPreregistration,
     reviewer_receipts: &[DomainStudyTimestampedReviewerReceipt],
 ) -> Result<ReviewCoverageBinding, DomainStudyResultError> {
     if rows.len() != preregistration.dataset.fixed_case_count {
         return invalid("private review-coverage matrix does not cover the fixed corpus");
+    }
+    if assignments.len() != reviewer_receipts.len() {
+        return invalid("private reviewer assignments do not cover every signed receipt");
+    }
+    let mut assigned_cases_by_reviewer = Vec::with_capacity(assignments.len());
+    for (reviewer_index, (assignment, receipt)) in
+        assignments.iter().zip(reviewer_receipts).enumerate()
+    {
+        if assignment.schema_version != DOMAIN_STUDY_REVIEWER_ASSIGNMENT_SCHEMA_VERSION
+            || assignment.study_id != preregistration.study_id
+            || usize::from(assignment.reviewer_index) != reviewer_index
+            || assignment.blind_case_token_sha256.is_empty()
+            || assignment.blind_case_token_sha256.len()
+                != receipt.receipt.claims.completed_case_count
+            || assignment
+                .blind_case_token_sha256
+                .iter()
+                .any(|case| !is_canonical_sha256(case))
+            || assignment
+                .blind_case_token_sha256
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
+            || canonical_sha256(assignment)? != receipt.receipt.claims.assignment_manifest_sha256
+        {
+            return invalid("private reviewer assignment does not match its signed receipt");
+        }
+        assigned_cases_by_reviewer.push(
+            assignment
+                .blind_case_token_sha256
+                .iter()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>(),
+        );
     }
     let mut completed_by_reviewer = vec![0_usize; reviewer_receipts.len()];
     let mut previous_case: Option<&str> = None;
@@ -1067,6 +1318,12 @@ fn validate_review_coverage_matrix(
                 .iter()
                 .any(|index| usize::from(*index) >= reviewer_receipts.len())
             || row.reviewer_indices.len() > preregistration.review.maximum_reviewers_per_case
+            || assigned_cases_by_reviewer.iter().enumerate().any(
+                |(reviewer_index, assigned_cases)| {
+                    assigned_cases.contains(row.blind_case_token_sha256.as_str())
+                        != row.reviewer_indices.contains(&(reviewer_index as u8))
+                },
+            )
         {
             return invalid("private review-coverage rows or reviewer assignments are invalid");
         }
@@ -1132,7 +1389,6 @@ fn validate_result_bundle(
         || result.adjudication_receipt_sha256 != adjudication_receipt_sha256
         || !is_canonical_sha256(&result.prediction_bundle_sha256)
         || !is_canonical_sha256(&result.analysis_environment_sha256)
-        || !is_canonical_sha256(&result.review_agreement_analysis_sha256)
         || result.review_coverage_manifest_sha256 != review_coverage.canonical_sha256
         || !is_canonical_sha256(&result.exclusion_manifest_sha256)
         || !is_canonical_sha256(&result.protocol_deviation_manifest_sha256)
@@ -1145,6 +1401,41 @@ fn validate_result_bundle(
         || result.reviewer_identifiers_exported
     {
         return invalid("aggregate result identity, provenance, or privacy binding is invalid");
+    }
+    let agreement = &result.review_agreement_analysis;
+    if agreement.schema_version != DOMAIN_STUDY_AGREEMENT_ANALYSIS_SCHEMA_VERSION
+        || agreement.study_id != binding.study_id
+        || agreement.preregistration_canonical_sha256 != binding.preregistration_canonical_sha256
+        || agreement.reviewer_receipt_set_sha256 != reviewer_receipt_set_sha256
+        || agreement.review_coverage_manifest_sha256 != review_coverage.canonical_sha256
+        || agreement.statistic != preregistration.analysis.inter_rater_agreement_statistic
+        || agreement.uncertainty_method
+            != preregistration
+                .analysis
+                .inter_rater_agreement_uncertainty_method
+        || agreement.bootstrap_resamples
+            != preregistration
+                .analysis
+                .inter_rater_agreement_bootstrap_resamples
+        || agreement.bootstrap_seed_sha256
+            != preregistration
+                .analysis
+                .inter_rater_agreement_bootstrap_seed_sha256
+        || !is_canonical_sha256(&agreement.analysis_artifact_sha256)
+        || agreement.completed_at_ms == 0
+        || agreement
+            .agreement
+            .is_some_and(|value| !signed_unit_interval(value))
+        || agreement
+            .agreement_95_lower
+            .is_some_and(|value| !signed_unit_interval(value))
+        || match (agreement.agreement, agreement.agreement_95_lower) {
+            (Some(point), Some(lower)) => lower > point,
+            (None, Some(_)) => true,
+            _ => false,
+        }
+    {
+        return invalid("reviewer-agreement analysis does not match the frozen procedure");
     }
     let metrics = &result.metrics;
     let accounted_case_count = checked_sum_counts(&[
@@ -1159,20 +1450,6 @@ fn validate_result_bundle(
         || metrics.evaluated_safe_boundary_case_count > metrics.analyzed_case_count
         || metrics.consistent_attack_variant_count > metrics.evaluated_attack_variant_count
         || metrics.evaluated_attack_variant_count > preregistration.attacks.fixed_variant_count
-        || metrics
-            .inter_rater_agreement
-            .is_some_and(|value| !signed_unit_interval(value))
-        || metrics
-            .inter_rater_agreement_95_lower
-            .is_some_and(|value| !signed_unit_interval(value))
-        || match (
-            metrics.inter_rater_agreement,
-            metrics.inter_rater_agreement_95_lower,
-        ) {
-            (Some(point), Some(lower)) => lower > point,
-            (None, Some(_)) => true,
-            _ => false,
-        }
     {
         return invalid("aggregate result counts or agreement value are inconsistent");
     }
@@ -1186,7 +1463,7 @@ fn validate_result_bundle(
         preregistration,
         metrics.analyzed_case_count,
     )?;
-    let attack_family_coverage_complete = validate_attack_families(
+    let attack_family_decision = validate_attack_families(
         &metrics.per_attack_family,
         preregistration,
         metrics.evaluated_attack_variant_count,
@@ -1293,9 +1570,9 @@ fn validate_result_bundle(
         && metrics.confirmatory_analysis_deviation_count == 0
         && all_family_support_complete
         && stratum_coverage_complete
-        && attack_family_coverage_complete
-        && metrics.inter_rater_agreement.is_some()
-        && metrics.inter_rater_agreement_95_lower.is_some();
+        && attack_family_decision.coverage_complete
+        && agreement.agreement.is_some()
+        && agreement.agreement_95_lower.is_some();
     let thresholds_met = complete
         && macro_f1.is_some_and(|value| value >= preregistration.analysis.minimum_macro_f1)
         && macro_f1_lower.is_some_and(|value| value >= preregistration.analysis.minimum_macro_f1)
@@ -1324,11 +1601,12 @@ fn validate_result_bundle(
                     .analysis
                     .minimum_attack_variant_consistency_rate
         })
-        && metrics
-            .inter_rater_agreement
+        && attack_family_decision.thresholds_met
+        && agreement
+            .agreement
             .is_some_and(|value| value >= preregistration.analysis.minimum_inter_rater_agreement)
-        && metrics
-            .inter_rater_agreement_95_lower
+        && agreement
+            .agreement_95_lower
             .is_some_and(|value| value >= preregistration.analysis.minimum_inter_rater_agreement);
 
     Ok(MetricDecision {
@@ -1339,6 +1617,7 @@ fn validate_result_bundle(
         safe_boundary_false_positive_wilson_95_upper: safe_upper,
         attack_variant_consistency_rate: attack_rate,
         attack_variant_consistency_wilson_95_lower: attack_lower,
+        per_attack_family: attack_family_decision.reports,
         complete,
         thresholds_met,
     })
@@ -1367,7 +1646,7 @@ fn validate_attack_families(
     preregistration: &DomainStudyPreregistration,
     evaluated_total: usize,
     consistent_total: usize,
-) -> Result<bool, DomainStudyResultError> {
+) -> Result<AttackFamilyDecision, DomainStudyResultError> {
     if families.len() != preregistration.attacks.attack_families.len()
         || families
             .iter()
@@ -1394,9 +1673,45 @@ fn validate_attack_families(
     if evaluated_sum != evaluated_total || consistent_sum != consistent_total {
         return invalid("attack-family counts do not satisfy the frozen coverage plan");
     }
-    Ok(families.iter().all(|family| {
+    let coverage_complete = families.iter().all(|family| {
         family.evaluated_variant_count >= preregistration.attacks.minimum_variants_per_family
-    }))
+    });
+    let mut thresholds_met = true;
+    let mut reports = Vec::with_capacity(families.len());
+    for family in families {
+        let rate = optional_ratio(
+            family.consistent_variant_count,
+            family.evaluated_variant_count,
+        )?;
+        let lower = optional_wilson_interval(
+            family.consistent_variant_count,
+            family.evaluated_variant_count,
+        )?
+        .map(|interval| interval.0);
+        thresholds_met &= rate.is_some_and(|value| {
+            value
+                >= preregistration
+                    .analysis
+                    .minimum_attack_variant_consistency_rate
+        }) && lower.is_some_and(|value| {
+            value
+                >= preregistration
+                    .analysis
+                    .minimum_attack_variant_consistency_rate
+        });
+        reports.push(DomainStudyAttackFamilyMetricReport {
+            attack_family: family.attack_family.clone(),
+            evaluated_variant_count: family.evaluated_variant_count,
+            consistent_variant_count: family.consistent_variant_count,
+            consistency_rate: rate,
+            consistency_wilson_95_lower: lower,
+        });
+    }
+    Ok(AttackFamilyDecision {
+        coverage_complete,
+        thresholds_met,
+        reports,
+    })
 }
 
 fn validate_timestamp_receipt(
@@ -1415,6 +1730,7 @@ fn validate_timestamp_receipt(
         || claims.accuracy_micros > MAX_TIMESTAMP_ACCURACY_MICROS
         || !is_canonical_sha256(&claims.request_sha256)
         || !is_canonical_sha256(&claims.response_sha256)
+        || !is_canonical_sha256(&claims.certificate_chain_sha256)
         || !is_canonical_sha256(&claims.revocation_evidence_sha256)
         || claims.tsa_spki_sha256 != trust_policy.trusted_tsa_spki_sha256
         || claims.tsa_policy_oid != trust_policy.trusted_tsa_policy_oid
@@ -1429,6 +1745,14 @@ fn validate_timestamp_receipt(
         "trusted timestamp receipt",
     )?;
     let accuracy_ms = claims.accuracy_micros.div_ceil(1_000);
+    let earliest_ms = claims
+        .issued_at_ms
+        .checked_sub(accuracy_ms)
+        .ok_or_else(|| {
+            DomainStudyResultError::InvalidEvidence(
+                "trusted timestamp uncertainty interval underflows Unix milliseconds".to_string(),
+            )
+        })?;
     let latest_ms = claims
         .issued_at_ms
         .checked_add(accuracy_ms)
@@ -1438,7 +1762,7 @@ fn validate_timestamp_receipt(
             )
         })?;
     Ok(TrustedTimeInterval {
-        earliest_ms: claims.issued_at_ms.saturating_sub(accuracy_ms),
+        earliest_ms,
         latest_ms,
     })
 }
@@ -1549,19 +1873,32 @@ fn signing_payload<T: Serialize>(
     Ok(payload)
 }
 
+fn outcome_status(complete: bool, thresholds_met: bool) -> DomainStudyOutcomeStatus {
+    if !complete {
+        DomainStudyOutcomeStatus::Incomplete
+    } else if thresholds_met {
+        DomainStudyOutcomeStatus::ThresholdsMet
+    } else {
+        DomainStudyOutcomeStatus::ThresholdsNotMet
+    }
+}
+
 fn evidence_status(
     corpus_class: DomainStudyCorpusClass,
-    complete: bool,
-    thresholds_met: bool,
+    outcome_status: DomainStudyOutcomeStatus,
 ) -> DomainStudyEvidenceStatus {
     match corpus_class {
         DomainStudyCorpusClass::RepositorySeed | DomainStudyCorpusClass::CuratedInternal => {
             DomainStudyEvidenceStatus::EngineeringOnly
         }
-        DomainStudyCorpusClass::IndependentExternal if !complete => {
+        DomainStudyCorpusClass::IndependentExternal
+            if outcome_status == DomainStudyOutcomeStatus::Incomplete =>
+        {
             DomainStudyEvidenceStatus::Incomplete
         }
-        DomainStudyCorpusClass::IndependentExternal if !thresholds_met => {
+        DomainStudyCorpusClass::IndependentExternal
+            if outcome_status == DomainStudyOutcomeStatus::ThresholdsNotMet =>
+        {
             DomainStudyEvidenceStatus::ThresholdsNotMet
         }
         DomainStudyCorpusClass::IndependentExternal => {
@@ -1689,10 +2026,10 @@ fn safe_oid(value: &str) -> bool {
     let Ok(first) = components[0].parse::<u8>() else {
         return false;
     };
-    let Ok(second) = components[1].parse::<u8>() else {
+    if !matches!(first, 0..=2) {
         return false;
-    };
-    matches!(first, 0..=2) && (first == 2 || second <= 39)
+    }
+    first == 2 || components[1].parse::<u8>().is_ok_and(|second| second <= 39)
 }
 
 fn invalid<T>(message: impl Into<String>) -> Result<T, DomainStudyResultError> {
@@ -1805,6 +2142,7 @@ mod tests {
             accuracy_micros: 1_000,
             request_sha256: SHA_B.to_string(),
             response_sha256: SHA_C.to_string(),
+            certificate_chain_sha256: SHA_A.to_string(),
             revocation_evidence_sha256: SHA_D.to_string(),
             tsa_spki_sha256: SHA_A.to_string(),
             tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
@@ -1975,9 +2313,39 @@ mod tests {
             &keys,
         );
 
+        let mut review_coverage = (0..120)
+            .map(|index| DomainStudyCaseReviewCoverage {
+                blind_case_token_sha256: hex(&Sha256::digest(format!("blind-case-{index}"))),
+                reviewer_indices: vec![0, 1],
+                adjudicated: true,
+            })
+            .collect::<Vec<_>>();
+        review_coverage.sort_by(|left, right| {
+            left.blind_case_token_sha256
+                .cmp(&right.blind_case_token_sha256)
+        });
+        let assigned_cases = review_coverage
+            .iter()
+            .map(|row| row.blind_case_token_sha256.clone())
+            .collect::<Vec<_>>();
+        let reviewer_assignments = vec![
+            DomainStudyReviewerAssignmentManifest {
+                schema_version: DOMAIN_STUDY_REVIEWER_ASSIGNMENT_SCHEMA_VERSION.to_string(),
+                study_id: binding.study_id.clone(),
+                reviewer_index: 0,
+                blind_case_token_sha256: assigned_cases.clone(),
+            },
+            DomainStudyReviewerAssignmentManifest {
+                schema_version: DOMAIN_STUDY_REVIEWER_ASSIGNMENT_SCHEMA_VERSION.to_string(),
+                study_id: binding.study_id.clone(),
+                reviewer_index: 1,
+                blind_case_token_sha256: assigned_cases,
+            },
+        ];
         let reviewer_a = reviewer_receipt(
             "reviewer_alpha",
             SHA_B,
+            &canonical_sha256(&reviewer_assignments[0]).expect("reviewer assignment digest"),
             SHA_A,
             &binding,
             REGISTERED_AT_MS + 20_000,
@@ -1986,6 +2354,7 @@ mod tests {
         let reviewer_b = reviewer_receipt(
             "reviewer_beta",
             SHA_C,
+            &canonical_sha256(&reviewer_assignments[1]).expect("reviewer assignment digest"),
             SHA_B,
             &binding,
             REGISTERED_AT_MS + 21_000,
@@ -2018,25 +2387,24 @@ mod tests {
                 .collect::<Vec<_>>(),
         )
         .expect("reviewer set digest");
-        let mut review_coverage = (0..120)
-            .map(|index| DomainStudyCaseReviewCoverage {
-                blind_case_token_sha256: hex(&Sha256::digest(format!("blind-case-{index}"))),
-                reviewer_indices: vec![0, 1],
-                adjudicated: true,
-            })
-            .collect::<Vec<_>>();
-        review_coverage.sort_by(|left, right| {
-            left.blind_case_token_sha256
-                .cmp(&right.blind_case_token_sha256)
-        });
         let review_coverage_manifest_sha256 =
             canonical_sha256(&review_coverage).expect("review coverage digest");
+        let adjudication_manifest = DomainStudyAdjudicationManifest {
+            schema_version: DOMAIN_STUDY_ADJUDICATION_MANIFEST_SCHEMA_VERSION.to_string(),
+            study_id: binding.study_id.clone(),
+            blind_case_token_sha256: review_coverage
+                .iter()
+                .map(|row| row.blind_case_token_sha256.clone())
+                .collect(),
+            decision_bundle_sha256: SHA_D.to_string(),
+        };
         let adjudication_claims = DomainStudyAdjudicationReceiptClaims {
             schema_version: DOMAIN_STUDY_ADJUDICATION_RECEIPT_SCHEMA_VERSION.to_string(),
             study_id: binding.study_id.clone(),
             preregistration_canonical_sha256: binding.preregistration_canonical_sha256.clone(),
             reviewer_receipt_set_sha256: reviewer_receipt_set_sha256.clone(),
-            adjudication_bundle_sha256: SHA_D.to_string(),
+            adjudication_bundle_sha256: canonical_sha256(&adjudication_manifest)
+                .expect("adjudication manifest digest"),
             label_ontology_sha256: preregistration.dataset.label_ontology_sha256.clone(),
             adjudicated_case_count: 120,
             completed_at_ms: REGISTERED_AT_MS + 30_000,
@@ -2069,11 +2437,32 @@ mod tests {
             policy_evidence_canonical_sha256: binding.policy_evidence_canonical_sha256.clone(),
             build_provenance_canonical_sha256: binding.build_provenance_canonical_sha256.clone(),
             review_packet_sha256: SHA_C.to_string(),
-            reviewer_receipt_set_sha256,
+            reviewer_receipt_set_sha256: reviewer_receipt_set_sha256.clone(),
             adjudication_receipt_sha256,
             prediction_bundle_sha256: SHA_A.to_string(),
             analysis_environment_sha256: SHA_B.to_string(),
-            review_agreement_analysis_sha256: SHA_C.to_string(),
+            review_agreement_analysis: DomainStudyAgreementAnalysisClaims {
+                schema_version: DOMAIN_STUDY_AGREEMENT_ANALYSIS_SCHEMA_VERSION.to_string(),
+                study_id: binding.study_id.clone(),
+                preregistration_canonical_sha256: binding.preregistration_canonical_sha256.clone(),
+                reviewer_receipt_set_sha256: reviewer_receipt_set_sha256.clone(),
+                review_coverage_manifest_sha256: review_coverage_manifest_sha256.clone(),
+                statistic: preregistration.analysis.inter_rater_agreement_statistic,
+                uncertainty_method: preregistration
+                    .analysis
+                    .inter_rater_agreement_uncertainty_method,
+                bootstrap_resamples: preregistration
+                    .analysis
+                    .inter_rater_agreement_bootstrap_resamples,
+                bootstrap_seed_sha256: preregistration
+                    .analysis
+                    .inter_rater_agreement_bootstrap_seed_sha256
+                    .clone(),
+                agreement: Some(0.9),
+                agreement_95_lower: Some(0.85),
+                analysis_artifact_sha256: SHA_C.to_string(),
+                completed_at_ms: REGISTERED_AT_MS + 25_000,
+            },
             review_coverage_manifest_sha256,
             exclusion_manifest_sha256: SHA_A.to_string(),
             protocol_deviation_manifest_sha256: SHA_B.to_string(),
@@ -2128,8 +2517,6 @@ mod tests {
                         consistent_variant_count: 20,
                     },
                 ],
-                inter_rater_agreement: Some(0.9),
-                inter_rater_agreement_95_lower: Some(0.85),
                 review_coverage: DomainStudyReviewCoverage {
                     reviewer_receipt_count: 2,
                     minimum_completed_reviews_per_case: 2,
@@ -2144,15 +2531,24 @@ mod tests {
             raw_content_exported: false,
             reviewer_identifiers_exported: false,
         };
+        let review_agreement_analysis_timestamp = timestamp(
+            DomainStudyTimestampSubjectKind::ReviewerAgreementAnalysis,
+            canonical_sha256(&result.review_agreement_analysis).expect("agreement analysis digest"),
+            REGISTERED_AT_MS + 25_500,
+            &keys,
+        );
         let mut evidence = DomainStudyResultEvidenceBundle {
             schema_version: DOMAIN_STUDY_RESULT_EVIDENCE_SCHEMA_VERSION.to_string(),
             preregistration_attestation,
             preregistration_timestamp,
             reviewer_receipts,
+            reviewer_assignments,
             review_coverage,
+            adjudication_manifest,
             adjudication_receipt,
             adjudication_timestamp,
             result,
+            review_agreement_analysis_timestamp,
             final_manifest: DomainStudyFinalManifest {
                 claims: placeholder_manifest_claims(&binding),
                 signature: DomainStudyDetachedSignature {
@@ -2187,6 +2583,7 @@ mod tests {
     fn reviewer_receipt(
         key_id: &str,
         affiliation_sha256: &str,
+        assignment_sha256: &str,
         decision_sha256: &str,
         binding: &crate::DomainStudyBinding,
         completed_at_ms: u64,
@@ -2197,7 +2594,7 @@ mod tests {
             study_id: binding.study_id.clone(),
             preregistration_canonical_sha256: binding.preregistration_canonical_sha256.clone(),
             review_packet_sha256: SHA_C.to_string(),
-            assignment_manifest_sha256: decision_sha256.to_string(),
+            assignment_manifest_sha256: assignment_sha256.to_string(),
             decision_bundle_sha256: decision_sha256.to_string(),
             affiliation_commitment_sha256: affiliation_sha256.to_string(),
             completed_case_count: 120,
@@ -2220,14 +2617,17 @@ mod tests {
             policy_evidence_canonical_sha256: binding.policy_evidence_canonical_sha256.clone(),
             build_provenance_canonical_sha256: binding.build_provenance_canonical_sha256.clone(),
             corpus_sha256: binding.corpus_sha256.clone(),
+            trust_policy_canonical_sha256: SHA_A.to_string(),
             preregistration_attestation_sha256: SHA_A.to_string(),
             preregistration_timestamp_sha256: SHA_A.to_string(),
             reviewer_receipt_set_sha256: SHA_A.to_string(),
             reviewer_timestamp_set_sha256: SHA_A.to_string(),
+            agreement_analysis_timestamp_sha256: SHA_A.to_string(),
             adjudication_receipt_sha256: SHA_A.to_string(),
             adjudication_timestamp_sha256: SHA_A.to_string(),
             result_bundle_sha256: SHA_A.to_string(),
             evidence_status: DomainStudyEvidenceStatus::Incomplete,
+            outcome_status: DomainStudyOutcomeStatus::Incomplete,
             temporal_mode: binding.temporal_mode,
             temporal_runtime_enabled: false,
             action_execution_configured: false,
@@ -2243,6 +2643,13 @@ mod tests {
         keys: &TestKeys,
         evidence_status: DomainStudyEvidenceStatus,
     ) {
+        evidence.review_agreement_analysis_timestamp = timestamp(
+            DomainStudyTimestampSubjectKind::ReviewerAgreementAnalysis,
+            canonical_sha256(&evidence.result.review_agreement_analysis)
+                .expect("agreement analysis digest"),
+            REGISTERED_AT_MS + 25_500,
+            keys,
+        );
         let reviewer_receipt_digests = evidence
             .reviewer_receipts
             .iter()
@@ -2261,6 +2668,8 @@ mod tests {
             policy_evidence_canonical_sha256: binding.policy_evidence_canonical_sha256.clone(),
             build_provenance_canonical_sha256: binding.build_provenance_canonical_sha256.clone(),
             corpus_sha256: binding.corpus_sha256.clone(),
+            trust_policy_canonical_sha256: canonical_sha256(&keys.trust_policy())
+                .expect("trust policy digest"),
             preregistration_attestation_sha256: canonical_sha256(
                 &evidence.preregistration_attestation,
             )
@@ -2271,12 +2680,26 @@ mod tests {
                 .expect("reviewer receipt set digest"),
             reviewer_timestamp_set_sha256: canonical_sha256(&reviewer_timestamp_digests)
                 .expect("reviewer timestamp set digest"),
+            agreement_analysis_timestamp_sha256: canonical_sha256(
+                &evidence.review_agreement_analysis_timestamp,
+            )
+            .expect("agreement timestamp digest"),
             adjudication_receipt_sha256: canonical_sha256(&evidence.adjudication_receipt)
                 .expect("adjudication receipt digest"),
             adjudication_timestamp_sha256: canonical_sha256(&evidence.adjudication_timestamp)
                 .expect("adjudication timestamp digest"),
             result_bundle_sha256: canonical_sha256(&evidence.result).expect("result digest"),
             evidence_status,
+            outcome_status: match evidence_status {
+                DomainStudyEvidenceStatus::Incomplete => DomainStudyOutcomeStatus::Incomplete,
+                DomainStudyEvidenceStatus::ThresholdsNotMet => {
+                    DomainStudyOutcomeStatus::ThresholdsNotMet
+                }
+                DomainStudyEvidenceStatus::EngineeringOnly
+                | DomainStudyEvidenceStatus::IndependentEvidenceCandidate => {
+                    DomainStudyOutcomeStatus::ThresholdsMet
+                }
+            },
             temporal_mode: binding.temporal_mode,
             temporal_runtime_enabled: false,
             action_execution_configured: false,
@@ -2333,6 +2756,13 @@ mod tests {
             report.evidence_status,
             DomainStudyEvidenceStatus::IndependentEvidenceCandidate
         );
+        assert_eq!(
+            report.outcome_status,
+            DomainStudyOutcomeStatus::ThresholdsMet
+        );
+        assert_eq!(report.total_case_count, 120);
+        assert_eq!(report.review_coverage.fully_reviewed_case_count, 120);
+        assert_eq!(report.per_attack_family.len(), 3);
         assert!(!report.temporal_runtime_enabled);
         assert!(!report.action_execution_configured);
         assert!(report
@@ -2341,6 +2771,10 @@ mod tests {
         assert_eq!(
             report.inter_rater_agreement_uncertainty_method,
             DomainStudyAgreementUncertaintyMethod::CaseBootstrapBca95
+        );
+        assert_eq!(
+            report.trust_policy_canonical_sha256,
+            canonical_sha256(&fixture.trust).expect("trust policy digest")
         );
     }
 
@@ -2356,6 +2790,52 @@ mod tests {
         let error = validate(&fixture).expect_err("tampered signature must fail");
 
         assert!(error.to_string().contains("signature verification failed"));
+    }
+
+    #[test]
+    fn identical_independent_decision_bundles_are_admissible() {
+        let mut fixture = fixture();
+        let preregistration: DomainStudyPreregistration =
+            serde_json::from_str(&fixture.preregistration_json).expect("preregistration");
+        let binding = binding(&fixture);
+        let shared_decision_sha256 = fixture.evidence.reviewer_receipts[0]
+            .receipt
+            .claims
+            .decision_bundle_sha256
+            .clone();
+        let reviewer = &mut fixture.evidence.reviewer_receipts[1];
+        reviewer.receipt.claims.decision_bundle_sha256 = shared_decision_sha256;
+        reviewer.receipt.signature = signature(
+            REVIEWER_RECEIPT_DOMAIN,
+            &reviewer.receipt.claims,
+            "reviewer_beta",
+            &fixture.keys.reviewer_b,
+        );
+        reviewer.trusted_timestamp = timestamp(
+            DomainStudyTimestampSubjectKind::ReviewerReceipt,
+            canonical_sha256(&reviewer.receipt).expect("reviewer digest"),
+            REGISTERED_AT_MS + 21_500,
+            &fixture.keys,
+        );
+        let preregistration_attestation_sha256 =
+            canonical_sha256(&fixture.evidence.preregistration_attestation)
+                .expect("attestation digest");
+        let preregistration_time = validate_timestamp_receipt(
+            &fixture.evidence.preregistration_timestamp,
+            DomainStudyTimestampSubjectKind::PreregistrationAttestation,
+            &preregistration_attestation_sha256,
+            &fixture.trust,
+        )
+        .expect("trusted preregistration time");
+
+        validate_reviewer_receipts(
+            &fixture.evidence.reviewer_receipts,
+            &preregistration,
+            &binding.preregistration_canonical_sha256,
+            preregistration_time,
+            &fixture.trust,
+        )
+        .expect("identical decisions from distinct signers are valid");
     }
 
     #[test]
@@ -2396,6 +2876,10 @@ mod tests {
             report.evidence_status,
             DomainStudyEvidenceStatus::ThresholdsNotMet
         );
+        assert_eq!(
+            report.outcome_status,
+            DomainStudyOutcomeStatus::ThresholdsNotMet
+        );
         assert!(report
             .safe_boundary_false_positive_wilson_95_upper
             .is_some_and(|value| value > 0.05));
@@ -2420,6 +2904,8 @@ mod tests {
             report.evidence_status,
             DomainStudyEvidenceStatus::Incomplete
         );
+        assert_eq!(report.outcome_status, DomainStudyOutcomeStatus::Incomplete);
+        assert_eq!(report.excluded_case_count, 1);
     }
 
     #[test]
@@ -2460,7 +2946,7 @@ mod tests {
 
         let error = validate(&fixture).expect_err("coverage substitution must fail");
 
-        assert!(error.to_string().contains("coverage matrix"));
+        assert!(error.to_string().contains("coverage"));
     }
 
     #[test]
@@ -2471,6 +2957,29 @@ mod tests {
         let error = validate(&fixture).expect_err("duplicate reviewer assignment must fail");
 
         assert!(error.to_string().contains("coverage rows"));
+    }
+
+    #[test]
+    fn signed_assignment_digest_is_connected_to_private_coverage() {
+        let mut fixture = fixture();
+        fixture.evidence.reviewer_assignments[0].blind_case_token_sha256[0] = SHA_A.to_string();
+        fixture.evidence.reviewer_assignments[0]
+            .blind_case_token_sha256
+            .sort();
+
+        let error = validate(&fixture).expect_err("assignment substitution must fail");
+
+        assert!(error.to_string().contains("signed receipt"));
+    }
+
+    #[test]
+    fn signed_adjudication_manifest_is_connected_to_private_coverage() {
+        let mut fixture = fixture();
+        fixture.evidence.review_coverage[0].adjudicated = false;
+
+        let error = validate(&fixture).expect_err("adjudication substitution must fail");
+
+        assert!(error.to_string().contains("adjudication manifest"));
     }
 
     #[test]
@@ -2497,14 +3006,45 @@ mod tests {
     }
 
     #[test]
-    fn undefined_agreement_is_preserved_as_incomplete_not_fabricated() {
+    fn pooled_attack_rate_cannot_hide_a_weak_family() {
         let mut fixture = fixture();
-        fixture.evidence.result.metrics.inter_rater_agreement = None;
         fixture
             .evidence
             .result
             .metrics
-            .inter_rater_agreement_95_lower = None;
+            .consistent_attack_variant_count = 55;
+        fixture.evidence.result.metrics.per_attack_family[0].consistent_variant_count = 15;
+        let binding = binding(&fixture);
+        finalize_manifest(
+            &mut fixture.evidence,
+            &binding,
+            &fixture.keys,
+            DomainStudyEvidenceStatus::ThresholdsNotMet,
+        );
+
+        let report = validate(&fixture).expect("weak family is valid negative evidence");
+
+        assert_eq!(
+            report.evidence_status,
+            DomainStudyEvidenceStatus::ThresholdsNotMet
+        );
+        assert!(report.per_attack_family[0]
+            .consistency_wilson_95_lower
+            .is_some_and(|value| value < 0.8));
+        assert!(report
+            .attack_variant_consistency_wilson_95_lower
+            .is_some_and(|value| value >= 0.8));
+    }
+
+    #[test]
+    fn undefined_agreement_is_preserved_as_incomplete_not_fabricated() {
+        let mut fixture = fixture();
+        fixture.evidence.result.review_agreement_analysis.agreement = None;
+        fixture
+            .evidence
+            .result
+            .review_agreement_analysis
+            .agreement_95_lower = None;
         let binding = binding(&fixture);
         finalize_manifest(
             &mut fixture.evidence,
@@ -2529,8 +3069,8 @@ mod tests {
         fixture
             .evidence
             .result
-            .metrics
-            .inter_rater_agreement_95_lower = Some(0.79);
+            .review_agreement_analysis
+            .agreement_95_lower = Some(0.79);
         let binding = binding(&fixture);
         finalize_manifest(
             &mut fixture.evidence,
@@ -2545,6 +3085,48 @@ mod tests {
             report.evidence_status,
             DomainStudyEvidenceStatus::ThresholdsNotMet
         );
+    }
+
+    #[test]
+    fn agreement_procedure_cannot_drift_from_preregistration() {
+        let mut fixture = fixture();
+        fixture
+            .evidence
+            .result
+            .review_agreement_analysis
+            .bootstrap_resamples += 1;
+        let binding = binding(&fixture);
+        finalize_manifest(
+            &mut fixture.evidence,
+            &binding,
+            &fixture.keys,
+            DomainStudyEvidenceStatus::IndependentEvidenceCandidate,
+        );
+
+        let error = validate(&fixture).expect_err("post-hoc agreement procedure must fail");
+
+        assert!(error.to_string().contains("frozen procedure"));
+    }
+
+    #[test]
+    fn agreement_analysis_must_provably_precede_adjudication() {
+        let mut fixture = fixture();
+        fixture
+            .evidence
+            .result
+            .review_agreement_analysis
+            .completed_at_ms = REGISTERED_AT_MS + 30_000;
+        fixture.evidence.review_agreement_analysis_timestamp = timestamp(
+            DomainStudyTimestampSubjectKind::ReviewerAgreementAnalysis,
+            canonical_sha256(&fixture.evidence.result.review_agreement_analysis)
+                .expect("agreement digest"),
+            REGISTERED_AT_MS + 30_500,
+            &fixture.keys,
+        );
+
+        let error = validate(&fixture).expect_err("overlapping agreement/adjudication must fail");
+
+        assert!(error.to_string().contains("pre-adjudication"));
     }
 
     #[test]
@@ -2625,6 +3207,65 @@ mod tests {
         let error = validate(&fixture).expect_err("overflowing trusted interval must fail");
 
         assert!(error.to_string().contains("overflows"));
+    }
+
+    #[test]
+    fn trusted_timestamp_interval_underflow_is_rejected() {
+        let fixture = fixture();
+        let mut receipt = timestamp(
+            DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            SHA_A.to_string(),
+            1,
+            &fixture.keys,
+        );
+        receipt.claims.accuracy_micros = 2_000;
+        receipt.signature = signature(
+            TRUSTED_TIMESTAMP_DOMAIN,
+            &receipt.claims,
+            "timestamp_verifier",
+            &fixture.keys.timestamp,
+        );
+
+        let error = validate_timestamp_receipt(
+            &receipt,
+            DomainStudyTimestampSubjectKind::FinalEvidenceManifest,
+            SHA_A,
+            &fixture.trust,
+        )
+        .expect_err("underflowing trusted interval must fail");
+
+        assert!(error.to_string().contains("underflows"));
+    }
+
+    #[test]
+    fn timestamp_receipt_requires_certificate_chain_digest() {
+        let mut fixture = fixture();
+        fixture
+            .evidence
+            .preregistration_timestamp
+            .claims
+            .certificate_chain_sha256 = "missing".to_string();
+
+        let error = validate(&fixture).expect_err("missing chain digest must fail");
+
+        assert!(error.to_string().contains("timestamp receipt"));
+    }
+
+    #[test]
+    fn engineering_maturity_does_not_erase_negative_outcome() {
+        let outcome = outcome_status(true, false);
+
+        assert_eq!(outcome, DomainStudyOutcomeStatus::ThresholdsNotMet);
+        assert_eq!(
+            evidence_status(DomainStudyCorpusClass::CuratedInternal, outcome),
+            DomainStudyEvidenceStatus::EngineeringOnly
+        );
+    }
+
+    #[test]
+    fn oid_with_large_second_arc_under_arc_two_is_valid() {
+        assert!(safe_oid("2.999.3"));
+        assert!(!safe_oid("1.40.3"));
     }
 
     fn hex(bytes: &[u8]) -> String {

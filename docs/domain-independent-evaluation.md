@@ -34,7 +34,7 @@ study identity. Values in arrays that define hypotheses, features, threat
 families, strata, attacks, or outcomes must be sorted and unique so semantically
 equivalent documents do not acquire arbitrary orderings.
 
-The bounded JSON v1 contract accepts 30 to 25,000 fixed cases. A larger study
+The bounded JSON v1 contract accepts 30 to 10,000 fixed cases. A larger study
 requires a future streamed or chunked evidence schema rather than silently
 exceeding the verifier's memory bound.
 
@@ -119,7 +119,8 @@ governed inputs and real execution must exist before a confirmatory claim:
    analysis;
 4. a difficult corpus with identity-disjoint splits, safe controls, and fixed
    attack variations;
-5. a blinded review packet, independently timestamped reviewer decisions, and
+5. a blinded review packet, independently timestamped reviewer decisions,
+   signed assignment manifests, pre-adjudication agreement analysis, and
    separate adjudication;
 6. a real execution of the fail-closed content-free result validator, including
    trusted preregistration-time verification and a signed evidence manifest
