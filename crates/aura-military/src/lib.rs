@@ -18,8 +18,9 @@ pub mod temporal_shadow_telemetry;
 pub mod temporal_study;
 
 use aura_domain::{
-    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
-    DomainOutput, DomainSignal, DomainTemporalInput, DomainTemporalOutput,
+    validate_domain_study_preregistration, DomainConfirmedOutput, DomainInput, DomainModule,
+    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
+    DomainStudyError, DomainTemporalInput, DomainTemporalOutput,
     DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
@@ -38,6 +39,21 @@ pub fn domain_evidence() -> DomainModuleEvidence {
         lexical_policy: lexicon::evidence(),
         temporal_policy: Some(temporal::evidence()),
     }
+}
+
+/// Validates a Military study against the exact policy packs in this build.
+///
+/// The shared validator rejects the preregistration unless the temporal pack
+/// remains runtime-disabled, non-executable, and declared `shadow_only`.
+pub fn validate_independent_study_preregistration(
+    preregistration_json: &str,
+    known_seed_sha256: &[&str],
+) -> Result<DomainStudyBinding, DomainStudyError> {
+    validate_domain_study_preregistration(
+        preregistration_json,
+        &domain_evidence(),
+        known_seed_sha256,
+    )
 }
 
 impl DomainModule for MilitaryModule {

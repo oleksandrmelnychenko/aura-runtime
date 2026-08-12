@@ -5,8 +5,9 @@ pub mod policy;
 mod routing;
 
 use aura_domain::{
-    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
-    DomainOutput, DomainSignal, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+    validate_domain_study_preregistration, DomainConfirmedOutput, DomainInput, DomainModule,
+    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
+    DomainStudyError, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
 #[derive(Default)]
@@ -65,6 +66,21 @@ pub fn domain_evidence() -> DomainModuleEvidence {
         lexical_policy: lexicon::evidence(),
         temporal_policy: None,
     }
+}
+
+/// Validates a Kids study against the exact policy pack and memory schema in this build.
+///
+/// Known repository, synthetic, and tuning-corpus digests must be supplied so
+/// they cannot be relabeled as an independent external corpus.
+pub fn validate_independent_study_preregistration(
+    preregistration_json: &str,
+    known_seed_sha256: &[&str],
+) -> Result<DomainStudyBinding, DomainStudyError> {
+    validate_domain_study_preregistration(
+        preregistration_json,
+        &domain_evidence(),
+        known_seed_sha256,
+    )
 }
 
 impl DomainModule for KidsModule {

@@ -142,6 +142,12 @@ level.
 
 ## Planned Research Artifacts
 
+The first shared artifact contract is now implemented in `aura-domain` and
+documented in `docs/domain-independent-evaluation.md`. It binds a fixed corpus,
+attack plan, review design, analysis thresholds, and exact domain policy
+evidence. Its strongest immediate state is `independent_evidence_pending`; it
+does not upgrade the current repository corpora into independent evidence.
+
 Future research work should introduce versioned, reviewable locations for:
 
 - protocols and preregistrations;

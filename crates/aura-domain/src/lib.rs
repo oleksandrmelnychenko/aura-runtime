@@ -21,6 +21,8 @@ pub mod output;
 pub mod policy;
 /// Runtime module registry.
 pub mod registry;
+/// Preregistered, policy-bound contracts for independent domain evaluation.
+pub mod research;
 /// Content-free temporal projection contracts.
 pub mod temporal;
 
@@ -31,4 +33,5 @@ pub use module::*;
 pub use output::*;
 pub use policy::*;
 pub use registry::*;
+pub use research::*;
 pub use temporal::*;
