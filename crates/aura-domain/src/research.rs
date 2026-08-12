@@ -18,39 +18,22 @@ use crate::{
 pub const DOMAIN_STUDY_PREREGISTRATION_SCHEMA_VERSION: &str =
     "aura.domain.independent_evaluation_preregistration.v1";
 
-/// Exact repository corpus digests that can never be claimed as independent.
-///
-/// The list covers the bundled curated, realistic, pilot, world-simulation,
-/// lifecycle, and Military temporal seed corpora. Tests bind every entry to
-/// its current source bytes.
-pub const AURA_REPOSITORY_SEED_SHA256: &[&str] = &[
-    "0ff33f84d723f8c1728f9b76598737e876bb30e7d01f3e47a0062c242832a73c",
-    "1729afffd49482aa9aa9d663ede8983db2ef05164cc74771bfba5e2086f4cb21",
-    "21932ea0c99cea71db60a46894c42d4d35eb155c5b1d62c57059e002668a291b",
-    "236ad7b753343e964c6c49ad317b51c8f72113a6087f70cb2cf4f352bc3af736",
-    "25ff98e4a8b71d6ae07b89131939b3c0df72e4f5ce59f7820a0a27f3ce85e64a",
-    "346d58a06969978692295d168c85048400b0b3b03ce50ac6d91ee10ea907aadb",
-    "3b84180a146435be7f7d6f42733df562c4d24a31acb7ec9f5a14483125d172ca",
-    "3c7b5987ed4575365bb0dd16e6e73c56f4b23c808090e94f065f48fc95017430",
-    "5762322c9e8a80bb18c28e8d7d9a791466b363e91b687975b247b97b57b61d1a",
-    "6203fd2fd3f571c7a021e450e677d46eba5decea13db46bf8587752716a0f8d5",
-    "7a758e34b77d6a2c999f8766aa52d127d71ddaaceb746b490a30953144511412",
-    "83da53961b5ff1dc0e370343599a2bcf2a36562abe09620ab405f358a39c2498",
-    "8533f2b56ce036cef4e305cc4275b2b45e4a813931f662c8e52c5875d15605f5",
-    "8e520bb7eb7c88c1bb4a1f26cc2d6b5026a60b3440adc839a0e1ae3f06449045",
-    "8fa24d71baf90edd6adeccb977a2a9052fe10cc562e146f109eff9fbc53a19c1",
-    "9a7a864c523eea9b8459f3cadc39e03a29659c836983b073ecb617e7808fa882",
-    "9dcb82d726e6fda878fb0e6c6699b553ccced4cfcf6c4b18792326d037710297",
-    "a4d61c99d8a55f8a825ad1095987d7874d32a83db7344b8198902b3bea097396",
-    "a588ecf6e0e077999755efea4464c669f2c591f33e61e019ef517f24d594d909",
-    "b89c36e8a15d9082eb3bf53316399d897d22ae4f2cf39145f0e12eec84cdf5af",
-    "b92df9b98fc13815a72f8129fc35b382869231c86ee0e93d3b15ab728d644fef",
-    "c82c9e9f0b5a9d2d323f1b411f28707894555b9a028b74d8c133bc551667d8c8",
-    "ca502f671dccaa6d712751c71d6b77a12e7b8c1ad88613a4e9f4fc83afba3d2d",
-    "cce2c696d776bfd6ab6ee84591699a37d3efaaf1df3e090fc172643c062adc26",
-    "e81a7fcf819c6208e871120289ce20fd012a6d11a32ef1a829521deb94d6c01c",
-    "f503181000062caaa39d1af07729d31aa0f73eb77a802697ff683b893faefc4b",
-];
+const REPOSITORY_SEED_MANIFEST_SCHEMA_VERSION: u32 = 1;
+const REPOSITORY_SEED_MANIFEST_JSON: &str = include_str!("../repository_seed_manifest.json");
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepositorySeedManifest {
+    schema_version: u32,
+    entries: Vec<RepositorySeedEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepositorySeedEntry {
+    path: String,
+    sha256: String,
+}
 
 /// Error returned when an independent-domain preregistration is not admissible.
 #[derive(Debug, Error)]
@@ -402,7 +385,7 @@ fn validate_build_provenance(
     {
         return invalid("build provenance identity or clean-source assurance is invalid");
     }
-    validate_sorted_tokens("build feature", &provenance.feature_set, 1, 64)
+    validate_sorted_tokens("build feature", &provenance.feature_set, 0, 64)
 }
 
 fn validate_temporal_mode(
@@ -457,6 +440,10 @@ fn validate_dataset(
         || dataset.minimum_cases_per_threat_family > dataset.fixed_case_count
         || dataset.minimum_safe_boundary_cases < 10
         || dataset.minimum_safe_boundary_cases > dataset.fixed_case_count
+        || dataset
+            .minimum_cases_per_threat_family
+            .saturating_add(dataset.minimum_safe_boundary_cases)
+            > dataset.fixed_case_count
         || !(32..=2_000).contains(
             &dataset
                 .a_priori_sample_size_rationale
@@ -482,10 +469,12 @@ fn validate_dataset(
     }
 
     if dataset.corpus_class == DomainStudyCorpusClass::IndependentExternal {
-        if AURA_REPOSITORY_SEED_SHA256
+        if repository_seed_manifest()?
+            .entries
             .iter()
-            .chain(additional_known_seed_sha256.iter())
-            .any(|seed| *seed == dataset.corpus_sha256)
+            .map(|entry| entry.sha256.as_str())
+            .chain(additional_known_seed_sha256.iter().copied())
+            .any(|seed| seed == dataset.corpus_sha256)
         {
             return invalid("independent external corpus matches a known seed corpus");
         }
@@ -582,9 +571,11 @@ pub fn domain_study_seed_registry_sha256(
     {
         return invalid("additional known-seed registry contains a malformed SHA-256 digest");
     }
-    let registry = AURA_REPOSITORY_SEED_SHA256
+    let manifest = repository_seed_manifest()?;
+    let registry = manifest
+        .entries
         .iter()
-        .copied()
+        .map(|entry| entry.sha256.as_str())
         .chain(additional_known_seed_sha256.iter().copied())
         .collect::<BTreeSet<_>>()
         .into_iter()
@@ -592,12 +583,37 @@ pub fn domain_study_seed_registry_sha256(
     canonical_sha256(&registry)
 }
 
+fn repository_seed_manifest() -> Result<RepositorySeedManifest, DomainStudyError> {
+    let manifest: RepositorySeedManifest = serde_json::from_str(REPOSITORY_SEED_MANIFEST_JSON)
+        .map_err(|error| {
+            DomainStudyError::InvalidPreregistration(format!(
+                "embedded repository seed manifest is invalid: {error}"
+            ))
+        })?;
+    if manifest.schema_version != REPOSITORY_SEED_MANIFEST_SCHEMA_VERSION
+        || manifest.entries.is_empty()
+        || manifest
+            .entries
+            .windows(2)
+            .any(|pair| pair[0].path >= pair[1].path)
+        || manifest.entries.iter().any(|entry| {
+            !entry.path.starts_with("crates/")
+                || !entry.path.ends_with(".json")
+                || entry.path.contains("..")
+                || !is_canonical_sha256(&entry.sha256)
+        })
+    {
+        return invalid("embedded repository seed manifest has invalid or unsorted entries");
+    }
+    Ok(manifest)
+}
+
 fn high_assurance_floor(value: f64) -> bool {
     value.is_finite() && (0.8..=1.0).contains(&value)
 }
 
 fn low_false_positive_ceiling(value: f64) -> bool {
-    value.is_finite() && (0.0..=0.1).contains(&value)
+    value.is_finite() && (0.0..=0.1).contains(&value) && !(value == 0.0 && value.is_sign_negative())
 }
 
 fn safe_token(value: &str) -> bool {
@@ -675,7 +691,7 @@ mod tests {
             rust_toolchain_sha256: SHA_C.to_string(),
             target_triple: "aarch64-apple-ios".to_string(),
             cargo_profile: "release".to_string(),
-            feature_set: vec!["default".to_string()],
+            feature_set: Vec::new(),
             binary_sha256: SHA_D.to_string(),
             source_tree_clean: true,
         }
@@ -796,78 +812,54 @@ mod tests {
 
     #[test]
     fn repository_seed_registry_is_bound_to_exact_source_bytes() {
-        let sources: &[&[u8]] = &[
-            include_bytes!("../../aura-core/data/corpus_curated_cases.json"),
-            include_bytes!("../../aura-core/data/corpus_style_profiles.json"),
-            include_bytes!("../../aura-core/data/external_curated_chat_cases.json"),
-            include_bytes!("../../aura-core/data/pilot_simulation_regression_cases.json"),
-            include_bytes!("../../aura-core/data/realistic_chat_cases.json"),
-            include_bytes!("../../aura-core/data/world_sim_13yo_6mo.json"),
-            include_bytes!("../../aura-core/data/world_sim_2k.json"),
-            include_bytes!("../../aura-core/data/world_sim_demo.json"),
-            include_bytes!("../../aura-core/data/world_sim_kids_memory_stress.json"),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/anastasia_12_to_14_clean_negative_2y.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/andrii_14_peer_blackmail_recovery_4mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/andrii_36_military_fake_recruiter_simple_4mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/denys_13_safe_adult_negative_5mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/dmytro_41_multi_vector_recruitment_network_6mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/ira_15_artist_slow_grooming_6mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/kateryna_16_recruitment_pressure_9mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/lev_10_gaming_scam_grooming_1y.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/liza_14_multilingual_creator_18mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/maksym_11_bullying_selfharm_4mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/maria_12_public_comments_phishing_pii_3mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/mykola_12_public_unknown_adult_network_1y.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/olena_09_game_3mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/olena_32_spec_service_recruitment_simple_4mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/serhiy_24_gang_recruitment_simple_3mo.json"
-            ),
-            include_bytes!(
-                "../../aura-core/data/world_lifecycle_suite/sofia_13_to_15_dense_2y.json"
-            ),
-            include_bytes!("../../aura-military/data/temporal_shadow_corpus.json"),
-        ];
-        let mut actual = sources
-            .iter()
-            .map(|source| {
-                Sha256::digest(source)
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>();
-        actual.sort();
+        use std::fs;
+        use std::path::{Path, PathBuf};
 
-        assert_eq!(actual, AURA_REPOSITORY_SEED_SHA256);
+        fn json_files(root: &Path, directory: &Path, output: &mut Vec<PathBuf>) {
+            for entry in fs::read_dir(directory).expect("read repository data directory") {
+                let path = entry.expect("repository data entry").path();
+                if path.is_dir() {
+                    json_files(root, &path, output);
+                } else if path.extension().and_then(|value| value.to_str()) == Some("json") {
+                    output.push(
+                        path.strip_prefix(root)
+                            .expect("workspace-relative path")
+                            .into(),
+                    );
+                }
+            }
+        }
+
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let crates = workspace.join("crates");
+        let mut discovered = Vec::new();
+        for entry in fs::read_dir(&crates).expect("read workspace crates") {
+            let data = entry.expect("crate directory").path().join("data");
+            if data.is_dir() {
+                json_files(workspace, &data, &mut discovered);
+            }
+        }
+        discovered.sort();
+
+        let manifest = repository_seed_manifest().expect("repository seed manifest");
+        let manifest_paths = manifest
+            .entries
+            .iter()
+            .map(|entry| PathBuf::from(&entry.path))
+            .collect::<Vec<_>>();
+        assert_eq!(discovered, manifest_paths);
+
+        for entry in manifest.entries {
+            let source = fs::read(workspace.join(&entry.path)).expect("repository data bytes");
+            let actual = Sha256::digest(source)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            assert_eq!(actual, entry.sha256, "{} digest drifted", entry.path);
+        }
     }
 
     #[test]
@@ -908,7 +900,11 @@ mod tests {
         let policy = evidence(DomainModuleId::Kids, false);
         let build = build_provenance();
         let mut study = preregistration(policy.clone(), build.clone());
-        study.dataset.corpus_sha256 = AURA_REPOSITORY_SEED_SHA256[0].to_string();
+        study.dataset.corpus_sha256 = repository_seed_manifest()
+            .expect("repository seed manifest")
+            .entries[0]
+            .sha256
+            .clone();
         let error = validate_domain_study_preregistration(&json(&study), &policy, &build, &[])
             .expect_err("known seed claim must fail");
 
@@ -973,6 +969,34 @@ mod tests {
             .expect_err("optional stopping must fail");
 
         assert!(error.to_string().contains("analysis plan"));
+    }
+
+    #[test]
+    fn negative_zero_threshold_is_not_a_second_canonical_encoding() {
+        let policy = evidence(DomainModuleId::Kids, false);
+        let build = build_provenance();
+        let mut study = preregistration(policy.clone(), build.clone());
+        study.analysis.maximum_safe_boundary_false_positive_rate = -0.0;
+
+        let error = validate_domain_study_preregistration(&json(&study), &policy, &build, &[])
+            .expect_err("negative zero must fail canonical threshold validation");
+
+        assert!(error.to_string().contains("analysis plan"));
+    }
+
+    #[test]
+    fn safe_and_positive_minimums_must_fit_the_fixed_corpus() {
+        let policy = evidence(DomainModuleId::Kids, false);
+        let build = build_provenance();
+        let mut study = preregistration(policy.clone(), build.clone());
+        study.dataset.fixed_case_count = 30;
+        study.dataset.minimum_cases_per_threat_family = 30;
+        study.dataset.minimum_safe_boundary_cases = 30;
+
+        let error = validate_domain_study_preregistration(&json(&study), &policy, &build, &[])
+            .expect_err("impossible denominator plan must fail");
+
+        assert!(error.to_string().contains("dataset identity"));
     }
 
     #[test]
