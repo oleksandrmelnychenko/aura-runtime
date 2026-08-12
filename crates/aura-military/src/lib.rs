@@ -20,7 +20,7 @@ pub mod temporal_study;
 use aura_domain::{
     validate_domain_study_preregistration, DomainConfirmedOutput, DomainInput, DomainModule,
     DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
-    DomainStudyError, DomainTemporalInput, DomainTemporalOutput,
+    DomainStudyBuildProvenance, DomainStudyError, DomainTemporalInput, DomainTemporalOutput,
     DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
@@ -45,14 +45,18 @@ pub fn domain_evidence() -> DomainModuleEvidence {
 ///
 /// The shared validator rejects the preregistration unless the temporal pack
 /// remains runtime-disabled, non-executable, and declared `shadow_only`.
+/// `expected_build_provenance` must describe the actual evaluated binary;
+/// repository seeds are injected before private seed digests are added.
 pub fn validate_independent_study_preregistration(
     preregistration_json: &str,
-    known_seed_sha256: &[&str],
+    expected_build_provenance: &DomainStudyBuildProvenance,
+    additional_known_seed_sha256: &[&str],
 ) -> Result<DomainStudyBinding, DomainStudyError> {
     validate_domain_study_preregistration(
         preregistration_json,
         &domain_evidence(),
-        known_seed_sha256,
+        expected_build_provenance,
+        additional_known_seed_sha256,
     )
 }
 

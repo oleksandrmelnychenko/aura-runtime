@@ -3,9 +3,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::{
-    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
-    DomainOutput, DomainPolicyPackEvidence, DomainSignal, DomainTemporalInput,
-    DomainTemporalOutput, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+    validate_domain_module_evidence, DomainConfirmedOutput, DomainInput, DomainModule,
+    DomainModuleEvidence, DomainModuleEvidenceError, DomainModuleId, DomainOutput,
+    DomainPolicyPackKind, DomainSignal, DomainTemporalInput, DomainTemporalOutput,
 };
 
 /// Registration failure that prevents an inconsistent module from entering the runtime.
@@ -243,27 +243,41 @@ fn validate_module_evidence(module: &dyn DomainModule) -> Result<(), DomainRegis
             evidence_module_id: evidence.module_id,
         });
     }
-    if evidence.schema_version != DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION {
-        return Err(DomainRegistrationError::UnsupportedEvidenceSchema {
-            module_id,
-            schema_version: evidence.schema_version,
-        });
-    }
-    if evidence.module_version.trim().is_empty() {
-        return Err(DomainRegistrationError::InvalidIdentity {
-            module_id,
-            field: "module_version",
-        });
-    }
-    match (evidence.stateful, evidence.state_schema_version) {
-        (true, Some(version)) if version > 0 => {}
-        (false, None) => {}
-        _ => return Err(DomainRegistrationError::InvalidStateContract { module_id }),
-    }
-    validate_policy_pack(module_id, "lexical", &evidence.lexical_policy)?;
-    if let Some(temporal) = evidence.temporal_policy.as_ref() {
-        validate_policy_pack(module_id, "temporal", &temporal.pack)?;
-    }
+    validate_domain_module_evidence(&evidence).map_err(|error| match error {
+        DomainModuleEvidenceError::UnsupportedSchema { schema_version } => {
+            DomainRegistrationError::UnsupportedEvidenceSchema {
+                module_id,
+                schema_version,
+            }
+        }
+        DomainModuleEvidenceError::InvalidModuleVersion => {
+            DomainRegistrationError::InvalidIdentity {
+                module_id,
+                field: "module_version",
+            }
+        }
+        DomainModuleEvidenceError::InvalidStateContract => {
+            DomainRegistrationError::InvalidStateContract { module_id }
+        }
+        DomainModuleEvidenceError::InvalidPolicyIdentity { policy_kind } => {
+            DomainRegistrationError::InvalidIdentity {
+                module_id,
+                field: match policy_kind {
+                    DomainPolicyPackKind::Lexical => "lexical_policy_identity",
+                    DomainPolicyPackKind::Temporal => "temporal_policy_identity",
+                },
+            }
+        }
+        DomainModuleEvidenceError::InvalidPolicyPack { policy_kind } => {
+            DomainRegistrationError::InvalidPolicyPack {
+                module_id,
+                policy_kind: match policy_kind {
+                    DomainPolicyPackKind::Lexical => "lexical",
+                    DomainPolicyPackKind::Temporal => "temporal",
+                },
+            }
+        }
+    })?;
 
     let runtime_enabled = module.temporal_enabled();
     let evidence_enabled = evidence
@@ -275,35 +289,6 @@ fn validate_module_evidence(module: &dyn DomainModule) -> Result<(), DomainRegis
             module_id,
             runtime_enabled,
             evidence_enabled,
-        });
-    }
-    Ok(())
-}
-
-fn validate_policy_pack(
-    module_id: DomainModuleId,
-    policy_kind: &'static str,
-    policy: &DomainPolicyPackEvidence,
-) -> Result<(), DomainRegistrationError> {
-    if policy.pack_id.trim().is_empty() || policy.schema_version == 0 {
-        return Err(DomainRegistrationError::InvalidIdentity {
-            module_id,
-            field: if policy_kind == "lexical" {
-                "lexical_policy_identity"
-            } else {
-                "temporal_policy_identity"
-            },
-        });
-    }
-    let valid_digest = policy.sha256.len() == 64
-        && policy
-            .sha256
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if policy.rule_count == 0 || !valid_digest {
-        return Err(DomainRegistrationError::InvalidPolicyPack {
-            module_id,
-            policy_kind,
         });
     }
     Ok(())

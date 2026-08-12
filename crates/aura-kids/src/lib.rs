@@ -7,7 +7,7 @@ mod routing;
 use aura_domain::{
     validate_domain_study_preregistration, DomainConfirmedOutput, DomainInput, DomainModule,
     DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
-    DomainStudyError, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+    DomainStudyBuildProvenance, DomainStudyError, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
 #[derive(Default)]
@@ -70,16 +70,19 @@ pub fn domain_evidence() -> DomainModuleEvidence {
 
 /// Validates a Kids study against the exact policy pack and memory schema in this build.
 ///
-/// Known repository, synthetic, and tuning-corpus digests must be supplied so
-/// they cannot be relabeled as an independent external corpus.
+/// `expected_build_provenance` must describe the actual evaluated binary.
+/// Repository seeds are injected automatically; private synthetic and tuning
+/// corpus digests must be supplied so they cannot be relabeled as external.
 pub fn validate_independent_study_preregistration(
     preregistration_json: &str,
-    known_seed_sha256: &[&str],
+    expected_build_provenance: &DomainStudyBuildProvenance,
+    additional_known_seed_sha256: &[&str],
 ) -> Result<DomainStudyBinding, DomainStudyError> {
     validate_domain_study_preregistration(
         preregistration_json,
         &domain_evidence(),
-        known_seed_sha256,
+        expected_build_provenance,
+        additional_known_seed_sha256,
     )
 }
 

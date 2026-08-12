@@ -7,13 +7,16 @@ collected.
 
 The shared `aura-domain` contract preregisters message-level evaluation for
 Kids and Military. It is separate from the more specialized Military temporal
-review protocol. A valid preregistration binds all of the following before
-confirmatory labels are inspected:
+review protocol. A valid preregistration declares and binds all of the
+following for later trusted-time verification:
 
 - the exact `DomainModuleEvidence`, including module version, state schema,
   lexical policy digest, and temporal policy digest;
+- the exact Git revision, source tree, Cargo.lock, toolchain, target, profile,
+  feature set, and evaluated binary digest;
 - the fixed corpus digest, case count, inclusion and exclusion criteria, split
-  discipline, strata, and prospective sample-size rationale;
+  discipline, label ontology, safe-boundary definition, minimum denominators,
+  strata, and prospective sample-size rationale;
 - attack families, exact variant count, per-family minimum, and construction
   manifest;
 - two to five reviewers per case, distinct affiliations, independent
@@ -23,10 +26,18 @@ confirmatory labels are inspected:
 - no optional stopping, no imputation of incomplete review, separation of
   exploratory analyses, and complete reporting of exclusions and deviations.
 
-Validation is fail-closed. A policy-pack, state-schema, corpus, criteria, or
-attack-manifest change creates a different study identity. Values in arrays
-that define hypotheses, strata, attacks, or outcomes must be sorted and unique
-so semantically equivalent documents do not acquire arbitrary orderings.
+Validation is fail-closed. A code, binary, policy-pack, state-schema, corpus,
+criteria, ontology, safe-boundary, or attack-manifest change creates a different
+study identity. Values in arrays that define hypotheses, features, threat
+families, strata, attacks, or outcomes must be sorted and unique so semantically
+equivalent documents do not acquire arbitrary orderings.
+
+The declared `registered_at_ms` and boolean anti-bias fields are not trusted
+proof that registration preceded label access. A canonical preregistration
+must still be signed and independently timestamped before labels are released;
+the later result gate must verify that chronology. Until that receipt exists,
+the document is a reproducible commitment candidate, not a proven
+preregistration event.
 
 ## Evidence ceiling
 
@@ -53,19 +64,29 @@ implementation that will actually run:
 ```rust
 let kids = aura_kids::validate_independent_study_preregistration(
     preregistration_json,
-    &known_seed_digests,
+    &actual_build_provenance,
+    &additional_private_seed_digests,
 )?;
 
 let military = aura_military::validate_independent_study_preregistration(
     preregistration_json,
-    &known_seed_digests,
+    &actual_build_provenance,
+    &additional_private_seed_digests,
 )?;
 ```
 
-The caller must enumerate every repository, synthetic, pilot-tuning, and prior
-evaluation corpus digest in `known_seed_digests`. The corpus itself stays in
-the controlled research environment; public and release evidence contains
-only the bound digest and aggregate results.
+The validator always injects and byte-verifies the committed repository corpus
+registry. The caller adds every private synthetic, pilot-tuning, and prior
+evaluation digest. The preregistration must contain the exact combined registry
+digest returned by `domain_study_seed_registry_sha256`; omitting or adding a
+private seed later invalidates the binding. This prevents exact corpus reuse,
+but transformed or partially copied seed material still requires independent
+lineage auditing.
+
+The corpus itself stays in the controlled research environment. This phase
+implements the preregistration binding only; the privacy-safe aggregate result
+schema, trusted-time verification, and signed final evidence manifest are the
+next code milestone and must not be inferred from a successful binding.
 
 ## Military temporal boundary
 
@@ -79,8 +100,8 @@ timestamps, receipt chains, and activation-readiness evidence.
 
 ## Next operational artifacts
 
-The code contract is ready; the following inputs must be produced outside the
-implementation team before a confirmatory run:
+The preregistration contract is ready; the following inputs and result-layer
+code must exist before a confirmatory run:
 
 1. an independently governed sampling frame and dataset card;
 2. ethics, consent, retention, and access-control records appropriate to each
@@ -91,8 +112,9 @@ implementation team before a confirmatory run:
    attack variations;
 5. a blinded review packet, independently timestamped reviewer decisions, and
    separate adjudication;
-6. a content-free result bundle and signed evidence manifest tied to the exact
-   preregistration and policy evidence.
+6. a fail-closed content-free result validator, trusted preregistration-time
+   verification, and signed evidence manifest tied to the exact
+   preregistration, build, corpus, reviews, and policy evidence.
 
 Until those artifacts exist, this feature is research infrastructure, not a
 claim of real-world effectiveness.
