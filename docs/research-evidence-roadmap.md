@@ -147,19 +147,32 @@ and terminal-attempt aggregate-recomputation contracts are implemented in
 `aura-domain` and documented in
 `docs/domain-independent-evaluation.md`,
 `docs/domain-independent-result-evidence.md`, and
-`docs/domain-independent-reproduction-package.md`, and
-`docs/domain-independent-recomputation-evidence.md`. They bind a fixed corpus,
+`docs/domain-independent-reproduction-package.md`,
+`docs/domain-independent-recomputation-evidence.md`, and
+`docs/domain-recomputation-attempt-registry.md`. They bind a fixed corpus,
 attack plan, review design, analysis thresholds, exact domain policy, reviewer
 and adjudicator receipts, trusted-time intervals, nominal Krippendorff alpha
 with a fixed case-resampling BCa interval, recomputed aggregate metrics with
 conservative uncertainty bounds, the final evidence manifest, a separate
 five-role recomputation trust policy, one terminal/no-deviation chain per
-submitted bundle, executor-reported resource usage, and a core-derived
-normalized comparison. Global retry/selective-reporting control requires an
-external append-only plan/run registry. No real independent corpus
-or independently operated rerun has completed that protocol, and repository
-corpora remain engineering evidence. The implementation can validate a later
-submitted run chain; it does not claim that such a run has already occurred.
+submitted bundle, executor-reported resource usage, a core-derived normalized
+comparison, and a witnessed append-only attempt-registration/terminal registry
+view.
+
+The registry contract detects mutation, truncation, and rollback of the
+caller-retained accepted-anchor prefix and establishes local integrity and state
+completeness of the submitted prefix through its witnessed checkpoint. That
+continuity requires durable compare-and-swap persistence of the returned next
+accepted anchor before relying on each report. It does not discover
+execution that bypassed registration, prove that a view was not withheld, or
+rule out competing valid successors or split views from one snapshot. Stronger
+selective-reporting control therefore still requires
+pre-execution admission enforcement, external witness operation, WORM
+publication, and cross-observer checkpoint comparison. No real independent
+corpus, independently operated rerun, or externally published registry has
+completed this protocol, and repository corpora remain engineering evidence.
+The implementation can validate later submitted evidence; it does not claim
+that such evidence already exists.
 
 Future research work should introduce versioned, reviewable locations for:
 

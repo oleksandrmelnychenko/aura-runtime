@@ -6,13 +6,15 @@ mod routing;
 
 use aura_domain::{
     validate_domain_study_independent_recomputation, validate_domain_study_preregistration,
-    validate_domain_study_reproduction_manifest, validate_domain_study_result_evidence,
-    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
-    DomainOutput, DomainSignal, DomainStudyBinding, DomainStudyBuildProvenance, DomainStudyError,
-    DomainStudyRecomputationError, DomainStudyRecomputationReport,
-    DomainStudyRecomputationTrustPolicy, DomainStudyReproductionError,
-    DomainStudyReproductionReport, DomainStudyResultError, DomainStudyResultReport,
-    DomainStudyTrustPolicy, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+    validate_domain_study_recomputation_registry, validate_domain_study_reproduction_manifest,
+    validate_domain_study_result_evidence, DomainConfirmedOutput, DomainInput, DomainModule,
+    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
+    DomainStudyBuildProvenance, DomainStudyError, DomainStudyRecomputationError,
+    DomainStudyRecomputationRegistryAcceptedAnchor, DomainStudyRecomputationRegistryError,
+    DomainStudyRecomputationRegistryReport, DomainStudyRecomputationRegistryTrustPolicy,
+    DomainStudyRecomputationReport, DomainStudyRecomputationTrustPolicy,
+    DomainStudyReproductionError, DomainStudyReproductionReport, DomainStudyResultError,
+    DomainStudyResultReport, DomainStudyTrustPolicy, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
 #[derive(Default)]
@@ -164,6 +166,48 @@ pub fn validate_independent_study_recomputation(
         additional_known_seed_sha256,
         original_trust_policy,
         recomputation_trust_policy,
+    )
+}
+
+/// Validates a witnessed Kids recomputation registry through one checkpoint.
+///
+/// Success establishes local integrity, prefix-state completeness, and
+/// append-only continuity only for the submitted registry view relative to
+/// `previous_anchor`. The caller must compare-and-swap durably persist the
+/// report's `next_accepted_anchor` before relying on the report or processing
+/// another extension. Success does not prove that no off-ledger attempt,
+/// competing successor, or split view exists. Operational reliance requires an
+/// externally witnessed, durable append-only publication channel.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the public boundary keeps every independently governed evidence input explicit"
+)]
+pub fn validate_independent_study_recomputation_registry(
+    preregistration_json: &str,
+    result_evidence_json: &str,
+    reproduction_manifest_json: &str,
+    recomputation_evidence_json: &str,
+    registry_evidence_json: &str,
+    expected_build_provenance: &DomainStudyBuildProvenance,
+    additional_known_seed_sha256: &[&str],
+    original_trust_policy: &DomainStudyTrustPolicy,
+    recomputation_trust_policy: &DomainStudyRecomputationTrustPolicy,
+    registry_trust_policy: &DomainStudyRecomputationRegistryTrustPolicy,
+    previous_anchor: &DomainStudyRecomputationRegistryAcceptedAnchor,
+) -> Result<DomainStudyRecomputationRegistryReport, DomainStudyRecomputationRegistryError> {
+    validate_domain_study_recomputation_registry(
+        preregistration_json,
+        result_evidence_json,
+        reproduction_manifest_json,
+        recomputation_evidence_json,
+        registry_evidence_json,
+        &domain_evidence(),
+        expected_build_provenance,
+        additional_known_seed_sha256,
+        original_trust_policy,
+        recomputation_trust_policy,
+        registry_trust_policy,
+        previous_anchor,
     )
 }
 

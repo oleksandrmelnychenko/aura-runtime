@@ -19,13 +19,15 @@ pub mod temporal_study;
 
 use aura_domain::{
     validate_domain_study_independent_recomputation, validate_domain_study_preregistration,
-    validate_domain_study_reproduction_manifest, validate_domain_study_result_evidence,
-    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
-    DomainOutput, DomainSignal, DomainStudyBinding, DomainStudyBuildProvenance, DomainStudyError,
-    DomainStudyRecomputationError, DomainStudyRecomputationReport,
-    DomainStudyRecomputationTrustPolicy, DomainStudyReproductionError,
-    DomainStudyReproductionReport, DomainStudyResultError, DomainStudyResultReport,
-    DomainStudyTrustPolicy, DomainTemporalInput, DomainTemporalOutput,
+    validate_domain_study_recomputation_registry, validate_domain_study_reproduction_manifest,
+    validate_domain_study_result_evidence, DomainConfirmedOutput, DomainInput, DomainModule,
+    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
+    DomainStudyBuildProvenance, DomainStudyError, DomainStudyRecomputationError,
+    DomainStudyRecomputationRegistryAcceptedAnchor, DomainStudyRecomputationRegistryError,
+    DomainStudyRecomputationRegistryReport, DomainStudyRecomputationRegistryTrustPolicy,
+    DomainStudyRecomputationReport, DomainStudyRecomputationTrustPolicy,
+    DomainStudyReproductionError, DomainStudyReproductionReport, DomainStudyResultError,
+    DomainStudyResultReport, DomainStudyTrustPolicy, DomainTemporalInput, DomainTemporalOutput,
     DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
@@ -138,6 +140,48 @@ pub fn validate_independent_study_recomputation(
         additional_known_seed_sha256,
         original_trust_policy,
         recomputation_trust_policy,
+    )
+}
+
+/// Validates a witnessed Military recomputation registry through one checkpoint.
+///
+/// The original temporal policy remains disabled and shadow-only. Success
+/// establishes local integrity, prefix-state completeness, and append-only
+/// continuity only for the submitted view. The caller must compare-and-swap
+/// durably persist the report's `next_accepted_anchor` before relying on the
+/// report or accepting another extension. Validation cannot rule out off-ledger
+/// attempts, competing successors, or a split view. External witness publication
+/// and durable retention remain operational gates.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the public boundary keeps every independently governed evidence input explicit"
+)]
+pub fn validate_independent_study_recomputation_registry(
+    preregistration_json: &str,
+    result_evidence_json: &str,
+    reproduction_manifest_json: &str,
+    recomputation_evidence_json: &str,
+    registry_evidence_json: &str,
+    expected_build_provenance: &DomainStudyBuildProvenance,
+    additional_known_seed_sha256: &[&str],
+    original_trust_policy: &DomainStudyTrustPolicy,
+    recomputation_trust_policy: &DomainStudyRecomputationTrustPolicy,
+    registry_trust_policy: &DomainStudyRecomputationRegistryTrustPolicy,
+    previous_anchor: &DomainStudyRecomputationRegistryAcceptedAnchor,
+) -> Result<DomainStudyRecomputationRegistryReport, DomainStudyRecomputationRegistryError> {
+    validate_domain_study_recomputation_registry(
+        preregistration_json,
+        result_evidence_json,
+        reproduction_manifest_json,
+        recomputation_evidence_json,
+        registry_evidence_json,
+        &domain_evidence(),
+        expected_build_provenance,
+        additional_known_seed_sha256,
+        original_trust_policy,
+        recomputation_trust_policy,
+        registry_trust_policy,
+        previous_anchor,
     )
 }
 

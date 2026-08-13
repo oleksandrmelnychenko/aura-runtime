@@ -3,7 +3,7 @@
 This folder holds the planning and operating documents that turn AURA Core from
 an evaluation-heavy prototype into a production-grade safety runtime.
 
-Status: synchronized with runtime and policy behavior on August 1, 2026.
+Status: synchronized with runtime and policy behavior on August 13, 2026.
 
 ## Active Operating Set
 
@@ -15,6 +15,7 @@ Status: synchronized with runtime and policy behavior on August 1, 2026.
 - [Domain Result Trusted Timestamp Adapter](./domain-result-trusted-timestamp-adapter.md)
 - [Private Independent-Reproduction Package](./domain-independent-reproduction-package.md)
 - [Independent Aggregate-Recomputation Evidence](./domain-independent-recomputation-evidence.md)
+- [Recomputation-Attempt Registry and Witnessed Checkpoints](./domain-recomputation-attempt-registry.md)
 - [Apple Artifact Integration Contract](./apple-artifact-integration.md)
 - [Canonical Local Decision ADR](./adr/0001-canonical-local-decision-api.md)
 - [AURA Core Refactor Baseline](./refactor-baseline.md)
@@ -88,6 +89,11 @@ Status: synchronized with runtime and policy behavior on August 1, 2026.
   curated corpora.
 - Use the research evidence roadmap before turning production or pilot results
   into a scientific hypothesis, experiment, or doctoral claim.
+- Use the recomputation-attempt registry contract before treating a submitted
+  terminal attempt as part of a locally complete submitted prefix through a
+  witnessed checkpoint; external WORM publication and split-view monitoring
+  remain operational requirements, and the returned next accepted anchor must
+  be durably compare-and-swapped before the report is relied upon.
 - Use the incident runbook when planning operational safeguards, kill switches,
   and rollback behavior.
 - Use the Olena scenarios doc when preparing product demos, guardian-facing

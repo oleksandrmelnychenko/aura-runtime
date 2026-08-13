@@ -79,14 +79,18 @@ and Python/OpenSSL adapter tests with:
 cargo test --locked -p aura-domain recomputation
 python3 -m unittest \
   ci.test_domain_recomputation_signer \
-  ci.test_domain_recomputation_timestamp_adapter
+  ci.test_domain_recomputation_timestamp_adapter \
+  ci.test_domain_recomputation_registry_signer \
+  ci.test_domain_recomputation_registry_timestamp_adapter
 ```
 
 The full CI discovery and workspace commands remain authoritative. These
 focused commands are a fast local check for
-`aura.domain.independent_recomputation_evidence.v1`; they do not perform a real
-independent run or replace the external append-only run registry described in
-`docs/domain-independent-recomputation-evidence.md`.
+`aura.domain.independent_recomputation_evidence.v1` and its witnessed
+recomputation-registry overlay; they do not perform a real independent run,
+publish a checkpoint to externally controlled WORM storage, detect an
+off-ledger attempt, or rule out split views. See
+`docs/domain-recomputation-attempt-registry.md`.
 
 ## Safety World v2 Smoke Gate
 

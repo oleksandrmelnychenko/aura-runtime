@@ -100,14 +100,20 @@ identifiers. The validator returns one of:
 - `execution_failed` — a structurally valid terminal failed attempt.
 
 Mismatch and failure are retained as valid negative evidence. The stateless
-validator proves that the submitted bundle contains one terminal chain; by
-itself it cannot prove that a sibling chain was never created, suppressed, or
-selectively reported. Operational acceptance therefore requires an external
-append-only registry or transparency log that atomically registers every
-recomputation identity, plan digest, and run identifier, and requires every
-registered plan to receive one terminal record. Any retry must be registered
-under a new plan, new recomputation identity, new nonce pair, and complete new
-signed and timestamped chain.
+attempt validator proves that the submitted bundle contains one terminal chain;
+by itself it cannot prove that a sibling chain was never created, suppressed,
+or selectively reported. The separate witnessed recomputation-attempt registry
+binds the plan, run, and terminal evidence to an ordered append-only view. Any
+retry must be registered under a new plan, new recomputation identity, new
+nonce pair, and complete new signed and timestamped chain. See
+[`domain-recomputation-attempt-registry.md`](./domain-recomputation-attempt-registry.md).
+
+Registry validation establishes local integrity and state completeness only for
+the submitted prefix through its witnessed checkpoint. It cannot discover
+off-ledger execution or rule out competing successors or split views from one
+snapshot. Operational acceptance still requires durable
+pre-execution registration, external checkpoint publication, an independently
+controlled WORM copy, and checkpoint comparison across observers.
 
 Malformed schemas, unknown fields, broken signatures, substituted artifacts,
 role-key reuse, ambiguous execution disposition, incomplete timestamp
@@ -190,10 +196,22 @@ private reproduction-manifest JSON, recomputation-evidence JSON, exact build
 provenance and seed registry, original result trust policy, and separate
 recomputation trust policy.
 
+The registry overlay is validated by
+`validate_domain_study_recomputation_registry`; Kids and Military expose
+`validate_independent_study_recomputation_registry`. That call revalidates the
+complete underlying study and recomputation chain, joins it to the witnessed
+attempt-registration and terminal records, and proves append-only extension
+relative to the required caller-retained typed accepted anchor. A successful
+registry report is not proof of absence of off-ledger attempts, withheld views,
+or equivocation among observers. Before relying on it, the caller must durably
+compare-and-swap the returned complete next accepted anchor against the exact
+reported previous-anchor digest.
+
 The validator is a verifier of submitted cryptographic evidence, not a process
 launcher. Resource values are signed executor observations, not measurements
 made by this Rust verifier. Executing the plan, enforcing network/resource and
 operating-system isolation, independently measuring usage, collecting the
-private transcript and output manifest, maintaining the append-only run
-registry, arranging truly independent custody, and retaining
+private transcript and output manifest, durably operating and externally
+witnessing the append-only registry, publishing checkpoints to independently
+controlled storage, arranging truly independent custody, and retaining
 ethics/consent/governance records are operational tasks outside this library.

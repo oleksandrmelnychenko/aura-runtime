@@ -2221,6 +2221,7 @@ mod tests {
     use super::*;
     use crate::{
         domain_study_seed_registry_sha256, research_recomputation as recomputation,
+        research_recomputation_registry as recomputation_registry,
         validate_domain_study_reproduction_manifest, DomainPolicyPackEvidence,
         DomainStudyAnalysisPlan, DomainStudyAttackPlan, DomainStudyDatasetPlan,
         DomainStudyHypothesis, DomainStudyMissingDataRule, DomainStudyPrimaryOutcome,
@@ -4766,6 +4767,450 @@ mod tests {
         )
     }
 
+    struct RecomputationRegistryKeys {
+        operator: SigningKey,
+        witness: SigningKey,
+        timestamp: SigningKey,
+    }
+
+    impl RecomputationRegistryKeys {
+        fn new() -> Self {
+            Self {
+                operator: SigningKey::from_bytes(&[12; 32]),
+                witness: SigningKey::from_bytes(&[13; 32]),
+                timestamp: SigningKey::from_bytes(&[14; 32]),
+            }
+        }
+
+        fn trust_policy(
+            &self,
+        ) -> recomputation_registry::DomainStudyRecomputationRegistryTrustPolicy {
+            recomputation_registry::DomainStudyRecomputationRegistryTrustPolicy {
+                schema_version: recomputation_registry::DOMAIN_STUDY_RECOMPUTATION_REGISTRY_TRUST_POLICY_SCHEMA_VERSION.to_string(),
+                registry_id: "independent_recomputation_registry_2026".to_string(),
+                operator: trusted_key("recomputation_registry_operator", &self.operator),
+                witness: trusted_key("recomputation_registry_witness", &self.witness),
+                timestamp_verifier: trusted_key(
+                    "recomputation_registry_timestamp_verifier",
+                    &self.timestamp,
+                ),
+                trusted_tsa_spki_sha256: SHA_A.to_string(),
+                trusted_tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct RecomputationRegistryOptions {
+        include_unrelated_pending_attempt: bool,
+        late_target_terminal: bool,
+        previous_witness_timestamp_issued_at_ms: Option<u64>,
+        terminal_due_at_ms_override: Option<u64>,
+        target_domain_override: Option<DomainModuleId>,
+        target_status_override: Option<recomputation::DomainStudyRecomputationStatus>,
+        target_evidence_sha256_override: Option<String>,
+    }
+
+    struct RecomputationRegistryFixture {
+        trust: recomputation_registry::DomainStudyRecomputationRegistryTrustPolicy,
+        previous_anchor: recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor,
+        evidence: recomputation_registry::DomainStudyRecomputationRegistryEvidenceBundle,
+    }
+
+    fn accepted_anchor_checkpoint(
+        anchor: &recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor,
+    ) -> &recomputation_registry::DomainStudyRecomputationRegistryCheckpointClaims {
+        match anchor {
+            recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor::Genesis {
+                checkpoint,
+                ..
+            } => checkpoint,
+            recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor::Witnessed {
+                checkpoint,
+                ..
+            } => &checkpoint.claims,
+        }
+    }
+
+    fn signed_recomputation_registry_entry(
+        claims: recomputation_registry::DomainStudyRecomputationRegistryEntryClaims,
+        keys: &RecomputationRegistryKeys,
+    ) -> recomputation_registry::DomainStudySignedRecomputationRegistryEntry {
+        let key_id = "recomputation_registry_operator";
+        let payload =
+            recomputation_registry::domain_study_recomputation_registry_entry_signing_payload(
+                &claims, key_id,
+            )
+            .expect("registry entry signing payload");
+        recomputation_registry::DomainStudySignedRecomputationRegistryEntry {
+            claims,
+            signature: recomputation_detached_signature(payload, key_id, &keys.operator),
+        }
+    }
+
+    fn recomputation_registry_entry(
+        event: recomputation_registry::DomainStudyRecomputationRegistryEvent,
+        sequence: u64,
+        previous_entry_sha256: Option<String>,
+        recorded_at_ms: u64,
+        trust_sha256: &str,
+        keys: &RecomputationRegistryKeys,
+    ) -> recomputation_registry::DomainStudySignedRecomputationRegistryEntry {
+        signed_recomputation_registry_entry(
+            recomputation_registry::DomainStudyRecomputationRegistryEntryClaims {
+                schema_version:
+                    recomputation_registry::DOMAIN_STUDY_RECOMPUTATION_REGISTRY_ENTRY_SCHEMA_VERSION
+                        .to_string(),
+                registry_id: "independent_recomputation_registry_2026".to_string(),
+                registry_trust_policy_canonical_sha256: trust_sha256.to_string(),
+                sequence,
+                previous_entry_sha256,
+                event,
+                recorded_at_ms,
+                raw_content_exported: false,
+                public_distribution_permitted: false,
+            },
+            keys,
+        )
+    }
+
+    fn recomputation_registry_timestamp(
+        checkpoint: &recomputation_registry::DomainStudySignedRecomputationRegistryCheckpoint,
+        issued_at_ms: u64,
+        keys: &RecomputationRegistryKeys,
+    ) -> recomputation_registry::DomainStudyRecomputationRegistryTimestampReceipt {
+        let claims =
+            recomputation_registry::DomainStudyRecomputationRegistryTimestampClaims {
+                schema_version: recomputation_registry::DOMAIN_STUDY_RECOMPUTATION_REGISTRY_TIMESTAMP_SCHEMA_VERSION.to_string(),
+                subject_kind: recomputation_registry::DomainStudyRecomputationRegistryTimestampSubjectKind::RegistryCheckpoint,
+                subject_canonical_sha256: canonical_sha256(checkpoint)
+                    .expect("registry checkpoint digest"),
+                protocol: DomainStudyTimestampProtocol::Rfc3161TrustedChain,
+                issued_at_ms,
+                gen_time_submillisecond_micros: 0,
+                accuracy_micros: 1_000,
+                request_sha256: SHA_B.to_string(),
+                response_sha256: SHA_C.to_string(),
+                certificate_chain_sha256: aggregate_sha256(
+                    b"aura.domain.rfc3161-certificate-chain.v1\0",
+                    &[SHA_A, SHA_B],
+                ),
+                revocation_evidence_sha256: aggregate_sha256(
+                    b"aura.domain.rfc3161-revocation-evidence.v1\0",
+                    &[SHA_C],
+                ),
+                tsa_spki_sha256: SHA_A.to_string(),
+                tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
+            };
+        let key_id = "recomputation_registry_timestamp_verifier";
+        let payload =
+            recomputation_registry::domain_study_recomputation_registry_timestamp_signing_payload(
+                &claims, key_id,
+            )
+            .expect("registry timestamp signing payload");
+        recomputation_registry::DomainStudyRecomputationRegistryTimestampReceipt {
+            claims,
+            signature: recomputation_detached_signature(payload, key_id, &keys.timestamp),
+        }
+    }
+
+    fn recomputation_registry_timestamp_material(
+    ) -> recomputation_registry::DomainStudyRecomputationRegistryTimestampMaterial {
+        recomputation_registry::DomainStudyRecomputationRegistryTimestampMaterial {
+            subject_kind: recomputation_registry::DomainStudyRecomputationRegistryTimestampSubjectKind::RegistryCheckpoint,
+            request: file(SHA_B),
+            response: file(SHA_C),
+            certificate_chain_der: vec![file(SHA_A), file(SHA_B)],
+            revocation_crl_der: vec![file(SHA_C)],
+        }
+    }
+
+    fn signed_recomputation_registry_checkpoint(
+        claims: recomputation_registry::DomainStudyRecomputationRegistryCheckpointClaims,
+        keys: &RecomputationRegistryKeys,
+    ) -> recomputation_registry::DomainStudySignedRecomputationRegistryCheckpoint {
+        let operator_key_id = "recomputation_registry_operator";
+        let witness_key_id = "recomputation_registry_witness";
+        let operator_payload = recomputation_registry::domain_study_recomputation_registry_checkpoint_operator_signing_payload(
+            &claims,
+            operator_key_id,
+        )
+        .expect("operator checkpoint signing payload");
+        let witness_payload = recomputation_registry::domain_study_recomputation_registry_checkpoint_witness_signing_payload(
+            &claims,
+            witness_key_id,
+        )
+        .expect("witness checkpoint signing payload");
+        recomputation_registry::DomainStudySignedRecomputationRegistryCheckpoint {
+            operator_signature: recomputation_detached_signature(
+                operator_payload,
+                operator_key_id,
+                &keys.operator,
+            ),
+            witness_signature: recomputation_detached_signature(
+                witness_payload,
+                witness_key_id,
+                &keys.witness,
+            ),
+            claims,
+        }
+    }
+
+    fn recomputation_registry_fixture(
+        original: &TestFixture,
+        submitted: &RecomputationFixture,
+        options: RecomputationRegistryOptions,
+    ) -> RecomputationRegistryFixture {
+        let report = validate_recomputation(original, submitted).expect("recomputation report");
+        let keys = RecomputationRegistryKeys::new();
+        let trust = keys.trust_policy();
+        let trust_sha256 = canonical_sha256(&trust).expect("registry trust digest");
+        let genesis_anchor =
+            recomputation_registry::domain_study_recomputation_registry_genesis_checkpoint(&trust)
+                .expect("registry genesis checkpoint");
+        let domain_id = options
+            .target_domain_override
+            .unwrap_or(original.policy.module_id);
+        let registration_recorded_at_ms = REGISTERED_AT_MS + 53_000;
+        let terminal_due_at_ms =
+            options
+                .terminal_due_at_ms_override
+                .unwrap_or(if options.late_target_terminal {
+                    REGISTERED_AT_MS + 54_000
+                } else {
+                    REGISTERED_AT_MS + 80_000
+                });
+        let registered = recomputation_registry::DomainStudyRecomputationAttemptRegistered {
+            domain_id,
+            study_id: report.study_id.clone(),
+            result_id: report.result_id.clone(),
+            recomputation_id: report.recomputation_id.clone(),
+            plan_canonical_sha256: report.plan_canonical_sha256.clone(),
+            plan_timestamp_sha256: canonical_sha256(&submitted.evidence.plan_timestamp)
+                .expect("plan timestamp digest"),
+            custodian_authorization_sha256: canonical_sha256(
+                &submitted.evidence.custodian_authorization,
+            )
+            .expect("custodian authorization digest"),
+            custodian_authorization_timestamp_sha256: canonical_sha256(
+                &submitted.evidence.custodian_authorization_timestamp,
+            )
+            .expect("custodian authorization timestamp digest"),
+            reproducer_authorization_sha256: canonical_sha256(
+                &submitted.evidence.reproducer_authorization,
+            )
+            .expect("reproducer authorization digest"),
+            reproducer_authorization_timestamp_sha256: canonical_sha256(
+                &submitted.evidence.reproducer_authorization_timestamp,
+            )
+            .expect("reproducer authorization timestamp digest"),
+            run_id: report.run_id.clone(),
+            terminal_due_at_ms,
+        };
+        let registration = recomputation_registry_entry(
+            recomputation_registry::DomainStudyRecomputationRegistryEvent::AttemptRegistered(
+                registered.clone(),
+            ),
+            0,
+            None,
+            registration_recorded_at_ms,
+            &trust_sha256,
+            &keys,
+        );
+        let registration_sha256 =
+            canonical_sha256(&registration).expect("registration entry digest");
+        let mut entries = vec![registration];
+        let mut previous_entry_sha256 = Some(registration_sha256.clone());
+
+        let previous_anchor = if let Some(issued_at_ms) =
+            options.previous_witness_timestamp_issued_at_ms
+        {
+            let genesis = accepted_anchor_checkpoint(&genesis_anchor);
+            let checkpoint = signed_recomputation_registry_checkpoint(
+                recomputation_registry::DomainStudyRecomputationRegistryCheckpointClaims {
+                    schema_version: recomputation_registry::DOMAIN_STUDY_RECOMPUTATION_REGISTRY_CHECKPOINT_SCHEMA_VERSION.to_string(),
+                    registry_id: trust.registry_id.clone(),
+                    registry_trust_policy_canonical_sha256: trust_sha256.clone(),
+                    entry_count: 1,
+                    head_entry_sha256: Some(registration_sha256.clone()),
+                    entries_aggregate_sha256: recomputation_registry::domain_study_recomputation_registry_entries_aggregate_sha256(&entries)
+                        .expect("registration-prefix aggregate"),
+                    previous_accepted_anchor_sha256: Some(
+                        recomputation_registry::domain_study_recomputation_registry_accepted_anchor_sha256(&genesis_anchor)
+                            .expect("genesis anchor digest"),
+                    ),
+                    previous_entry_count: 0,
+                    previous_head_entry_sha256: None,
+                    previous_entries_aggregate_sha256: Some(
+                        genesis.entries_aggregate_sha256.clone(),
+                    ),
+                    pending_attempt_count: 1,
+                    completed_at_ms: registration_recorded_at_ms + 100,
+                    raw_content_exported: false,
+                    public_distribution_permitted: false,
+                },
+                &keys,
+            );
+            let checkpoint_timestamp =
+                recomputation_registry_timestamp(&checkpoint, issued_at_ms, &keys);
+            recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor::Witnessed {
+                schema_version: recomputation_registry::DOMAIN_STUDY_RECOMPUTATION_REGISTRY_ACCEPTED_ANCHOR_SCHEMA_VERSION.to_string(),
+                checkpoint: Box::new(checkpoint),
+                checkpoint_timestamp,
+            }
+        } else {
+            genesis_anchor
+        };
+        let previous_checkpoint = accepted_anchor_checkpoint(&previous_anchor);
+
+        if options.include_unrelated_pending_attempt {
+            let unrelated = recomputation_registry::DomainStudyRecomputationAttemptRegistered {
+                domain_id: original.policy.module_id,
+                study_id: "unrelated_study_2026".to_string(),
+                result_id: "unrelated_result_2026".to_string(),
+                recomputation_id: "unrelated_recomputation_2026".to_string(),
+                plan_canonical_sha256: SHA_D.to_string(),
+                plan_timestamp_sha256: SHA_C.to_string(),
+                custodian_authorization_sha256: SHA_B.to_string(),
+                custodian_authorization_timestamp_sha256: SHA_A.to_string(),
+                reproducer_authorization_sha256: SHA_D.to_string(),
+                reproducer_authorization_timestamp_sha256: SHA_C.to_string(),
+                run_id: SHA_B.to_string(),
+                terminal_due_at_ms: REGISTERED_AT_MS + 100_000,
+            };
+            let unrelated_entry = recomputation_registry_entry(
+                recomputation_registry::DomainStudyRecomputationRegistryEvent::AttemptRegistered(
+                    unrelated,
+                ),
+                1,
+                previous_entry_sha256,
+                REGISTERED_AT_MS + 54_000,
+                &trust_sha256,
+                &keys,
+            );
+            previous_entry_sha256 = Some(
+                canonical_sha256(&unrelated_entry).expect("unrelated registration entry digest"),
+            );
+            entries.push(unrelated_entry);
+        }
+
+        let terminal_sequence = u64::try_from(entries.len()).expect("terminal sequence");
+        let terminal_recorded_at_ms = REGISTERED_AT_MS
+            + if options.include_unrelated_pending_attempt || options.late_target_terminal {
+                55_000
+            } else {
+                54_000
+            };
+        let terminal = recomputation_registry::DomainStudyRecomputationAttemptTerminal {
+            domain_id: registered.domain_id,
+            study_id: registered.study_id,
+            result_id: registered.result_id,
+            recomputation_id: registered.recomputation_id,
+            plan_canonical_sha256: registered.plan_canonical_sha256,
+            plan_timestamp_sha256: registered.plan_timestamp_sha256,
+            custodian_authorization_sha256: registered.custodian_authorization_sha256,
+            custodian_authorization_timestamp_sha256: registered
+                .custodian_authorization_timestamp_sha256,
+            reproducer_authorization_sha256: registered.reproducer_authorization_sha256,
+            reproducer_authorization_timestamp_sha256: registered
+                .reproducer_authorization_timestamp_sha256,
+            run_id: registered.run_id,
+            terminal_due_at_ms,
+            registration_entry_sha256: registration_sha256,
+            recomputation_evidence_canonical_sha256: options
+                .target_evidence_sha256_override
+                .unwrap_or(report.recomputation_evidence_canonical_sha256.clone()),
+            final_manifest_canonical_sha256: report.final_manifest_canonical_sha256.clone(),
+            status: options.target_status_override.unwrap_or(report.status),
+        };
+        let terminal_entry = recomputation_registry_entry(
+            recomputation_registry::DomainStudyRecomputationRegistryEvent::AttemptTerminal(
+                terminal,
+            ),
+            terminal_sequence,
+            previous_entry_sha256,
+            terminal_recorded_at_ms,
+            &trust_sha256,
+            &keys,
+        );
+        entries.push(terminal_entry);
+
+        let head_entry_sha256 =
+            canonical_sha256(entries.last().expect("registry head")).expect("registry head digest");
+        let entries_aggregate_sha256 =
+            recomputation_registry::domain_study_recomputation_registry_entries_aggregate_sha256(
+                &entries,
+            )
+            .expect("registry entries aggregate");
+        let completed_at_ms = terminal_recorded_at_ms + 1_000;
+        let checkpoint_claims =
+            recomputation_registry::DomainStudyRecomputationRegistryCheckpointClaims {
+                schema_version: recomputation_registry::DOMAIN_STUDY_RECOMPUTATION_REGISTRY_CHECKPOINT_SCHEMA_VERSION.to_string(),
+                registry_id: trust.registry_id.clone(),
+                registry_trust_policy_canonical_sha256: trust_sha256,
+                entry_count: u64::try_from(entries.len()).expect("registry entry count"),
+                head_entry_sha256: Some(head_entry_sha256),
+                entries_aggregate_sha256,
+                previous_accepted_anchor_sha256: Some(
+                    recomputation_registry::domain_study_recomputation_registry_accepted_anchor_sha256(
+                        &previous_anchor,
+                    )
+                    .expect("genesis accepted-anchor digest"),
+                ),
+                previous_entry_count: previous_checkpoint.entry_count,
+                previous_head_entry_sha256: previous_checkpoint.head_entry_sha256.clone(),
+                previous_entries_aggregate_sha256: Some(
+                    previous_checkpoint.entries_aggregate_sha256.clone(),
+                ),
+                pending_attempt_count: u64::from(options.include_unrelated_pending_attempt),
+                completed_at_ms,
+                raw_content_exported: false,
+                public_distribution_permitted: false,
+            };
+        let checkpoint = signed_recomputation_registry_checkpoint(checkpoint_claims, &keys);
+        let checkpoint_timestamp =
+            recomputation_registry_timestamp(&checkpoint, completed_at_ms + 2_000, &keys);
+
+        RecomputationRegistryFixture {
+            trust,
+            previous_anchor,
+            evidence:
+                recomputation_registry::DomainStudyRecomputationRegistryEvidenceBundle {
+                    schema_version: recomputation_registry::DOMAIN_STUDY_RECOMPUTATION_REGISTRY_EVIDENCE_SCHEMA_VERSION.to_string(),
+                    entries,
+                    checkpoint,
+                    checkpoint_timestamp,
+                    checkpoint_timestamp_material: recomputation_registry_timestamp_material(),
+                },
+        }
+    }
+
+    fn validate_recomputation_registry(
+        original: &TestFixture,
+        submitted: &RecomputationFixture,
+        registry_fixture: &RecomputationRegistryFixture,
+        previous_anchor: &recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor,
+    ) -> Result<
+        recomputation_registry::DomainStudyRecomputationRegistryReport,
+        recomputation_registry::DomainStudyRecomputationRegistryError,
+    > {
+        recomputation_registry::validate_domain_study_recomputation_registry(
+            &original.preregistration_json,
+            &serde_json::to_string(&original.evidence).expect("original evidence JSON"),
+            &serde_json::to_string(&submitted.reproduction_manifest)
+                .expect("reproduction manifest JSON"),
+            &serde_json::to_string(&submitted.evidence).expect("recomputation evidence JSON"),
+            &serde_json::to_string(&registry_fixture.evidence).expect("registry evidence JSON"),
+            &original.policy,
+            &original.build,
+            &[],
+            &original.trust,
+            &submitted.trust,
+            &registry_fixture.trust,
+            previous_anchor,
+        )
+    }
+
     #[test]
     fn exact_recomputation_is_bounded_to_computational_reproduction() {
         let original = fixture();
@@ -4792,7 +5237,411 @@ mod tests {
     }
 
     #[test]
-    fn mismatch_and_failed_runs_are_preserved_as_negative_evidence() {
+    fn exact_recomputation_registry_preserves_the_core_claim_and_bounded_booleans() {
+        let original = fixture();
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        let core_report =
+            validate_recomputation(&original, &submitted).expect("exact recomputation report");
+        let registry_fixture = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions::default(),
+        );
+
+        let report = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &registry_fixture,
+            &registry_fixture.previous_anchor,
+        )
+        .expect("exact recomputation registry");
+
+        assert_eq!(report.status, core_report.status);
+        assert_eq!(
+            report.recomputation_claim_ceiling,
+            core_report.claim_ceiling
+        );
+        assert_eq!(
+            report.original_evidence_status,
+            core_report.original_evidence_status
+        );
+        assert_eq!(
+            report.original_outcome_status,
+            core_report.original_outcome_status
+        );
+        assert_eq!(report.recomputation_id, core_report.recomputation_id);
+        assert_eq!(report.run_id, core_report.run_id);
+        assert_eq!(report.target_registration_sequence, 0);
+        assert_eq!(report.target_terminal_sequence, 1);
+        assert!(report.target_terminal_within_operator_declared_deadline);
+        assert!(report.terminal_deadline_compliance_proven);
+        assert_eq!(report.entry_count, 2);
+        assert_eq!(report.pending_attempt_count, 0);
+        assert!(report.submitted_prefix_integrity_established);
+        assert!(report.append_only_extension_from_previous_checkpoint);
+        assert!(report.target_terminal_core_verified);
+        assert!(!report.pre_start_registration_proven);
+        assert!(!report.global_non_equivocation_established);
+        assert!(!report.scientific_replication_established);
+        assert!(!report.policy_activation_authorized);
+        assert!(!report.public_distribution_permitted);
+    }
+
+    #[test]
+    fn recomputation_registry_retains_mismatch_and_failure_as_terminal_evidence() {
+        let original = fixture();
+        for (submitted_kind, expected_status) in [
+            (
+                SubmittedRecomputation::NormalizedMismatch,
+                recomputation::DomainStudyRecomputationStatus::NormalizedMismatch,
+            ),
+            (
+                SubmittedRecomputation::ExecutionFailed,
+                recomputation::DomainStudyRecomputationStatus::ExecutionFailed,
+            ),
+        ] {
+            let submitted = recomputation_fixture(&original, submitted_kind);
+            let registry_fixture = recomputation_registry_fixture(
+                &original,
+                &submitted,
+                RecomputationRegistryOptions::default(),
+            );
+
+            let report = validate_recomputation_registry(
+                &original,
+                &submitted,
+                &registry_fixture,
+                &registry_fixture.previous_anchor,
+            )
+            .expect("negative recomputation registry evidence");
+
+            assert_eq!(report.status, expected_status);
+            assert_eq!(
+                report.recomputation_claim_ceiling,
+                recomputation::DomainStudyRecomputationClaimCeiling::SubmittedRecomputationAttemptAttestation
+            );
+            assert!(report.target_terminal_core_verified);
+            assert_eq!(report.pending_attempt_count, 0);
+            assert!(!report.scientific_replication_established);
+            assert!(!report.policy_activation_authorized);
+        }
+    }
+
+    #[test]
+    fn recomputation_registry_rejects_fully_signed_semantic_terminal_tampering() {
+        let original = fixture();
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        let tampered = [
+            RecomputationRegistryOptions {
+                target_status_override: Some(
+                    recomputation::DomainStudyRecomputationStatus::NormalizedMismatch,
+                ),
+                ..RecomputationRegistryOptions::default()
+            },
+            RecomputationRegistryOptions {
+                target_evidence_sha256_override: Some(SHA_D.to_string()),
+                ..RecomputationRegistryOptions::default()
+            },
+        ];
+
+        for options in tampered {
+            let registry_fixture = recomputation_registry_fixture(&original, &submitted, options);
+            let error = validate_recomputation_registry(
+                &original,
+                &submitted,
+                &registry_fixture,
+                &registry_fixture.previous_anchor,
+            )
+            .expect_err("signed target-terminal semantic tamper must fail");
+
+            assert!(error.to_string().contains("target recomputation terminal"));
+        }
+    }
+
+    #[test]
+    fn recomputation_registry_requires_the_retained_anchor_and_exact_prefix() {
+        let original = fixture();
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        let registry_fixture = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions::default(),
+        );
+
+        let mut rollback_anchor = registry_fixture.evidence.checkpoint.clone();
+        rollback_anchor.claims.entry_count += 1;
+        rollback_anchor.claims.head_entry_sha256 = Some(SHA_D.to_string());
+        rollback_anchor.claims.entries_aggregate_sha256 = SHA_C.to_string();
+        rollback_anchor.claims.pending_attempt_count = 1;
+        let rollback_anchor =
+            recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor::Witnessed {
+                schema_version: recomputation_registry::DOMAIN_STUDY_RECOMPUTATION_REGISTRY_ACCEPTED_ANCHOR_SCHEMA_VERSION.to_string(),
+                checkpoint: Box::new(rollback_anchor),
+                checkpoint_timestamp: registry_fixture.evidence.checkpoint_timestamp.clone(),
+            };
+        let rollback_error = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &registry_fixture,
+            &rollback_anchor,
+        )
+        .expect_err("a view truncated before the retained anchor must fail");
+        assert!(rollback_error
+            .to_string()
+            .contains("retained registry operator checkpoint"));
+
+        let mut rewritten_prefix_anchor = registry_fixture.previous_anchor.clone();
+        let recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor::Genesis {
+            checkpoint,
+            ..
+        } = &mut rewritten_prefix_anchor
+        else {
+            panic!("expected genesis anchor");
+        };
+        checkpoint.entry_count = 1;
+        checkpoint.head_entry_sha256 = Some(SHA_D.to_string());
+        checkpoint.entries_aggregate_sha256 = SHA_C.to_string();
+        checkpoint.previous_accepted_anchor_sha256 = Some(SHA_B.to_string());
+        checkpoint.previous_entries_aggregate_sha256 = Some(
+            recomputation_registry::domain_study_recomputation_registry_entries_aggregate_sha256(
+                &[],
+            )
+            .expect("empty aggregate"),
+        );
+        checkpoint.pending_attempt_count = 1;
+        checkpoint.completed_at_ms = REGISTERED_AT_MS + 53_000;
+        let rewrite_error = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &registry_fixture,
+            &rewritten_prefix_anchor,
+        )
+        .expect_err("a rewritten retained prefix must fail");
+        assert!(rewrite_error
+            .to_string()
+            .contains("genesis anchor is not empty"));
+    }
+
+    #[test]
+    fn recomputation_registry_reports_an_interleaved_unrelated_open_attempt() {
+        let original = fixture();
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        let registry_fixture = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions {
+                include_unrelated_pending_attempt: true,
+                ..RecomputationRegistryOptions::default()
+            },
+        );
+
+        let report = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &registry_fixture,
+            &registry_fixture.previous_anchor,
+        )
+        .expect("interleaved pending attempt registry");
+
+        assert_eq!(report.target_registration_sequence, 0);
+        assert_eq!(report.target_terminal_sequence, 2);
+        assert_eq!(report.entry_count, 3);
+        assert_eq!(report.pending_attempt_count, 1);
+        assert!(report.target_terminal_core_verified);
+    }
+
+    #[test]
+    fn recomputation_registry_rejects_a_cross_domain_target_binding() {
+        let original = fixture();
+        assert_eq!(original.policy.module_id, DomainModuleId::Military);
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        let registry_fixture = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions {
+                target_domain_override: Some(DomainModuleId::Kids),
+                ..RecomputationRegistryOptions::default()
+            },
+        );
+
+        let error = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &registry_fixture,
+            &registry_fixture.previous_anchor,
+        )
+        .expect_err("cross-domain target binding must fail");
+
+        assert!(error
+            .to_string()
+            .contains("target recomputation registration"));
+    }
+
+    #[test]
+    fn recomputation_registry_keeps_a_late_terminal_but_marks_the_deadline_miss() {
+        let original = fixture();
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        let registry_fixture = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions {
+                late_target_terminal: true,
+                ..RecomputationRegistryOptions::default()
+            },
+        );
+
+        let report = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &registry_fixture,
+            &registry_fixture.previous_anchor,
+        )
+        .expect("late terminal remains admissible evidence");
+
+        assert_eq!(
+            report.status,
+            recomputation::DomainStudyRecomputationStatus::AggregateExactMatch
+        );
+        assert!(!report.target_terminal_within_operator_declared_deadline);
+        assert!(!report.terminal_deadline_compliance_proven);
+        assert!(report.target_terminal_core_verified);
+        assert_eq!(report.pending_attempt_count, 0);
+    }
+
+    #[test]
+    fn recomputation_registry_revalidates_witnessed_anchor_and_strict_trusted_chronology() {
+        let original = fixture();
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        let valid_fixture = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions {
+                previous_witness_timestamp_issued_at_ms: Some(REGISTERED_AT_MS + 53_500),
+                ..RecomputationRegistryOptions::default()
+            },
+        );
+        let report = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &valid_fixture,
+            &valid_fixture.previous_anchor,
+        )
+        .expect("strictly later witnessed checkpoint extension");
+        assert_eq!(
+            report.previous_accepted_anchor_sha256,
+            recomputation_registry::domain_study_recomputation_registry_accepted_anchor_sha256(
+                &valid_fixture.previous_anchor,
+            )
+            .expect("previous anchor digest")
+        );
+        assert_eq!(
+            report.next_accepted_anchor_sha256,
+            recomputation_registry::domain_study_recomputation_registry_accepted_anchor_sha256(
+                &report.next_accepted_anchor,
+            )
+            .expect("next anchor digest")
+        );
+
+        let overlapping = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions {
+                previous_witness_timestamp_issued_at_ms: Some(REGISTERED_AT_MS + 57_000),
+                ..RecomputationRegistryOptions::default()
+            },
+        );
+        let overlap_error = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &overlapping,
+            &overlapping.previous_anchor,
+        )
+        .expect_err("overlapping checkpoint trusted intervals must fail");
+        assert!(overlap_error
+            .to_string()
+            .contains("registry checkpoint extension trusted interval overlaps"));
+
+        let mut forged = valid_fixture.previous_anchor.clone();
+        let recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor::Witnessed {
+            checkpoint,
+            ..
+        } = &mut forged
+        else {
+            panic!("expected witnessed anchor");
+        };
+        checkpoint.claims.pending_attempt_count = 0;
+        let forged_error =
+            validate_recomputation_registry(&original, &submitted, &valid_fixture, &forged)
+                .expect_err("tampered retained checkpoint must fail before prefix acceptance");
+        assert!(forged_error
+            .to_string()
+            .contains("retained registry operator checkpoint"));
+
+        let mut forged_timestamp = valid_fixture.previous_anchor.clone();
+        let recomputation_registry::DomainStudyRecomputationRegistryAcceptedAnchor::Witnessed {
+            checkpoint_timestamp,
+            ..
+        } = &mut forged_timestamp
+        else {
+            panic!("expected witnessed anchor");
+        };
+        checkpoint_timestamp.signature.signature_hex = "00".repeat(64);
+        let timestamp_error = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &valid_fixture,
+            &forged_timestamp,
+        )
+        .expect_err("tampered retained checkpoint timestamp must fail");
+        assert!(timestamp_error
+            .to_string()
+            .contains("registry checkpoint timestamp signature verification failed"));
+    }
+
+    #[test]
+    fn recomputation_registry_deadline_proof_uses_trusted_checkpoint_end_interval() {
+        let original = fixture();
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        let due_at_ms = REGISTERED_AT_MS + 57_001;
+        let within = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions {
+                terminal_due_at_ms_override: Some(due_at_ms),
+                ..RecomputationRegistryOptions::default()
+            },
+        );
+        let within_report = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &within,
+            &within.previous_anchor,
+        )
+        .expect("checkpoint latest microsecond equals inclusive deadline");
+        assert!(within_report.target_terminal_within_operator_declared_deadline);
+        assert!(within_report.terminal_deadline_compliance_proven);
+
+        let outside = recomputation_registry_fixture(
+            &original,
+            &submitted,
+            RecomputationRegistryOptions {
+                terminal_due_at_ms_override: Some(due_at_ms - 1),
+                ..RecomputationRegistryOptions::default()
+            },
+        );
+        let outside_report = validate_recomputation_registry(
+            &original,
+            &submitted,
+            &outside,
+            &outside.previous_anchor,
+        )
+        .expect("late trusted checkpoint remains admissible evidence");
+        assert!(outside_report.target_terminal_within_operator_declared_deadline);
+        assert!(!outside_report.terminal_deadline_compliance_proven);
+    }
+
+    #[test]
+    fn recomputation_mismatch_and_failed_runs_are_preserved_as_negative_evidence() {
         let original = fixture();
         for (submitted, expected) in [
             (
