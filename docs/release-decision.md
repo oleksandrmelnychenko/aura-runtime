@@ -1,7 +1,7 @@
 # Release decision contract
 
 `ci/release_decision.py` implements the top-level
-`aura.release_decision.v1` GO/NO-GO contract. It is deliberately separate from
+`aura.release_decision.v2` GO/NO-GO contract. It is deliberately separate from
 Apple `shippable` and the technical evidence manifest: a correctly built
 binary is not, by itself, authorization to release it.
 
@@ -14,21 +14,25 @@ omitted.
 
 A `go` decision requires all of the following for one exact candidate:
 
-- a passing `aura.evidence_manifest.v1` and its successful Ed25519 attestation
-  verification;
-- a passing, clean, shippable Apple artifact verification plus the exact Apple
-  release manifest;
+- a passing `aura.evidence_manifest.v1`, its raw Ed25519 attestation, a pinned
+  public key plus expected key identifier, and an exactly matching derived
+  verification report;
+- a passing, clean, shippable Apple artifact verification, the exact Apple
+  release manifest, and a strict two-build reproducibility report binding
+  source `H`, artifact `A`, and release revision `R`;
 - a passing pilot gate containing all four real review signoffs, mandatory
   KIDS checks, rollback triggers, stop conditions, and review cadence;
-- an external `aura.product_integration_acceptance.v1` produced after client
+- an external `aura.product_integration_acceptance.v2` produced after client
   contract tests accept the exact Apple artifact;
 - matching source revision, source-tree digest, runtime identity, artifact
   hashes, and profile scope across every child.
 
 The product-acceptance template is
 `docs/product-integration-acceptance.template.json`. It binds the evidence
-manifest, its signature verification, Apple verification, Apple manifest, and
-pilot gate by SHA-256. It also records successful local-decision,
+manifest, its raw signature and signer SPKI, its signature verification,
+Apple verification, Apple manifest,
+Apple reproducibility proof, and pilot gate by SHA-256. It also records exact
+`A`/`R` plus successful local-decision,
 terminal-checkpoint, and restart-replay client contracts.
 
 Missing input produces a machine-readable `no-go` with a `blocked` category.
@@ -44,8 +48,12 @@ python3 ci/release_decision.py create \
   --runtime-version 0.2.0 \
   --profile agent-kids-rules-context \
   --evidence-manifest artifacts/evidence-manifest.json \
+  --evidence-attestation artifacts/evidence-manifest.attestation.json \
+  --evidence-public-key /trusted/evidence-signer-public.pem \
+  --expected-evidence-key-id evidence-signer-2026-01 \
   --evidence-attestation-verification artifacts/evidence-manifest.attestation-verification.json \
   --apple-artifact-verification artifacts/apple-release-verification.json \
+  --apple-artifact-reproducibility artifacts/apple-reproducibility.json \
   --apple-release-manifest dist/apple/release-manifest.json \
   --pilot-gate-report artifacts/pilot-gate-report.json \
   --product-integration-acceptance artifacts/product-integration-acceptance.json \
@@ -67,8 +75,12 @@ python3 ci/release_decision.py sign \
   --private-key /protected/release-operator-private.pem \
   --key-id release-operator-2026-01 \
   --evidence-manifest artifacts/evidence-manifest.json \
+  --evidence-attestation artifacts/evidence-manifest.attestation.json \
+  --evidence-public-key /trusted/evidence-signer-public.pem \
+  --expected-evidence-key-id evidence-signer-2026-01 \
   --evidence-attestation-verification artifacts/evidence-manifest.attestation-verification.json \
   --apple-artifact-verification artifacts/apple-release-verification.json \
+  --apple-artifact-reproducibility artifacts/apple-reproducibility.json \
   --apple-release-manifest dist/apple/release-manifest.json \
   --pilot-gate-report artifacts/pilot-gate-report.json \
   --product-integration-acceptance artifacts/product-integration-acceptance.json \
@@ -83,13 +95,15 @@ python3 ci/release_decision.py verify \
   --require-pass
 ```
 
-Before signing, the command reopens all six source-evidence files, verifies
-their recorded SHA-256 identities, and independently recomputes every decision
-field except the generation timestamp. The detached Ed25519 signature then
-binds the exact decision bytes, candidate, profile, source revision, key
-identifier, and trusted public-key SPKI digest. A `no-go` decision cannot be
-signed by this command. Private keys must remain outside the repository and use
-owner-only permissions.
+Before signing, the command reopens every source-evidence file, reads bounded
+stable snapshots, independently verifies the raw evidence-manifest signature
+against the pinned key and expected key identifier, requires the supplied
+derived report to match exactly, and recomputes every decision field except the
+generation timestamp. The detached Ed25519 signature binds the exact decision
+bytes, `H`/`A`/`R`, the raw evidence-attestation digest, and the evidence signer
+identity. The release-operator SPKI must differ from the evidence-signer SPKI;
+the verifier enforces the same separation. A `no-go` decision cannot be signed.
+Private keys must remain outside the repository and use owner-only permissions.
 
 ## Security boundary
 

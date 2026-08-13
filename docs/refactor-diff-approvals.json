@@ -2,6 +2,62 @@
   "schema_version": "aura.refactor_diff_approvals.v1",
   "approvals": [
     {
+      "path": "/contracts/apple_artifact/manifest_file/sha256",
+      "classification": "structural_only",
+      "baseline": "af5b59850da1d2db8c1749df5182a860882cb18858aafdcd4ac84bd79daad350",
+      "candidate": "1b7c3b16e6162ad597224a30a9f33becafc68ec131e41718ab66a3f06b2def12",
+      "reason": "Pins the reviewed Apple artifact refresh built from source 8af9d76: the exact checked-in candidate passed the fail-closed internal artifact verifier and source Rust CI run 31731240246 passed; headers, Info.plist, trust keyring, ABI and runtime behavior remained unchanged. Independent byte reproducibility remains a separate release gate."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64",
+      "classification": "structural_only",
+      "baseline": "e4d91a53654a441533b53a4db89d5875fd4a27deba2cde9f2d9ae4b4ffd81bff",
+      "candidate": "8a4fcbe2f671a90a456417ee59fe17aaf21ef6e77c1493ce5c6c36f37c1fda7f",
+      "reason": "Updates the exact iOS device archive identity declared by the internally verified source 8af9d76 candidate; the exported ABI and governed runtime evidence did not change. This approval does not claim independent byte reproduction."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64_x86_64-maccatalyst",
+      "classification": "structural_only",
+      "baseline": "2b1a883d91ddf7971e301b1b993d948bd6c18fd45b4262b2ae542bc6b551339a",
+      "candidate": "f5897b2b00f28196f8b96a7e6aa69820545847d4cec57ae4fe9447500ce1e66d",
+      "reason": "Updates the exact Mac Catalyst archive identity declared by the internally verified source 8af9d76 candidate; the exported ABI and governed runtime evidence did not change. This approval does not claim independent byte reproduction."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64_x86_64-simulator",
+      "classification": "structural_only",
+      "baseline": "6efebc1a06a635f7f774bdc14e481cbbed653f588a5e91eb2c2ba528e4df65e1",
+      "candidate": "6aa9cc0f0feeda26688b53510533a0277839d185872ca091b3d048cd086cea22",
+      "reason": "Updates the exact iOS Simulator archive identity declared by the internally verified source 8af9d76 candidate; the exported ABI and governed runtime evidence did not change. This approval does not claim independent byte reproduction."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/runtime_artifact_descriptor_sha256",
+      "classification": "structural_only",
+      "baseline": "e5d0e0e615b82e9a6eff5206c87eba56a48ccae8bf1dcd0d126fa2a15e838b1f",
+      "candidate": "82ac7af604037cb1f1bfab6eccfc639c2bab97fe1a3c40f0e0ce9fd0c4d9fb31",
+      "reason": "Updates the internally verified descriptor identity to bind source revision 8af9d76 and its materialized source-tree digest without changing descriptor schema, ABI, runtime, wire, state or FFI versions."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/runtime_artifact_identities_env_sha256",
+      "classification": "structural_only",
+      "baseline": "b852c121d52591da8c5627cf7c24d1b0b67a90654fa4248f8e02b092e61c2649",
+      "candidate": "f926559877cc8c3dab9618452c75f0e8256f1e2f7374082ebcf60132eeaa3503",
+      "reason": "Updates the generated identity-environment digest to the internally verified descriptor identity; runtime capabilities and model-manifest identities remained unchanged."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/source_revision",
+      "classification": "structural_only",
+      "baseline": "2126d1c0fbf98a25bc1159ae5d573061f0475d7e",
+      "candidate": "8af9d760c66c1bbc068a6b347ae3e885dd873a2a",
+      "reason": "Advances the exact clean Apple source pin to witnessed-recomputation commit 8af9d76; full source CI and internal checked-in artifact verification passed, while independent byte reproducibility remains separately required."
+    },
+    {
+      "path": "/contracts/apple_artifact/release_manifest/source_tree_sha256",
+      "classification": "structural_only",
+      "baseline": "353104b84422f5f5a695bcbb3b80f9adea312c05e62043c952c1f3f318950eae",
+      "candidate": "432787c4d6e5ebec2c9283ad8962e74117027bd3f0ca6620f91e12f41ee68f27",
+      "reason": "Advances the domain-separated materialized source-tree commitment for source 8af9d76; release, lifecycle, performance, FFI and security gates passed, while independent Apple byte reproducibility remains separately required."
+    },
+    {
       "path": "/contracts/contract_evidence/domain_modules",
       "classification": "structural_only",
       "baseline": {

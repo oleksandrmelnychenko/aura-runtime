@@ -20,13 +20,14 @@ except ModuleNotFoundError:  # Direct execution from the ci/ directory.
     import evidence_attestation as crypto_support
 
 
-DECISION_SCHEMA_VERSION = "aura.release_decision.v1"
-PRODUCT_ACCEPTANCE_SCHEMA_VERSION = "aura.product_integration_acceptance.v1"
-ATTESTATION_SCHEMA_VERSION = "aura.release_decision_attestation.v1"
-VERIFICATION_SCHEMA_VERSION = "aura.release_decision_attestation_verification.v1"
+DECISION_SCHEMA_VERSION = "aura.release_decision.v2"
+PRODUCT_ACCEPTANCE_SCHEMA_VERSION = "aura.product_integration_acceptance.v2"
+ATTESTATION_SCHEMA_VERSION = "aura.release_decision_attestation.v2"
+VERIFICATION_SCHEMA_VERSION = "aura.release_decision_attestation_verification.v2"
+APPLE_REPRODUCIBILITY_SCHEMA_VERSION = "aura.apple_artifact_reproducibility.v1"
 PROFILE = "agent-kids-rules-context"
 SIGNATURE_ALGORITHM = "Ed25519"
-SIGNED_PAYLOAD_DOMAIN = b"aura.release-decision.attestation.v1\x00"
+SIGNED_PAYLOAD_DOMAIN = b"aura.release-decision.attestation.v2\x00"
 MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
 MAX_ATTESTATION_BYTES = 64 * 1024
 
@@ -40,7 +41,14 @@ DECISION_FIELDS = {
     "candidate",
     "profile",
     "source_revision",
+    "artifact_revision",
+    "release_revision",
     "source_tree_sha256",
+    "evidence_attestation_sha256",
+    "evidence_signer_signature_algorithm",
+    "evidence_signer_key_id",
+    "evidence_signer_spki_sha256",
+    "evidence_signer_manifest_sha256",
     "artifact_integrity",
     "runtime_safety",
     "contract_compatibility",
@@ -68,10 +76,14 @@ PRODUCT_ACCEPTANCE_FIELDS = {
     "status",
     "profile",
     "candidate_revision",
+    "source_revision",
     "source_tree_sha256",
     "evidence_manifest_sha256",
+    "evidence_attestation_sha256",
     "evidence_attestation_verification_sha256",
+    "evidence_signer_spki_sha256",
     "apple_artifact_verification_sha256",
+    "apple_artifact_reproducibility_sha256",
     "apple_release_manifest_sha256",
     "pilot_gate_report_sha256",
     "runtime_artifact_descriptor_sha256",
@@ -80,6 +92,8 @@ PRODUCT_ACCEPTANCE_FIELDS = {
     "terminal_checkpoint_contract",
     "restart_replay_contract",
     "exact_artifact_pin",
+    "artifact_revision",
+    "release_revision",
     "model_enabled",
     "relay_enabled",
     "military_enabled",
@@ -92,6 +106,10 @@ ATTESTATION_FIELDS = {
     "candidate",
     "profile",
     "source_revision",
+    "artifact_revision",
+    "release_revision",
+    "evidence_signer_key_id",
+    "evidence_signer_spki_sha256",
     "public_key_spki_sha256",
     "signature_base64",
 }
@@ -114,6 +132,46 @@ EXPECTED_APPLE_SLICES = {
     "ios-arm64_x86_64-simulator": ["arm64", "x86_64"],
     "ios-arm64_x86_64-maccatalyst": ["arm64", "x86_64"],
 }
+EXPECTED_APPLE_VERIFICATION_FIELDS = {
+    "schema_version",
+    "status",
+    "shippable",
+    "source_revision",
+    "source_tree_dirty",
+    "source_tree_sha256",
+    "runtime_release_version",
+    "wire_package",
+    "state_schema_version",
+    "ffi_contract_version",
+    "cargo_features",
+    "slices",
+}
+EXPECTED_APPLE_RELEASE_MANIFEST_FIELDS = {
+    "schema_version",
+    "source_revision",
+    "source_tree_dirty",
+    "source_tree_sha256",
+    "shippable",
+    "cargo_profile",
+    "cargo_locked",
+    "cargo_features",
+    "runtime_release_version",
+    "wire_package",
+    "wire_major_version",
+    "state_schema_version",
+    "ffi_contract_version",
+    "minimum_ios_version",
+    "target_triples",
+    "aura_ffi_header_sha256",
+    "runtime_capabilities_sha256",
+    "runtime_artifact_descriptor_sha256",
+    "runtime_artifact_identities_env_sha256",
+    "model_manifest_sha256",
+    "execution_policy_trust_keyring_sha256",
+    "xcframework_info_plist_sha256",
+    "binary_sha256",
+    "model_bundle_included",
+}
 EXPECTED_APPLE_TARGET_TRIPLES = [
     "aarch64-apple-ios",
     "aarch64-apple-ios-sim",
@@ -121,6 +179,54 @@ EXPECTED_APPLE_TARGET_TRIPLES = [
     "aarch64-apple-ios-macabi",
     "x86_64-apple-ios-macabi",
 ]
+EXPECTED_APPLE_ARTIFACT_PATHS = (
+    "AuraAgentFFI.xcframework/Info.plist",
+    "AuraAgentFFI.xcframework/ios-arm64/Headers/aura_ffi.h",
+    "AuraAgentFFI.xcframework/ios-arm64/libaura_agent_ffi.a",
+    "AuraAgentFFI.xcframework/ios-arm64_x86_64-maccatalyst/Headers/aura_ffi.h",
+    "AuraAgentFFI.xcframework/ios-arm64_x86_64-maccatalyst/libaura_agent_ffi_maccatalyst.a",
+    "AuraAgentFFI.xcframework/ios-arm64_x86_64-simulator/Headers/aura_ffi.h",
+    "AuraAgentFFI.xcframework/ios-arm64_x86_64-simulator/libaura_agent_ffi_ios_sim.a",
+    "execution-policy-trust-keyring.json",
+    "release-manifest.json",
+    "runtime-artifact-descriptor.json",
+    "runtime-artifact-identities.env",
+)
+EXPECTED_APPLE_ARCHIVE_PATHS = {
+    "ios-arm64": "AuraAgentFFI.xcframework/ios-arm64/libaura_agent_ffi.a",
+    "ios-arm64_x86_64-simulator": (
+        "AuraAgentFFI.xcframework/ios-arm64_x86_64-simulator/"
+        "libaura_agent_ffi_ios_sim.a"
+    ),
+    "ios-arm64_x86_64-maccatalyst": (
+        "AuraAgentFFI.xcframework/ios-arm64_x86_64-maccatalyst/"
+        "libaura_agent_ffi_maccatalyst.a"
+    ),
+}
+APPLE_REPRODUCIBILITY_FIELDS = {
+    "schema_version",
+    "status",
+    "claim",
+    "independent_reproduction_proven",
+    "compiler_trust_proven",
+    "candidate_blind_build_proven",
+    "hermetic_build_proven",
+    "trusted_source_and_build_scripts_assumed",
+    "release_revision",
+    "artifact_revision",
+    "source_revision",
+    "source_tree_sha256",
+    "artifact_commit_policy",
+    "committed_artifact_verification",
+    "committed_archive_lfs",
+    "artifact_inventory",
+    "build_count",
+    "source_identities",
+    "all_three_inventories_equal",
+    "verified_dist_output",
+    "disk_preflight",
+    "toolchain",
+}
 
 ReleaseDecisionError = crypto_support.AttestationError
 
@@ -136,8 +242,12 @@ def parse_args() -> argparse.Namespace:
     create.add_argument("--runtime-version", required=True)
     create.add_argument("--profile", default=PROFILE, choices=[PROFILE])
     create.add_argument("--evidence-manifest", default=None)
+    create.add_argument("--evidence-attestation", default=None)
+    create.add_argument("--evidence-public-key", default=None)
+    create.add_argument("--expected-evidence-key-id", default=None)
     create.add_argument("--evidence-attestation-verification", default=None)
     create.add_argument("--apple-artifact-verification", default=None)
+    create.add_argument("--apple-artifact-reproducibility", default=None)
     create.add_argument("--apple-release-manifest", default=None)
     create.add_argument("--pilot-gate-report", default=None)
     create.add_argument("--product-integration-acceptance", default=None)
@@ -149,8 +259,12 @@ def parse_args() -> argparse.Namespace:
     sign.add_argument("--private-key", required=True)
     sign.add_argument("--key-id", required=True)
     sign.add_argument("--evidence-manifest", required=True)
+    sign.add_argument("--evidence-attestation", required=True)
+    sign.add_argument("--evidence-public-key", required=True)
+    sign.add_argument("--expected-evidence-key-id", required=True)
     sign.add_argument("--evidence-attestation-verification", required=True)
     sign.add_argument("--apple-artifact-verification", required=True)
+    sign.add_argument("--apple-artifact-reproducibility", required=True)
     sign.add_argument("--apple-release-manifest", required=True)
     sign.add_argument("--pilot-gate-report", required=True)
     sign.add_argument("--product-integration-acceptance", required=True)
@@ -186,10 +300,8 @@ def read_stable_regular_file_with_mode(
     path: Path, maximum: int, label: str
 ) -> tuple[bytes, int]:
     flags = os.O_RDONLY
-    if hasattr(os, "O_CLOEXEC"):
-        flags |= os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
+    for name in ("O_CLOEXEC", "O_NOFOLLOW", "O_NONBLOCK"):
+        flags |= getattr(os, name, 0)
     try:
         descriptor = os.open(path, flags)
     except OSError as error:
@@ -247,7 +359,32 @@ def observed_status(payload: object) -> str | None:
     return None
 
 
-def load_child(path_value: str | None, label: str) -> tuple[bytes | None, dict | None, dict]:
+def _strict_json_object(pairs: list[tuple[str, object]]) -> dict:
+    result: dict = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON field: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON value is forbidden: {value}")
+
+
+def strict_json_loads(raw: bytes) -> object:
+    return json.loads(
+        raw.decode("utf-8"),
+        object_pairs_hook=_strict_json_object,
+        parse_constant=_reject_json_constant,
+    )
+
+
+def load_child(
+    path_value: str | None,
+    label: str,
+    maximum: int = MAX_ARTIFACT_BYTES,
+) -> tuple[bytes | None, dict | None, dict]:
     if path_value is None:
         return None, None, {
             "required": True,
@@ -259,7 +396,7 @@ def load_child(path_value: str | None, label: str) -> tuple[bytes | None, dict |
         }
     path = Path(path_value)
     try:
-        raw = read_stable_regular_file(path, MAX_ARTIFACT_BYTES, label)
+        raw = read_stable_regular_file(path, maximum, label)
     except ReleaseDecisionError:
         return None, None, {
             "required": True,
@@ -270,8 +407,8 @@ def load_child(path_value: str | None, label: str) -> tuple[bytes | None, dict |
             "observed_status": "inaccessible",
         }
     try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        payload = strict_json_loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
         payload = None
     return raw, payload if isinstance(payload, dict) else None, {
         "required": True,
@@ -286,6 +423,41 @@ def load_child(path_value: str | None, label: str) -> tuple[bytes | None, dict |
             if isinstance(payload, dict)
             else "invalid_json"
         ),
+    }
+
+
+def load_raw_child(
+    path_value: str | None,
+    label: str,
+    maximum: int = MAX_ARTIFACT_BYTES,
+) -> tuple[bytes | None, dict]:
+    if path_value is None:
+        return None, {
+            "required": True,
+            "present": False,
+            "bytes": None,
+            "sha256": None,
+            "schema_version": None,
+            "observed_status": "missing",
+        }
+    try:
+        raw = read_stable_regular_file(Path(path_value), maximum, label)
+    except ReleaseDecisionError:
+        return None, {
+            "required": True,
+            "present": False,
+            "bytes": None,
+            "sha256": None,
+            "schema_version": None,
+            "observed_status": "inaccessible",
+        }
+    return raw, {
+        "required": True,
+        "present": True,
+        "bytes": len(raw),
+        "sha256": sha256(raw).hexdigest(),
+        "schema_version": None,
+        "observed_status": "loaded",
     }
 
 
@@ -359,28 +531,123 @@ def evaluate_evidence_manifest(
     return runtime_status, contract_status, privacy_status
 
 
-def evaluate_evidence_attestation(
+def evidence_manifest_binds_apple_identity(
     payload: dict | None,
-    metadata: dict,
-    evidence_manifest_metadata: dict,
-) -> str:
-    base = child_input_status(metadata)
-    if base != "pass" or payload is None:
-        return base
+    identity: dict[str, str] | None,
+    reproduction_sha256: object,
+    verification_sha256: object,
+) -> bool:
+    if not isinstance(payload, dict) or identity is None:
+        return False
+    summary = payload.get("summary")
+    artifacts = payload.get("artifacts")
+    if not isinstance(summary, dict) or not isinstance(artifacts, dict):
+        return False
+    verification = artifacts.get("apple_artifact_verification")
+    reproduction = artifacts.get("apple_artifact_reproducibility")
+    return (
+        isinstance(verification, dict)
+        and isinstance(reproduction, dict)
+        and verification.get("sha256") == verification_sha256
+        and reproduction.get("sha256") == reproduction_sha256
+        and summary.get("apple_artifact_status") == "pass"
+        and summary.get("apple_artifact_source_revision")
+        == identity["source_revision"]
+        and summary.get("apple_artifact_source_tree_sha256")
+        == identity["source_tree_sha256"]
+        and summary.get("apple_reproducibility_status") == "pass"
+        and summary.get("apple_reproducibility_source_revision")
+        == identity["source_revision"]
+        and summary.get("apple_reproducibility_artifact_revision")
+        == identity["artifact_revision"]
+        and summary.get("apple_reproducibility_release_revision")
+        == identity["release_revision"]
+        and summary.get("apple_reproducibility_source_tree_sha256")
+        == identity["source_tree_sha256"]
+    )
+
+
+def evaluate_evidence_attestation(
+    manifest_raw: bytes | None,
+    attestation_raw: bytes | None,
+    public_key_raw: bytes | None,
+    expected_key_id: str | None,
+    derived_verification: dict | None,
+    derived_metadata: dict,
+    trio_supplied: tuple[bool, bool, bool],
+) -> tuple[str, dict[str, str] | None]:
+    """Verify the raw trust root and require the supplied report to be exact."""
+
+    if not any(trio_supplied):
+        return "blocked", None
+    if not all(trio_supplied):
+        return "fail", None
     if (
-        payload.get("schema_version")
-        != "aura.evidence_manifest_attestation_verification.v1"
-        or payload.get("status") != "pass"
-        or payload.get("manifest_evidence_status") != "pass"
-        or not hmac.compare_digest(
-            str(payload.get("manifest_sha256")),
-            str(evidence_manifest_metadata.get("sha256")),
-        )
-        or payload.get("signature_algorithm") != SIGNATURE_ALGORITHM
-        or not lowercase_sha256(payload.get("public_key_spki_sha256"))
+        manifest_raw is None
+        or attestation_raw is None
+        or public_key_raw is None
     ):
-        return "fail"
-    return "pass"
+        return "fail", None
+    if (
+        not isinstance(expected_key_id, str)
+        or not crypto_support.safe_key_id(expected_key_id)
+    ):
+        return "fail", None
+    derived_base = child_input_status(derived_metadata)
+    if derived_base != "pass" or derived_verification is None:
+        return (
+            "blocked"
+            if derived_metadata.get("observed_status") == "missing"
+            else "fail"
+        ), None
+    try:
+        with tempfile.TemporaryDirectory() as directory:
+            snapshots = {
+                "manifest": ("manifest.json", manifest_raw),
+                "attestation": ("attestation.json", attestation_raw),
+                "public_key": ("public-key.pem", public_key_raw),
+            }
+            snapshot_paths = {}
+            for name, (filename, raw) in snapshots.items():
+                path = Path(directory) / filename
+                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "wb") as handle:
+                    handle.write(raw)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                snapshot_paths[name] = path
+            verified = crypto_support.verify_manifest(
+                snapshot_paths["manifest"],
+                snapshot_paths["attestation"],
+                snapshot_paths["public_key"],
+                expected_key_id,
+            )
+    except (ReleaseDecisionError, OSError, ValueError, TypeError):
+        return "fail", None
+    if not _json_exactly_equal(verified, derived_verification):
+        return "fail", None
+    identity = {
+        "signature_algorithm": verified["signature_algorithm"],
+        "key_id": verified["key_id"],
+        "public_key_spki_sha256": verified["public_key_spki_sha256"],
+        "manifest_sha256": verified["manifest_sha256"],
+    }
+    if (
+        set(identity)
+        != {
+            "signature_algorithm",
+            "key_id",
+            "public_key_spki_sha256",
+            "manifest_sha256",
+        }
+        or identity["signature_algorithm"] != SIGNATURE_ALGORITHM
+        or not crypto_support.safe_key_id(identity["key_id"])
+        or not lowercase_sha256(identity["public_key_spki_sha256"])
+        or not lowercase_sha256(identity["manifest_sha256"])
+        or identity["manifest_sha256"] != sha256(manifest_raw).hexdigest()
+    ):
+        return "fail", None
+    return "pass", identity
 
 
 def evaluate_apple_artifact(
@@ -388,7 +655,7 @@ def evaluate_apple_artifact(
     verification_metadata: dict,
     release_manifest: dict | None,
     release_manifest_metadata: dict,
-    candidate_revision: str,
+    source_revision: str | None,
     expected_runtime_version: str,
 ) -> tuple[str, str | None]:
     base = combine_status(
@@ -400,18 +667,22 @@ def evaluate_apple_artifact(
     source_tree_sha256 = verification.get("source_tree_sha256")
     binary_hashes = release_manifest.get("binary_sha256")
     slices = verification.get("slices")
-    slice_map = (
-        {item.get("slice_id"): item for item in slices if isinstance(item, dict)}
-        if isinstance(slices, list)
-        else {}
-    )
+    slice_map = {}
+    if isinstance(slices, list):
+        for item in slices:
+            slice_id = item.get("slice_id") if isinstance(item, dict) else None
+            if isinstance(slice_id, str) and slice_id not in slice_map:
+                slice_map[slice_id] = item
     if (
-        verification.get("schema_version")
+        set(verification) != EXPECTED_APPLE_VERIFICATION_FIELDS
+        or verification.get("schema_version")
         != "aura.apple_artifact_verification.v1"
         or verification.get("status") != "pass"
         or verification.get("shippable") is not True
         or verification.get("source_tree_dirty") is not False
-        or verification.get("source_revision") != candidate_revision
+        or not git_revision(verification.get("source_revision"))
+        or source_revision is not None
+        and verification.get("source_revision") != source_revision
         or not lowercase_sha256(source_tree_sha256)
         or verification.get("runtime_release_version") != expected_runtime_version
         or verification.get("ffi_contract_version") != 1
@@ -421,8 +692,9 @@ def evaluate_apple_artifact(
         or not isinstance(slices, list)
         or len(slices) != len(EXPECTED_APPLE_SLICES)
         or set(slice_map) != set(EXPECTED_APPLE_SLICES)
+        or set(release_manifest) != EXPECTED_APPLE_RELEASE_MANIFEST_FIELDS
         or release_manifest.get("schema_version") != 5
-        or release_manifest.get("source_revision") != candidate_revision
+        or release_manifest.get("source_revision") != verification.get("source_revision")
         or release_manifest.get("source_tree_sha256") != source_tree_sha256
         or release_manifest.get("source_tree_dirty") is not False
         or release_manifest.get("shippable") is not True
@@ -433,6 +705,7 @@ def evaluate_apple_artifact(
         or release_manifest.get("runtime_release_version") != expected_runtime_version
         or release_manifest.get("ffi_contract_version") != 1
         or release_manifest.get("state_schema_version") != 3
+        or release_manifest.get("minimum_ios_version") != "18.0"
         or release_manifest.get("wire_package") != "aura.messenger.v1"
         or release_manifest.get("wire_major_version") != 1
         or release_manifest.get("target_triples") != EXPECTED_APPLE_TARGET_TRIPLES
@@ -448,9 +721,336 @@ def evaluate_apple_artifact(
             release_manifest.get("runtime_artifact_descriptor_sha256")
         )
         or not lowercase_sha256(release_manifest.get("runtime_capabilities_sha256"))
+        or not lowercase_sha256(release_manifest.get("model_manifest_sha256"))
     ):
         return "fail", None
     return "pass", source_tree_sha256
+
+
+def _bounded_positive_integer(value: object, maximum: int) -> bool:
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 1 <= value <= maximum
+    )
+
+
+def _json_exactly_equal(left: object, right: object) -> bool:
+    try:
+        return json.dumps(
+            left, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ) == json.dumps(
+            right, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def validate_apple_reproducibility_report(
+    report: object,
+    apple_verification: object,
+) -> dict[str, str]:
+    """Validate the complete v1 reproducibility claim against its verified snapshot."""
+
+    if not isinstance(report, dict) or set(report) != APPLE_REPRODUCIBILITY_FIELDS:
+        raise ReleaseDecisionError("Apple reproducibility report fields are not exact")
+    if not isinstance(apple_verification, dict):
+        raise ReleaseDecisionError("Apple artifact verification is unavailable")
+
+    source_revision = report.get("source_revision")
+    artifact_revision = report.get("artifact_revision")
+    release_revision = report.get("release_revision")
+    source_tree_sha256 = report.get("source_tree_sha256")
+    if (
+        report.get("schema_version") != APPLE_REPRODUCIBILITY_SCHEMA_VERSION
+        or report.get("status") != "pass"
+        or report.get("claim") != "same_environment_deterministic_rebuild"
+        or report.get("independent_reproduction_proven") is not False
+        or report.get("compiler_trust_proven") is not False
+        or report.get("candidate_blind_build_proven") is not False
+        or report.get("hermetic_build_proven") is not False
+        or report.get("trusted_source_and_build_scripts_assumed") is not True
+        or report.get("build_count") != 2
+        or isinstance(report.get("build_count"), bool)
+        or report.get("all_three_inventories_equal") is not True
+        or not git_revision(source_revision)
+        or not git_revision(artifact_revision)
+        or not git_revision(release_revision)
+        or source_revision == artifact_revision
+        or source_revision == release_revision
+        or not lowercase_sha256(source_tree_sha256)
+    ):
+        raise ReleaseDecisionError("Apple reproducibility claims are invalid")
+
+    policy = report.get("artifact_commit_policy")
+    if not isinstance(policy, dict) or policy != {
+        "direct_single_parent": True,
+        "generated_only_diff": True,
+        "governance_only_release_suffix": True,
+    }:
+        raise ReleaseDecisionError("Apple artifact commit policy is invalid")
+
+    if not _json_exactly_equal(
+        report.get("committed_artifact_verification"), apple_verification
+    ):
+        raise ReleaseDecisionError(
+            "Apple reproducibility report does not bind the supplied verification"
+        )
+    slices = apple_verification.get("slices")
+    if (
+        set(apple_verification) != EXPECTED_APPLE_VERIFICATION_FIELDS
+        or apple_verification.get("schema_version")
+        != "aura.apple_artifact_verification.v1"
+        or apple_verification.get("status") != "pass"
+        or apple_verification.get("source_revision") != source_revision
+        or apple_verification.get("source_tree_sha256") != source_tree_sha256
+        or not isinstance(slices, list)
+        or len(slices) != len(EXPECTED_APPLE_SLICES)
+    ):
+        raise ReleaseDecisionError(
+            "Apple reproducibility source identity is inconsistent"
+        )
+    slice_map: dict[str, dict] = {}
+    for item in slices:
+        slice_id = item.get("slice_id") if isinstance(item, dict) else None
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"slice_id", "architectures", "binary_sha256"}
+            or not isinstance(slice_id, str)
+            or slice_id in slice_map
+            or slice_id not in EXPECTED_APPLE_SLICES
+            or item.get("architectures")
+            != EXPECTED_APPLE_SLICES.get(slice_id)
+            or not lowercase_sha256(item.get("binary_sha256"))
+        ):
+            raise ReleaseDecisionError("Apple verification slice identity is invalid")
+        slice_map[slice_id] = item
+    if set(slice_map) != set(EXPECTED_APPLE_SLICES):
+        raise ReleaseDecisionError("Apple verification slice set is invalid")
+
+    inventory = report.get("artifact_inventory")
+    if not isinstance(inventory, list) or len(inventory) != len(
+        EXPECTED_APPLE_ARTIFACT_PATHS
+    ):
+        raise ReleaseDecisionError("Apple reproducibility inventory count is invalid")
+    inventory_map: dict[str, dict] = {}
+    total_bytes = 0
+    for item in inventory:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"path", "size", "sha256", "executable"}
+            or not isinstance(item.get("path"), str)
+            or item.get("path") in inventory_map
+            or not _bounded_positive_integer(item.get("size"), 512 * 1024 * 1024)
+            or not lowercase_sha256(item.get("sha256"))
+            or item.get("executable") is not False
+        ):
+            raise ReleaseDecisionError("Apple reproducibility inventory entry is invalid")
+        inventory_map[item["path"]] = item
+        total_bytes += item["size"]
+    if (
+        tuple(item.get("path") for item in inventory)
+        != EXPECTED_APPLE_ARTIFACT_PATHS
+        or set(inventory_map) != set(EXPECTED_APPLE_ARTIFACT_PATHS)
+        or total_bytes > 2 * 1024 * 1024 * 1024
+    ):
+        raise ReleaseDecisionError("Apple reproducibility inventory shape is invalid")
+
+    lfs = report.get("committed_archive_lfs")
+    expected_lfs_paths = {
+        f"dist/apple/{path}" for path in EXPECTED_APPLE_ARCHIVE_PATHS.values()
+    }
+    if not isinstance(lfs, dict) or set(lfs) != expected_lfs_paths:
+        raise ReleaseDecisionError("Apple reproducibility LFS archive set is invalid")
+    for slice_id, relative_path in EXPECTED_APPLE_ARCHIVE_PATHS.items():
+        binding = lfs[f"dist/apple/{relative_path}"]
+        inventory_entry = inventory_map[relative_path]
+        if (
+            not isinstance(binding, dict)
+            or set(binding) != {"size", "sha256"}
+            or binding.get("size") != inventory_entry["size"]
+            or binding.get("sha256") != inventory_entry["sha256"]
+            or inventory_entry["sha256"] != slice_map[slice_id]["binary_sha256"]
+        ):
+            raise ReleaseDecisionError(
+                "Apple reproducibility LFS archive binding is invalid"
+            )
+
+    source_identities = report.get("source_identities")
+    if not isinstance(source_identities, list) or len(source_identities) != 2:
+        raise ReleaseDecisionError("Apple reproducibility source identities are invalid")
+    for identity in source_identities:
+        if (
+            not isinstance(identity, dict)
+            or set(identity)
+            != {"source_tree_sha256", "entry_count", "content_bytes"}
+            or identity.get("source_tree_sha256") != source_tree_sha256
+            or not _bounded_positive_integer(identity.get("entry_count"), 1_000_000)
+            or not _bounded_positive_integer(
+                identity.get("content_bytes"), 64 * 1024 * 1024 * 1024
+            )
+        ):
+            raise ReleaseDecisionError(
+                "Apple reproducibility source identity is malformed"
+            )
+    if not _json_exactly_equal(source_identities[0], source_identities[1]):
+        raise ReleaseDecisionError("Apple rebuilds used different source identities")
+
+    disk = report.get("disk_preflight")
+    if not isinstance(disk, dict) or set(disk) != {
+        "materialized_source_lfs_object_count",
+        "materialized_source_lfs_bytes",
+        "required_free_bytes",
+        "observed_free_bytes",
+    }:
+        raise ReleaseDecisionError("Apple reproducibility disk preflight is invalid")
+    required_free_bytes = disk.get("materialized_source_lfs_bytes", 0) + 16 * 1024**3
+    if any(
+        not _bounded_positive_integer(value, 1 << 60) for value in disk.values()
+    ) or (
+        disk["required_free_bytes"] != required_free_bytes
+        or disk["observed_free_bytes"] < disk["required_free_bytes"]
+    ):
+        raise ReleaseDecisionError("Apple reproducibility disk preflight failed")
+
+    toolchain = report.get("toolchain")
+    if not isinstance(toolchain, dict) or set(toolchain) != {
+        "xcode",
+        "iphoneos_sdk",
+        "iphoneos_sdk_build",
+        "effective_developer_dir",
+        "resolved_xcodebuild",
+        "global_xcode_select",
+        "rustc_verbose",
+        "cargo",
+        "git",
+        "git_lfs",
+        "python",
+        "runner",
+    }:
+        raise ReleaseDecisionError("Apple reproducibility toolchain identity is invalid")
+    if (
+        toolchain.get("xcode") != ["Xcode 26.2", "Build version 17C52"]
+        or toolchain.get("iphoneos_sdk") != "26.2"
+        or toolchain.get("iphoneos_sdk_build") != "23C53"
+        or not isinstance(toolchain.get("effective_developer_dir"), str)
+        or not isinstance(toolchain.get("resolved_xcodebuild"), str)
+        or not toolchain["resolved_xcodebuild"].startswith(
+            toolchain["effective_developer_dir"].rstrip("/") + "/"
+        )
+        or not isinstance(toolchain.get("rustc_verbose"), list)
+        or not toolchain["rustc_verbose"]
+        or any(not isinstance(value, str) for value in toolchain["rustc_verbose"])
+        or not {
+            "release: 1.96.1",
+            "commit-hash: 31fca3adb283cc9dfd56b49cdee9a96eb9c96ffd",
+            "LLVM version: 22.1.2",
+        }.issubset(toolchain["rustc_verbose"])
+        or not isinstance(toolchain.get("cargo"), str)
+        or not toolchain["cargo"].startswith("cargo 1.96.1 ")
+        or any(
+            not isinstance(toolchain.get(field), str) or not toolchain[field]
+            for field in (
+                "iphoneos_sdk",
+                "iphoneos_sdk_build",
+                "effective_developer_dir",
+                "resolved_xcodebuild",
+                "global_xcode_select",
+                "git",
+                "git_lfs",
+                "python",
+            )
+        )
+        or not isinstance(toolchain.get("runner"), dict)
+        or any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in toolchain["runner"].items()
+        )
+    ):
+        raise ReleaseDecisionError("Apple reproducibility toolchain fields are invalid")
+    verified_output = report.get("verified_dist_output")
+    if (
+        not isinstance(verified_output, str)
+        or not verified_output
+        or len(verified_output.encode("utf-8")) > 4096
+        or "\x00" in verified_output
+    ):
+        raise ReleaseDecisionError("Apple retained artifact path claim is invalid")
+
+    return {
+        "source_revision": source_revision,
+        "artifact_revision": artifact_revision,
+        "release_revision": release_revision,
+        "source_tree_sha256": source_tree_sha256,
+    }
+
+
+def evaluate_apple_reproducibility(
+    report: dict | None,
+    report_metadata: dict,
+    apple_verification: dict | None,
+    release_manifest: dict | None,
+    release_manifest_metadata: dict,
+    candidate_release_revision: str,
+) -> tuple[str, dict[str, str] | None]:
+    base = child_input_status(report_metadata)
+    if base != "pass" or report is None:
+        return base, None
+    try:
+        identity = validate_apple_reproducibility_report(report, apple_verification)
+    except ReleaseDecisionError:
+        return "fail", None
+    binary_hashes = (
+        release_manifest.get("binary_sha256")
+        if isinstance(release_manifest, dict)
+        else None
+    )
+    if not isinstance(binary_hashes, dict):
+        return "fail", None
+    inventory_map = {
+        item["path"]: item
+        for item in report["artifact_inventory"]
+        if isinstance(item, dict) and isinstance(item.get("path"), str)
+    }
+    expected_nonbinary_hashes = {
+        "AuraAgentFFI.xcframework/Info.plist": "xcframework_info_plist_sha256",
+        "execution-policy-trust-keyring.json": (
+            "execution_policy_trust_keyring_sha256"
+        ),
+        "runtime-artifact-descriptor.json": "runtime_artifact_descriptor_sha256",
+        "runtime-artifact-identities.env": "runtime_artifact_identities_env_sha256",
+    }
+    header_paths = (
+        path for path in EXPECTED_APPLE_ARTIFACT_PATHS if path.endswith("/aura_ffi.h")
+    )
+    if (
+        release_manifest is None
+        or identity["release_revision"] != candidate_release_revision
+        or release_manifest.get("source_revision") != identity["source_revision"]
+        or release_manifest.get("source_tree_sha256")
+        != identity["source_tree_sha256"]
+        or inventory_map["release-manifest.json"].get("sha256")
+        != release_manifest_metadata.get("sha256")
+        or any(
+            report["artifact_inventory"][
+                EXPECTED_APPLE_ARTIFACT_PATHS.index(relative_path)
+            ].get("sha256")
+            != binary_hashes.get(slice_id)
+            for slice_id, relative_path in EXPECTED_APPLE_ARCHIVE_PATHS.items()
+        )
+        or any(
+            inventory_map[path].get("sha256")
+            != release_manifest.get(manifest_field)
+            for path, manifest_field in expected_nonbinary_hashes.items()
+        )
+        or any(
+            inventory_map[path].get("sha256")
+            != release_manifest.get("aura_ffi_header_sha256")
+            for path in header_paths
+        )
+    ):
+        return "fail", None
+    return "pass", identity
 
 
 def evaluate_pilot_gate(payload: dict | None, metadata: dict) -> tuple[str, str]:
@@ -510,21 +1110,37 @@ def evaluate_product_acceptance(
     metadata: dict,
     candidate_revision: str,
     source_tree_sha256: str | None,
+    apple_identity: dict[str, str] | None,
     child_metadata: dict[str, dict],
     apple_release_manifest: dict | None,
+    evidence_attestation_status: str,
+    evidence_signer: dict[str, str] | None,
 ) -> str:
     base = child_input_status(metadata)
     if base != "pass" or payload is None:
         return base
+    if evidence_attestation_status != "pass":
+        return evidence_attestation_status
+    reproduction_base = child_input_status(
+        child_metadata["apple_artifact_reproducibility"]
+    )
+    if reproduction_base != "pass":
+        return reproduction_base
     if set(payload) != PRODUCT_ACCEPTANCE_FIELDS:
         return "fail"
     expected_digests = {
         "evidence_manifest_sha256": child_metadata["evidence_manifest"]["sha256"],
+        "evidence_attestation_sha256": child_metadata["evidence_attestation"][
+            "sha256"
+        ],
         "evidence_attestation_verification_sha256": child_metadata[
             "evidence_attestation_verification"
         ]["sha256"],
         "apple_artifact_verification_sha256": child_metadata[
             "apple_artifact_verification"
+        ]["sha256"],
+        "apple_artifact_reproducibility_sha256": child_metadata[
+            "apple_artifact_reproducibility"
         ]["sha256"],
         "apple_release_manifest_sha256": child_metadata["apple_release_manifest"][
             "sha256"
@@ -536,7 +1152,14 @@ def evaluate_product_acceptance(
         or payload.get("status") != "pass"
         or payload.get("profile") != PROFILE
         or payload.get("candidate_revision") != candidate_revision
+        or apple_identity is None
+        or payload.get("source_revision") != apple_identity["source_revision"]
+        or payload.get("artifact_revision") != apple_identity["artifact_revision"]
+        or payload.get("release_revision") != apple_identity["release_revision"]
         or payload.get("source_tree_sha256") != source_tree_sha256
+        or evidence_signer is None
+        or payload.get("evidence_signer_spki_sha256")
+        != evidence_signer["public_key_spki_sha256"]
         or any(
             expected is None
             or not hmac.compare_digest(str(payload.get(field)), str(expected))
@@ -577,42 +1200,90 @@ def create_decision(
     if profile != PROFILE:
         raise ReleaseDecisionError("release profile is unsupported")
 
+    raws = {}
     payloads = {}
     artifacts = {}
     for key, label in (
         ("evidence_manifest", "evidence manifest"),
+        ("evidence_attestation", "evidence attestation"),
         ("evidence_attestation_verification", "evidence attestation verification"),
         ("apple_artifact_verification", "Apple artifact verification"),
+        ("apple_artifact_reproducibility", "Apple artifact reproducibility"),
         ("apple_release_manifest", "Apple release manifest"),
         ("pilot_gate_report", "pilot gate report"),
         ("product_integration_acceptance", "product integration acceptance"),
     ):
-        _raw, payload, metadata = load_child(paths.get(key), label)
+        maximum = (
+            MAX_ATTESTATION_BYTES if key == "evidence_attestation" else MAX_ARTIFACT_BYTES
+        )
+        raw, payload, metadata = load_child(paths.get(key), label, maximum)
+        raws[key] = raw
         payloads[key] = payload
         artifacts[key] = metadata
+    evidence_public_key_raw, evidence_public_key_metadata = load_raw_child(
+        paths.get("evidence_public_key"),
+        "evidence public key",
+        MAX_ATTESTATION_BYTES,
+    )
+    raws["evidence_public_key"] = evidence_public_key_raw
+    artifacts["evidence_public_key"] = evidence_public_key_metadata
 
     runtime_status, contract_status, privacy_status = evaluate_evidence_manifest(
         payloads["evidence_manifest"],
         artifacts["evidence_manifest"],
         expected_runtime_version,
     )
-    attestation_status = evaluate_evidence_attestation(
+    trio_supplied = (
+        paths.get("evidence_attestation") is not None,
+        paths.get("evidence_public_key") is not None,
+        paths.get("expected_evidence_key_id") is not None,
+    )
+    attestation_status, evidence_signer = evaluate_evidence_attestation(
+        raws["evidence_manifest"],
+        raws["evidence_attestation"],
+        raws["evidence_public_key"],
+        paths.get("expected_evidence_key_id"),
         payloads["evidence_attestation_verification"],
         artifacts["evidence_attestation_verification"],
-        artifacts["evidence_manifest"],
+        trio_supplied,
     )
     runtime_status = combine_status(runtime_status, attestation_status)
     contract_status = combine_status(contract_status, attestation_status)
     privacy_status = combine_status(privacy_status, attestation_status)
 
+    reproduction_status, apple_identity = evaluate_apple_reproducibility(
+        payloads["apple_artifact_reproducibility"],
+        artifacts["apple_artifact_reproducibility"],
+        payloads["apple_artifact_verification"],
+        payloads["apple_release_manifest"],
+        artifacts["apple_release_manifest"],
+        candidate_revision,
+    )
+    if reproduction_status == "pass":
+        manifest_base = child_input_status(artifacts["evidence_manifest"])
+        if manifest_base != "pass":
+            reproduction_status = manifest_base
+            apple_identity = None
+        elif not evidence_manifest_binds_apple_identity(
+            payloads["evidence_manifest"],
+            apple_identity,
+            artifacts["apple_artifact_reproducibility"].get("sha256"),
+            artifacts["apple_artifact_verification"].get("sha256"),
+        ):
+            reproduction_status = "fail"
+            apple_identity = None
+    expected_source_revision = (
+        apple_identity["source_revision"] if apple_identity is not None else None
+    )
     artifact_status, source_tree_sha256 = evaluate_apple_artifact(
         payloads["apple_artifact_verification"],
         artifacts["apple_artifact_verification"],
         payloads["apple_release_manifest"],
         artifacts["apple_release_manifest"],
-        candidate_revision,
+        expected_source_revision,
         expected_runtime_version,
     )
+    artifact_status = combine_status(artifact_status, reproduction_status)
     operational_status, human_status = evaluate_pilot_gate(
         payloads["pilot_gate_report"], artifacts["pilot_gate_report"]
     )
@@ -621,8 +1292,11 @@ def create_decision(
         artifacts["product_integration_acceptance"],
         candidate_revision,
         source_tree_sha256,
+        apple_identity,
         artifacts,
         payloads["apple_release_manifest"],
+        attestation_status,
+        evidence_signer,
     )
     operational_status = combine_status(operational_status, product_status)
     human_status = combine_status(human_status, product_status)
@@ -680,8 +1354,37 @@ def create_decision(
         "generated_at_utc": now_utc(),
         "candidate": f"{expected_runtime_version}+{candidate_revision}",
         "profile": profile,
-        "source_revision": candidate_revision,
+        "source_revision": (
+            apple_identity["source_revision"] if apple_identity is not None else None
+        ),
+        "artifact_revision": (
+            apple_identity["artifact_revision"] if apple_identity is not None else None
+        ),
+        "release_revision": candidate_revision,
         "source_tree_sha256": source_tree_sha256,
+        "evidence_attestation_sha256": (
+            artifacts["evidence_attestation"]["sha256"]
+            if evidence_signer is not None
+            else None
+        ),
+        "evidence_signer_signature_algorithm": (
+            evidence_signer["signature_algorithm"]
+            if evidence_signer is not None
+            else None
+        ),
+        "evidence_signer_key_id": (
+            evidence_signer["key_id"] if evidence_signer is not None else None
+        ),
+        "evidence_signer_spki_sha256": (
+            evidence_signer["public_key_spki_sha256"]
+            if evidence_signer is not None
+            else None
+        ),
+        "evidence_signer_manifest_sha256": (
+            evidence_signer["manifest_sha256"]
+            if evidence_signer is not None
+            else None
+        ),
         **categories,
         "profile_scope": profile_scope,
         "decision": decision,
@@ -713,16 +1416,54 @@ def validate_artifact_metadata(metadata: object) -> None:
 
 def validate_decision(payload: dict) -> None:
     if set(payload) != DECISION_FIELDS:
-        raise ReleaseDecisionError("release decision fields do not match v1")
+        raise ReleaseDecisionError("release decision fields do not match v2")
     candidate = payload.get("candidate")
+    source_revision = payload.get("source_revision")
+    artifact_revision = payload.get("artifact_revision")
+    release_revision = payload.get("release_revision")
+    evidence_attestation_sha256 = payload.get("evidence_attestation_sha256")
+    evidence_signer_signature_algorithm = payload.get(
+        "evidence_signer_signature_algorithm"
+    )
+    evidence_signer_key_id = payload.get("evidence_signer_key_id")
+    evidence_signer_spki_sha256 = payload.get("evidence_signer_spki_sha256")
+    evidence_signer_manifest_sha256 = payload.get(
+        "evidence_signer_manifest_sha256"
+    )
     if (
         payload.get("schema_version") != DECISION_SCHEMA_VERSION
         or payload.get("profile") != PROFILE
-        or not git_revision(payload.get("source_revision"))
+        or not git_revision(release_revision)
+        or source_revision is not None and not git_revision(source_revision)
+        or artifact_revision is not None and not git_revision(artifact_revision)
+        or (source_revision is None) != (artifact_revision is None)
+        or source_revision is not None and source_revision == artifact_revision
+        or source_revision is not None and source_revision == release_revision
         or not isinstance(payload.get("generated_at_utc"), str)
         or not isinstance(candidate, str)
         or "+" not in candidate
-        or candidate != f"{candidate.split('+', 1)[0]}+{payload['source_revision']}"
+        or candidate != f"{candidate.split('+', 1)[0]}+{release_revision}"
+        or (evidence_attestation_sha256 is None)
+        != (evidence_signer_signature_algorithm is None)
+        or (evidence_signer_signature_algorithm is None)
+        != (evidence_signer_key_id is None)
+        or (evidence_signer_key_id is None)
+        != (evidence_signer_spki_sha256 is None)
+        or (evidence_signer_spki_sha256 is None)
+        != (evidence_signer_manifest_sha256 is None)
+        or evidence_attestation_sha256 is not None
+        and not lowercase_sha256(evidence_attestation_sha256)
+        or evidence_signer_signature_algorithm is not None
+        and evidence_signer_signature_algorithm != SIGNATURE_ALGORITHM
+        or evidence_signer_key_id is not None
+        and (
+            not isinstance(evidence_signer_key_id, str)
+            or not crypto_support.safe_key_id(evidence_signer_key_id)
+        )
+        or evidence_signer_spki_sha256 is not None
+        and not lowercase_sha256(evidence_signer_spki_sha256)
+        or evidence_signer_manifest_sha256 is not None
+        and not lowercase_sha256(evidence_signer_manifest_sha256)
     ):
         raise ReleaseDecisionError("release decision identity is invalid")
     try:
@@ -766,8 +1507,11 @@ def validate_decision(payload: dict) -> None:
     artifacts = payload.get("artifacts")
     if not isinstance(artifacts, dict) or set(artifacts) != {
         "evidence_manifest",
+        "evidence_attestation",
+        "evidence_public_key",
         "evidence_attestation_verification",
         "apple_artifact_verification",
+        "apple_artifact_reproducibility",
         "apple_release_manifest",
         "pilot_gate_report",
         "product_integration_acceptance",
@@ -807,6 +1551,24 @@ def validate_decision(payload: dict) -> None:
         }
         and not reasons
         and lowercase_sha256(source_tree_sha256)
+        and git_revision(source_revision)
+        and git_revision(artifact_revision)
+        and lowercase_sha256(evidence_attestation_sha256)
+        and evidence_signer_signature_algorithm == SIGNATURE_ALGORITHM
+        and isinstance(evidence_signer_key_id, str)
+        and crypto_support.safe_key_id(evidence_signer_key_id)
+        and lowercase_sha256(evidence_signer_spki_sha256)
+        and lowercase_sha256(evidence_signer_manifest_sha256)
+        and evidence_signer_manifest_sha256
+        == artifacts["evidence_manifest"]["sha256"]
+        and evidence_attestation_sha256
+        == artifacts["evidence_attestation"]["sha256"]
+        and all(
+            metadata["present"] is True
+            and isinstance(metadata["bytes"], int)
+            and lowercase_sha256(metadata["sha256"])
+            for metadata in artifacts.values()
+        )
     )
     if payload.get("decision") not in ("go", "no-go"):
         raise ReleaseDecisionError("release decision outcome is invalid")
@@ -817,8 +1579,8 @@ def validate_decision(payload: dict) -> None:
 def load_decision(path: Path) -> tuple[bytes, dict]:
     raw = read_stable_regular_file(path, MAX_ARTIFACT_BYTES, "release decision")
     try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        payload = strict_json_loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         raise ReleaseDecisionError("release decision is invalid JSON") from error
     if not isinstance(payload, dict):
         raise ReleaseDecisionError("release decision must be a JSON object")
@@ -829,7 +1591,7 @@ def load_decision(path: Path) -> tuple[bytes, dict]:
 def verify_decision_evidence(decision: dict, paths: dict[str, str | None]) -> None:
     runtime = decision["candidate"].split("+", 1)[0]
     recomputed = create_decision(
-        decision["source_revision"],
+        decision["release_revision"],
         runtime,
         decision["profile"],
         paths,
@@ -880,6 +1642,13 @@ def sign_decision(
         public_key_der = crypto_support.public_key_der_from_private(
             stable_private_key_path
         )
+        operator_spki_sha256 = sha256(public_key_der).hexdigest()
+        if hmac.compare_digest(
+            operator_spki_sha256, decision["evidence_signer_spki_sha256"]
+        ):
+            raise ReleaseDecisionError(
+                "release operator key must differ from evidence signer key"
+            )
         attestation = {
             "schema_version": ATTESTATION_SCHEMA_VERSION,
             "signature_algorithm": SIGNATURE_ALGORITHM,
@@ -888,7 +1657,13 @@ def sign_decision(
             "candidate": decision["candidate"],
             "profile": decision["profile"],
             "source_revision": decision["source_revision"],
-            "public_key_spki_sha256": sha256(public_key_der).hexdigest(),
+            "artifact_revision": decision["artifact_revision"],
+            "release_revision": decision["release_revision"],
+            "evidence_signer_key_id": decision["evidence_signer_key_id"],
+            "evidence_signer_spki_sha256": decision[
+                "evidence_signer_spki_sha256"
+            ],
+            "public_key_spki_sha256": operator_spki_sha256,
         }
         with tempfile.NamedTemporaryFile() as claims_file:
             claims_file.write(canonical_attestation_claims(attestation))
@@ -913,24 +1688,32 @@ def sign_decision(
 def load_attestation(path: Path) -> dict:
     raw = read_stable_regular_file(path, MAX_ATTESTATION_BYTES, "release attestation")
     try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        payload = strict_json_loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         raise ReleaseDecisionError("release attestation is invalid JSON") from error
     if not isinstance(payload, dict) or set(payload) != ATTESTATION_FIELDS:
-        raise ReleaseDecisionError("release attestation fields do not match v1")
+        raise ReleaseDecisionError("release attestation fields do not match v2")
     if (
         payload.get("schema_version") != ATTESTATION_SCHEMA_VERSION
         or payload.get("signature_algorithm") != SIGNATURE_ALGORITHM
-        or not crypto_support.safe_key_id(payload.get("key_id", ""))
+        or not isinstance(payload.get("key_id"), str)
+        or not crypto_support.safe_key_id(payload["key_id"])
         or not lowercase_sha256(payload.get("decision_sha256"))
         or not lowercase_sha256(payload.get("public_key_spki_sha256"))
         or payload.get("profile") != PROFILE
         or not git_revision(payload.get("source_revision"))
+        or not git_revision(payload.get("artifact_revision"))
+        or not git_revision(payload.get("release_revision"))
+        or payload.get("source_revision") == payload.get("artifact_revision")
+        or payload.get("source_revision") == payload.get("release_revision")
+        or not isinstance(payload.get("evidence_signer_key_id"), str)
+        or not crypto_support.safe_key_id(payload["evidence_signer_key_id"])
+        or not lowercase_sha256(payload.get("evidence_signer_spki_sha256"))
     ):
         raise ReleaseDecisionError("release attestation claims are invalid")
     try:
         signature = base64.b64decode(payload["signature_base64"], validate=True)
-    except (binascii.Error, ValueError) as error:
+    except (binascii.Error, TypeError, ValueError) as error:
         raise ReleaseDecisionError("release attestation signature is malformed") from error
     if len(signature) != 64:
         raise ReleaseDecisionError("release attestation signature is malformed")
@@ -959,6 +1742,10 @@ def verify_decision(
         "candidate": decision["candidate"],
         "profile": decision["profile"],
         "source_revision": decision["source_revision"],
+        "artifact_revision": decision["artifact_revision"],
+        "release_revision": decision["release_revision"],
+        "evidence_signer_key_id": decision["evidence_signer_key_id"],
+        "evidence_signer_spki_sha256": decision["evidence_signer_spki_sha256"],
     }
     if any(
         not hmac.compare_digest(str(attestation[field]), str(value))
@@ -980,6 +1767,12 @@ def verify_decision(
         ):
             raise ReleaseDecisionError(
                 "trusted public key does not match release attestation"
+            )
+        if hmac.compare_digest(
+            public_key_digest, decision["evidence_signer_spki_sha256"]
+        ):
+            raise ReleaseDecisionError(
+                "release operator key must differ from evidence signer key"
             )
         signature = base64.b64decode(
             attestation["signature_base64"], validate=True
@@ -1011,6 +1804,10 @@ def verify_decision(
         "candidate": decision["candidate"],
         "profile": decision["profile"],
         "source_revision": decision["source_revision"],
+        "artifact_revision": decision["artifact_revision"],
+        "release_revision": decision["release_revision"],
+        "evidence_signer_key_id": decision["evidence_signer_key_id"],
+        "evidence_signer_spki_sha256": decision["evidence_signer_spki_sha256"],
         "source_tree_sha256": decision["source_tree_sha256"],
         "decision_sha256": expected_bindings["decision_sha256"],
         "public_key_spki_sha256": public_key_digest,
@@ -1021,8 +1818,11 @@ def protected_input_paths(args: argparse.Namespace) -> list[Path]:
     result = []
     for field in (
         "evidence_manifest",
+        "evidence_attestation",
+        "evidence_public_key",
         "evidence_attestation_verification",
         "apple_artifact_verification",
+        "apple_artifact_reproducibility",
         "apple_release_manifest",
         "pilot_gate_report",
         "product_integration_acceptance",
@@ -1049,10 +1849,16 @@ def main() -> int:
                 args.profile,
                 {
                     "evidence_manifest": args.evidence_manifest,
+                    "evidence_attestation": args.evidence_attestation,
+                    "evidence_public_key": args.evidence_public_key,
+                    "expected_evidence_key_id": args.expected_evidence_key_id,
                     "evidence_attestation_verification": (
                         args.evidence_attestation_verification
                     ),
                     "apple_artifact_verification": args.apple_artifact_verification,
+                    "apple_artifact_reproducibility": (
+                        args.apple_artifact_reproducibility
+                    ),
                     "apple_release_manifest": args.apple_release_manifest,
                     "pilot_gate_report": args.pilot_gate_report,
                     "product_integration_acceptance": (
@@ -1073,11 +1879,17 @@ def main() -> int:
                 args.key_id,
                 {
                     "evidence_manifest": args.evidence_manifest,
+                    "evidence_attestation": args.evidence_attestation,
+                    "evidence_public_key": args.evidence_public_key,
+                    "expected_evidence_key_id": args.expected_evidence_key_id,
                     "evidence_attestation_verification": (
                         args.evidence_attestation_verification
                     ),
                     "apple_artifact_verification": (
                         args.apple_artifact_verification
+                    ),
+                    "apple_artifact_reproducibility": (
+                        args.apple_artifact_reproducibility
                     ),
                     "apple_release_manifest": args.apple_release_manifest,
                     "pilot_gate_report": args.pilot_gate_report,

@@ -8,10 +8,15 @@
   temporal fusion requires the context interpretation itself to meet the
   configured confidence floor. The public `aura-domain` API now denies unsafe
   code and missing documentation.
-- Added a fail-closed `aura.release_decision.v1` aggregator and detached
+- Added a fail-closed `aura.release_decision.v2` aggregator and detached
   Ed25519 operator attestation. A GO now requires one exact signed evidence,
   Apple, pilot/signoff, rollback, and external client-acceptance set; missing
   or mismatched inputs remain an explicit NO-GO.
+- Hardened Apple provenance around an explicit source/artifact/release
+  `H`/`A`/`R` lineage, exact materialized Git LFS identities, an immutable
+  11-file candidate snapshot, two same-environment deterministic rebuilds,
+  pinned Xcode/Rust identities, and direct raw-evidence signature verification
+  with separate evidence and release-operator keys.
 - Pinned the Rust toolchain, GitHub Actions, and `cargo-audit` installer;
   disabled persisted checkout credentials, restricted every workflow token to
   read-only repository contents, required `Cargo.lock` resolution in CI, and

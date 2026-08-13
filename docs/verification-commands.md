@@ -36,7 +36,9 @@ every external GitHub Action to a full commit SHA, prevents checkout from
 retaining credentials, grants jobs read-only repository access, and requires
 all CI Cargo resolution to use `Cargo.lock`. The discovery command is the
 canonical Python helper gate so newly added evidence tests cannot be omitted by
-an outdated hand-maintained module list.
+an outdated hand-maintained module list. The strict Apple provenance job also
+requires full Git history and materialized Git LFS objects; it pins Xcode
+`26.2` and Rust `1.96.1` and fails if the resolved versions differ.
 
 ## Top-Level Release Decision
 
@@ -209,13 +211,18 @@ just apple-artifact-build-local
 ```
 
 The local artifact is marked `shippable=false` whenever reviewable source is
-dirty. For a clean reviewed checkout, build and verify the shippable artifact:
+dirty. For a clean reviewed source commit `H`, build the shippable artifact
+candidate:
 
 ```bash
 just apple-artifact-build-release
 ```
 
-Verify an already packaged clean artifact independently:
+Commit only the permitted generated `dist/apple` outputs as the direct child
+`A` of `H`. Record any artifact approval or accepted differential baseline in a
+linear suffix that changes only the two excluded governance files, and call the
+resulting exact release revision `R` (`R` may equal `A`). Then, on exact revision
+`R`, verify the checked-in artifact before running any build:
 
 ```bash
 python3 ci/apple_artifact.py verify \
@@ -225,10 +232,50 @@ python3 ci/apple_artifact.py verify \
   --require-clean-source
 ```
 
-The verifier checks source revision/digest, runtime/wire/state/FFI versions,
-Cargo feature identity, three XCFramework slices, Mach-O architectures,
-embedded headers, trust keyring, descriptor identities, binary hashes, and the
-exact Aura export allowlist.
+The strict caller must provide full history and materialize all required Git
+LFS objects before either command. The verifier does not silently repair a
+shallow checkout or download missing LFS content. It validates the exact
+stage-zero LFS pointer object identifier and size against materialized working
+bytes. With source digest `aura.build-source-tree.v2`, all materialized
+build-relevant LFS content currently participates in the digest (about 5.5 GiB,
+or 5.9 GB); selecting only part of that content would require a `v3` digest
+contract.
+
+After the checked-in verification passes, run the strict two-build gate:
+
+```bash
+python3 ci/apple_artifact_reproducibility.py verify \
+  --root . \
+  --output artifacts/apple-reproducibility.json
+```
+
+The gate requires `A` to have exactly one parent `H`, requires the manifest to
+name full revision `H`, and permits only the contract's generated artifact
+paths in the `H..A` diff. Every optional `A..R` commit must be single-parent and
+may modify only `docs/refactor-diff-approvals.json` and/or
+`crates/aura-core/data/refactor_baseline_v1.json`. The report separately binds
+`H`, `A`, and `R`; version 1 permits `A` plus at most 15 governance commits. It
+verifies the exact checked-in 11-file inventory, then
+performs two sequential fresh builds from `H` into distinct external
+directories. It requires byte-identical path, type, executable-bit, size, and
+SHA-256 inventories for:
+
+```text
+checked-in dist/apple == build 1 == build 2
+```
+
+The artifact verifier also checks runtime/wire/state/FFI versions, Cargo
+feature identity, three XCFramework slices, Mach-O architectures, embedded
+headers, trust keyring, descriptor identities, binary hashes, and the exact
+Aura export allowlist.
+
+A passing run demonstrates deterministic repeatability and path independence
+on the pinned Xcode `26.2` / Rust `1.96.1` runner. It is not independent
+reproduction and does not prove that the compiler, runner image, or build
+service is trustworthy. The source and build scripts are trusted inputs, and
+the linked worktrees do not prove candidate-blind or hermetic execution.
+Pull-request merge revisions are validation inputs, not release evidence
+commits.
 
 ## Full Workspace Validation
 

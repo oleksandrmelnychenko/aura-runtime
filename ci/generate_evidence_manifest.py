@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import os
+import stat
 import sys
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -27,6 +28,7 @@ TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
     "aura.military.temporal_shadow_telemetry_validation.v1"
 )
 TEMPORAL_TELEMETRY_SCHEMA_VERSION = "aura.military.temporal_shadow_telemetry.v1"
+MAX_JSON_ARTIFACT_BYTES = 256 * 1024 * 1024
 
 
 def parse_args() -> argparse.Namespace:
@@ -129,6 +131,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to Apple XCFramework verification JSON.",
     )
+    parser.add_argument(
+        "--apple-artifact-reproducibility",
+        default=None,
+        help="Optional path to Apple deterministic-rebuild verification JSON.",
+    )
     return parser.parse_args()
 
 
@@ -136,30 +143,111 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def file_digest(path: Path) -> dict:
-    data = path.read_bytes()
-    return {
-        "path": path.as_posix(),
-        "bytes": len(data),
-        "sha256": sha256(data).hexdigest(),
-    }
+def _strict_json_object(pairs: list[tuple[str, object]]) -> dict:
+    result: dict = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON field: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON value is forbidden: {value}")
+
+
+def strict_json_loads(raw: bytes) -> object:
+    return json.loads(
+        raw.decode("utf-8"),
+        object_pairs_hook=_strict_json_object,
+        parse_constant=_reject_json_constant,
+    )
+
+
+def read_json_artifact_snapshot(path: Path) -> bytes:
+    flags = os.O_RDONLY
+    for name in ("O_CLOEXEC", "O_NOFOLLOW", "O_NONBLOCK"):
+        flags |= getattr(os, name, 0)
+    descriptor = os.open(path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("artifact is not a regular file")
+        if not 1 <= metadata.st_size <= MAX_JSON_ARTIFACT_BYTES:
+            raise ValueError(
+                "artifact size must be within "
+                f"1..={MAX_JSON_ARTIFACT_BYTES} bytes"
+            )
+        chunks = []
+        remaining = MAX_JSON_ARTIFACT_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        final_metadata = os.fstat(descriptor)
+        identity_before = (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_mode,
+            metadata.st_nlink,
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+        )
+        identity_after = (
+            final_metadata.st_dev,
+            final_metadata.st_ino,
+            final_metadata.st_mode,
+            final_metadata.st_nlink,
+            final_metadata.st_size,
+            final_metadata.st_mtime_ns,
+            final_metadata.st_ctime_ns,
+        )
+        if (
+            not raw
+            or len(raw) > MAX_JSON_ARTIFACT_BYTES
+            or len(raw) != metadata.st_size
+            or identity_before != identity_after
+        ):
+            raise ValueError("artifact changed while it was being read")
+        return raw
+    finally:
+        os.close(descriptor)
 
 
 def load_json_artifact(path_str: str, required: bool) -> tuple[dict | None, dict]:
     path = Path(path_str)
     artifact = {
         "required": required,
-        "exists": path.exists(),
         "path": path.as_posix(),
     }
-    if not path.exists():
+    try:
+        raw = read_json_artifact_snapshot(path)
+    except FileNotFoundError:
+        artifact["exists"] = False
         artifact["status"] = "missing"
         return None, artifact
+    except (OSError, ValueError) as error:
+        artifact["exists"] = True
+        artifact["status"] = "invalid_file"
+        artifact["error"] = str(error)
+        return None, artifact
 
-    artifact.update(file_digest(path))
+    artifact.update(
+        {
+            "exists": True,
+            "bytes": len(raw),
+            "sha256": sha256(raw).hexdigest(),
+        }
+    )
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
+        payload = strict_json_loads(raw)
+        if not isinstance(payload, dict):
+            raise ValueError("top-level JSON value must be an object")
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         artifact["status"] = "invalid_json"
         artifact["error"] = str(error)
         return None, artifact
@@ -1173,10 +1261,32 @@ def apple_artifact_status(payload: dict | None) -> str | None:
     return "pass"
 
 
+def apple_reproducibility_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != "aura.apple_artifact_reproducibility.v1":
+        return "invalid_schema"
+    if (
+        payload.get("status") != "pass"
+        or payload.get("claim") != "same_environment_deterministic_rebuild"
+        or payload.get("build_count") != 2
+        or isinstance(payload.get("build_count"), bool)
+        or payload.get("all_three_inventories_equal") is not True
+        or payload.get("independent_reproduction_proven") is not False
+        or payload.get("compiler_trust_proven") is not False
+        or payload.get("candidate_blind_build_proven") is not False
+        or payload.get("hermetic_build_proven") is not False
+        or payload.get("trusted_source_and_build_scripts_assumed") is not True
+    ):
+        return "fail"
+    return "pass"
+
+
 def evidence_status(artifacts: dict, summary: dict) -> str:
-    if any(meta["required"] and not meta["exists"] for meta in artifacts.values()):
-        return "blocked"
-    if any(meta["status"] == "invalid_json" for meta in artifacts.values()):
+    if any(
+        meta["required"] and meta.get("status") != "loaded"
+        for meta in artifacts.values()
+    ):
         return "blocked"
     if summary["release_report_status"] != "pass":
         return "fail"
@@ -1234,6 +1344,8 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["apple_artifact_status"] not in (None, "pass"):
         return "fail"
+    if summary["apple_reproducibility_status"] not in (None, "pass"):
+        return "fail"
     return "pass"
 
 
@@ -1260,6 +1372,7 @@ def attach_payload_details(
     world_performance_payload: dict | None,
     refactor_diff_payload: dict | None,
     apple_artifact_payload: dict | None,
+    apple_reproducibility_payload: dict | None,
 ) -> None:
     if release_payload is not None:
         artifacts["release_report"]["observed_status"] = release_payload.get("overall_status")
@@ -1651,6 +1764,29 @@ def attach_payload_details(
         artifacts["apple_artifact_verification"]["slice_count"] = len(
             apple_artifact_payload.get("slices", [])
         )
+    if apple_reproducibility_payload is not None:
+        artifact = artifacts["apple_artifact_reproducibility"]
+        artifact["observed_status"] = apple_reproducibility_status(
+            apple_reproducibility_payload
+        )
+        for field in (
+            "schema_version",
+            "claim",
+            "source_revision",
+            "artifact_revision",
+            "release_revision",
+            "source_tree_sha256",
+            "build_count",
+            "all_three_inventories_equal",
+            "independent_reproduction_proven",
+            "compiler_trust_proven",
+            "candidate_blind_build_proven",
+            "hermetic_build_proven",
+            "trusted_source_and_build_scripts_assumed",
+        ):
+            artifact[field] = apple_reproducibility_payload.get(field)
+        inventory = apple_reproducibility_payload.get("artifact_inventory")
+        artifact["inventory_count"] = len(inventory) if isinstance(inventory, list) else None
 
 
 def main() -> int:
@@ -1749,6 +1885,10 @@ def main() -> int:
         args.apple_artifact_verification,
         required=args.apple_artifact_verification is not None,
     ) if args.apple_artifact_verification else (None, None)
+    apple_reproducibility_payload, apple_reproducibility_artifact = load_json_artifact(
+        args.apple_artifact_reproducibility,
+        required=args.apple_artifact_reproducibility is not None,
+    ) if args.apple_artifact_reproducibility else (None, None)
     smoke_payload, smoke_artifact = load_json_artifact(
         args.ffi_smoke, required=args.ffi_smoke is not None
     ) if args.ffi_smoke else (None, None)
@@ -1800,6 +1940,8 @@ def main() -> int:
         artifacts["refactor_diff_report"] = refactor_diff_artifact
     if apple_artifact_artifact is not None:
         artifacts["apple_artifact_verification"] = apple_artifact_artifact
+    if apple_reproducibility_artifact is not None:
+        artifacts["apple_artifact_reproducibility"] = apple_reproducibility_artifact
     if smoke_artifact is not None:
         artifacts["ffi_smoke"] = smoke_artifact
 
@@ -1834,6 +1976,7 @@ def main() -> int:
         world_performance_payload=world_performance_payload,
         refactor_diff_payload=refactor_diff_payload,
         apple_artifact_payload=apple_artifact_payload,
+        apple_reproducibility_payload=apple_reproducibility_payload,
     )
 
     request_limits = (
@@ -2379,6 +2522,39 @@ def main() -> int:
         "apple_artifact_slice_count": (
             len(apple_artifact_payload.get("slices", []))
             if apple_artifact_payload
+            else None
+        ),
+        "apple_reproducibility_status": apple_reproducibility_status(
+            apple_reproducibility_payload
+        ),
+        "apple_reproducibility_schema_version": (
+            apple_reproducibility_payload.get("schema_version")
+            if apple_reproducibility_payload
+            else None
+        ),
+        "apple_reproducibility_source_revision": (
+            apple_reproducibility_payload.get("source_revision")
+            if apple_reproducibility_payload
+            else None
+        ),
+        "apple_reproducibility_artifact_revision": (
+            apple_reproducibility_payload.get("artifact_revision")
+            if apple_reproducibility_payload
+            else None
+        ),
+        "apple_reproducibility_release_revision": (
+            apple_reproducibility_payload.get("release_revision")
+            if apple_reproducibility_payload
+            else None
+        ),
+        "apple_reproducibility_source_tree_sha256": (
+            apple_reproducibility_payload.get("source_tree_sha256")
+            if apple_reproducibility_payload
+            else None
+        ),
+        "apple_reproducibility_build_count": (
+            apple_reproducibility_payload.get("build_count")
+            if apple_reproducibility_payload
             else None
         ),
         "ffi_export_count": (

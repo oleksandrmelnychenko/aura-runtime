@@ -125,6 +125,51 @@ class EvidenceAttestationTests(unittest.TestCase):
                 self.manifest, self.attestation, self.public_key
             )
 
+    def test_malformed_attestation_types_fail_closed(self):
+        payload = self.sign()
+        payload["key_id"] = []
+        payload["signature_base64"] = []
+        evidence_attestation.write_json_atomic(self.attestation, payload)
+
+        with self.assertRaisesRegex(
+            evidence_attestation.AttestationError, "key_id is invalid"
+        ):
+            evidence_attestation.verify_manifest(
+                self.manifest, self.attestation, self.public_key
+            )
+
+        payload["key_id"] = "release-test-key"
+        evidence_attestation.write_json_atomic(self.attestation, payload)
+        with self.assertRaisesRegex(
+            evidence_attestation.AttestationError, "signature is malformed"
+        ):
+            evidence_attestation.verify_manifest(
+                self.manifest, self.attestation, self.public_key
+            )
+
+    def test_duplicate_and_nonfinite_attestation_json_is_rejected(self):
+        payload = self.sign()
+        serialized = json.dumps(payload)
+        self.attestation.write_text(
+            serialized[:-1] + ',"key_id":"duplicate"}', encoding="utf-8"
+        )
+        with self.assertRaisesRegex(
+            evidence_attestation.AttestationError, "invalid JSON"
+        ):
+            evidence_attestation.verify_manifest(
+                self.manifest, self.attestation, self.public_key
+            )
+
+        self.attestation.write_text(
+            serialized[:-1] + ',"unexpected":NaN}', encoding="utf-8"
+        )
+        with self.assertRaisesRegex(
+            evidence_attestation.AttestationError, "invalid JSON"
+        ):
+            evidence_attestation.verify_manifest(
+                self.manifest, self.attestation, self.public_key
+            )
+
     def test_invalid_key_id_is_rejected_before_signing(self):
         with self.assertRaisesRegex(
             evidence_attestation.AttestationError, "key_id must be"

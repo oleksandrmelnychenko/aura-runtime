@@ -7,6 +7,7 @@ if [[ "$DIST_DIR" != /* ]]; then
   DIST_DIR="$ROOT/$DIST_DIR"
 fi
 PROFILE="${PROFILE:-release}"
+MINIMUM_IOS_VERSION="${MINIMUM_IOS_VERSION:-18.0}"
 CARGO_PROFILE_FLAG=("--release")
 CARGO_FEATURE_NAME=""
 SOURCE_REVISION="$(git -C "$ROOT" rev-parse HEAD)"
@@ -26,6 +27,12 @@ if [[ "$PROFILE" == "release" && "$SOURCE_TREE_DIRTY" == "true" && "${ALLOW_DIRT
   echo "Commit the reviewed source or set ALLOW_DIRTY_SOURCE=1 for a non-shippable local artifact." >&2
   exit 2
 fi
+
+if [[ "$MINIMUM_IOS_VERSION" != "18.0" ]]; then
+  echo "Apple release artifacts require MINIMUM_IOS_VERSION=18.0." >&2
+  exit 2
+fi
+export IPHONEOS_DEPLOYMENT_TARGET="$MINIMUM_IOS_VERSION"
 
 case "${AURA_AGENT_ONNX:-0}" in
   0) ;;
@@ -406,7 +413,7 @@ cat >"$DIST_DIR/release-manifest.json" <<JSON
   "wire_major_version": 1,
   "state_schema_version": $STATE_SCHEMA_VERSION,
   "ffi_contract_version": 1,
-  "minimum_ios_version": "18.0",
+  "minimum_ios_version": "$MINIMUM_IOS_VERSION",
   "target_triples": [
     "aarch64-apple-ios",
     "aarch64-apple-ios-sim",

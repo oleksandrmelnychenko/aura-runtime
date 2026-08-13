@@ -550,7 +550,7 @@ pilot signoff поточний кандидат зобов'язаний зали
 
 ```json
 {
-  "schema_version": "aura.release_decision.v1",
+  "schema_version": "aura.release_decision.v2",
   "candidate": "<runtime-version+commit>",
   "profile": "agent-kids-rules-context",
   "artifact_integrity": "pass",
@@ -690,4 +690,4 @@ evidence є інфраструктурою докторського дослід
 - усі необхідні людські підписи реальні;
 - Relay, ONNX і Military або окремо допущені, або доведено вимкнені;
 - документація описує фактичний стан без застарілих заяв;
-- верхньорівневий `aura.release_decision.v1` має `decision = go`.
+- верхньорівневий `aura.release_decision.v2` має `decision = go`.

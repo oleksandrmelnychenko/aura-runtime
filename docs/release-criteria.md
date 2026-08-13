@@ -20,7 +20,11 @@ Apple release-boundary verification uses:
 - `just apple-artifact-build-local` for a non-shippable dirty-tree rehearsal;
 - `just apple-artifact-build-release` for the clean, locked release artifact;
 - `python3 ci/apple_artifact.py verify --root . --dist-dir dist/apple
-  --require-clean-source` for independent provenance verification.
+  --require-clean-source` to verify the exact checked-in artifact before a
+  rebuild;
+- `python3 ci/apple_artifact_reproducibility.py verify --root . --output
+  artifacts/apple-reproducibility.json` for the strict source/artifact commit
+  relationship and two-build equality gate.
 
 ## Release Statuses
 
@@ -39,6 +43,15 @@ cannot be called stable yet.
 An Apple artifact with `source_tree_dirty=true`, `shippable=false`, a mismatched
 `source_tree_sha256`, an unexpected export, or a slice/header/hash mismatch is
 `BLOCKED` regardless of runtime evaluation results.
+
+An Apple artifact is also `BLOCKED` when the caller provides shallow history or
+unmaterialized Git LFS content; when artifact commit `A` is not the single-parent
+direct child of the manifest's source commit `H`; when `H..A` contains anything
+outside the permitted generated artifact paths; when any optional `A..R`
+release-suffix commit is non-linear or changes anything except the two explicit
+governance files; when the checked-in 11-file inventory is incomplete or has
+extra/non-regular entries; or when either fresh build differs from the
+checked-in bytes or from the other build.
 
 ## Blocking Suite Set
 
@@ -208,6 +221,11 @@ A release is `BLOCKED` if any of the following are missing:
 - privacy-safe audit behavior for any new telemetry or debug path
 - machine-readable dataset evidence for the current corpus snapshot
 - machine-readable audit evidence proving raw identifiers and transcript fields are absent
+- a strict pre-build verification report for the exact checked-in Apple
+  artifact inventory
+- a passing Apple reproducibility report binding source commit `H`, its
+  direct-child artifact commit `A`, exact release revision `R`, and two fresh
+  builds from `H`
 
 ## Required Release Artifact
 
@@ -254,6 +272,19 @@ Current manifest contract:
 - Audit evidence proves forbidden fields are absent
 - Refactor differential evidence contains no unapproved regression
 - Performance evidence stays inside the reviewed envelope
+- Apple provenance ran on exact release revision `R` and separately bound the
+  artifact commit `A`, whose sole parent is the full source revision `H`
+  recorded by the manifest
+- The `H..A` diff contains only permitted generated Apple artifact outputs
+- Every optional `A..R` commit is linear and changes only the two explicit
+  governance evidence files; the Apple artifact inventory remains unchanged
+- Full history and all build-relevant Git LFS objects were present and
+  materialized before verification
+- The exact checked-in 11-file `dist/apple` inventory passed verification
+  before any build overwrote output
+- Two sequential builds from `H` in distinct external directories exactly
+  matched the checked-in path/type/executable-bit/size/SHA-256 inventory
+- The Apple gate resolved exactly Xcode `26.2` and Rust `1.96.1`
 - Local promotion rehearsal is treated as `BLOCKED`, not green, if the FFI
   smoke compile is only a stub due to a missing local compiler
 
@@ -264,3 +295,12 @@ Current manifest contract:
 - synthetic-only confidence without realistic and curated support
 - undocumented protobuf or FFI changes
 - raw message logging used as a debugging crutch
+- a rebuild that overwrote `dist/apple` before the checked-in bytes were
+  verified
+- a passing build on a synthetic pull-request merge revision presented as
+  release provenance evidence
+- two byte-identical builds on one pinned runner presented as independent
+  reproduction or as proof of compiler, runner-image, or build-service trust
+- linked same-repository worktrees presented as candidate-blind or hermetic
+  builds, or as proof that trusted source/build scripts could not inspect the
+  release workspace

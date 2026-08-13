@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -333,6 +334,99 @@ class WorldLifecycleStatusTests(unittest.TestCase):
         )
 
 
+class ArtifactSnapshotTests(unittest.TestCase):
+    def test_digest_and_payload_come_from_one_stable_snapshot(self):
+        raw = b'{"schema_version":"fixture.v1","status":"pass"}\n'
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "artifact.json"
+            path.write_bytes(raw)
+            with (
+                patch.object(
+                    Path,
+                    "read_bytes",
+                    side_effect=AssertionError("path must not be reopened for hashing"),
+                ),
+                patch.object(
+                    Path,
+                    "read_text",
+                    side_effect=AssertionError("path must not be reopened for parsing"),
+                ),
+            ):
+                payload, artifact = generate_evidence_manifest.load_json_artifact(
+                    path.as_posix(), required=True
+                )
+
+        self.assertEqual(payload, {"schema_version": "fixture.v1", "status": "pass"})
+        self.assertEqual(artifact["bytes"], len(raw))
+        self.assertEqual(artifact["sha256"], sha256(raw).hexdigest())
+        self.assertEqual(artifact["status"], "loaded")
+
+    def test_symlink_and_fifo_are_rejected_without_following_or_blocking(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            symlink = root / "symlink.json"
+            symlink.symlink_to(target)
+            fifo = root / "artifact.fifo"
+            os.mkfifo(fifo)
+
+            for path in (symlink, fifo):
+                with self.subTest(path=path.name):
+                    payload, artifact = (
+                        generate_evidence_manifest.load_json_artifact(
+                            path.as_posix(), required=True
+                        )
+                    )
+                    self.assertIsNone(payload)
+                    self.assertTrue(artifact["exists"])
+                    self.assertEqual(artifact["status"], "invalid_file")
+
+    def test_oversize_duplicate_and_nonfinite_json_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            oversized = root / "oversized.json"
+            oversized.write_bytes(b"{" + b" " * 8 + b"}")
+            with patch.object(
+                generate_evidence_manifest, "MAX_JSON_ARTIFACT_BYTES", 8
+            ):
+                payload, artifact = generate_evidence_manifest.load_json_artifact(
+                    oversized.as_posix(), required=True
+                )
+            self.assertIsNone(payload)
+            self.assertEqual(artifact["status"], "invalid_file")
+
+            for name, raw in (
+                ("duplicate.json", b'{"status":"pass","status":"fail"}'),
+                ("nonfinite.json", b'{"value":NaN}'),
+                ("array.json", b"[]"),
+            ):
+                with self.subTest(name=name):
+                    path = root / name
+                    path.write_bytes(raw)
+                    payload, artifact = (
+                        generate_evidence_manifest.load_json_artifact(
+                            path.as_posix(), required=True
+                        )
+                    )
+                    self.assertIsNone(payload)
+                    self.assertEqual(artifact["status"], "invalid_json")
+
+    def test_supplied_invalid_optional_artifact_blocks_evidence_status(self):
+        artifacts = {
+            "optional_input": {
+                "required": True,
+                "exists": True,
+                "status": "invalid_file",
+            }
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.evidence_status(artifacts, {}),
+            "blocked",
+        )
+
+
 class RefactorEvidenceStatusTests(unittest.TestCase):
     def test_world_performance_accepts_clean_tier(self):
         payload = {
@@ -418,6 +512,44 @@ class RefactorEvidenceStatusTests(unittest.TestCase):
         self.assertEqual(
             generate_evidence_manifest.apple_artifact_status(payload),
             "non_shippable",
+        )
+
+    def test_apple_reproducibility_accepts_exact_limited_claim(self):
+        payload = {
+            "schema_version": "aura.apple_artifact_reproducibility.v1",
+            "status": "pass",
+            "claim": "same_environment_deterministic_rebuild",
+            "build_count": 2,
+            "all_three_inventories_equal": True,
+            "independent_reproduction_proven": False,
+            "compiler_trust_proven": False,
+            "candidate_blind_build_proven": False,
+            "hermetic_build_proven": False,
+            "trusted_source_and_build_scripts_assumed": True,
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.apple_reproducibility_status(payload),
+            "pass",
+        )
+
+    def test_apple_reproducibility_rejects_claim_upgrade(self):
+        payload = {
+            "schema_version": "aura.apple_artifact_reproducibility.v1",
+            "status": "pass",
+            "claim": "same_environment_deterministic_rebuild",
+            "build_count": 2,
+            "all_three_inventories_equal": True,
+            "independent_reproduction_proven": True,
+            "compiler_trust_proven": False,
+            "candidate_blind_build_proven": False,
+            "hermetic_build_proven": False,
+            "trusted_source_and_build_scripts_assumed": True,
+        }
+
+        self.assertEqual(
+            generate_evidence_manifest.apple_reproducibility_status(payload),
+            "fail",
         )
 
 

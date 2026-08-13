@@ -35,6 +35,27 @@ class AttestationError(Exception):
     pass
 
 
+def _strict_json_object(pairs: list[tuple[str, object]]) -> dict:
+    result: dict = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON field: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON value is forbidden: {value}")
+
+
+def strict_json_loads(raw: bytes) -> object:
+    return json.loads(
+        raw.decode("utf-8"),
+        object_pairs_hook=_strict_json_object,
+        parse_constant=_reject_json_constant,
+    )
+
+
 def _write_private_snapshot(path: Path, payload: bytes) -> None:
     descriptor = None
     try:
@@ -184,8 +205,8 @@ def safe_key_id(key_id: str) -> bool:
 
 def validate_release_manifest(manifest: bytes) -> dict:
     try:
-        payload = json.loads(manifest.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        payload = strict_json_loads(manifest)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         raise AttestationError(f"evidence manifest is invalid JSON: {error}") from error
     if not isinstance(payload, dict) or payload.get("schema_version") != "aura.evidence_manifest.v1":
         raise AttestationError("evidence manifest schema_version is unsupported")
@@ -307,8 +328,8 @@ def sign_manifest(
 def load_attestation(path: Path) -> dict:
     raw = read_bounded(path, MAX_ATTESTATION_BYTES, "evidence attestation")
     try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        payload = strict_json_loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         raise AttestationError(f"evidence attestation is invalid JSON: {error}") from error
     if not isinstance(payload, dict) or set(payload) != ATTESTATION_FIELDS:
         raise AttestationError("evidence attestation fields do not match the v1 schema")
@@ -316,7 +337,8 @@ def load_attestation(path: Path) -> dict:
         raise AttestationError("evidence attestation schema_version is unsupported")
     if payload.get("signature_algorithm") != SIGNATURE_ALGORITHM:
         raise AttestationError("evidence attestation signature algorithm is unsupported")
-    if not safe_key_id(payload.get("key_id", "")):
+    key_id = payload.get("key_id")
+    if not isinstance(key_id, str) or not safe_key_id(key_id):
         raise AttestationError("evidence attestation key_id is invalid")
     for field in ("manifest_sha256", "public_key_spki_sha256"):
         value = payload.get(field)
@@ -328,9 +350,12 @@ def load_attestation(path: Path) -> dict:
             raise AttestationError(
                 f"evidence attestation {field} is malformed"
             ) from error
+    signature_base64 = payload.get("signature_base64")
+    if not isinstance(signature_base64, str):
+        raise AttestationError("evidence attestation signature is malformed")
     try:
-        signature = base64.b64decode(payload["signature_base64"], validate=True)
-    except (binascii.Error, ValueError) as error:
+        signature = base64.b64decode(signature_base64, validate=True)
+    except (binascii.Error, TypeError, ValueError) as error:
         raise AttestationError("evidence attestation signature is malformed") from error
     if len(signature) != 64:
         raise AttestationError("evidence attestation signature is malformed")
@@ -343,6 +368,10 @@ def verify_manifest(
     public_key_path: Path,
     expected_key_id: str | None = None,
 ) -> dict:
+    if expected_key_id is not None and (
+        not isinstance(expected_key_id, str) or not safe_key_id(expected_key_id)
+    ):
+        raise AttestationError("expected evidence key_id is invalid")
     manifest = read_bounded(manifest_path, MAX_MANIFEST_BYTES, "evidence manifest")
     manifest_payload = validate_release_manifest(manifest)
     public_key = read_bounded(
