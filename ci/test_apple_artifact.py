@@ -10,6 +10,7 @@ from unittest import mock
 from ci.apple_artifact import (
     APPLE_ARTIFACT_FILE_LIMITS,
     ArtifactError,
+    GIT_LFS_FILTER_CONFIG,
     SOURCE_TREE_DIGEST_DOMAIN,
     _frame,
     _git_environment,
@@ -260,11 +261,16 @@ class SourceTreeIdentityTests(unittest.TestCase):
             "GIT_DIR",
             "GIT_WORK_TREE",
             "GIT_INDEX_FILE",
-            "GIT_CONFIG_COUNT",
         ):
             self.assertNotIn(name, environment)
         self.assertEqual(environment["GIT_CONFIG_NOSYSTEM"], "1")
         self.assertEqual(environment["GIT_CONFIG_GLOBAL"], "/dev/null")
+        self.assertEqual(
+            environment["GIT_CONFIG_COUNT"], str(len(GIT_LFS_FILTER_CONFIG))
+        )
+        for index, (key, value) in enumerate(GIT_LFS_FILTER_CONFIG):
+            self.assertEqual(environment[f"GIT_CONFIG_KEY_{index}"], key)
+            self.assertEqual(environment[f"GIT_CONFIG_VALUE_{index}"], value)
 
     def test_digest_rejects_git_graft_metadata(self) -> None:
         grafts = Path(

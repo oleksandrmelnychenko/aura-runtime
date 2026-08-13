@@ -6,18 +6,21 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ci.apple_artifact import APPLE_ARTIFACT_FILE_LIMITS
+from ci.apple_artifact import APPLE_ARTIFACT_FILE_LIMITS, ArtifactError
 from ci.apple_artifact_reproducibility import (
     ALLOWED_ARTIFACT_COMMIT_PATHS,
     ARCHIVE_PATHS,
     REQUIRED_ARTIFACT_COMMIT_PATHS,
     ReproducibilityError,
     MAX_RELEASE_LINEAGE_COMMITS,
+    _add_source_worktree,
     _command_environment,
     _artifact_commit_pair,
     _bind_committed_archive_lfs,
     _copy_verified_snapshot,
+    _remove_source_worktree,
     _require_equal_inventories,
+    _source_identity,
     _toolchain_report,
 )
 
@@ -367,6 +370,98 @@ class ArtifactLfsBindingTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ReproducibilityError, "LFS pointer"):
             _bind_committed_archive_lfs(self.root, tuple(inventory))
+
+
+class SourceWorktreeLfsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name) / "repository"
+        self.destination = Path(self.temporary_directory.name) / "source-worktree"
+        self.root.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        (self.root / ".gitattributes").write_text(
+            "*.bin filter=lfs diff=lfs merge=lfs -text\n"
+        )
+        subprocess.run(
+            ["git", "add", ".gitattributes"], cwd=self.root, check=True
+        )
+
+        self.content = b"materialized source input\n"
+        digest = hashlib.sha256(self.content).hexdigest()
+        pointer = (
+            "version https://git-lfs.github.com/spec/v1\n"
+            f"oid sha256:{digest}\n"
+            f"size {len(self.content)}\n"
+        ).encode()
+        object_id = subprocess.run(
+            ["git", "hash-object", "-w", "--stdin"],
+            cwd=self.root,
+            input=pointer,
+            check=True,
+            capture_output=True,
+        ).stdout.decode().strip()
+        subprocess.run(
+            [
+                "git",
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"100644,{object_id},fixture.bin",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+        self.lfs_object = (
+            self.root / ".git/lfs/objects" / digest[:2] / digest[2:4] / digest
+        )
+        self.lfs_object.parent.mkdir(parents=True)
+        self.lfs_object.write_bytes(self.content)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Aura Test",
+                "-c",
+                "user.email=aura-test@example.invalid",
+                "commit",
+                "-qm",
+                "source",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+        self.source_revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def tearDown(self) -> None:
+        if self.destination.exists():
+            _remove_source_worktree(self.root, self.destination)
+        self.temporary_directory.cleanup()
+
+    def test_materializes_lfs_with_sanitized_global_configuration(self) -> None:
+        _add_source_worktree(self.root, self.source_revision, self.destination)
+
+        self.assertEqual((self.destination / "fixture.bin").read_bytes(), self.content)
+        identity = _source_identity(self.destination, self.source_revision)
+        self.assertEqual(identity["entry_count"], 2)
+        self.assertGreater(identity["content_bytes"], len(self.content))
+
+    def test_missing_lfs_media_fails_closed_and_worktree_is_removable(self) -> None:
+        self.lfs_object.unlink()
+        _add_source_worktree(self.root, self.source_revision, self.destination)
+
+        with self.assertRaisesRegex(
+            ArtifactError, "Git LFS object is not materialized to its declared size"
+        ):
+            _source_identity(self.destination, self.source_revision)
+
+        _remove_source_worktree(self.root, self.destination)
+        self.assertFalse(self.destination.exists())
 
 
 if __name__ == "__main__":

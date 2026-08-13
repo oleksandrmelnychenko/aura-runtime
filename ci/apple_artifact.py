@@ -32,6 +32,12 @@ MAX_LFS_POINTER_BYTES = 1024
 MAX_RELEASE_JSON_BYTES = 1024 * 1024
 MAX_APPLE_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_APPLE_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
+GIT_LFS_FILTER_CONFIG = (
+    ("filter.lfs.process", "git-lfs filter-process"),
+    ("filter.lfs.smudge", "git-lfs smudge -- %f"),
+    ("filter.lfs.clean", "git-lfs clean -- %f"),
+    ("filter.lfs.required", "true"),
+)
 
 GENERATED_SOURCE_PATHS = {
     "dist/apple/release-manifest.json",
@@ -159,6 +165,10 @@ def _git_environment() -> dict[str, str]:
             environment.pop(key, None)
     environment["GIT_CONFIG_NOSYSTEM"] = "1"
     environment["GIT_CONFIG_GLOBAL"] = "/dev/null"
+    environment["GIT_CONFIG_COUNT"] = str(len(GIT_LFS_FILTER_CONFIG))
+    for index, (key, value) in enumerate(GIT_LFS_FILTER_CONFIG):
+        environment[f"GIT_CONFIG_KEY_{index}"] = key
+        environment[f"GIT_CONFIG_VALUE_{index}"] = value
     environment["GIT_NO_REPLACE_OBJECTS"] = "1"
     environment.pop("GIT_REPLACE_REF_BASE", None)
     environment.pop("GIT_EXTERNAL_DIFF", None)

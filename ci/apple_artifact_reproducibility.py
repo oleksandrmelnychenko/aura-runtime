@@ -19,6 +19,7 @@ try:
     from ci.apple_artifact import (
         APPLE_ARTIFACT_FILE_LIMITS,
         ArtifactError,
+        GIT_LFS_FILTER_CONFIG,
         NON_BUILD_GOVERNANCE_PATHS,
         _lfs_source_expectations,
         _load_json,
@@ -34,6 +35,7 @@ except ModuleNotFoundError:  # Direct execution from the ci/ directory.
     from apple_artifact import (  # type: ignore[no-redef]
         APPLE_ARTIFACT_FILE_LIMITS,
         ArtifactError,
+        GIT_LFS_FILTER_CONFIG,
         NON_BUILD_GOVERNANCE_PATHS,
         _lfs_source_expectations,
         _load_json,
@@ -107,6 +109,10 @@ def _command_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
     environment.pop("GIT_EXTERNAL_DIFF", None)
     if extra:
         environment.update(extra)
+    environment["GIT_CONFIG_COUNT"] = str(len(GIT_LFS_FILTER_CONFIG))
+    for index, (key, value) in enumerate(GIT_LFS_FILTER_CONFIG):
+        environment[f"GIT_CONFIG_KEY_{index}"] = key
+        environment[f"GIT_CONFIG_VALUE_{index}"] = value
     environment["GIT_NO_REPLACE_OBJECTS"] = "1"
     environment.pop("GIT_REPLACE_REF_BASE", None)
     return environment
