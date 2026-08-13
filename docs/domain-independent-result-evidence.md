@@ -155,7 +155,9 @@ randomly salted commitment artifacts, never raw institution names that permit
 dictionary recovery.
 
 This adapter completes receipt issuance, not independent reproducibility of the
-study. A subsequent private reproduction-package gate must prove that every
-content-addressed primary decision, prediction, exclusion, deviation, and
-timestamp artifact is present before independent aggregate recomputation can
-be claimed.
+study. The implemented private reproduction-package gate is documented in
+`docs/domain-independent-reproduction-package.md`. It checks that every
+content-addressed primary decision, prediction, exclusion, deviation, build,
+trust, and timestamp artifact is represented and cross-linked before a later
+independent aggregate recomputation can be attempted. Its strongest status is
+`manifest_consistent`; it cannot claim that the attempt occurred or succeeded.

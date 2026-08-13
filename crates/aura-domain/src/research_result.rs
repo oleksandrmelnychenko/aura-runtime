@@ -147,7 +147,7 @@ pub struct DomainStudyPreregistrationAttestation {
 }
 
 /// Kind of signed artifact covered by a trusted timestamp receipt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DomainStudyTimestampSubjectKind {
     /// Signed institutional preregistration attestation.
@@ -2180,11 +2180,16 @@ mod tests {
 
     use super::*;
     use crate::{
-        domain_study_seed_registry_sha256, DomainPolicyPackEvidence, DomainStudyAnalysisPlan,
-        DomainStudyAttackPlan, DomainStudyDatasetPlan, DomainStudyHypothesis,
-        DomainStudyMissingDataRule, DomainStudyPrimaryOutcome, DomainStudyReviewPlan,
-        DomainTemporalPolicyEvidence, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+        domain_study_seed_registry_sha256, validate_domain_study_reproduction_manifest,
+        DomainPolicyPackEvidence, DomainStudyAnalysisPlan, DomainStudyAttackPlan,
+        DomainStudyDatasetPlan, DomainStudyHypothesis, DomainStudyMissingDataRule,
+        DomainStudyPrimaryOutcome, DomainStudyReproductionArtifact,
+        DomainStudyReproductionArtifactRole, DomainStudyReproductionDigestKind,
+        DomainStudyReproductionFileIdentity, DomainStudyReproductionManifest,
+        DomainStudyReproductionStatus, DomainStudyReproductionTimestampMaterial,
+        DomainStudyReviewPlan, DomainTemporalPolicyEvidence, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
         DOMAIN_STUDY_PREREGISTRATION_SCHEMA_VERSION,
+        DOMAIN_STUDY_REPRODUCTION_MANIFEST_SCHEMA_VERSION,
     };
 
     const SHA_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -2281,8 +2286,14 @@ mod tests {
             accuracy_micros: 1_000,
             request_sha256: SHA_B.to_string(),
             response_sha256: SHA_C.to_string(),
-            certificate_chain_sha256: SHA_A.to_string(),
-            revocation_evidence_sha256: SHA_D.to_string(),
+            certificate_chain_sha256: aggregate_sha256(
+                b"aura.domain.rfc3161-certificate-chain.v1\0",
+                &[SHA_A, SHA_B],
+            ),
+            revocation_evidence_sha256: aggregate_sha256(
+                b"aura.domain.rfc3161-revocation-evidence.v1\0",
+                &[SHA_C],
+            ),
             tsa_spki_sha256: SHA_A.to_string(),
             tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
         };
@@ -2945,6 +2956,486 @@ mod tests {
             &[],
             &fixture.trust,
         )
+    }
+
+    fn file(sha256: &str) -> DomainStudyReproductionFileIdentity {
+        DomainStudyReproductionFileIdentity {
+            sha256: sha256.to_string(),
+            byte_length: 1,
+        }
+    }
+
+    fn reproduction_manifest(fixture: &TestFixture) -> DomainStudyReproductionManifest {
+        use DomainStudyReproductionArtifactRole as Role;
+
+        let preregistration: DomainStudyPreregistration =
+            serde_json::from_str(&fixture.preregistration_json).expect("preregistration");
+        let report = validate(fixture).expect("result evidence");
+        let result = &fixture.evidence.result;
+        let mut primary = vec![
+            (
+                Role::Preregistration,
+                0,
+                result.preregistration_canonical_sha256.as_str(),
+            ),
+            (
+                Role::PolicyEvidence,
+                0,
+                result.policy_evidence_canonical_sha256.as_str(),
+            ),
+            (
+                Role::BuildProvenance,
+                0,
+                result.build_provenance_canonical_sha256.as_str(),
+            ),
+            (
+                Role::TrustPolicy,
+                0,
+                fixture
+                    .evidence
+                    .final_manifest
+                    .claims
+                    .trust_policy_canonical_sha256
+                    .as_str(),
+            ),
+            (
+                Role::SourceTree,
+                0,
+                preregistration.build_provenance.source_tree_sha256.as_str(),
+            ),
+            (
+                Role::CargoLock,
+                0,
+                preregistration.build_provenance.cargo_lock_sha256.as_str(),
+            ),
+            (
+                Role::RustToolchain,
+                0,
+                preregistration
+                    .build_provenance
+                    .rust_toolchain_sha256
+                    .as_str(),
+            ),
+            (
+                Role::EvaluatedBinary,
+                0,
+                preregistration.build_provenance.binary_sha256.as_str(),
+            ),
+            (Role::Corpus, 0, result.corpus_sha256.as_str()),
+            (
+                Role::KnownSeedRegistry,
+                0,
+                preregistration.dataset.known_seed_registry_sha256.as_str(),
+            ),
+            (
+                Role::InclusionCriteria,
+                0,
+                preregistration.dataset.inclusion_criteria_sha256.as_str(),
+            ),
+            (
+                Role::ExclusionCriteria,
+                0,
+                preregistration.dataset.exclusion_criteria_sha256.as_str(),
+            ),
+            (
+                Role::LabelOntology,
+                0,
+                preregistration.dataset.label_ontology_sha256.as_str(),
+            ),
+            (
+                Role::SafeBoundaryDefinition,
+                0,
+                preregistration
+                    .dataset
+                    .safe_boundary_definition_sha256
+                    .as_str(),
+            ),
+            (
+                Role::SplitManifest,
+                0,
+                result.split_manifest_sha256.as_str(),
+            ),
+            (
+                Role::AttackConstructionManifest,
+                0,
+                preregistration
+                    .attacks
+                    .construction_manifest_sha256
+                    .as_str(),
+            ),
+            (
+                Role::AgreementBootstrapSeed,
+                0,
+                preregistration
+                    .analysis
+                    .inter_rater_agreement_bootstrap_seed_sha256
+                    .as_str(),
+            ),
+            (Role::ReviewPacket, 0, result.review_packet_sha256.as_str()),
+            (
+                Role::ReviewCoverageManifest,
+                0,
+                result.review_coverage_manifest_sha256.as_str(),
+            ),
+            (
+                Role::AgreementAnalysisArtifact,
+                0,
+                result
+                    .review_agreement_analysis
+                    .analysis_artifact_sha256
+                    .as_str(),
+            ),
+            (
+                Role::AdjudicationManifest,
+                0,
+                fixture
+                    .evidence
+                    .adjudication_receipt
+                    .claims
+                    .adjudication_bundle_sha256
+                    .as_str(),
+            ),
+            (
+                Role::AdjudicationDecisionBundle,
+                0,
+                fixture
+                    .evidence
+                    .adjudication_manifest
+                    .decision_bundle_sha256
+                    .as_str(),
+            ),
+            (
+                Role::PredictionBundle,
+                0,
+                result.prediction_bundle_sha256.as_str(),
+            ),
+            (
+                Role::AnalysisEnvironment,
+                0,
+                result.analysis_environment_sha256.as_str(),
+            ),
+            (
+                Role::ExclusionManifest,
+                0,
+                result.exclusion_manifest_sha256.as_str(),
+            ),
+            (
+                Role::ProtocolDeviationManifest,
+                0,
+                result.protocol_deviation_manifest_sha256.as_str(),
+            ),
+        ];
+        for (index, receipt) in fixture.evidence.reviewer_receipts.iter().enumerate() {
+            primary.push((
+                Role::ReviewerAssignment,
+                u16::try_from(index).expect("reviewer ordinal"),
+                receipt.receipt.claims.assignment_manifest_sha256.as_str(),
+            ));
+            primary.push((
+                Role::ReviewerDecisionBundle,
+                u16::try_from(index).expect("reviewer ordinal"),
+                receipt.receipt.claims.decision_bundle_sha256.as_str(),
+            ));
+        }
+        if let Some(exploratory) = result.exploratory_results_sha256.as_deref() {
+            primary.push((Role::ExploratoryResults, 0, exploratory));
+        }
+        let evidence_sha256 = canonical_sha256(&fixture.evidence).expect("evidence digest");
+        primary.push((Role::ResultEvidenceBundle, 0, evidence_sha256.as_str()));
+        primary.sort_by_key(|(role, ordinal, _)| (*role, *ordinal));
+        let primary_artifacts = primary
+            .into_iter()
+            .map(|(role, ordinal, sha256)| DomainStudyReproductionArtifact {
+                role,
+                ordinal,
+                digest_kind: match role {
+                    Role::Preregistration
+                    | Role::PolicyEvidence
+                    | Role::BuildProvenance
+                    | Role::TrustPolicy
+                    | Role::KnownSeedRegistry
+                    | Role::ReviewerAssignment
+                    | Role::ReviewCoverageManifest
+                    | Role::AdjudicationManifest
+                    | Role::ResultEvidenceBundle => {
+                        DomainStudyReproductionDigestKind::CanonicalJsonSha256
+                    }
+                    Role::SourceTree => DomainStudyReproductionDigestKind::BuildSourceTreeV2,
+                    _ => DomainStudyReproductionDigestKind::RawFileSha256,
+                },
+                covered_file_count: 1,
+                file: file(sha256),
+            })
+            .collect::<Vec<_>>();
+
+        let mut timestamps = vec![(
+            DomainStudyTimestampSubjectKind::PreregistrationAttestation,
+            None,
+        )];
+        timestamps.extend(fixture.evidence.reviewer_receipts.iter().enumerate().map(
+            |(index, _)| {
+                (
+                    DomainStudyTimestampSubjectKind::ReviewerReceipt,
+                    Some(u16::try_from(index).expect("reviewer ordinal")),
+                )
+            },
+        ));
+        timestamps.extend([
+            (
+                DomainStudyTimestampSubjectKind::ReviewerAgreementAnalysis,
+                None,
+            ),
+            (
+                DomainStudyTimestampSubjectKind::AdjudicationStartAuthorization,
+                None,
+            ),
+            (DomainStudyTimestampSubjectKind::AdjudicationReceipt, None),
+            (DomainStudyTimestampSubjectKind::FinalEvidenceManifest, None),
+        ]);
+        let timestamp_materials = timestamps
+            .into_iter()
+            .map(
+                |(subject_kind, reviewer_index)| DomainStudyReproductionTimestampMaterial {
+                    subject_kind,
+                    reviewer_index,
+                    request: file(SHA_B),
+                    response: file(SHA_C),
+                    certificate_chain_der: vec![file(SHA_A), file(SHA_B)],
+                    revocation_crl_der: vec![file(SHA_C)],
+                },
+            )
+            .collect::<Vec<_>>();
+        let file_count = u32::try_from(primary_artifacts.len() + timestamp_materials.len() * 5)
+            .expect("file count");
+
+        DomainStudyReproductionManifest {
+            schema_version: DOMAIN_STUDY_REPRODUCTION_MANIFEST_SCHEMA_VERSION.to_string(),
+            study_id: report.study_id,
+            result_id: report.result_id,
+            preregistration_canonical_sha256: report.preregistration_canonical_sha256,
+            result_bundle_sha256: report.result_bundle_sha256,
+            final_manifest_sha256: report.final_manifest_sha256,
+            evidence_bundle_canonical_sha256: canonical_sha256(&fixture.evidence)
+                .expect("evidence digest"),
+            primary_artifacts,
+            timestamp_materials,
+            file_count,
+            total_file_bytes: u64::from(file_count),
+            public_distribution_permitted: false,
+            independent_recomputation_completed: false,
+        }
+    }
+
+    fn validate_reproduction(
+        fixture: &TestFixture,
+        manifest: &DomainStudyReproductionManifest,
+    ) -> Result<crate::DomainStudyReproductionReport, crate::DomainStudyReproductionError> {
+        validate_domain_study_reproduction_manifest(
+            &fixture.preregistration_json,
+            &serde_json::to_string(&fixture.evidence).expect("evidence JSON"),
+            &serde_json::to_string(manifest).expect("reproduction JSON"),
+            &fixture.policy,
+            &fixture.build,
+            &[],
+            &fixture.trust,
+        )
+    }
+
+    #[test]
+    fn complete_reproduction_manifest_is_consistent_but_not_a_completed_rerun() {
+        let fixture = fixture();
+        let manifest = reproduction_manifest(&fixture);
+
+        let report = validate_reproduction(&fixture, &manifest).expect("reproduction manifest");
+
+        assert_eq!(
+            report.status,
+            DomainStudyReproductionStatus::ManifestConsistent
+        );
+        assert_eq!(report.file_count, manifest.file_count);
+        assert!(!report.independent_recomputation_completed);
+        assert!(!report.public_distribution_permitted);
+    }
+
+    #[test]
+    fn reproduction_manifest_rejects_missing_primary_artifact() {
+        let fixture = fixture();
+        let mut manifest = reproduction_manifest(&fixture);
+        manifest.primary_artifacts.pop();
+        manifest.file_count -= 1;
+        manifest.total_file_bytes -= 1;
+
+        let error = validate_reproduction(&fixture, &manifest)
+            .expect_err("incomplete materialization must fail");
+
+        assert!(error.to_string().contains("incomplete or has extra roles"));
+    }
+
+    #[test]
+    fn reproduction_manifest_rejects_timestamp_chain_substitution() {
+        let fixture = fixture();
+        let mut manifest = reproduction_manifest(&fixture);
+        manifest.timestamp_materials[0].certificate_chain_der[0].sha256 = SHA_D.to_string();
+
+        let error = validate_reproduction(&fixture, &manifest)
+            .expect_err("substituted timestamp chain must fail");
+
+        assert!(error.to_string().contains("does not match receipt"));
+    }
+
+    #[test]
+    fn materialization_manifest_cannot_claim_independent_recomputation() {
+        let fixture = fixture();
+        let mut manifest = reproduction_manifest(&fixture);
+        manifest.independent_recomputation_completed = true;
+
+        let error = validate_reproduction(&fixture, &manifest)
+            .expect_err("materialization cannot claim a rerun");
+
+        assert!(error.to_string().contains("completed rerun"));
+    }
+
+    #[test]
+    fn reproduction_manifest_rejects_incorrect_file_totals() {
+        let fixture = fixture();
+        let mut manifest = reproduction_manifest(&fixture);
+        manifest.total_file_bytes += 1;
+
+        let error =
+            validate_reproduction(&fixture, &manifest).expect_err("incorrect totals must fail");
+
+        assert!(error
+            .to_string()
+            .contains("totals are not exactly recomputed"));
+    }
+
+    #[test]
+    fn reproduction_manifest_rejects_unsorted_crl_material() {
+        let fixture = fixture();
+        let mut manifest = reproduction_manifest(&fixture);
+        let timestamp = &mut manifest.timestamp_materials[0];
+        timestamp.certificate_chain_der.push(file(SHA_D));
+        timestamp.revocation_crl_der = vec![file(SHA_D), file(SHA_C)];
+        manifest.file_count += 2;
+        manifest.total_file_bytes += 2;
+
+        let error = validate_reproduction(&fixture, &manifest)
+            .expect_err("unsorted CRL material must fail before its aggregate is trusted");
+
+        assert!(error.to_string().contains("duplicated or not sorted"));
+    }
+
+    #[test]
+    fn reproduction_manifest_rejects_old_schema() {
+        let fixture = fixture();
+        let mut manifest = reproduction_manifest(&fixture);
+        manifest.schema_version = "aura.domain.independent_reproduction_package.v0".to_string();
+
+        let error =
+            validate_reproduction(&fixture, &manifest).expect_err("old schema must fail closed");
+
+        assert!(error.to_string().contains("identity does not match"));
+    }
+
+    #[test]
+    fn reproduction_manifest_rejects_wrong_digest_semantics() {
+        let fixture = fixture();
+        let mut manifest = reproduction_manifest(&fixture);
+        let source = manifest
+            .primary_artifacts
+            .iter_mut()
+            .find(|item| item.role == DomainStudyReproductionArtifactRole::SourceTree)
+            .expect("source tree entry");
+        source.digest_kind = DomainStudyReproductionDigestKind::RawFileSha256;
+
+        let error = validate_reproduction(&fixture, &manifest)
+            .expect_err("source tree cannot be interpreted as a raw file");
+
+        assert!(error
+            .to_string()
+            .contains("does not match its bound chain digest"));
+    }
+
+    #[test]
+    fn reproduction_manifest_rejects_hidden_multifile_canonical_artifact() {
+        let fixture = fixture();
+        let mut manifest = reproduction_manifest(&fixture);
+        manifest.primary_artifacts[0].covered_file_count = 2;
+        manifest.file_count += 1;
+
+        let error = validate_reproduction(&fixture, &manifest)
+            .expect_err("canonical JSON must identify exactly one file");
+
+        assert!(error
+            .to_string()
+            .contains("does not match its bound chain digest"));
+    }
+
+    #[test]
+    fn reproduction_file_identity_hashes_exact_nonempty_bytes() {
+        let identity = crate::domain_study_reproduction_file_identity(b"exact bytes")
+            .expect("bounded file identity");
+
+        assert_eq!(identity.sha256, hex(&Sha256::digest(b"exact bytes")));
+        assert_eq!(identity.byte_length, 11);
+        assert!(crate::domain_study_reproduction_file_identity(b"").is_err());
+    }
+
+    #[test]
+    fn reproduction_artifact_role_wire_values_are_stable() {
+        use DomainStudyReproductionArtifactRole as Role;
+
+        let cases = [
+            (Role::Preregistration, "preregistration"),
+            (Role::PolicyEvidence, "policy_evidence"),
+            (Role::BuildProvenance, "build_provenance"),
+            (Role::TrustPolicy, "trust_policy"),
+            (Role::SourceTree, "source_tree"),
+            (Role::CargoLock, "cargo_lock"),
+            (Role::RustToolchain, "rust_toolchain"),
+            (Role::EvaluatedBinary, "evaluated_binary"),
+            (Role::Corpus, "corpus"),
+            (Role::KnownSeedRegistry, "known_seed_registry"),
+            (Role::InclusionCriteria, "inclusion_criteria"),
+            (Role::ExclusionCriteria, "exclusion_criteria"),
+            (Role::LabelOntology, "label_ontology"),
+            (Role::SafeBoundaryDefinition, "safe_boundary_definition"),
+            (Role::SplitManifest, "split_manifest"),
+            (
+                Role::AttackConstructionManifest,
+                "attack_construction_manifest",
+            ),
+            (Role::AgreementBootstrapSeed, "agreement_bootstrap_seed"),
+            (Role::ReviewPacket, "review_packet"),
+            (Role::ReviewerAssignment, "reviewer_assignment"),
+            (Role::ReviewerDecisionBundle, "reviewer_decision_bundle"),
+            (Role::ReviewCoverageManifest, "review_coverage_manifest"),
+            (
+                Role::AgreementAnalysisArtifact,
+                "agreement_analysis_artifact",
+            ),
+            (Role::AdjudicationManifest, "adjudication_manifest"),
+            (
+                Role::AdjudicationDecisionBundle,
+                "adjudication_decision_bundle",
+            ),
+            (Role::PredictionBundle, "prediction_bundle"),
+            (Role::AnalysisEnvironment, "analysis_environment"),
+            (Role::ExclusionManifest, "exclusion_manifest"),
+            (
+                Role::ProtocolDeviationManifest,
+                "protocol_deviation_manifest",
+            ),
+            (Role::ExploratoryResults, "exploratory_results"),
+            (Role::ResultEvidenceBundle, "result_evidence_bundle"),
+        ];
+
+        for (role, expected) in cases {
+            assert_eq!(
+                serde_json::to_string(&role).expect("serialize role"),
+                format!("\"{expected}\"")
+            );
+        }
     }
 
     #[test]
@@ -3662,5 +4153,19 @@ mod tests {
 
     fn hex(bytes: &[u8]) -> String {
         bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    }
+
+    fn aggregate_sha256(domain: &[u8], digests: &[&str]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(domain);
+        hasher.update(
+            u32::try_from(digests.len())
+                .expect("aggregate count")
+                .to_be_bytes(),
+        );
+        for digest in digests {
+            hasher.update(decode_hex_array::<32>(digest).expect("aggregate member digest"));
+        }
+        hex(&hasher.finalize())
     }
 }

@@ -115,8 +115,25 @@ def _frame(hasher: Any, payload: bytes) -> None:
     hasher.update(payload)
 
 
-def source_tree_digest(root: Path) -> str:
-    """Hash build-relevant source without generated or self-referential evidence."""
+def _source_entry_metadata(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def source_tree_identity(
+    root: Path,
+) -> tuple[str, int, int, frozenset[tuple[int, int]]]:
+    """Hash build source and return digest, entry count, and content bytes.
+
+    Regular files are streamed from one non-following descriptor. Symbolic
+    links bind their target text. Missing tracked paths retain the historical
+    ``D`` framing and contribute zero content bytes.
+    """
 
     root = root.resolve()
     paths = _source_paths(root)
@@ -125,27 +142,97 @@ def source_tree_digest(root: Path) -> str:
 
     hasher = hashlib.sha256()
     hasher.update(SOURCE_TREE_DIGEST_DOMAIN)
+    total_content_bytes = 0
+    regular_file_identities = set()
     for relative_path in paths:
         path = root / relative_path
         _frame(hasher, relative_path.encode("utf-8", errors="surrogateescape"))
 
-        if path.is_symlink():
-            hasher.update(b"L")
-            _frame(
-                hasher,
-                os.readlink(path).encode("utf-8", errors="surrogateescape"),
-            )
-        elif path.is_file():
-            hasher.update(b"F")
-            executable = bool(path.stat().st_mode & stat.S_IXUSR)
-            hasher.update(b"X" if executable else b"-")
-            _frame(hasher, path.read_bytes())
-        elif not path.exists():
+        try:
+            initial_metadata = path.lstat()
+        except FileNotFoundError:
             hasher.update(b"D")
+            continue
+
+        if stat.S_ISLNK(initial_metadata.st_mode):
+            target = os.readlink(path).encode("utf-8", errors="surrogateescape")
+            final_metadata = path.lstat()
+            if _source_entry_metadata(initial_metadata) != _source_entry_metadata(
+                final_metadata
+            ):
+                raise ArtifactError(f"source-tree link changed while hashing: {relative_path}")
+            hasher.update(b"L")
+            _frame(hasher, target)
+            total_content_bytes += len(target)
+        elif stat.S_ISREG(initial_metadata.st_mode):
+            flags = os.O_RDONLY
+            flags |= getattr(os, "O_CLOEXEC", 0)
+            flags |= getattr(os, "O_NOFOLLOW", 0)
+            try:
+                descriptor = os.open(path, flags)
+            except OSError as error:
+                raise ArtifactError(
+                    f"source-tree file cannot be opened safely: {relative_path}"
+                ) from error
+            try:
+                opened_metadata = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(opened_metadata.st_mode)
+                    or _source_entry_metadata(initial_metadata)
+                    != _source_entry_metadata(opened_metadata)
+                ):
+                    raise ArtifactError(
+                        f"source-tree file changed before hashing: {relative_path}"
+                    )
+                regular_file_identities.add(
+                    (opened_metadata.st_dev, opened_metadata.st_ino)
+                )
+                expected_size = opened_metadata.st_size
+                if expected_size < 0:
+                    raise ArtifactError(f"source-tree file size is invalid: {relative_path}")
+                hasher.update(b"F")
+                executable = bool(opened_metadata.st_mode & stat.S_IXUSR)
+                hasher.update(b"X" if executable else b"-")
+                hasher.update(expected_size.to_bytes(8, byteorder="big"))
+                observed_size = 0
+                while True:
+                    chunk = os.read(descriptor, 1024 * 1024)
+                    if not chunk:
+                        break
+                    observed_size += len(chunk)
+                    if observed_size > expected_size:
+                        raise ArtifactError(
+                            f"source-tree file grew while hashing: {relative_path}"
+                        )
+                    hasher.update(chunk)
+                final_metadata = os.fstat(descriptor)
+                if (
+                    observed_size != expected_size
+                    or _source_entry_metadata(opened_metadata)
+                    != _source_entry_metadata(final_metadata)
+                ):
+                    raise ArtifactError(
+                        f"source-tree file changed while hashing: {relative_path}"
+                    )
+                total_content_bytes += observed_size
+            finally:
+                os.close(descriptor)
         else:
             raise ArtifactError(f"unsupported source-tree entry: {relative_path}")
 
-    return hasher.hexdigest()
+    return (
+        hasher.hexdigest(),
+        len(paths),
+        total_content_bytes,
+        frozenset(regular_file_identities),
+    )
+
+
+def source_tree_digest(root: Path) -> str:
+    """Hash build-relevant source without generated or self-referential evidence."""
+
+    digest, _, _, _ = source_tree_identity(root)
+    return digest
 
 
 def source_tree_dirty(root: Path) -> bool:

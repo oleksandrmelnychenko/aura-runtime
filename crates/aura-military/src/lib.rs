@@ -18,11 +18,13 @@ pub mod temporal_shadow_telemetry;
 pub mod temporal_study;
 
 use aura_domain::{
-    validate_domain_study_preregistration, validate_domain_study_result_evidence,
-    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
-    DomainOutput, DomainSignal, DomainStudyBinding, DomainStudyBuildProvenance, DomainStudyError,
-    DomainStudyResultError, DomainStudyResultReport, DomainStudyTrustPolicy, DomainTemporalInput,
-    DomainTemporalOutput, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+    validate_domain_study_preregistration, validate_domain_study_reproduction_manifest,
+    validate_domain_study_result_evidence, DomainConfirmedOutput, DomainInput, DomainModule,
+    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
+    DomainStudyBuildProvenance, DomainStudyError, DomainStudyReproductionError,
+    DomainStudyReproductionReport, DomainStudyResultError, DomainStudyResultReport,
+    DomainStudyTrustPolicy, DomainTemporalInput, DomainTemporalOutput,
+    DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
 #[derive(Default)]
@@ -75,6 +77,29 @@ pub fn validate_independent_study_result(
     validate_domain_study_result_evidence(
         preregistration_json,
         evidence_json,
+        &domain_evidence(),
+        expected_build_provenance,
+        additional_known_seed_sha256,
+        trust_policy,
+    )
+}
+
+/// Validates a private Military reproduction manifest without enabling policy.
+///
+/// The complete signed result chain is revalidated under this exact disabled
+/// shadow policy. Success proves manifest consistency, not a completed rerun.
+pub fn validate_independent_study_reproduction_manifest(
+    preregistration_json: &str,
+    evidence_json: &str,
+    reproduction_manifest_json: &str,
+    expected_build_provenance: &DomainStudyBuildProvenance,
+    additional_known_seed_sha256: &[&str],
+    trust_policy: &DomainStudyTrustPolicy,
+) -> Result<DomainStudyReproductionReport, DomainStudyReproductionError> {
+    validate_domain_study_reproduction_manifest(
+        preregistration_json,
+        evidence_json,
+        reproduction_manifest_json,
         &domain_evidence(),
         expected_build_provenance,
         additional_known_seed_sha256,

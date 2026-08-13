@@ -5,11 +5,12 @@ pub mod policy;
 mod routing;
 
 use aura_domain::{
-    validate_domain_study_preregistration, validate_domain_study_result_evidence,
-    DomainConfirmedOutput, DomainInput, DomainModule, DomainModuleEvidence, DomainModuleId,
-    DomainOutput, DomainSignal, DomainStudyBinding, DomainStudyBuildProvenance, DomainStudyError,
-    DomainStudyResultError, DomainStudyResultReport, DomainStudyTrustPolicy,
-    DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+    validate_domain_study_preregistration, validate_domain_study_reproduction_manifest,
+    validate_domain_study_result_evidence, DomainConfirmedOutput, DomainInput, DomainModule,
+    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainSignal, DomainStudyBinding,
+    DomainStudyBuildProvenance, DomainStudyError, DomainStudyReproductionError,
+    DomainStudyReproductionReport, DomainStudyResultError, DomainStudyResultReport,
+    DomainStudyTrustPolicy, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
 };
 
 #[derive(Default)]
@@ -102,6 +103,29 @@ pub fn validate_independent_study_result(
     validate_domain_study_result_evidence(
         preregistration_json,
         evidence_json,
+        &domain_evidence(),
+        expected_build_provenance,
+        additional_known_seed_sha256,
+        trust_policy,
+    )
+}
+
+/// Validates a private Kids reproduction manifest against this exact build.
+///
+/// The returned status proves manifest consistency only. It is neither a
+/// completed independent rerun nor authority to export private child data.
+pub fn validate_independent_study_reproduction_manifest(
+    preregistration_json: &str,
+    evidence_json: &str,
+    reproduction_manifest_json: &str,
+    expected_build_provenance: &DomainStudyBuildProvenance,
+    additional_known_seed_sha256: &[&str],
+    trust_policy: &DomainStudyTrustPolicy,
+) -> Result<DomainStudyReproductionReport, DomainStudyReproductionError> {
+    validate_domain_study_reproduction_manifest(
+        preregistration_json,
+        evidence_json,
+        reproduction_manifest_json,
         &domain_evidence(),
         expected_build_provenance,
         additional_known_seed_sha256,

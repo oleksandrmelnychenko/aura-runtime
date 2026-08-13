@@ -1,9 +1,15 @@
+import hashlib
+import os
+import stat
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from ci.apple_artifact import (
+    SOURCE_TREE_DIGEST_DOMAIN,
+    _frame,
+    _source_paths,
     _source_revision_is_ancestor,
     source_tree_digest,
     source_tree_dirty,
@@ -95,6 +101,29 @@ class SourceTreeIdentityTests(unittest.TestCase):
 
         self.assertNotEqual(source_tree_digest(self.root), baseline)
         self.assertTrue(source_tree_dirty(self.root))
+
+    def test_streamed_digest_preserves_v2_wire_algorithm(self) -> None:
+        hasher = hashlib.sha256()
+        hasher.update(SOURCE_TREE_DIGEST_DOMAIN)
+        for relative_path in _source_paths(self.root):
+            path = self.root / relative_path
+            _frame(hasher, relative_path.encode("utf-8", errors="surrogateescape"))
+            if path.is_symlink():
+                hasher.update(b"L")
+                _frame(
+                    hasher,
+                    os.readlink(path).encode("utf-8", errors="surrogateescape"),
+                )
+            elif path.is_file():
+                hasher.update(b"F")
+                hasher.update(b"X" if path.stat().st_mode & stat.S_IXUSR else b"-")
+                _frame(hasher, path.read_bytes())
+            elif not path.exists():
+                hasher.update(b"D")
+            else:
+                self.fail(f"unsupported fixture path: {relative_path}")
+
+        self.assertEqual(source_tree_digest(self.root), hasher.hexdigest())
 
     def test_artifact_only_commit_can_follow_source_revision(self) -> None:
         source_revision = subprocess.run(

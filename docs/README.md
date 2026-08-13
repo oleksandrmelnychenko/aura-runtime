@@ -13,6 +13,7 @@ Status: synchronized with runtime and policy behavior on August 1, 2026.
 - [AURA Core Research Evidence Roadmap](./research-evidence-roadmap.md)
 - [Independent Domain Result Evidence](./domain-independent-result-evidence.md)
 - [Domain Result Trusted Timestamp Adapter](./domain-result-trusted-timestamp-adapter.md)
+- [Private Independent-Reproduction Package](./domain-independent-reproduction-package.md)
 - [Apple Artifact Integration Contract](./apple-artifact-integration.md)
 - [Canonical Local Decision ADR](./adr/0001-canonical-local-decision-api.md)
 - [AURA Core Refactor Baseline](./refactor-baseline.md)
