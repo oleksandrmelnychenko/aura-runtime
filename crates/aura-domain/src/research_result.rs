@@ -1566,7 +1566,22 @@ fn validate_result_bundle(
     {
         return invalid("reviewer-agreement analysis does not match the frozen procedure");
     }
-    let metrics = &result.metrics;
+    evaluate_metric_decision(
+        &result.metrics,
+        agreement.agreement,
+        agreement.agreement_95_lower,
+        preregistration,
+        &review_coverage.aggregate,
+    )
+}
+
+fn evaluate_metric_decision(
+    metrics: &DomainStudyResultMetrics,
+    agreement_point: Option<f64>,
+    agreement_lower: Option<f64>,
+    preregistration: &DomainStudyPreregistration,
+    expected_review_coverage: &DomainStudyReviewCoverage,
+) -> Result<MetricDecision, DomainStudyResultError> {
     let accounted_case_count = checked_sum_counts(&[
         metrics.analyzed_case_count,
         metrics.excluded_case_count,
@@ -1582,7 +1597,7 @@ fn validate_result_bundle(
     {
         return invalid("aggregate result counts or agreement value are inconsistent");
     }
-    if metrics.review_coverage != review_coverage.aggregate
+    if &metrics.review_coverage != expected_review_coverage
         || metrics.confirmatory_analysis_deviation_count > metrics.protocol_deviation_count
     {
         return invalid("reported review coverage or protocol deviations are inconsistent");
@@ -1700,8 +1715,8 @@ fn validate_result_bundle(
         && all_family_support_complete
         && stratum_coverage_complete
         && attack_family_decision.coverage_complete
-        && agreement.agreement.is_some()
-        && agreement.agreement_95_lower.is_some();
+        && agreement_point.is_some()
+        && agreement_lower.is_some();
     let thresholds_met = complete
         && macro_f1.is_some_and(|value| value >= preregistration.analysis.minimum_macro_f1)
         && macro_f1_lower.is_some_and(|value| value >= preregistration.analysis.minimum_macro_f1)
@@ -1731,11 +1746,9 @@ fn validate_result_bundle(
                     .minimum_attack_variant_consistency_rate
         })
         && attack_family_decision.thresholds_met
-        && agreement
-            .agreement
+        && agreement_point
             .is_some_and(|value| value >= preregistration.analysis.minimum_inter_rater_agreement)
-        && agreement
-            .agreement_95_lower
+        && agreement_lower
             .is_some_and(|value| value >= preregistration.analysis.minimum_inter_rater_agreement);
 
     Ok(MetricDecision {
@@ -1750,6 +1763,33 @@ fn validate_result_bundle(
         complete,
         thresholds_met,
     })
+}
+
+pub(crate) fn domain_study_recomputed_outcome_status(
+    metrics: &DomainStudyResultMetrics,
+    agreement_point: Option<f64>,
+    agreement_lower: Option<f64>,
+    preregistration: &DomainStudyPreregistration,
+    expected_review_coverage: &DomainStudyReviewCoverage,
+) -> Result<DomainStudyOutcomeStatus, DomainStudyResultError> {
+    if agreement_point.is_some_and(|value| !signed_unit_interval(value))
+        || agreement_lower.is_some_and(|value| !signed_unit_interval(value))
+        || match (agreement_point, agreement_lower) {
+            (Some(point), Some(lower)) => lower > point,
+            (None, Some(_)) => true,
+            _ => false,
+        }
+    {
+        return invalid("recomputed agreement values are malformed");
+    }
+    let decision = evaluate_metric_decision(
+        metrics,
+        agreement_point,
+        agreement_lower,
+        preregistration,
+        expected_review_coverage,
+    )?;
+    Ok(outcome_status(decision.complete, decision.thresholds_met))
 }
 
 fn validate_strata(
@@ -2176,18 +2216,19 @@ fn invalid<T>(message: impl Into<String>) -> Result<T, DomainStudyResultError> {
 
 #[cfg(test)]
 mod tests {
-    use ed25519_dalek::{Signer, SigningKey};
+    use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 
     use super::*;
     use crate::{
-        domain_study_seed_registry_sha256, validate_domain_study_reproduction_manifest,
-        DomainPolicyPackEvidence, DomainStudyAnalysisPlan, DomainStudyAttackPlan,
-        DomainStudyDatasetPlan, DomainStudyHypothesis, DomainStudyMissingDataRule,
-        DomainStudyPrimaryOutcome, DomainStudyReproductionArtifact,
-        DomainStudyReproductionArtifactRole, DomainStudyReproductionDigestKind,
-        DomainStudyReproductionFileIdentity, DomainStudyReproductionManifest,
-        DomainStudyReproductionStatus, DomainStudyReproductionTimestampMaterial,
-        DomainStudyReviewPlan, DomainTemporalPolicyEvidence, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
+        domain_study_seed_registry_sha256, research_recomputation as recomputation,
+        validate_domain_study_reproduction_manifest, DomainPolicyPackEvidence,
+        DomainStudyAnalysisPlan, DomainStudyAttackPlan, DomainStudyDatasetPlan,
+        DomainStudyHypothesis, DomainStudyMissingDataRule, DomainStudyPrimaryOutcome,
+        DomainStudyReproductionArtifact, DomainStudyReproductionArtifactRole,
+        DomainStudyReproductionDigestKind, DomainStudyReproductionFileIdentity,
+        DomainStudyReproductionManifest, DomainStudyReproductionStatus,
+        DomainStudyReproductionTimestampMaterial, DomainStudyReviewPlan,
+        DomainTemporalPolicyEvidence, DOMAIN_MODULE_EVIDENCE_SCHEMA_VERSION,
         DOMAIN_STUDY_PREREGISTRATION_SCHEMA_VERSION,
         DOMAIN_STUDY_REPRODUCTION_MANIFEST_SCHEMA_VERSION,
     };
@@ -4149,6 +4190,805 @@ mod tests {
     fn oid_with_large_second_arc_under_arc_two_is_valid() {
         assert!(safe_oid("2.999.3"));
         assert!(!safe_oid("1.40.3"));
+    }
+
+    struct RecomputationKeys {
+        custodian: SigningKey,
+        reproducer: SigningKey,
+        executor: SigningKey,
+        timestamp: SigningKey,
+        final_manifest: SigningKey,
+    }
+
+    impl RecomputationKeys {
+        fn new() -> Self {
+            Self {
+                custodian: SigningKey::from_bytes(&[7; 32]),
+                reproducer: SigningKey::from_bytes(&[8; 32]),
+                executor: SigningKey::from_bytes(&[9; 32]),
+                timestamp: SigningKey::from_bytes(&[10; 32]),
+                final_manifest: SigningKey::from_bytes(&[11; 32]),
+            }
+        }
+
+        fn trust_policy(&self) -> recomputation::DomainStudyRecomputationTrustPolicy {
+            recomputation::DomainStudyRecomputationTrustPolicy {
+                schema_version:
+                    recomputation::DOMAIN_STUDY_RECOMPUTATION_TRUST_POLICY_SCHEMA_VERSION
+                        .to_string(),
+                evidence_custodian_authorizer: trusted_key(
+                    "recomputation_custodian",
+                    &self.custodian,
+                ),
+                evidence_custodian_affiliation_commitment_sha256: SHA_A.to_string(),
+                independent_reproducer_authorizer: trusted_key(
+                    "independent_reproducer",
+                    &self.reproducer,
+                ),
+                independent_reproducer_affiliation_commitment_sha256: SHA_D.to_string(),
+                executor: trusted_key("recomputation_executor", &self.executor),
+                executor_affiliation_commitment_sha256: SHA_D.to_string(),
+                timestamp_verifier: trusted_key(
+                    "recomputation_timestamp_verifier",
+                    &self.timestamp,
+                ),
+                trusted_tsa_spki_sha256: SHA_A.to_string(),
+                trusted_tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
+                final_manifest_signer: trusted_key(
+                    "recomputation_final_manifest",
+                    &self.final_manifest,
+                ),
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum SubmittedRecomputation {
+        ExactMatch,
+        NormalizedMismatch,
+        ExecutionFailed,
+    }
+
+    struct RecomputationFixture {
+        trust: recomputation::DomainStudyRecomputationTrustPolicy,
+        reproduction_manifest: DomainStudyReproductionManifest,
+        evidence: recomputation::DomainStudyRecomputationEvidenceBundle,
+    }
+
+    fn recomputation_detached_signature(
+        payload: Vec<u8>,
+        key_id: &str,
+        signing_key: &SigningKey,
+    ) -> DomainStudyDetachedSignature {
+        DomainStudyDetachedSignature {
+            key_id: key_id.to_string(),
+            signature_hex: hex(&signing_key.sign(&payload).to_bytes()),
+        }
+    }
+
+    fn recomputation_timestamp(
+        subject_kind: recomputation::DomainStudyRecomputationTimestampSubjectKind,
+        subject_sha256: String,
+        issued_at_ms: u64,
+        keys: &RecomputationKeys,
+    ) -> recomputation::DomainStudyRecomputationTimestampReceipt {
+        let claims = recomputation::DomainStudyRecomputationTimestampClaims {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_TIMESTAMP_SCHEMA_VERSION
+                .to_string(),
+            subject_kind,
+            subject_canonical_sha256: subject_sha256,
+            protocol: DomainStudyTimestampProtocol::Rfc3161TrustedChain,
+            issued_at_ms,
+            gen_time_submillisecond_micros: 0,
+            accuracy_micros: 1_000,
+            request_sha256: SHA_B.to_string(),
+            response_sha256: SHA_C.to_string(),
+            certificate_chain_sha256: aggregate_sha256(
+                b"aura.domain.rfc3161-certificate-chain.v1\0",
+                &[SHA_A, SHA_B],
+            ),
+            revocation_evidence_sha256: aggregate_sha256(
+                b"aura.domain.rfc3161-revocation-evidence.v1\0",
+                &[SHA_C],
+            ),
+            tsa_spki_sha256: SHA_A.to_string(),
+            tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
+        };
+        let key_id = "recomputation_timestamp_verifier";
+        let payload =
+            recomputation::domain_study_recomputation_timestamp_signing_payload(&claims, key_id)
+                .expect("recomputation timestamp signing payload");
+        recomputation::DomainStudyRecomputationTimestampReceipt {
+            claims,
+            signature: recomputation_detached_signature(payload, key_id, &keys.timestamp),
+        }
+    }
+
+    fn recomputation_timestamp_material(
+        subject_kind: recomputation::DomainStudyRecomputationTimestampSubjectKind,
+    ) -> recomputation::DomainStudyRecomputationTimestampMaterial {
+        recomputation::DomainStudyRecomputationTimestampMaterial {
+            subject_kind,
+            request: file(SHA_B),
+            response: file(SHA_C),
+            certificate_chain_der: vec![file(SHA_A), file(SHA_B)],
+            revocation_crl_der: vec![file(SHA_C)],
+        }
+    }
+
+    fn recomputation_fixture(
+        original: &TestFixture,
+        submitted: SubmittedRecomputation,
+    ) -> RecomputationFixture {
+        let reproduction_manifest = reproduction_manifest(original);
+        let original_report = validate(original).expect("original result evidence");
+        let preregistration: DomainStudyPreregistration =
+            serde_json::from_str(&original.preregistration_json).expect("preregistration");
+        let keys = RecomputationKeys::new();
+        let trust = keys.trust_policy();
+        let execution_specification =
+            recomputation::DomainStudyRecomputationExecutionSpecification {
+                schema_version:
+                    recomputation::DOMAIN_STUDY_RECOMPUTATION_EXECUTION_SPECIFICATION_SCHEMA_VERSION
+                        .to_string(),
+                command_argv: vec![
+                    "aura-domain-recompute".to_string(),
+                    "--aggregate-only".to_string(),
+                ],
+                runner_sha256: SHA_A.to_string(),
+                comparator_sha256: SHA_B.to_string(),
+                source_tree_sha256: preregistration.build_provenance.source_tree_sha256.clone(),
+                evaluated_binary_sha256: preregistration.build_provenance.binary_sha256.clone(),
+                analysis_environment_sha256: original
+                    .evidence
+                    .result
+                    .analysis_environment_sha256
+                    .clone(),
+                hardware_class_sha256: SHA_C.to_string(),
+                environment_allowlist_sha256: SHA_D.to_string(),
+                known_seed_registry_sha256: preregistration
+                    .dataset
+                    .known_seed_registry_sha256
+                    .clone(),
+                agreement_bootstrap_seed_sha256: preregistration
+                    .analysis
+                    .inter_rater_agreement_bootstrap_seed_sha256
+                    .clone(),
+                network_policy: recomputation::DomainStudyRecomputationNetworkPolicy::DenyAll,
+                maximum_wall_clock_ms: 300_000,
+                maximum_cpu_time_ms: 300_000,
+                maximum_rss_bytes: 1_073_741_824,
+                maximum_output_bytes: 67_108_864,
+            };
+        let plan = recomputation::DomainStudyRecomputationPlan {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_PLAN_SCHEMA_VERSION
+                .to_string(),
+            recomputation_id: "independent_recomputation_2026_01".to_string(),
+            study_id: original_report.study_id.clone(),
+            result_id: original_report.result_id.clone(),
+            original_preregistration_canonical_sha256: original_report
+                .preregistration_canonical_sha256
+                .clone(),
+            original_result_bundle_sha256: original_report.result_bundle_sha256.clone(),
+            original_final_manifest_sha256: original_report.final_manifest_sha256.clone(),
+            original_evidence_bundle_canonical_sha256: canonical_sha256(&original.evidence)
+                .expect("original evidence digest"),
+            reproduction_manifest_canonical_sha256: canonical_sha256(&reproduction_manifest)
+                .expect("reproduction manifest digest"),
+            original_trust_policy_canonical_sha256: canonical_sha256(&original.trust)
+                .expect("original trust digest"),
+            recomputation_trust_policy_canonical_sha256: canonical_sha256(&trust)
+                .expect("recomputation trust digest"),
+            execution_specification,
+            normalization_profile:
+                recomputation::DomainStudyRecomputationNormalizationProfile::MetricsAgreementBitsOutcomeV1,
+            planned_attempt_count: 1,
+            deviations_permitted: false,
+            raw_content_export_permitted: false,
+            public_distribution_permitted: false,
+        };
+        let plan_sha256 = canonical_sha256(&plan).expect("plan digest");
+        let plan_timestamp = recomputation_timestamp(
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::RecomputationPlan,
+            plan_sha256.clone(),
+            REGISTERED_AT_MS + 40_000,
+            &keys,
+        );
+        let plan_timestamp_sha256 =
+            canonical_sha256(&plan_timestamp).expect("plan timestamp digest");
+
+        let custodian_claims =
+            recomputation::DomainStudyRecomputationCustodianAuthorizationClaims {
+                schema_version:
+                    recomputation::DOMAIN_STUDY_RECOMPUTATION_CUSTODIAN_AUTHORIZATION_SCHEMA_VERSION
+                        .to_string(),
+                recomputation_id: plan.recomputation_id.clone(),
+                plan_canonical_sha256: plan_sha256.clone(),
+                plan_timestamp_sha256: plan_timestamp_sha256.clone(),
+                authorized_executor_key_id: trust.executor.key_id.clone(),
+                affiliation_commitment_sha256: trust
+                    .evidence_custodian_affiliation_commitment_sha256
+                    .clone(),
+                governance_scope_sha256: SHA_A.to_string(),
+                authorization_nonce_hex: SHA_A.to_string(),
+                valid_until_ms: REGISTERED_AT_MS + 100_000,
+                authorized_at_ms: REGISTERED_AT_MS + 41_000,
+                raw_content_export_permitted: false,
+                public_distribution_permitted: false,
+            };
+        let custodian_payload =
+            recomputation::domain_study_recomputation_custodian_authorization_signing_payload(
+                &custodian_claims,
+                &trust.evidence_custodian_authorizer.key_id,
+            )
+            .expect("custodian signing payload");
+        let custodian_authorization =
+            recomputation::DomainStudySignedRecomputationCustodianAuthorization {
+                claims: custodian_claims,
+                signature: recomputation_detached_signature(
+                    custodian_payload,
+                    &trust.evidence_custodian_authorizer.key_id,
+                    &keys.custodian,
+                ),
+            };
+        let custodian_sha256 =
+            canonical_sha256(&custodian_authorization).expect("custodian authorization digest");
+        let custodian_authorization_timestamp = recomputation_timestamp(
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::EvidenceCustodianAuthorization,
+            custodian_sha256.clone(),
+            REGISTERED_AT_MS + 42_000,
+            &keys,
+        );
+        let custodian_timestamp_sha256 = canonical_sha256(&custodian_authorization_timestamp)
+            .expect("custodian timestamp digest");
+
+        let reproducer_claims =
+            recomputation::DomainStudyRecomputationReproducerAuthorizationClaims {
+                schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_REPRODUCER_AUTHORIZATION_SCHEMA_VERSION.to_string(),
+                recomputation_id: plan.recomputation_id.clone(),
+                plan_canonical_sha256: plan_sha256.clone(),
+                custodian_authorization_sha256: custodian_sha256.clone(),
+                custodian_authorization_timestamp_sha256: custodian_timestamp_sha256.clone(),
+                authorized_executor_key_id: trust.executor.key_id.clone(),
+                affiliation_commitment_sha256: trust
+                    .independent_reproducer_affiliation_commitment_sha256
+                    .clone(),
+                independence_record_sha256: SHA_B.to_string(),
+                acceptance_nonce_hex: SHA_B.to_string(),
+                valid_until_ms: REGISTERED_AT_MS + 100_000,
+                accepted_at_ms: REGISTERED_AT_MS + 43_000,
+                raw_content_export_permitted: false,
+                public_distribution_permitted: false,
+            };
+        let reproducer_payload =
+            recomputation::domain_study_recomputation_reproducer_authorization_signing_payload(
+                &reproducer_claims,
+                &trust.independent_reproducer_authorizer.key_id,
+            )
+            .expect("reproducer signing payload");
+        let reproducer_authorization =
+            recomputation::DomainStudySignedRecomputationReproducerAuthorization {
+                claims: reproducer_claims,
+                signature: recomputation_detached_signature(
+                    reproducer_payload,
+                    &trust.independent_reproducer_authorizer.key_id,
+                    &keys.reproducer,
+                ),
+            };
+        let reproducer_sha256 =
+            canonical_sha256(&reproducer_authorization).expect("reproducer authorization digest");
+        let reproducer_authorization_timestamp = recomputation_timestamp(
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::IndependentReproducerAuthorization,
+            reproducer_sha256.clone(),
+            REGISTERED_AT_MS + 44_000,
+            &keys,
+        );
+        let reproducer_timestamp_sha256 = canonical_sha256(&reproducer_authorization_timestamp)
+            .expect("reproducer timestamp digest");
+
+        let run_id = recomputation::domain_study_recomputation_run_id(&plan_sha256, SHA_A, SHA_B)
+            .expect("run id");
+        let execution_specification_sha256 = canonical_sha256(&plan.execution_specification)
+            .expect("execution specification digest");
+        let start_claims = recomputation::DomainStudyRecomputationStartClaims {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_START_SCHEMA_VERSION
+                .to_string(),
+            recomputation_id: plan.recomputation_id.clone(),
+            run_id: run_id.clone(),
+            attempt_ordinal: 0,
+            plan_canonical_sha256: plan_sha256.clone(),
+            custodian_authorization_sha256: custodian_sha256.clone(),
+            custodian_authorization_timestamp_sha256: custodian_timestamp_sha256.clone(),
+            reproducer_authorization_sha256: reproducer_sha256.clone(),
+            reproducer_authorization_timestamp_sha256: reproducer_timestamp_sha256.clone(),
+            observed_reproduction_manifest_canonical_sha256: plan
+                .reproduction_manifest_canonical_sha256
+                .clone(),
+            observed_execution_specification_canonical_sha256: execution_specification_sha256
+                .clone(),
+            committed_at_ms: REGISTERED_AT_MS + 45_000,
+        };
+        let start_payload = recomputation::domain_study_recomputation_start_signing_payload(
+            &start_claims,
+            &trust.executor.key_id,
+        )
+        .expect("start signing payload");
+        let start_commitment = recomputation::DomainStudySignedRecomputationStart {
+            claims: start_claims,
+            signature: recomputation_detached_signature(
+                start_payload,
+                &trust.executor.key_id,
+                &keys.executor,
+            ),
+        };
+        let start_sha256 = canonical_sha256(&start_commitment).expect("start digest");
+        let start_timestamp = recomputation_timestamp(
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::ExecutionStartCommitment,
+            start_sha256.clone(),
+            REGISTERED_AT_MS + 46_000,
+            &keys,
+        );
+        let start_timestamp_sha256 =
+            canonical_sha256(&start_timestamp).expect("start timestamp digest");
+
+        let no_deviation_manifest = recomputation::DomainStudyRecomputationNoDeviationManifest {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_NO_DEVIATION_SCHEMA_VERSION
+                .to_string(),
+            recomputation_id: plan.recomputation_id.clone(),
+            run_id: run_id.clone(),
+            complete_inventory_declared: true,
+            deviation_count: 0,
+        };
+        let no_deviation_sha256 =
+            canonical_sha256(&no_deviation_manifest).expect("no-deviation digest");
+        let mut normalized = recomputation::domain_study_recomputation_normalized_result(
+            &original.evidence.result,
+            original_report.outcome_status,
+        );
+        if matches!(submitted, SubmittedRecomputation::NormalizedMismatch) {
+            normalized.metrics.per_stratum[0].case_count -= 1;
+            normalized.metrics.per_stratum[1].case_count += 1;
+        }
+        let normalized_result = if matches!(submitted, SubmittedRecomputation::ExecutionFailed) {
+            None
+        } else {
+            Some(normalized)
+        };
+        let normalized_sha256 = normalized_result
+            .as_ref()
+            .map(canonical_sha256)
+            .transpose()
+            .expect("normalized result digest");
+        let (disposition, process_exit_code, failure_kind) = match submitted {
+            SubmittedRecomputation::ExactMatch | SubmittedRecomputation::NormalizedMismatch => (
+                recomputation::DomainStudyRecomputationExecutionDisposition::Succeeded,
+                Some(0),
+                None,
+            ),
+            SubmittedRecomputation::ExecutionFailed => (
+                recomputation::DomainStudyRecomputationExecutionDisposition::Failed,
+                Some(17),
+                Some(recomputation::DomainStudyRecomputationFailureKind::ProcessExit),
+            ),
+        };
+        let execution_claims = recomputation::DomainStudyRecomputationExecutionClaims {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_EXECUTION_SCHEMA_VERSION
+                .to_string(),
+            recomputation_id: plan.recomputation_id.clone(),
+            run_id: run_id.clone(),
+            attempt_ordinal: 0,
+            plan_canonical_sha256: plan_sha256.clone(),
+            signed_start_commitment_sha256: start_sha256.clone(),
+            start_timestamp_sha256: start_timestamp_sha256.clone(),
+            observed_reproduction_manifest_canonical_sha256: plan
+                .reproduction_manifest_canonical_sha256
+                .clone(),
+            observed_execution_specification_canonical_sha256: execution_specification_sha256,
+            disposition,
+            process_exit_code,
+            failure_kind,
+            output_artifact_manifest_sha256: SHA_A.to_string(),
+            execution_transcript_sha256: SHA_B.to_string(),
+            no_deviation_manifest_canonical_sha256: no_deviation_sha256.clone(),
+            normalized_result_canonical_sha256: normalized_sha256.clone(),
+            observed_wall_clock_ms: 1_000,
+            observed_cpu_time_ms: 750,
+            observed_peak_rss_bytes: 268_435_456,
+            observed_output_bytes: 1_048_576,
+            declared_started_at_ms: REGISTERED_AT_MS + 47_000,
+            declared_completed_at_ms: REGISTERED_AT_MS + 48_000,
+            raw_content_exported: false,
+        };
+        let execution_payload =
+            recomputation::domain_study_recomputation_execution_signing_payload(
+                &execution_claims,
+                &trust.executor.key_id,
+            )
+            .expect("execution signing payload");
+        let execution_attestation = recomputation::DomainStudySignedRecomputationExecution {
+            claims: execution_claims,
+            signature: recomputation_detached_signature(
+                execution_payload,
+                &trust.executor.key_id,
+                &keys.executor,
+            ),
+        };
+        let execution_sha256 = canonical_sha256(&execution_attestation).expect("execution digest");
+        let execution_timestamp = recomputation_timestamp(
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::ExecutionAttestation,
+            execution_sha256.clone(),
+            REGISTERED_AT_MS + 49_000,
+            &keys,
+        );
+        let execution_timestamp_sha256 =
+            canonical_sha256(&execution_timestamp).expect("execution timestamp digest");
+
+        let status = match submitted {
+            SubmittedRecomputation::ExactMatch => {
+                recomputation::DomainStudyRecomputationStatus::AggregateExactMatch
+            }
+            SubmittedRecomputation::NormalizedMismatch => {
+                recomputation::DomainStudyRecomputationStatus::NormalizedMismatch
+            }
+            SubmittedRecomputation::ExecutionFailed => {
+                recomputation::DomainStudyRecomputationStatus::ExecutionFailed
+            }
+        };
+        let original_normalized = recomputation::domain_study_recomputation_normalized_result(
+            &original.evidence.result,
+            original_report.outcome_status,
+        );
+        let comparison = recomputation::DomainStudyRecomputationComparison {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_COMPARISON_SCHEMA_VERSION
+                .to_string(),
+            recomputation_id: plan.recomputation_id.clone(),
+            run_id: run_id.clone(),
+            plan_canonical_sha256: plan_sha256.clone(),
+            signed_execution_attestation_sha256: execution_sha256.clone(),
+            original_normalized_result_canonical_sha256: canonical_sha256(&original_normalized)
+                .expect("original normalized digest"),
+            recomputed_normalized_result_canonical_sha256: normalized_sha256,
+            status,
+        };
+        let comparison_sha256 = canonical_sha256(&comparison).expect("comparison digest");
+        let comparison_timestamp = recomputation_timestamp(
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::ComparisonReceipt,
+            comparison_sha256.clone(),
+            REGISTERED_AT_MS + 50_000,
+            &keys,
+        );
+        let comparison_timestamp_sha256 =
+            canonical_sha256(&comparison_timestamp).expect("comparison timestamp digest");
+
+        let final_claims = recomputation::DomainStudyRecomputationFinalManifestClaims {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_FINAL_MANIFEST_SCHEMA_VERSION
+                .to_string(),
+            recomputation_id: plan.recomputation_id.clone(),
+            run_id,
+            plan_canonical_sha256: plan_sha256,
+            plan_timestamp_sha256,
+            custodian_authorization_sha256: custodian_sha256,
+            custodian_authorization_timestamp_sha256: custodian_timestamp_sha256,
+            reproducer_authorization_sha256: reproducer_sha256,
+            reproducer_authorization_timestamp_sha256: reproducer_timestamp_sha256,
+            signed_start_commitment_sha256: start_sha256,
+            start_timestamp_sha256,
+            signed_execution_attestation_sha256: execution_sha256,
+            execution_timestamp_sha256,
+            no_deviation_manifest_canonical_sha256: no_deviation_sha256,
+            comparison_canonical_sha256: comparison_sha256,
+            comparison_timestamp_sha256,
+            recomputation_trust_policy_canonical_sha256: canonical_sha256(&trust)
+                .expect("recomputation trust digest"),
+            status,
+            completed_at_ms: REGISTERED_AT_MS + 51_000,
+            raw_content_exported: false,
+            public_distribution_permitted: false,
+        };
+        let final_payload =
+            recomputation::domain_study_recomputation_final_manifest_signing_payload(
+                &final_claims,
+                &trust.final_manifest_signer.key_id,
+            )
+            .expect("recomputation final signing payload");
+        let final_manifest = recomputation::DomainStudySignedRecomputationFinalManifest {
+            claims: final_claims,
+            signature: recomputation_detached_signature(
+                final_payload,
+                &trust.final_manifest_signer.key_id,
+                &keys.final_manifest,
+            ),
+        };
+        let final_manifest_timestamp = recomputation_timestamp(
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::RecomputationFinalManifest,
+            canonical_sha256(&final_manifest).expect("final manifest digest"),
+            REGISTERED_AT_MS + 52_000,
+            &keys,
+        );
+        let timestamp_materials = [
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::RecomputationPlan,
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::EvidenceCustodianAuthorization,
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::IndependentReproducerAuthorization,
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::ExecutionStartCommitment,
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::ExecutionAttestation,
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::ComparisonReceipt,
+            recomputation::DomainStudyRecomputationTimestampSubjectKind::RecomputationFinalManifest,
+        ]
+        .into_iter()
+        .map(recomputation_timestamp_material)
+        .collect();
+
+        RecomputationFixture {
+            trust,
+            reproduction_manifest,
+            evidence: recomputation::DomainStudyRecomputationEvidenceBundle {
+                schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_EVIDENCE_SCHEMA_VERSION
+                    .to_string(),
+                plan,
+                plan_timestamp,
+                custodian_authorization,
+                custodian_authorization_timestamp,
+                reproducer_authorization,
+                reproducer_authorization_timestamp,
+                start_commitment,
+                start_timestamp,
+                no_deviation_manifest,
+                execution_attestation,
+                execution_timestamp,
+                normalized_result,
+                comparison,
+                comparison_timestamp,
+                final_manifest,
+                final_manifest_timestamp,
+                timestamp_materials,
+            },
+        }
+    }
+
+    fn validate_recomputation(
+        original: &TestFixture,
+        submitted: &RecomputationFixture,
+    ) -> Result<
+        recomputation::DomainStudyRecomputationReport,
+        recomputation::DomainStudyRecomputationError,
+    > {
+        recomputation::validate_domain_study_independent_recomputation(
+            &original.preregistration_json,
+            &serde_json::to_string(&original.evidence).expect("original evidence JSON"),
+            &serde_json::to_string(&submitted.reproduction_manifest)
+                .expect("reproduction manifest JSON"),
+            &serde_json::to_string(&submitted.evidence).expect("recomputation evidence JSON"),
+            &original.policy,
+            &original.build,
+            &[],
+            &original.trust,
+            &submitted.trust,
+        )
+    }
+
+    #[test]
+    fn exact_recomputation_is_bounded_to_computational_reproduction() {
+        let original = fixture();
+        let submitted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+
+        let report = validate_recomputation(&original, &submitted).expect("exact recomputation");
+
+        assert_eq!(
+            report.status,
+            recomputation::DomainStudyRecomputationStatus::AggregateExactMatch
+        );
+        assert_eq!(
+            report.claim_ceiling,
+            recomputation::DomainStudyRecomputationClaimCeiling::IndependentComputationalReproductionCandidate
+        );
+        assert!(report.aggregate_exact_match);
+        assert_eq!(
+            report.recomputation_evidence_canonical_sha256,
+            canonical_sha256(&submitted.evidence).expect("recomputation evidence digest")
+        );
+        assert!(!report.scientific_replication_established);
+        assert!(!report.policy_activation_authorized);
+        assert!(!report.public_distribution_permitted);
+    }
+
+    #[test]
+    fn mismatch_and_failed_runs_are_preserved_as_negative_evidence() {
+        let original = fixture();
+        for (submitted, expected) in [
+            (
+                SubmittedRecomputation::NormalizedMismatch,
+                recomputation::DomainStudyRecomputationStatus::NormalizedMismatch,
+            ),
+            (
+                SubmittedRecomputation::ExecutionFailed,
+                recomputation::DomainStudyRecomputationStatus::ExecutionFailed,
+            ),
+        ] {
+            let submitted = recomputation_fixture(&original, submitted);
+            let report = validate_recomputation(&original, &submitted)
+                .expect("valid negative recomputation evidence");
+
+            assert_eq!(report.status, expected);
+            assert_eq!(
+                report.claim_ceiling,
+                recomputation::DomainStudyRecomputationClaimCeiling::SubmittedRecomputationAttemptAttestation
+            );
+            assert!(!report.aggregate_exact_match);
+            assert!(!report.scientific_replication_established);
+        }
+    }
+
+    #[test]
+    fn recomputation_rejects_plan_substitution_and_original_role_key_reuse() {
+        let original = fixture();
+        let mut substituted = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        substituted
+            .evidence
+            .plan
+            .execution_specification
+            .runner_sha256 = SHA_D.to_string();
+        assert!(validate_recomputation(&original, &substituted).is_err());
+
+        let mut key_reuse = recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        key_reuse.trust.executor = original.trust.reviewers[0].key.clone();
+        assert!(validate_recomputation(&original, &key_reuse).is_err());
+
+        let mut oversized_material =
+            recomputation_fixture(&original, SubmittedRecomputation::ExactMatch);
+        oversized_material.evidence.timestamp_materials[0]
+            .request
+            .byte_length = (64 * 1_024) + 1;
+        assert!(validate_recomputation(&original, &oversized_material).is_err());
+    }
+
+    #[test]
+    fn recomputation_rejects_foreign_metric_shape() {
+        let original = fixture();
+        let preregistration: DomainStudyPreregistration =
+            serde_json::from_str(&original.preregistration_json).expect("preregistration");
+        let report = validate(&original).expect("original result");
+        let mut normalized = recomputation::domain_study_recomputation_normalized_result(
+            &original.evidence.result,
+            report.outcome_status,
+        );
+        normalized.metrics.per_threat[0].threat_family = "foreign_family".to_string();
+
+        assert!(domain_study_recomputed_outcome_status(
+            &normalized.metrics,
+            normalized.agreement_f64_bits.map(f64::from_bits),
+            normalized.agreement_95_lower_f64_bits.map(f64::from_bits),
+            &preregistration,
+            &original.evidence.result.metrics.review_coverage,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn recomputation_timestamp_subject_wire_values_are_closed() {
+        use recomputation::DomainStudyRecomputationTimestampSubjectKind as Kind;
+
+        for (kind, expected) in [
+            (Kind::RecomputationPlan, "\"recomputation_plan\""),
+            (
+                Kind::EvidenceCustodianAuthorization,
+                "\"evidence_custodian_authorization\"",
+            ),
+            (
+                Kind::IndependentReproducerAuthorization,
+                "\"independent_reproducer_authorization\"",
+            ),
+            (
+                Kind::ExecutionStartCommitment,
+                "\"execution_start_commitment\"",
+            ),
+            (Kind::ExecutionAttestation, "\"execution_attestation\""),
+            (Kind::ComparisonReceipt, "\"comparison_receipt\""),
+            (
+                Kind::RecomputationFinalManifest,
+                "\"recomputation_final_manifest\"",
+            ),
+        ] {
+            assert_eq!(serde_json::to_string(&kind).expect("kind JSON"), expected);
+        }
+    }
+
+    #[test]
+    fn python_openssl_recomputation_execution_signature_verifies_with_dalek() {
+        let claims = recomputation::DomainStudyRecomputationExecutionClaims {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_EXECUTION_SCHEMA_VERSION
+                .to_string(),
+            recomputation_id: "recomputation_2026_01".to_string(),
+            run_id: SHA_A.to_string(),
+            attempt_ordinal: 0,
+            plan_canonical_sha256: SHA_B.to_string(),
+            signed_start_commitment_sha256: SHA_C.to_string(),
+            start_timestamp_sha256: SHA_D.to_string(),
+            observed_reproduction_manifest_canonical_sha256: SHA_A.to_string(),
+            observed_execution_specification_canonical_sha256: SHA_B.to_string(),
+            disposition: recomputation::DomainStudyRecomputationExecutionDisposition::Succeeded,
+            process_exit_code: Some(0),
+            failure_kind: None,
+            output_artifact_manifest_sha256: SHA_C.to_string(),
+            execution_transcript_sha256: SHA_D.to_string(),
+            no_deviation_manifest_canonical_sha256: SHA_A.to_string(),
+            normalized_result_canonical_sha256: Some(SHA_B.to_string()),
+            observed_wall_clock_ms: 1_000,
+            observed_cpu_time_ms: 750,
+            observed_peak_rss_bytes: 268_435_456,
+            observed_output_bytes: 1_048_576,
+            declared_started_at_ms: 1_780_000_000_000,
+            declared_completed_at_ms: 1_780_000_001_000,
+            raw_content_exported: false,
+        };
+        let payload = recomputation::domain_study_recomputation_execution_signing_payload(
+            &claims,
+            "recomputation_executor",
+        )
+        .expect("execution signing payload");
+        let public_key = VerifyingKey::from_bytes(
+            &decode_hex_array::<32>(concat!(
+                "d75a980182b10ab7d54bfed3c964073a",
+                "0ee172f3daa62325af021a68f707511a"
+            ))
+            .expect("fixed public key"),
+        )
+        .expect("valid public key");
+        let signature = Signature::from_bytes(
+            &decode_hex_array::<64>(concat!(
+                "27d60b63b4e2f70e5ffa69562366e089bf64c1d8caab6c3d285e440a77dda6d870",
+                "8ac6f027ab9dca9efed38c47e7dc52b239a40124839c8e8c6a5f4ae4dc6008"
+            ))
+            .expect("fixed execution signature"),
+        );
+
+        public_key
+            .verify_strict(&payload, &signature)
+            .expect("Python/OpenSSL execution signature must verify in Rust/dalek");
+    }
+
+    #[test]
+    fn python_openssl_recomputation_timestamp_signature_verifies_with_dalek() {
+        let claims = recomputation::DomainStudyRecomputationTimestampClaims {
+            schema_version: recomputation::DOMAIN_STUDY_RECOMPUTATION_TIMESTAMP_SCHEMA_VERSION
+                .to_string(),
+            subject_kind:
+                recomputation::DomainStudyRecomputationTimestampSubjectKind::RecomputationFinalManifest,
+            subject_canonical_sha256: SHA_A.to_string(),
+            protocol: DomainStudyTimestampProtocol::Rfc3161TrustedChain,
+            issued_at_ms: 1_780_000_000_000,
+            gen_time_submillisecond_micros: 999,
+            accuracy_micros: 1_000,
+            request_sha256: SHA_B.to_string(),
+            response_sha256: SHA_C.to_string(),
+            certificate_chain_sha256: SHA_D.to_string(),
+            revocation_evidence_sha256: SHA_A.to_string(),
+            tsa_spki_sha256: SHA_B.to_string(),
+            tsa_policy_oid: "1.3.6.1.4.1.57264.1".to_string(),
+        };
+        let payload = recomputation::domain_study_recomputation_timestamp_signing_payload(
+            &claims,
+            "recomputation_timestamp_verifier",
+        )
+        .expect("timestamp signing payload");
+        let public_key = VerifyingKey::from_bytes(
+            &decode_hex_array::<32>(concat!(
+                "d75a980182b10ab7d54bfed3c964073a",
+                "0ee172f3daa62325af021a68f707511a"
+            ))
+            .expect("fixed public key"),
+        )
+        .expect("valid public key");
+        let signature = Signature::from_bytes(
+            &decode_hex_array::<64>(concat!(
+                "00648b44618edf65aebfdf1126c09889381837ed67e46a1b9ebd2ad103daaa681",
+                "cd1dd7a7437e635e27328c36f2974e9bc0935f87011a790fbb6b7f867af9708"
+            ))
+            .expect("fixed timestamp signature"),
+        );
+
+        public_key
+            .verify_strict(&payload, &signature)
+            .expect("Python/OpenSSL timestamp signature must verify in Rust/dalek");
     }
 
     fn hex(bytes: &[u8]) -> String {

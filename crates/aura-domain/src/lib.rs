@@ -23,6 +23,8 @@ pub mod policy;
 pub mod registry;
 /// Preregistered, policy-bound contracts for independent domain evaluation.
 pub mod research;
+/// Signed evidence for one independent aggregate recomputation attempt.
+pub mod research_recomputation;
 /// Private materialization contract for independently reproducible studies.
 pub mod research_reproduction;
 /// Signed, timestamped result evidence for independent domain evaluation.
@@ -38,6 +40,7 @@ pub use output::*;
 pub use policy::*;
 pub use registry::*;
 pub use research::*;
+pub use research_recomputation::*;
 pub use research_reproduction::*;
 pub use research_result::*;
 pub use temporal::*;

@@ -142,20 +142,24 @@ level.
 
 ## Planned Research Artifacts
 
-The shared preregistration, signed result-chain, and private reproduction-package
-contracts are implemented in `aura-domain` and documented in
+The shared preregistration, signed result-chain, private reproduction-package,
+and terminal-attempt aggregate-recomputation contracts are implemented in
+`aura-domain` and documented in
 `docs/domain-independent-evaluation.md`,
 `docs/domain-independent-result-evidence.md`, and
-`docs/domain-independent-reproduction-package.md`. They bind a fixed corpus, attack
-plan, review design, analysis thresholds, exact domain policy, reviewer and
-adjudicator receipts, trusted-time intervals, nominal Krippendorff alpha with a
-fixed case-resampling BCa interval, recomputed aggregate metrics with
-conservative uncertainty bounds, and the final evidence manifest. No real
-independent corpus has completed that
-protocol, and repository corpora remain engineering evidence. The reproduction
-package currently proves a complete content-addressed inventory only; a signed
-record of an actual independent rerun and its normalized comparison remains a
-future research artifact.
+`docs/domain-independent-reproduction-package.md`, and
+`docs/domain-independent-recomputation-evidence.md`. They bind a fixed corpus,
+attack plan, review design, analysis thresholds, exact domain policy, reviewer
+and adjudicator receipts, trusted-time intervals, nominal Krippendorff alpha
+with a fixed case-resampling BCa interval, recomputed aggregate metrics with
+conservative uncertainty bounds, the final evidence manifest, a separate
+five-role recomputation trust policy, one terminal/no-deviation chain per
+submitted bundle, executor-reported resource usage, and a core-derived
+normalized comparison. Global retry/selective-reporting control requires an
+external append-only plan/run registry. No real independent corpus
+or independently operated rerun has completed that protocol, and repository
+corpora remain engineering evidence. The implementation can validate a later
+submitted run chain; it does not claim that such a run has already occurred.
 
 Future research work should introduce versioned, reviewable locations for:
 

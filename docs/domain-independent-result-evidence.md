@@ -161,3 +161,7 @@ content-addressed primary decision, prediction, exclusion, deviation, build,
 trust, and timestamp artifact is represented and cross-linked before a later
 independent aggregate recomputation can be attempted. Its strongest status is
 `manifest_consistent`; it cannot claim that the attempt occurred or succeeded.
+The separate signed single-attempt recomputation contract is documented in
+`docs/domain-independent-recomputation-evidence.md`. Its strongest exact-match
+status remains bounded to same-data computational reproduction and explicitly
+does not establish scientific replication.

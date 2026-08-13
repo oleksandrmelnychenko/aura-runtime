@@ -104,9 +104,13 @@ reject a descriptor or manifest that changes either value. Raw corpus,
 reviewer, child-safety, military, consent, or governance material must not be
 copied into public release evidence.
 
-Moving beyond `manifest_consistent` requires a separate, signed record from an
-authorized independent environment. That later record must bind the package
-digest, exact command, implementation and environment lock, hardware class,
-seed set, normalized recomputed output, deviations, and comparison with the
-frozen result. Even then, the claim remains limited by sampling,
-representativeness, labeling, blinding, governance, and key-control assumptions.
+Moving beyond `manifest_consistent` uses the separate
+`aura.domain.independent_recomputation_evidence.v1` contract documented in
+`docs/domain-independent-recomputation-evidence.md`. It binds one authorized
+attempt, the exact command, implementation and environment lock, hardware
+class, fixed seed set, normalized recomputed output, explicitly empty v1
+deviation inventory, deterministic comparison, five role-separated signatures,
+and seven trusted timestamps. Even an exact match remains same-data
+computational reproduction rather than new-sample scientific replication, and
+the claim remains limited by sampling, representativeness, labeling, blinding,
+governance, execution-assurance, and key-control assumptions.

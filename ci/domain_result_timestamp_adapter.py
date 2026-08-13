@@ -30,6 +30,7 @@ import secrets
 import stat
 import sys
 import tempfile
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
@@ -73,6 +74,26 @@ CLAIM_FIELDS = (
 )
 
 AdapterError = crypto_support.AttestationError
+
+
+@dataclass(frozen=True)
+class TimestampReceiptProfile:
+    """Closed schema and signature-domain profile for one receipt family."""
+
+    schema_version: str
+    protocol: str
+    signed_payload_domain: bytes
+    subject_kinds: tuple[str, ...]
+    cli_label: str
+
+
+RESULT_TIMESTAMP_PROFILE = TimestampReceiptProfile(
+    schema_version=TRUSTED_TIMESTAMP_SCHEMA_VERSION,
+    protocol=TRUSTED_TIMESTAMP_PROTOCOL,
+    signed_payload_domain=SIGNED_PAYLOAD_DOMAIN,
+    subject_kinds=SUBJECT_KINDS,
+    cli_label="domain-study",
+)
 
 
 class FrozenAtomicOutput:
@@ -252,10 +273,12 @@ class FrozenAtomicOutput:
         self.close()
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(
+    profile: TimestampReceiptProfile = RESULT_TIMESTAMP_PROFILE,
+) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Create RFC 3161 requests and issue signed AURA domain-study "
+            f"Create RFC 3161 requests and issue signed AURA {profile.cli_label} "
             "trusted timestamp receipts."
         )
     )
@@ -273,7 +296,9 @@ def parse_args() -> argparse.Namespace:
         help="Verify original timestamp evidence and sign the trusted receipt.",
     )
     verify_parser.add_argument("--subject", required=True)
-    verify_parser.add_argument("--subject-kind", choices=SUBJECT_KINDS, required=True)
+    verify_parser.add_argument(
+        "--subject-kind", choices=profile.subject_kinds, required=True
+    )
     verify_parser.add_argument("--request", required=True)
     verify_parser.add_argument("--response", required=True)
     verify_parser.add_argument("--ca-file", required=True)
@@ -306,7 +331,9 @@ def reject_nonfinite_json_number(value: str) -> None:
     raise AdapterError(f"non-finite JSON number is not allowed: {value}")
 
 
-def validate_compact_subject(raw: bytes) -> bytes:
+def validate_compact_json_object(raw: bytes, label: str) -> bytes:
+    """Validate strict compact JSON without changing any input byte."""
+
     try:
         text = raw.decode("utf-8")
         payload = json.loads(
@@ -317,9 +344,9 @@ def validate_compact_subject(raw: bytes) -> bytes:
     except AdapterError:
         raise
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError) as error:
-        raise AdapterError(f"timestamp subject is not strict JSON: {error}") from error
+        raise AdapterError(f"{label} is not strict JSON: {error}") from error
     if not isinstance(payload, dict):
-        raise AdapterError("timestamp subject must be a JSON object")
+        raise AdapterError(f"{label} must be a JSON object")
     inside_string = False
     escaped = False
     for character in text:
@@ -334,11 +361,15 @@ def validate_compact_subject(raw: bytes) -> bytes:
             inside_string = True
         elif character.isspace():
             raise AdapterError(
-                "timestamp subject must be compact Rust serde JSON with no whitespace"
+                f"{label} must be compact Rust serde JSON with no whitespace"
             )
     if inside_string or escaped:
-        raise AdapterError("timestamp subject is not complete JSON")
+        raise AdapterError(f"{label} is not complete JSON")
     return raw
+
+
+def validate_compact_subject(raw: bytes) -> bytes:
+    return validate_compact_json_object(raw, "timestamp subject")
 
 
 def read_compact_subject(path: Path) -> bytes:
@@ -355,13 +386,18 @@ def read_compact_subject_with_identity(
     return validate_compact_subject(raw), identity
 
 
-def signing_payload(claims: dict, key_id: str) -> bytes:
+def signing_payload(
+    claims: dict,
+    key_id: str,
+    *,
+    profile: TimestampReceiptProfile = RESULT_TIMESTAMP_PROFILE,
+) -> bytes:
     """Match ``research_result.rs::signing_payload`` byte for byte."""
     if not isinstance(claims, dict) or set(claims) != set(CLAIM_FIELDS):
         raise AdapterError("trusted timestamp claims must contain the exact field set")
     ordered_claims = {field: claims[field] for field in CLAIM_FIELDS}
     signed_claims = {"key_id": key_id, "claims": ordered_claims}
-    return SIGNED_PAYLOAD_DOMAIN + json.dumps(
+    return profile.signed_payload_domain + json.dumps(
         signed_claims,
         ensure_ascii=False,
         allow_nan=False,
@@ -381,17 +417,17 @@ def safe_key_id(value: object) -> bool:
     )
 
 
-def sign_claims(
-    claims: dict,
+def sign_ed25519_payload(
+    payload: bytes,
     private_key_path: Path,
-    key_id: str,
     *,
     private_key_bytes: bytes | None = None,
-) -> dict:
-    if not safe_key_id(key_id):
-        raise AdapterError(
-            "key_id must be 1..128 ASCII alphanumeric, '_', '-', or '.' characters"
-        )
+    private_key_label: str = "timestamp verifier",
+) -> bytes:
+    """Sign one already bounded payload through a private Ed25519 snapshot."""
+
+    if not isinstance(payload, bytes) or not payload:
+        raise AdapterError("Ed25519 signing payload must be nonempty bytes")
     key_bytes = (
         attestation_support.validate_private_key_file(private_key_path)
         if private_key_bytes is None
@@ -405,9 +441,9 @@ def sign_claims(
         if len(public_key_der) != 44 or not public_key_der.startswith(
             ed25519_spki_prefix
         ):
-            raise AdapterError("timestamp verifier private key must use Ed25519")
+            raise AdapterError(f"{private_key_label} private key must use Ed25519")
         with tempfile.NamedTemporaryFile() as payload_file:
-            payload_file.write(signing_payload(claims, key_id))
+            payload_file.write(payload)
             payload_file.flush()
             signature = timestamp_support.run_openssl(
                 [
@@ -422,6 +458,31 @@ def sign_claims(
             )
     if len(signature) != 64:
         raise AdapterError("OpenSSL returned a malformed Ed25519 signature")
+    return signature
+
+
+def sign_claims(
+    claims: dict,
+    private_key_path: Path,
+    key_id: str,
+    *,
+    private_key_bytes: bytes | None = None,
+    profile: TimestampReceiptProfile = RESULT_TIMESTAMP_PROFILE,
+) -> dict:
+    if not safe_key_id(key_id):
+        raise AdapterError(
+            "key_id must be 1..128 ASCII alphanumeric, '_', '-', or '.' characters"
+        )
+    key_bytes = (
+        attestation_support.validate_private_key_file(private_key_path)
+        if private_key_bytes is None
+        else private_key_bytes
+    )
+    signature = sign_ed25519_payload(
+        signing_payload(claims, key_id, profile=profile),
+        private_key_path,
+        private_key_bytes=key_bytes,
+    )
     return {"key_id": key_id, "signature_hex": signature.hex()}
 
 
@@ -467,8 +528,9 @@ def create_trusted_timestamp_receipt(
     private_key_path: Path,
     key_id: str,
     frozen_output: FrozenAtomicOutput | None = None,
+    profile: TimestampReceiptProfile = RESULT_TIMESTAMP_PROFILE,
 ) -> dict:
-    if subject_kind not in SUBJECT_KINDS:
+    if subject_kind not in profile.subject_kinds:
         raise AdapterError("timestamp subject kind is unsupported")
     if not timestamp_support.safe_oid(expected_policy_oid):
         raise AdapterError("expected timestamp policy OID is malformed")
@@ -646,10 +708,10 @@ def create_trusted_timestamp_receipt(
         raise AdapterError("RFC 3161 verifier returned an inconsistent time interval")
 
     claims = {
-        "schema_version": TRUSTED_TIMESTAMP_SCHEMA_VERSION,
+        "schema_version": profile.schema_version,
         "subject_kind": subject_kind,
         "subject_canonical_sha256": subject_sha256,
-        "protocol": TRUSTED_TIMESTAMP_PROTOCOL,
+        "protocol": profile.protocol,
         "issued_at_ms": issued_at_ms,
         "gen_time_submillisecond_micros": gen_time_submillisecond_micros,
         "accuracy_micros": accuracy_micros,
@@ -665,12 +727,13 @@ def create_trusted_timestamp_receipt(
         private_key_path,
         key_id,
         private_key_bytes=private_key_bytes,
+        profile=profile,
     )
     return {"claims": claims, "signature": signature}
 
 
-def main() -> int:
-    args = parse_args()
+def main(profile: TimestampReceiptProfile = RESULT_TIMESTAMP_PROFILE) -> int:
+    args = parse_args(profile)
     try:
         if args.command == "request":
             subject_path = Path(args.subject)
@@ -684,7 +747,7 @@ def main() -> int:
                     subject, args.policy_oid
                 )
                 frozen_output.write_bytes(request)
-            print(f"domain-study RFC 3161 request written to {output}")
+            print(f"{profile.cli_label} RFC 3161 request written to {output}")
             return 0
 
         output = Path(args.output)
@@ -714,12 +777,13 @@ def main() -> int:
                 private_key_path=Path(args.private_key),
                 key_id=args.key_id,
                 frozen_output=frozen_output,
+                profile=profile,
             )
             serialized_receipt = (
                 json.dumps(receipt, indent=2, sort_keys=True) + "\n"
             ).encode("utf-8")
             frozen_output.write_bytes(serialized_receipt)
-        print(f"domain-study trusted timestamp receipt written to {output}")
+        print(f"{profile.cli_label} trusted timestamp receipt written to {output}")
         return 0
     except (AdapterError, UnicodeDecodeError) as error:
         print(str(error), file=sys.stderr)

@@ -70,6 +70,24 @@ cargo test --locked -p aura-core eval_social_context::tests::social_context_pre_
 cargo test --locked -p aura-ml
 ```
 
+## Independent Recomputation Contract
+
+Run the Rust end-to-end chain, negative outcomes, resource/chronology bounds,
+and Python/OpenSSL adapter tests with:
+
+```bash
+cargo test --locked -p aura-domain recomputation
+python3 -m unittest \
+  ci.test_domain_recomputation_signer \
+  ci.test_domain_recomputation_timestamp_adapter
+```
+
+The full CI discovery and workspace commands remain authoritative. These
+focused commands are a fast local check for
+`aura.domain.independent_recomputation_evidence.v1`; they do not perform a real
+independent run or replace the external append-only run registry described in
+`docs/domain-independent-recomputation-evidence.md`.
+
 ## Safety World v2 Smoke Gate
 
 ```bash
