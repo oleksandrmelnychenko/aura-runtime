@@ -5,57 +5,57 @@
       "path": "/contracts/apple_artifact/manifest_file/sha256",
       "classification": "structural_only",
       "baseline": "af5b59850da1d2db8c1749df5182a860882cb18858aafdcd4ac84bd79daad350",
-      "candidate": "4c38ca04ad95ddcd31ff10df4544562a2b158accfefcd4798fc628021d7315de",
-      "reason": "Pins the exact reviewed Apple manifest built from source 1fc649f. The checked-in 11-file candidate passed the strict verifier, while headers, Info.plist, trust keyring, exported ABI and governed runtime evidence remained unchanged. Same-environment reproducibility is gated separately and is not claimed by this approval."
+      "candidate": "6afc4a9f015b127b28d27a60eb017b820dbb4b9c297a90c856d79ecb35fa2490",
+      "reason": "Pins the exact reviewed Apple manifest built from governance-only source 8c528e4. The checked-in 11-file candidate passed the strict verifier and two same-environment deterministic rebuilds, while headers, Info.plist, trust keyring, exported ABI and governed runtime evidence remained unchanged. Independent reproduction and compiler trust are not claimed."
     },
     {
       "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64",
       "classification": "structural_only",
       "baseline": "e4d91a53654a441533b53a4db89d5875fd4a27deba2cde9f2d9ae4b4ffd81bff",
-      "candidate": "ebed55e3073c7b2b2a57386f6ce27e1a7a26d44471c15e45e1110dd170ca0855",
-      "reason": "Updates the exact iOS device archive identity for source 1fc649f. Platform, architecture and iOS 18.0 checks passed; exported symbols and governed runtime evidence remained unchanged. Same-environment reproducibility and independent reproduction remain separate gates."
+      "candidate": "65154de5a1a4098b556a25648bf42b83b94b92b646067ff2847a62a0ae2a1cce",
+      "reason": "Updates the exact iOS device archive identity for governance-only source 8c528e4. Platform, architecture and iOS 18.0 checks passed; exported symbols and governed runtime evidence remained unchanged, and two same-environment rebuilds matched the committed archive. Independent reproduction and compiler trust are not claimed."
     },
     {
       "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64_x86_64-maccatalyst",
       "classification": "structural_only",
       "baseline": "2b1a883d91ddf7971e301b1b993d948bd6c18fd45b4262b2ae542bc6b551339a",
-      "candidate": "e047d514f9acbb768c5c720c4f25b0bbdb72c54d21bc471f9a87895b3f7df515",
-      "reason": "Updates the exact Mac Catalyst archive identity for source 1fc649f. Platform, architecture and deployment-floor checks passed; exported symbols and governed runtime evidence remained unchanged. Same-environment reproducibility and independent reproduction remain separate gates."
+      "candidate": "a3389b966f14f99a88abe97e1005a2aefa677e5304d44b696584455e8ea11327",
+      "reason": "Updates the exact Mac Catalyst archive identity for governance-only source 8c528e4. Platform, architecture and deployment-floor checks passed; exported symbols and governed runtime evidence remained unchanged, and two same-environment rebuilds matched the committed archive. Independent reproduction and compiler trust are not claimed."
     },
     {
       "path": "/contracts/apple_artifact/release_manifest/binary_sha256/ios-arm64_x86_64-simulator",
       "classification": "structural_only",
       "baseline": "6efebc1a06a635f7f774bdc14e481cbbed653f588a5e91eb2c2ba528e4df65e1",
-      "candidate": "c162c94f28248ee9dd4171f95e3fbb193c84688713734e4e660239eac0eef238",
-      "reason": "Updates the exact iOS Simulator archive identity for source 1fc649f. Platform, architecture and iOS 18.0 checks passed; exported symbols and governed runtime evidence remained unchanged. Same-environment reproducibility and independent reproduction remain separate gates."
+      "candidate": "c8e520e1993c0d0605b1cb225d9bea2f9094ad3a5e7e03045097682e2cb74ef2",
+      "reason": "Updates the exact iOS Simulator archive identity for governance-only source 8c528e4. Platform, architecture and iOS 18.0 checks passed; exported symbols and governed runtime evidence remained unchanged, and two same-environment rebuilds matched the committed archive. Independent reproduction and compiler trust are not claimed."
     },
     {
       "path": "/contracts/apple_artifact/release_manifest/runtime_artifact_descriptor_sha256",
       "classification": "structural_only",
       "baseline": "e5d0e0e615b82e9a6eff5206c87eba56a48ccae8bf1dcd0d126fa2a15e838b1f",
-      "candidate": "f0edd844fb438b4b0e1ed55f9748d3455f32292ab8f5de9c70a44093b2e525fc",
-      "reason": "Updates the verified descriptor identity to bind source revision 1fc649f and materialized source-tree digest 2fc56988 without changing descriptor schema, ABI, runtime, wire, state, FFI, capability, model or trust-keyring identities."
+      "candidate": "8e93a5d77003920470d1ce8e4e6cfc38b0359d85460eab1bec73fd1e2e90699f",
+      "reason": "Updates the verified descriptor identity to bind source revision 8c528e4 and materialized source-tree digest cf619d34 without changing descriptor schema, ABI, runtime, wire, state, FFI, capability, model or trust-keyring identities."
     },
     {
       "path": "/contracts/apple_artifact/release_manifest/runtime_artifact_identities_env_sha256",
       "classification": "structural_only",
       "baseline": "b852c121d52591da8c5627cf7c24d1b0b67a90654fa4248f8e02b092e61c2649",
-      "candidate": "e51d30b642fdb522fd82732ab445b09776d829b83fd561b124543715c822c43d",
+      "candidate": "84c55fe7b0d3065274f53dab56a0055b8149642627960e576999e73d8a152504",
       "reason": "Updates the generated identity-environment digest only to bind the new verified descriptor; runtime-capability and model-manifest identities remained byte-for-byte unchanged."
     },
     {
       "path": "/contracts/apple_artifact/release_manifest/source_revision",
       "classification": "structural_only",
       "baseline": "2126d1c0fbf98a25bc1159ae5d573061f0475d7e",
-      "candidate": "1fc649fe1d7a2aef0af2f6f7c70b84e3b26b1c89",
-      "reason": "Advances the exact clean Apple source pin to 1fc649f, which adds externally authenticated four-role pilot signoffs, immutable hosted intake, decision v3 and the 13-file dossier v2. Full workspace tests, strict Apple verification and governed behavior gates passed; reproducibility and independent reproduction remain separate."
+      "candidate": "8c528e456d0880caaa4f102b6face173f244f0ac",
+      "reason": "Advances the exact clean Apple source pin to governance-only revision 8c528e4, which adds protected-main release ref checks, release-environment approval gates, CODEOWNERS bootstrap coverage and fail-closed hosted workflow bindings. Full workspace tests, strict Apple verification, governed behavior gates and same-environment reproducibility passed; independent reproduction and compiler trust are not claimed."
     },
     {
       "path": "/contracts/apple_artifact/release_manifest/source_tree_sha256",
       "classification": "structural_only",
       "baseline": "353104b84422f5f5a695bcbb3b80f9adea312c05e62043c952c1f3f318950eae",
-      "candidate": "2fc569885df0728152b8f5db1cafc6f6d7f7ebb4ecc52b1cbbe5bcd0adb71e32",
-      "reason": "Advances the domain-separated materialized source-tree commitment for source 1fc649f. Full workspace, authenticated-signoff, release, pilot, world-lifecycle, 10k performance and strict Apple gates passed; same-environment reproducibility, independent reproduction and compiler trust remain separate."
+      "candidate": "cf619d34aa5388640da60ca87fbca01a3d6fa0962a0db12314aef93db822c233",
+      "reason": "Advances the domain-separated materialized source-tree commitment for governance-only source 8c528e4. Full workspace, release-control, pilot, world-lifecycle, 10k performance, strict Apple and same-environment reproducibility gates passed; independent reproduction and compiler trust are not claimed."
     },
     {
       "path": "/contracts/contract_evidence/domain_modules",
