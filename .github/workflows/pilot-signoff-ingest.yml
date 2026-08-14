@@ -1,0 +1,206 @@
+name: Pilot Signoff Ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_revision:
+        description: Exact 40-character release revision R
+        required: true
+        type: string
+      bundle_base64:
+        description: Base64 of the externally produced signed four-role bundle (maximum 32 KiB decoded)
+        required: true
+        type: string
+      bundle_sha256:
+        description: Exact lowercase SHA-256 of the decoded bundle bytes
+        required: true
+        type: string
+      bundle_bytes:
+        description: Exact decoded bundle byte length (1..32768)
+        required: true
+        type: string
+
+concurrency:
+  group: pilot-signoff-ingest-${{ inputs.release_revision }}
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    env:
+      RELEASE_REVISION: ${{ inputs.release_revision }}
+      DECLARED_BUNDLE_SHA256: ${{ inputs.bundle_sha256 }}
+      DECLARED_BUNDLE_BYTES: ${{ inputs.bundle_bytes }}
+      PILOT_SIGNOFF_BUNDLE_BASE64: ${{ inputs.bundle_base64 }}
+      PILOT_SIGNOFF_TRUST_POLICY_BASE64: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_B64 }}
+      EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256 }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ inputs.release_revision }}
+
+      - name: Materialize exact external bundle and configured trust policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_REVISION"
+          test ! -e artifacts/pilot-signoff-ingest
+          mkdir -p artifacts
+          mkdir -m 700 artifacts/pilot-signoff-ingest
+          test ! -e "$RUNNER_TEMP/pilot-signoff-trust"
+          mkdir -m 700 "$RUNNER_TEMP/pilot-signoff-trust"
+
+          python3 - <<'PY'
+          import base64
+          import binascii
+          import hashlib
+          import os
+          import re
+          import stat
+          from pathlib import Path
+
+          revision = os.environ["RELEASE_REVISION"]
+          declared_sha256 = os.environ["DECLARED_BUNDLE_SHA256"]
+          declared_bytes_text = os.environ["DECLARED_BUNDLE_BYTES"]
+          expected_policy_sha256 = os.environ.get(
+              "EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256", ""
+          )
+          if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+              raise SystemExit("release revision is malformed")
+          if re.fullmatch(r"[0-9a-f]{64}", declared_sha256) is None:
+              raise SystemExit("declared bundle SHA-256 is malformed")
+          if re.fullmatch(r"[0-9a-f]{64}", expected_policy_sha256) is None:
+              raise SystemExit("configured pilot trust-policy digest is absent or malformed")
+          if re.fullmatch(r"[1-9][0-9]{0,4}", declared_bytes_text) is None:
+              raise SystemExit("declared bundle byte length is malformed")
+          declared_bytes = int(declared_bytes_text)
+          if declared_bytes > 32 * 1024:
+              raise SystemExit("pilot signoff bundle exceeds the 32 KiB hosted-ingest cap")
+
+          def decode(name: str, maximum: int, label: str) -> bytes:
+              encoded = os.environ.get(name, "")
+              if not encoded:
+                  raise SystemExit(f"{label} base64 is absent")
+              try:
+                  raw = base64.b64decode(encoded, validate=True)
+              except (binascii.Error, ValueError) as error:
+                  raise SystemExit(f"{label} base64 is malformed") from error
+              if not 1 <= len(raw) <= maximum:
+                  raise SystemExit(f"{label} byte length is outside its bound")
+              return raw
+
+          def write_fresh(path: Path, raw: bytes) -> None:
+              descriptor = os.open(
+                  path,
+                  os.O_WRONLY
+                  | os.O_CREAT
+                  | os.O_EXCL
+                  | getattr(os, "O_CLOEXEC", 0)
+                  | getattr(os, "O_NOFOLLOW", 0),
+                  0o600,
+              )
+              try:
+                  with os.fdopen(descriptor, "wb", closefd=False) as output:
+                      output.write(raw)
+                      output.flush()
+                      os.fsync(output.fileno())
+              finally:
+                  os.close(descriptor)
+              metadata = path.lstat()
+              if (
+                  not stat.S_ISREG(metadata.st_mode)
+                  or metadata.st_nlink != 1
+                  or metadata.st_size != len(raw)
+              ):
+                  raise SystemExit("materialized input identity is unsafe")
+
+          bundle = decode("PILOT_SIGNOFF_BUNDLE_BASE64", 32 * 1024, "pilot bundle")
+          if len(bundle) != declared_bytes:
+              raise SystemExit("decoded pilot bundle byte length does not match its pin")
+          if hashlib.sha256(bundle).hexdigest() != declared_sha256:
+              raise SystemExit("decoded pilot bundle SHA-256 does not match its pin")
+          policy = decode(
+              "PILOT_SIGNOFF_TRUST_POLICY_BASE64",
+              64 * 1024,
+              "configured pilot trust policy",
+          )
+          write_fresh(
+              Path("artifacts/pilot-signoff-ingest/pilot-review-signoff-bundle.json"),
+              bundle,
+          )
+          write_fresh(
+              Path(os.environ["RUNNER_TEMP"])
+              / "pilot-signoff-trust"
+              / "policy.json",
+              policy,
+          )
+          PY
+
+      - name: Verify every external pilot signoff offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ci/pilot_signoff_verification.py verify \
+            --bundle artifacts/pilot-signoff-ingest/pilot-review-signoff-bundle.json \
+            --trust-policy "$RUNNER_TEMP/pilot-signoff-trust/policy.json" \
+            --expected-trust-policy-sha256 "$EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256" \
+            --release-revision "$RELEASE_REVISION" \
+            --output artifacts/pilot-signoff-ingest/pilot-signoff-verification.json \
+            --signoffs-output artifacts/pilot-signoff-ingest/pilot-review-signoffs.json \
+            --require-pass
+
+      - name: Inspect exact publishable signoff artifact
+        id: publishability
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import os
+          import stat
+          from pathlib import Path
+
+          root = Path("artifacts/pilot-signoff-ingest")
+          expected = {
+              "pilot-review-signoff-bundle.json",
+              "pilot-signoff-verification.json",
+              "pilot-review-signoffs.json",
+          }
+          if not root.is_dir():
+              raise SystemExit(0)
+          entries = list(root.iterdir())
+          if {entry.name for entry in entries} != expected:
+              raise SystemExit(0)
+          limits = {
+              "pilot-review-signoff-bundle.json": 32 * 1024,
+              "pilot-signoff-verification.json": 256 * 1024,
+              "pilot-review-signoffs.json": 64 * 1024,
+          }
+          for entry in entries:
+              metadata = entry.lstat()
+              if (
+                  not stat.S_ISREG(metadata.st_mode)
+                  or metadata.st_nlink != 1
+                  or not 1 <= metadata.st_size <= limits[entry.name]
+              ):
+                  raise SystemExit(0)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("ready=true\n")
+          PY
+
+      - name: Upload sole immutable pilot signoff artifact
+        if: ${{ always() && steps.publishability.outputs.ready == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aura-pilot-signoff-${{ inputs.release_revision }}
+          path: artifacts/pilot-signoff-ingest
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

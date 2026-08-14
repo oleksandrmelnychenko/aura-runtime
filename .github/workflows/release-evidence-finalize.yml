@@ -46,6 +46,8 @@ jobs:
       PROMOTION_WORKFLOW_ID: "246571367"
       APPLE_WORKFLOW_ID: "320479820"
       PROMOTION_ARTIFACT_NAME: aura-promotion-evidence-release
+      PILOT_SIGNOFF_TRUST_POLICY_BASE64: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_B64 }}
+      EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256 }}
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -106,6 +108,7 @@ jobs:
               expected_attempt: int,
               expected_workflow_id: int,
               expected_path: str,
+              expected_events: set[str],
           ) -> None:
               expected_repo = os.environ["GITHUB_REPOSITORY"]
               if run.get("id") != expected_id:
@@ -120,7 +123,7 @@ jobs:
                   raise SystemExit("GitHub run head SHA mismatch")
               if run.get("status") != "completed" or run.get("conclusion") != "success":
                   raise SystemExit("GitHub source run did not complete successfully")
-              if run.get("event") not in {"workflow_dispatch", "push"}:
+              if run.get("event") not in expected_events:
                   raise SystemExit("pull-request or unknown source runs are forbidden")
               repository = run.get("repository")
               head_repository = run.get("head_repository")
@@ -171,6 +174,7 @@ jobs:
               expected_attempt=int(os.environ["PROMOTION_RUN_ATTEMPT"]),
               expected_workflow_id=int(os.environ["PROMOTION_WORKFLOW_ID"]),
               expected_path=".github/workflows/promotion-gate.yml",
+              expected_events={"workflow_dispatch"},
           )
           validate_run(
               apple_run,
@@ -178,6 +182,7 @@ jobs:
               expected_attempt=int(os.environ["APPLE_RUN_ATTEMPT"]),
               expected_workflow_id=int(os.environ["APPLE_WORKFLOW_ID"]),
               expected_path=".github/workflows/apple-artifact.yml",
+              expected_events={"workflow_dispatch", "push"},
           )
 
           promotion_artifact = exact_artifact(
@@ -266,6 +271,70 @@ jobs:
             --output incoming/apple
           rm -f "$downloads/promotion.zip" "$downloads/apple.zip"
 
+      - name: Reverify frozen pilot signoffs against external trust policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e "$RUNNER_TEMP/freeze-pilot-signoff-reverify"
+          mkdir -m 700 "$RUNNER_TEMP/freeze-pilot-signoff-reverify"
+          python3 - <<'PY'
+          import base64
+          import binascii
+          import os
+          import re
+          from pathlib import Path
+
+          encoded = os.environ.get("PILOT_SIGNOFF_TRUST_POLICY_BASE64", "")
+          expected = os.environ.get(
+              "EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256", ""
+          )
+          if re.fullmatch(r"[0-9a-f]{64}", expected) is None:
+              raise SystemExit("configured pilot trust-policy digest is absent or malformed")
+          if not encoded:
+              raise SystemExit("configured pilot trust policy is absent")
+          try:
+              raw = base64.b64decode(encoded, validate=True)
+          except (binascii.Error, ValueError) as error:
+              raise SystemExit("configured pilot trust policy is malformed") from error
+          if not 1 <= len(raw) <= 64 * 1024:
+              raise SystemExit("configured pilot trust policy exceeds its bound")
+          path = (
+              Path(os.environ["RUNNER_TEMP"])
+              / "freeze-pilot-signoff-reverify"
+              / "policy.json"
+          )
+          descriptor = os.open(
+              path,
+              os.O_WRONLY
+              | os.O_CREAT
+              | os.O_EXCL
+              | getattr(os, "O_CLOEXEC", 0)
+              | getattr(os, "O_NOFOLLOW", 0),
+              0o600,
+          )
+          try:
+              with os.fdopen(descriptor, "wb", closefd=False) as output:
+                  output.write(raw)
+                  output.flush()
+                  os.fsync(output.fileno())
+          finally:
+              os.close(descriptor)
+          PY
+
+          reverified="$RUNNER_TEMP/freeze-pilot-signoff-reverify"
+          python3 ci/pilot_signoff_verification.py verify \
+            --bundle incoming/promotion/pilot-review-signoff-bundle.json \
+            --trust-policy "$reverified/policy.json" \
+            --expected-trust-policy-sha256 "$EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256" \
+            --release-revision "$RELEASE_REVISION" \
+            --output "$reverified/pilot-signoff-verification.json" \
+            --signoffs-output "$reverified/pilot-review-signoffs.json" \
+            --require-pass
+          cmp -s incoming/promotion/pilot-signoff-verification.json \
+            "$reverified/pilot-signoff-verification.json"
+          cmp -s incoming/promotion/pilot-review-signoffs.json \
+            "$reverified/pilot-review-signoffs.json"
+
       - name: Build exact final evidence manifest
         shell: bash
         run: |
@@ -292,6 +361,7 @@ jobs:
             --audit-evidence incoming/promotion/audit-evidence.json \
             --pilot-shadow-bundle incoming/promotion/pilot-shadow-bundle.json \
             --pilot-regression-report incoming/promotion/pilot-regression-report.json \
+            --pilot-signoff-verification incoming/promotion/pilot-signoff-verification.json \
             --temporal-shadow-report incoming/promotion/temporal-shadow-report.json \
             --temporal-shadow-telemetry-validation incoming/promotion/temporal-shadow-telemetry-validation.json \
             --pilot-gate-report incoming/promotion/pilot-gate-report.json \
@@ -311,6 +381,8 @@ jobs:
             "$package/release-inputs/apple/release-manifest.json"
           install -m 600 incoming/promotion/pilot-gate-report.json \
             "$package/release-inputs/pilot/pilot-gate-report.json"
+          install -m 600 incoming/promotion/pilot-signoff-verification.json \
+            "$package/release-inputs/pilot/pilot-signoff-verification.json"
 
           python3 - <<'PY'
           from pathlib import Path
@@ -329,6 +401,7 @@ jobs:
               release_dossier.SOURCE_PATHS["apple_artifact_reproducibility"],
               release_dossier.SOURCE_PATHS["apple_release_manifest"],
               release_dossier.SOURCE_PATHS["pilot_gate_report"],
+              release_dossier.SOURCE_PATHS["pilot_signoff_verification"],
           }
           if set(snapshots) != expected:
               raise SystemExit("unsigned release evidence inventory is not exact")

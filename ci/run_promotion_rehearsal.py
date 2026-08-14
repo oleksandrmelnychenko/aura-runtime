@@ -52,6 +52,21 @@ def parse_args() -> argparse.Namespace:
         help="Optional path to pilot review signoffs JSON. If provided, a pilot gate report will be generated.",
     )
     parser.add_argument(
+        "--pilot-signoff-bundle",
+        default=None,
+        help="Externally produced signed four-role pilot bundle for offline verification.",
+    )
+    parser.add_argument(
+        "--pilot-signoff-trust-policy",
+        default=None,
+        help="External pilot trust-policy JSON; never copied into rehearsal artifacts.",
+    )
+    parser.add_argument(
+        "--expected-pilot-signoff-trust-policy-sha256",
+        default=None,
+        help="Caller-pinned canonical SHA-256 identity of the external pilot trust policy.",
+    )
+    parser.add_argument(
         "--evidence-signing-private-key",
         default=os.environ.get("AURA_EVIDENCE_SIGNING_PRIVATE_KEY_PATH"),
         help="Optional Ed25519 private key PEM used for detached evidence attestation.",
@@ -355,6 +370,9 @@ def main() -> int:
         "kids_memory_health": output_dir / "kids-memory-health.json",
         "kids_preprod_dry_run": output_dir / "kids-preprod-dry-run-matrix.json",
         "pilot_gate_report": output_dir / "pilot-gate-report.json",
+        "pilot_signoff_verification": output_dir
+        / "pilot-signoff-verification.json",
+        "pilot_review_signoffs": output_dir / "pilot-review-signoffs.json",
         "ffi_soak": output_dir / "ffi-state-sync-soak.json",
         "ffi_smoke": output_dir / "ffi-header-smoke.json",
         "ffi_smoke_object": output_dir / "ffi-header-smoke.o",
@@ -408,8 +426,18 @@ def main() -> int:
         return result
 
     try:
+        signed_pilot_inputs = (
+            args.pilot_signoff_bundle,
+            args.pilot_signoff_trust_policy,
+            args.expected_pilot_signoff_trust_policy_sha256,
+        )
+        if any(signed_pilot_inputs) and not all(signed_pilot_inputs):
+            raise RuntimeError(
+                "signed pilot bundle, external trust policy, and expected policy digest must be supplied together"
+            )
+        pilot_review_signoffs = args.pilot_review_signoffs
         release_revision = None
-        if args.pilot_review_signoffs:
+        if pilot_review_signoffs or all(signed_pilot_inputs):
             revision_result = record_and_require(["git", "rev-parse", "HEAD"])
             if not revision_result["stdout_tail"]:
                 raise RuntimeError("git rev-parse HEAD returned no release revision")
@@ -418,6 +446,32 @@ def main() -> int:
                 char not in "0123456789abcdef" for char in release_revision
             ):
                 raise RuntimeError("git rev-parse HEAD returned an invalid release revision")
+        if all(signed_pilot_inputs):
+            record_and_require(
+                [
+                    sys.executable,
+                    "ci/pilot_signoff_verification.py",
+                    "verify",
+                    "--bundle",
+                    str(args.pilot_signoff_bundle),
+                    "--trust-policy",
+                    str(args.pilot_signoff_trust_policy),
+                    "--expected-trust-policy-sha256",
+                    str(args.expected_pilot_signoff_trust_policy_sha256),
+                    "--release-revision",
+                    str(release_revision),
+                    "--output",
+                    paths["pilot_signoff_verification"].as_posix(),
+                    "--signoffs-output",
+                    paths["pilot_review_signoffs"].as_posix(),
+                    "--require-pass",
+                ]
+            )
+            pilot_review_signoffs = paths["pilot_review_signoffs"].as_posix()
+        elif args.target == "release" and pilot_review_signoffs:
+            raise RuntimeError(
+                "release rehearsal refuses unauthenticated pilot review signoffs"
+            )
 
         if not args.skip_build:
             record_and_require(["cargo", "build", "--verbose"])
@@ -561,7 +615,7 @@ def main() -> int:
                 "--require-clean",
             ]
         )
-        if args.pilot_review_signoffs:
+        if pilot_review_signoffs:
             record_and_require(
                 [
                     "cargo",
@@ -595,7 +649,7 @@ def main() -> int:
                 "--require-pass",
             ]
         )
-        if args.pilot_review_signoffs:
+        if pilot_review_signoffs:
             record_and_require(
                 [
                     sys.executable,
@@ -644,7 +698,7 @@ def main() -> int:
                     "--shadow-bundle",
                     paths["pilot_shadow_bundle_2"].as_posix(),
                     "--review-signoffs",
-                    args.pilot_review_signoffs,
+                    pilot_review_signoffs,
                     "--release-revision",
                     release_revision,
                     "--kids-memory-health-report",
@@ -707,7 +761,7 @@ def main() -> int:
             paths["world_lifecycle_report"].as_posix(),
             *(
                 ["--pilot-gate-report", paths["pilot_gate_report"].as_posix()]
-                if args.pilot_review_signoffs
+                if pilot_review_signoffs
                 else []
             ),
             *(
@@ -715,7 +769,15 @@ def main() -> int:
                     "--kids-preprod-dry-run-report",
                     paths["kids_preprod_dry_run"].as_posix(),
                 ]
-                if args.pilot_review_signoffs
+                if pilot_review_signoffs
+                else []
+            ),
+            *(
+                [
+                    "--pilot-signoff-verification",
+                    paths["pilot_signoff_verification"].as_posix(),
+                ]
+                if paths["pilot_signoff_verification"].is_file()
                 else []
             ),
             "--ffi-smoke",

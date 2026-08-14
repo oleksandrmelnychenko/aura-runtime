@@ -57,25 +57,49 @@ Statuses:
 
 `approved` is required for pilot-ready status.
 
-## Signoff Source
+## Signed Signoff Source
 
-The current expected format is the strict
-`aura.pilot_review_signoffs.v2` envelope from:
+The Rust gate consumes the strict `aura.pilot_review_signoffs.v2` projection
+from:
 
 - [`pilot_gate.rs`](../crates/aura-core/src/pilot_gate.rs)
 
-Use the template:
+Use the template only to plan review content:
 
 - [`pilot-review-signoffs.template.json`](./pilot-review-signoffs.template.json)
 
-Create the real file only after the immutable release candidate `R` exists, and
-keep it outside the tracked source tree, for example at
-`artifacts/pilot-review-signoffs.json`. The envelope and every one of its
-exactly four signoffs must repeat the same full lowercase 40-character `R`.
+Production projection bytes must be derived by
+`ci/pilot_signoff_verification.py` from an external
+`aura.pilot_review_signoff_bundle.v1`. The bundle contains exactly four
+detached `aura.pilot_review_signoff_attestation.v1` values. Each claim binds
+the policy ID/epoch, canonical trust-policy digest, area, reviewer, status,
+review time, notes, and exact lowercase 40-character `R`. The external
+`aura.pilot_signoff_trust_policy.v1` fixes one distinct reviewer, key ID, and
+raw Ed25519 public key per required area. The policy is a caller trust root and
+must never be copied into the release artifact.
+
+Create signatures only after immutable candidate `R` exists, outside the
+repository and hosted workflows. The bundle and every one of its exactly four
+claims must repeat the same `R`. Verify locally without any private key:
+
+```bash
+python3 ci/pilot_signoff_verification.py verify \
+  --bundle /external/pilot-review-signoff-bundle.json \
+  --trust-policy /trusted/pilot-signoff-policy.json \
+  --expected-trust-policy-sha256 '<64 lowercase canonical policy digest>' \
+  --release-revision '<R>' \
+  --output artifacts/pilot-signoff-verification.json \
+  --signoffs-output artifacts/pilot-review-signoffs.json \
+  --require-pass
+```
+
 The resulting `aura.pilot_gate_report.v2` repeats that `R`, and the terminal
 release-decision evaluator compares the report and every signoff with its own
 candidate revision. A v1 array, a stale revision, a mixed-revision set, a
-duplicate area, or an incomplete set fails closed.
+duplicate area, reused signing identity, small-order/non-prime-order Ed25519
+point, invalid signature, or incomplete set fails closed. Cryptographically
+valid `pending` is `blocked`; valid `needs_changes` is `fail`; only four
+`approved` claims produce `pass`.
 
 `H`, `A`, and `source_tree_sha256` remain bound by the separate verified Apple
 artifact and reproducibility evidence. They are deliberately not copied into
@@ -166,22 +190,44 @@ High-signal triggers:
 
 ## Workflow Support
 
-Local rehearsal already understands optional pilot signoffs:
+Local rehearsal can verify the signed bundle and derive the projection before
+running the Rust gate:
 
 ```bash
 python3 ci/run_promotion_rehearsal.py \
-  --target staging \
-  --pilot-review-signoffs artifacts/pilot-review-signoffs.json
+  --target release \
+  --pilot-signoff-bundle /external/pilot-review-signoff-bundle.json \
+  --pilot-signoff-trust-policy /trusted/pilot-signoff-policy.json \
+  --expected-pilot-signoff-trust-policy-sha256 '<canonical policy digest>'
 ```
 
-CI and `Promotion Gate` look only for the untracked
-`artifacts/pilot-review-signoffs.json` path and pass the checked-out
-`GITHUB_SHA` as the expected `R`. No repository-owned hosted step currently
-ingests or authenticates that external file. Consequently hosted automation
-skips pilot-gate generation when the file is absent, and the downstream release
-chain remains fail-closed/no-go. Adding an authenticated external ingestion
-stage is an explicit operational prerequisite; committing signoffs into the
-repository is not a substitute.
+For hosted release use `Pilot Signoff Ingest` at exact `R`. Supply base64 of
+the bundle plus its exact raw SHA-256 and byte count; decoded input is capped at
+32 KiB. The workflow has no signing operation or private key. It verifies
+offline and uploads exactly the bundle, verification report, and Rust
+projection. A signed negative decision is retained for diagnosis through an
+unsuccessful run; malformed signatures emit no report. `Promotion Gate` accepts
+only a successful first-attempt ingest run for the same `R`, resolves its sole
+immutable artifact ID/digest/length, downloads using a token only for metadata
+and transport, then repeats offline verification before invoking Rust. Release
+Evidence Freeze repeats verification again and carries only the verification
+leaf.
+
+`Promotion Gate` is manual-only. A tag push is not promotion authorization and
+cannot select an ingest artifact. For `target=release`, the exact successful
+ingest run ID and attempt `1` are mandatory inputs; staging may run without
+pilot signoffs and remains non-release evidence.
+
+Required repository variables are
+`AURA_PILOT_SIGNOFF_TRUST_POLICY_B64`,
+`AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256`, and
+`AURA_PILOT_SIGNOFF_WORKFLOW_ID`. They are externally configured governance
+inputs, not proof that change control is already protected. They are currently
+absent; hosted intake, release Promotion, and Freeze therefore fail closed
+until repository administrators establish review/rotation controls and
+provision exact values. The digest is the helper's domain-separated canonical
+policy identity, not a raw-file digest. Committing a policy, private key,
+signoff bundle, or generated projection is not a substitute.
 
 When pilot gate runs with `--require-kids-memory-pass`, missing mandatory
 `kids.memory.*` reasons are treated as a blocking/failing condition instead of a

@@ -545,22 +545,35 @@ account. Kill switch не повинен переводити явний риз�
 Статус реалізації: fail-closed агрегатор, зовнішній client-acceptance contract
 і окремі Ed25519 sign/verify команди реалізовано в
 `ci/release_decision.py`. До фактичного iOS acceptance та чотирьох реальних
-pilot signoff поточний кандидат зобов'язаний залишатися `no-go`; автоматизація
-не підміняє ці зовнішні рішення.
+криптографічно автентифікованих pilot signoff для exact `R` поточний кандидат
+зобов'язаний залишатися `no-go`; автоматизація не підміняє ці зовнішні рішення.
 
 Фіксований terminal bundle реалізовано в `ci/release_dossier.py`. Він збирає
 лише allowlisted evidence, decision та detached attestations, повторно
 перевіряє їх через `ci.release_decision` і публікує unsigned index
-`aura.release_candidate_dossier.v1`. Цей index не є новим підписом або
+`aura.release_candidate_dossier.v2`. Fixed layout містить рівно 13 файлів,
+включно з `pilot/pilot-signoff-verification.json`; зовнішня pilot trust policy
+та її canonical digest потрібні для повторної перевірки, але ніколи не
+копіюються у dossier. Цей index не є новим підписом або
 дозволом: `GO` залишається чинним лише завдяки перевіреному release-operator
-attestation. Hosted `Release Evidence Freeze` без секретів заморожує exact
-unsigned evidence leaf; зовнішній evidence operator підписує його окремо.
-Workflow не генерує product acceptance чи human signoff і сам не може видати
-`GO`.
+attestation. Manual `Pilot Signoff Ingest` приймає зовнішній signed four-role
+bundle для exact `R`, перевіряє його без private keys і публікує тільки exact
+bundle/report/projection artifact. Release Promotion pin-ить successful
+first-attempt ingest run та його sole immutable artifact identity, повторно
+перевіряє offline і передає projection у Rust. Hosted `Release Evidence Freeze`
+без секретів повторює перевірку, заморожує exact unsigned evidence leaf;
+зовнішній evidence operator підписує його окремо. Жодний workflow не генерує
+product acceptance чи human signoff і сам не може видати `GO`.
+
+Hosted chain навмисно fail-closed, доки адміністратори не налаштують governance
+і repository variables `AURA_PILOT_SIGNOFF_TRUST_POLICY_B64`,
+`AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256`,
+`AURA_PILOT_SIGNOFF_WORKFLOW_ID`. Зараз вони відсутні; це незакритий
+операційний prerequisite, а не прихована готовність production trust boundary.
 
 ```json
 {
-  "schema_version": "aura.release_decision.v2",
+  "schema_version": "aura.release_decision.v3",
   "candidate": "<runtime-version+commit>",
   "profile": "agent-kids-rules-context",
   "artifact_integrity": "pass",
@@ -700,4 +713,4 @@ evidence є інфраструктурою докторського дослід
 - усі необхідні людські підписи реальні;
 - Relay, ONNX і Military або окремо допущені, або доведено вимкнені;
 - документація описує фактичний стан без застарілих заяв;
-- верхньорівневий `aura.release_decision.v2` має `decision = go`.
+- верхньорівневий `aura.release_decision.v3` має `decision = go`.

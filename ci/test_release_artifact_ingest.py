@@ -25,7 +25,10 @@ EXPECTED_PROMOTION_FILES = frozenset(
         "performance/world-performance-summary.json",
         "pilot-gate-report.json",
         "pilot-regression-report.json",
+        "pilot-review-signoff-bundle.json",
+        "pilot-review-signoffs.json",
         "pilot-shadow-bundle.json",
+        "pilot-signoff-verification.json",
         "refactor-candidate.json",
         "refactor-diff-report.json",
         "release-report.json",
@@ -53,6 +56,14 @@ EXPECTED_APPLE_FILES = frozenset(
     }
 )
 
+EXPECTED_PILOT_SIGNOFF_FILES = frozenset(
+    {
+        "pilot-review-signoff-bundle.json",
+        "pilot-review-signoffs.json",
+        "pilot-signoff-verification.json",
+    }
+)
+
 
 class ReleaseArtifactIngestTests(unittest.TestCase):
     def setUp(self):
@@ -77,6 +88,7 @@ class ReleaseArtifactIngestTests(unittest.TestCase):
         expected = {
             "promotion": EXPECTED_PROMOTION_FILES,
             "apple": EXPECTED_APPLE_FILES,
+            "pilot_signoff": EXPECTED_PILOT_SIGNOFF_FILES,
         }[profile]
         with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for relative in sorted(expected):
@@ -126,6 +138,9 @@ class ReleaseArtifactIngestTests(unittest.TestCase):
     def test_profile_contracts_and_apple_happy_path_are_independent(self):
         self.assertEqual(ingest.PROMOTION_FILES, EXPECTED_PROMOTION_FILES)
         self.assertEqual(ingest.APPLE_FILES, EXPECTED_APPLE_FILES)
+        self.assertEqual(
+            ingest.PILOT_SIGNOFF_FILES, EXPECTED_PILOT_SIGNOFF_FILES
+        )
         archive = self.archive(profile="apple")
         output = self.extract(archive, profile="apple")
         actual = {
@@ -134,6 +149,44 @@ class ReleaseArtifactIngestTests(unittest.TestCase):
             if path.is_file()
         }
         self.assertEqual(actual, EXPECTED_APPLE_FILES)
+
+        pilot_archive = self.archive(profile="pilot_signoff")
+        pilot_output = self.root / "pilot-output"
+        digest, size = self.identity(pilot_archive)
+        ingest.extract_artifact(
+            pilot_archive,
+            digest,
+            size,
+            "pilot_signoff",
+            pilot_output,
+        )
+        self.assertEqual(
+            {
+                path.relative_to(pilot_output).as_posix()
+                for path in pilot_output.rglob("*")
+                if path.is_file()
+            },
+            EXPECTED_PILOT_SIGNOFF_FILES,
+        )
+
+    def test_pilot_signoff_profile_has_narrow_transport_and_expansion_limits(self):
+        self.assertEqual(ingest.PROFILE_ARCHIVE_LIMITS["pilot_signoff"], 1024 * 1024)
+        self.assertEqual(ingest.PROFILE_EXTRACTED_LIMITS["pilot_signoff"], 512 * 1024)
+        self.assertEqual(ingest.PROFILE_FILE_LIMITS["pilot_signoff"], 256 * 1024)
+        archive = self.root / "oversized-pilot-signoff.zip"
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
+            for relative in sorted(EXPECTED_PILOT_SIGNOFF_FILES):
+                raw = b"x" * (256 * 1024 + 1) if relative.endswith("bundle.json") else b"{}\n"
+                output.writestr(relative, raw)
+        digest, size = self.identity(archive)
+        with self.assertRaises(ingest.ArtifactIngestError):
+            ingest.extract_artifact(
+                archive,
+                digest,
+                size,
+                "pilot_signoff",
+                self.root / "oversized-pilot-output",
+            )
 
     def test_wrong_digest_and_byte_length_fail_closed(self):
         archive = self.archive()

@@ -33,7 +33,10 @@ PROMOTION_FILES = frozenset(
         "performance/world-performance-summary.json",
         "pilot-gate-report.json",
         "pilot-regression-report.json",
+        "pilot-review-signoff-bundle.json",
+        "pilot-review-signoffs.json",
         "pilot-shadow-bundle.json",
+        "pilot-signoff-verification.json",
         "refactor-candidate.json",
         "refactor-diff-report.json",
         "release-report.json",
@@ -61,7 +64,34 @@ APPLE_FILES = frozenset(
     }
 )
 
-PROFILES = {"promotion": PROMOTION_FILES, "apple": APPLE_FILES}
+PILOT_SIGNOFF_FILES = frozenset(
+    {
+        "pilot-review-signoff-bundle.json",
+        "pilot-review-signoffs.json",
+        "pilot-signoff-verification.json",
+    }
+)
+
+PROFILES = {
+    "promotion": PROMOTION_FILES,
+    "apple": APPLE_FILES,
+    "pilot_signoff": PILOT_SIGNOFF_FILES,
+}
+PROFILE_ARCHIVE_LIMITS = {
+    "promotion": MAX_ARCHIVE_BYTES,
+    "apple": MAX_ARCHIVE_BYTES,
+    "pilot_signoff": 1024 * 1024,
+}
+PROFILE_EXTRACTED_LIMITS = {
+    "promotion": MAX_EXTRACTED_BYTES,
+    "apple": MAX_EXTRACTED_BYTES,
+    "pilot_signoff": 512 * 1024,
+}
+PROFILE_FILE_LIMITS = {
+    "promotion": MAX_FILE_BYTES,
+    "apple": MAX_FILE_BYTES,
+    "pilot_signoff": 256 * 1024,
+}
 
 
 class ArtifactIngestError(Exception):
@@ -78,13 +108,16 @@ def _open_flags(*, directory: bool = False) -> int:
 
 
 def _stable_archive(
-    path: Path, expected_sha256: str, expected_bytes: int
+    path: Path,
+    expected_sha256: str,
+    expected_bytes: int,
+    maximum_bytes: int = MAX_ARCHIVE_BYTES,
 ) -> tuple[int, os.stat_result]:
     if (
         len(expected_sha256) != 64
         or any(character not in "0123456789abcdef" for character in expected_sha256)
         or isinstance(expected_bytes, bool)
-        or not 1 <= expected_bytes <= MAX_ARCHIVE_BYTES
+        or not 1 <= expected_bytes <= maximum_bytes
     ):
         raise ArtifactIngestError("artifact identity is malformed or exceeds its limit")
     try:
@@ -106,7 +139,7 @@ def _stable_archive(
             if not chunk:
                 break
             observed += len(chunk)
-            if observed > MAX_ARCHIVE_BYTES:
+            if observed > maximum_bytes:
                 raise ArtifactIngestError("artifact archive exceeds its size limit")
             digest.update(chunk)
         after = os.fstat(descriptor)
@@ -151,7 +184,10 @@ def _safe_member_path(value: str) -> PurePosixPath:
 
 
 def _validate_members(
-    archive: zipfile.ZipFile, expected_files: frozenset[str]
+    archive: zipfile.ZipFile,
+    expected_files: frozenset[str],
+    maximum_file_bytes: int = MAX_FILE_BYTES,
+    maximum_extracted_bytes: int = MAX_EXTRACTED_BYTES,
 ) -> list[zipfile.ZipInfo]:
     infos = archive.infolist()
     if not infos or len(infos) > MAX_ENTRY_COUNT:
@@ -180,10 +216,10 @@ def _validate_members(
             continue
         if relative not in expected_files or kind not in (0, stat.S_IFREG):
             raise ArtifactIngestError("artifact ZIP contains an unexpected or special file")
-        if not 1 <= info.file_size <= MAX_FILE_BYTES:
+        if not 1 <= info.file_size <= maximum_file_bytes:
             raise ArtifactIngestError("artifact ZIP member size is invalid")
         total += info.file_size
-        if total > MAX_EXTRACTED_BYTES:
+        if total > maximum_extracted_bytes:
             raise ArtifactIngestError("artifact extracted-byte total exceeds its limit")
         files.append(info)
     if {PurePosixPath(info.filename).as_posix() for info in files} != expected_files:
@@ -530,12 +566,20 @@ def extract_artifact(
             temporary_name, _open_flags(directory=True), dir_fd=parent_descriptor
         )
         archive_descriptor, archive_metadata = _stable_archive(
-            archive_path, expected_sha256, expected_bytes
+            archive_path,
+            expected_sha256,
+            expected_bytes,
+            PROFILE_ARCHIVE_LIMITS[profile],
         )
         expected_snapshot: dict[str, tuple[int, str]] = {}
         with os.fdopen(os.dup(archive_descriptor), "rb") as archive_handle:
             with zipfile.ZipFile(archive_handle, "r") as archive:
-                members = _validate_members(archive, expected_files)
+                members = _validate_members(
+                    archive,
+                    expected_files,
+                    PROFILE_FILE_LIMITS[profile],
+                    PROFILE_EXTRACTED_LIMITS[profile],
+                )
                 for info in sorted(members, key=lambda member: member.filename):
                     expected_snapshot[info.filename] = _write_member(
                         root_descriptor, archive, info

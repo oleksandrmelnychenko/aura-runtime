@@ -25,13 +25,21 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 
 try:
-    from ci import release_decision
+    from ci import pilot_signoff_verification, release_decision
 except ModuleNotFoundError:  # Direct execution from the ci/ directory.
+    import pilot_signoff_verification
     import release_decision
 
 
-SCHEMA_VERSION = "aura.release_candidate_dossier.v1"
-VERIFICATION_SCHEMA_VERSION = "aura.release_candidate_dossier_verification.v1"
+SCHEMA_VERSION = "aura.release_candidate_dossier.v2"
+VERIFICATION_SCHEMA_VERSION = "aura.release_candidate_dossier_verification.v2"
+PILOT_SIGNOFF_VERIFICATION_SCHEMA_VERSION = (
+    pilot_signoff_verification.VERIFICATION_SCHEMA_VERSION
+)
+PILOT_SIGNOFF_TRUST_POLICY_SCHEMA_VERSION = (
+    pilot_signoff_verification.TRUST_POLICY_SCHEMA_VERSION
+)
+PILOT_SIGNOFF_SIGNATURE_ALGORITHM = pilot_signoff_verification.SIGNATURE_ALGORITHM
 INDEX_PATH = "dossier.json"
 DECISION_PATH = "decision/release-decision.json"
 RELEASE_ATTESTATION_PATH = "decision/release-decision.attestation.json"
@@ -41,6 +49,37 @@ RELEASE_VERIFICATION_PATH = (
 MAX_INDEX_BYTES = 1024 * 1024
 MAX_KEY_BYTES = release_decision.MAX_ATTESTATION_BYTES
 MAX_ARTIFACT_BYTES = release_decision.MAX_ARTIFACT_BYTES
+MAX_PILOT_SIGNOFF_TRUST_POLICY_BYTES = 64 * 1024
+
+PILOT_REQUIRED_REVIEW_AREAS = pilot_signoff_verification.REQUIRED_REVIEW_AREAS
+PILOT_SIGNOFF_VERIFICATION_FIELDS = {
+    "schema_version",
+    "status",
+    "release_revision",
+    "trust_policy_sha256",
+    "policy_id",
+    "policy_epoch",
+    "signature_algorithm",
+    "required_review_areas",
+    "verified_signoff_count",
+    "distinct_signer_count",
+    "signoff_set_sha256",
+    "signer_spki_sha256",
+    "signer_spki_set_sha256",
+    "attestations",
+}
+PILOT_TRUST_POLICY_FIELDS = {
+    "schema_version",
+    "policy_id",
+    "policy_epoch",
+    "roles",
+}
+PILOT_TRUST_ROLE_FIELDS = {
+    "area",
+    "reviewer",
+    "key_id",
+    "public_key_hex",
+}
 
 SOURCE_PATHS = {
     "evidence_manifest": "evidence/evidence-manifest.json",
@@ -52,6 +91,7 @@ SOURCE_PATHS = {
     "apple_artifact_reproducibility": "apple/apple-reproducibility.json",
     "apple_release_manifest": "apple/release-manifest.json",
     "pilot_gate_report": "pilot/pilot-gate-report.json",
+    "pilot_signoff_verification": "pilot/pilot-signoff-verification.json",
     "product_integration_acceptance": (
         "product/product-integration-acceptance.json"
     ),
@@ -85,6 +125,7 @@ DOSSIER_FIELDS = {
     "release_decision_sha256",
     "release_decision",
     "evidence_trust",
+    "pilot_signoff_trust",
     "release_trust",
     "assurance",
     "inventory",
@@ -95,6 +136,15 @@ TRUST_FIELDS = {
     "expected_key_id",
     "verified_key_id",
     "verified_public_key_spki_sha256",
+}
+PILOT_SIGNOFF_TRUST_FIELDS = {
+    "external_trust_policy_required",
+    "trust_policy_embedded",
+    "trust_policy_supplied",
+    "expected_trust_policy_sha256",
+    "verification_report_trust_policy_sha256",
+    "verification_report_signer_spki_sha256",
+    "verification_report_signer_spki_set_sha256",
 }
 ASSURANCE_FIELDS = {
     "semantic_authority",
@@ -461,6 +511,128 @@ def _validate_expected_key_id(value: str | None, label: str) -> bool:
     return True
 
 
+def _validate_expected_sha256(value: str | None, label: str) -> bool:
+    if value is None:
+        return False
+    if not release_decision.lowercase_sha256(value):
+        raise DossierError(f"{label} expected SHA-256 is malformed")
+    return True
+
+
+def _safe_ascii_identifier(value: object, maximum: int = 128) -> bool:
+    return (
+        isinstance(value, str)
+        and value.isascii()
+        and 1 <= len(value) <= maximum
+        and all(character.isalnum() or character in "_.@-" for character in value)
+    )
+
+
+def _load_pilot_signoff_verification(raw: bytes) -> dict:
+    try:
+        payload = strict_json_loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        raise DossierError("pilot signoff verification is invalid JSON") from error
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != PILOT_SIGNOFF_VERIFICATION_FIELDS
+        or payload.get("schema_version")
+        != PILOT_SIGNOFF_VERIFICATION_SCHEMA_VERSION
+        or payload.get("status") not in ("pass", "blocked", "fail")
+        or not release_decision.lowercase_sha256(payload.get("trust_policy_sha256"))
+        or not _safe_ascii_identifier(payload.get("policy_id"))
+        or not isinstance(payload.get("policy_epoch"), int)
+        or isinstance(payload.get("policy_epoch"), bool)
+        or payload["policy_epoch"] <= 0
+        or payload.get("signature_algorithm") != PILOT_SIGNOFF_SIGNATURE_ALGORITHM
+        or payload.get("required_review_areas") != list(PILOT_REQUIRED_REVIEW_AREAS)
+        or not isinstance(payload.get("verified_signoff_count"), int)
+        or isinstance(payload.get("verified_signoff_count"), bool)
+        or not isinstance(payload.get("distinct_signer_count"), int)
+        or isinstance(payload.get("distinct_signer_count"), bool)
+        or not release_decision.lowercase_sha256(payload.get("signoff_set_sha256"))
+        or not release_decision.lowercase_sha256(payload.get("signer_spki_set_sha256"))
+    ):
+        raise DossierError("pilot signoff verification fields are invalid")
+    signers = payload.get("signer_spki_sha256")
+    attestations = payload.get("attestations")
+    if (
+        not isinstance(signers, list)
+        or len(signers) != len(PILOT_REQUIRED_REVIEW_AREAS)
+        or any(not release_decision.lowercase_sha256(value) for value in signers)
+        or len(set(signers)) != len(signers)
+        or not isinstance(attestations, list)
+        or len(attestations) != len(PILOT_REQUIRED_REVIEW_AREAS)
+        or any(not isinstance(value, dict) for value in attestations)
+    ):
+        raise DossierError("pilot signoff verification signer set is invalid")
+    release_revision = payload.get("release_revision")
+    if (
+        not isinstance(release_revision, str)
+        or len(release_revision) != 40
+        or any(character not in "0123456789abcdef" for character in release_revision)
+    ):
+        raise DossierError("pilot signoff verification release revision is invalid")
+    if payload["status"] == "pass" and (
+        payload["verified_signoff_count"] != len(PILOT_REQUIRED_REVIEW_AREAS)
+        or payload["distinct_signer_count"] != len(PILOT_REQUIRED_REVIEW_AREAS)
+    ):
+        raise DossierError("passing pilot signoff verification is incomplete")
+    return payload
+
+
+def _load_pilot_signoff_trust_policy(raw: bytes) -> dict:
+    try:
+        payload = strict_json_loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        raise DossierError("pilot signoff trust policy is invalid JSON") from error
+    try:
+        pilot_signoff_verification.validate_trust_policy(payload)
+    except pilot_signoff_verification.PilotSignoffError as error:
+        raise DossierError("pilot signoff trust policy fields are invalid") from error
+    return payload
+
+
+def _pilot_policy_signer_spki(policy: dict) -> list[str]:
+    # RFC 8410 SubjectPublicKeyInfo prefix for a raw 32-byte Ed25519 public key.
+    prefix = bytes.fromhex("302a300506032b6570032100")
+    return [
+        sha256(prefix + bytes.fromhex(role["public_key_hex"])).hexdigest()
+        for role in policy["roles"]
+    ]
+
+
+def _validate_pilot_signoff_trust(
+    verification_raw: bytes,
+    trust_policy_raw: bytes,
+    expected_trust_policy_sha256: str,
+    expected_release_revision: str,
+    *,
+    require_pass: bool = True,
+) -> dict:
+    _validate_expected_sha256(
+        expected_trust_policy_sha256, "pilot signoff trust policy"
+    )
+    report = _load_pilot_signoff_verification(verification_raw)
+    policy = _load_pilot_signoff_trust_policy(trust_policy_raw)
+    try:
+        pilot_signoff_verification.validate_verification_report(
+            report,
+            policy,
+            expected_trust_policy_sha256,
+            expected_release_revision,
+        )
+    except pilot_signoff_verification.PilotSignoffError as error:
+        raise DossierError(
+            "pilot signoff verification does not match its external trust policy or release"
+        ) from error
+    if require_pass and report["status"] != "pass":
+        raise DossierError(
+            "only a passing pilot signoff verification may authorize a final dossier"
+        )
+    return report
+
+
 def _external_file_optional(
     path: Path | None, maximum: int, label: str
 ) -> tuple[bytes | None, bool]:
@@ -495,6 +667,7 @@ def _materialized_inputs(
     evidence_public_key: bytes | None = None,
     release_public_key: bytes | None = None,
     release_attestation: bytes | None = None,
+    pilot_signoff_trust_policy: bytes | None = None,
 ):
     with tempfile.TemporaryDirectory(prefix="aura-release-dossier-inputs-") as directory:
         root = Path(directory)
@@ -504,11 +677,13 @@ def _materialized_inputs(
             "evidence_public_key": None,
             "release_public_key": None,
             "release_attestation": None,
+            "pilot_signoff_trust_policy": None,
         }
         for name, raw in (
             ("evidence_public_key", evidence_public_key),
             ("release_public_key", release_public_key),
             ("release_attestation", release_attestation),
+            ("pilot_signoff_trust_policy", pilot_signoff_trust_policy),
         ):
             if raw is not None:
                 path = root / "_external" / f"{name}.bin"
@@ -522,6 +697,8 @@ def _decision_paths(
     present_paths: set[str],
     evidence_public_key: Path | None,
     expected_evidence_key_id: str | None,
+    pilot_signoff_trust_policy: Path | None = None,
+    expected_pilot_signoff_trust_policy_sha256: str | None = None,
 ) -> dict[str, str | None]:
     paths = {
         field: (root / relative).as_posix() if relative in present_paths else None
@@ -531,6 +708,14 @@ def _decision_paths(
         evidence_public_key.as_posix() if evidence_public_key is not None else None
     )
     paths["expected_evidence_key_id"] = expected_evidence_key_id
+    paths["pilot_signoff_trust_policy"] = (
+        pilot_signoff_trust_policy.as_posix()
+        if pilot_signoff_trust_policy is not None
+        else None
+    )
+    paths["expected_pilot_signoff_trust_policy_sha256"] = (
+        expected_pilot_signoff_trust_policy_sha256
+    )
     return paths
 
 
@@ -538,9 +723,13 @@ def _load_decision_from_snapshot(
     snapshots: dict[str, bytes],
     evidence_public_key: bytes | None,
     expected_evidence_key_id: str | None,
+    pilot_signoff_trust_policy: bytes | None,
+    expected_pilot_signoff_trust_policy_sha256: str | None,
 ) -> tuple[dict, bytes]:
     with _materialized_inputs(
-        snapshots, evidence_public_key=evidence_public_key
+        snapshots,
+        evidence_public_key=evidence_public_key,
+        pilot_signoff_trust_policy=pilot_signoff_trust_policy,
     ) as (root, external):
         decision_path = root / DECISION_PATH
         raw, decision = release_decision.load_decision(decision_path)
@@ -551,6 +740,8 @@ def _load_decision_from_snapshot(
                 set(snapshots),
                 external["evidence_public_key"],
                 expected_evidence_key_id,
+                external["pilot_signoff_trust_policy"],
+                expected_pilot_signoff_trust_policy_sha256,
             ),
         )
     return decision, raw
@@ -562,9 +753,13 @@ def _create_decision(
     runtime_version: str,
     evidence_public_key: bytes | None,
     expected_evidence_key_id: str | None,
+    pilot_signoff_trust_policy: bytes | None,
+    expected_pilot_signoff_trust_policy_sha256: str | None,
 ) -> dict:
     with _materialized_inputs(
-        snapshots, evidence_public_key=evidence_public_key
+        snapshots,
+        evidence_public_key=evidence_public_key,
+        pilot_signoff_trust_policy=pilot_signoff_trust_policy,
     ) as (root, external):
         return release_decision.create_decision(
             candidate_revision,
@@ -575,6 +770,8 @@ def _create_decision(
                 set(snapshots),
                 external["evidence_public_key"],
                 expected_evidence_key_id,
+                external["pilot_signoff_trust_policy"],
+                expected_pilot_signoff_trust_policy_sha256,
             ),
         )
 
@@ -606,8 +803,13 @@ def _preliminary_status(
     evidence_public_key_supplied: bool,
     expected_evidence_key_id_supplied: bool,
     malformed_external_key: bool,
+    invalid_pilot_signoff_trust: bool,
 ) -> str:
-    if malformed_external_key or _source_contains_invalid_json(snapshots):
+    if (
+        malformed_external_key
+        or invalid_pilot_signoff_trust
+        or _source_contains_invalid_json(snapshots)
+    ):
         return "fail"
     if any(decision[field] == "fail" for field in DECISION_STATUS_FIELDS):
         return "fail"
@@ -629,6 +831,9 @@ def _build_dossier(
     status: str,
     evidence_public_key_supplied: bool,
     expected_evidence_key_id: str | None,
+    pilot_signoff_trust_policy_supplied: bool,
+    expected_pilot_signoff_trust_policy_sha256: str | None,
+    pilot_signoff_report: dict | None,
     release_report: dict | None = None,
     expected_release_key_id: str | None = None,
 ) -> dict:
@@ -661,6 +866,29 @@ def _build_dossier(
             "verified_public_key_spki_sha256": decision[
                 "evidence_signer_spki_sha256"
             ],
+        },
+        "pilot_signoff_trust": {
+            "external_trust_policy_required": True,
+            "trust_policy_embedded": False,
+            "trust_policy_supplied": pilot_signoff_trust_policy_supplied,
+            "expected_trust_policy_sha256": (
+                expected_pilot_signoff_trust_policy_sha256
+            ),
+            "verification_report_trust_policy_sha256": (
+                pilot_signoff_report["trust_policy_sha256"]
+                if pilot_signoff_report is not None
+                else None
+            ),
+            "verification_report_signer_spki_sha256": (
+                pilot_signoff_report["signer_spki_sha256"]
+                if pilot_signoff_report is not None
+                else None
+            ),
+            "verification_report_signer_spki_set_sha256": (
+                pilot_signoff_report["signer_spki_set_sha256"]
+                if pilot_signoff_report is not None
+                else None
+            ),
         },
         "release_trust": (
             {
@@ -696,7 +924,7 @@ def _build_dossier(
 
 def _validate_dossier_shape(payload: object) -> dict:
     if not isinstance(payload, dict) or set(payload) != DOSSIER_FIELDS:
-        raise DossierError("dossier fields do not match v1")
+        raise DossierError("dossier fields do not match v2")
     _validate_utc(payload.get("generated_at_utc"))
     phase = payload.get("phase")
     if (
@@ -716,6 +944,13 @@ def _validate_dossier_shape(payload: object) -> dict:
         if not isinstance(trust, dict) or set(trust) != TRUST_FIELDS:
             raise DossierError(f"dossier {field} is invalid")
         _validate_trust(trust, field)
+    pilot_signoff_trust = payload.get("pilot_signoff_trust")
+    if (
+        not isinstance(pilot_signoff_trust, dict)
+        or set(pilot_signoff_trust) != PILOT_SIGNOFF_TRUST_FIELDS
+    ):
+        raise DossierError("dossier pilot_signoff_trust is invalid")
+    _validate_pilot_signoff_trust_metadata(pilot_signoff_trust)
     release_trust = payload.get("release_trust")
     if release_trust is not None and (
         not isinstance(release_trust, dict) or set(release_trust) != TRUST_FIELDS
@@ -795,6 +1030,38 @@ def _validate_trust(trust: dict, label: str) -> None:
     digest = trust.get("verified_public_key_spki_sha256")
     if digest is not None and not release_decision.lowercase_sha256(digest):
         raise DossierError(f"dossier {label} SPKI identity is invalid")
+
+
+def _validate_pilot_signoff_trust_metadata(trust: dict) -> None:
+    if (
+        trust.get("external_trust_policy_required") is not True
+        or trust.get("trust_policy_embedded") is not False
+        or not isinstance(trust.get("trust_policy_supplied"), bool)
+    ):
+        raise DossierError("dossier pilot signoff trust presence is invalid")
+    for field in (
+        "expected_trust_policy_sha256",
+        "verification_report_trust_policy_sha256",
+        "verification_report_signer_spki_set_sha256",
+    ):
+        value = trust.get(field)
+        if value is not None and not release_decision.lowercase_sha256(value):
+            raise DossierError(f"dossier pilot signoff trust {field} is invalid")
+    signers = trust.get("verification_report_signer_spki_sha256")
+    if signers is not None and (
+        not isinstance(signers, list)
+        or len(signers) != len(PILOT_REQUIRED_REVIEW_AREAS)
+        or any(not release_decision.lowercase_sha256(value) for value in signers)
+        or len(set(signers)) != len(signers)
+    ):
+        raise DossierError("dossier pilot signoff signer identities are invalid")
+    reported_policy = trust.get("verification_report_trust_policy_sha256")
+    reported_set = trust.get("verification_report_signer_spki_set_sha256")
+    if reported_policy is None:
+        if signers is not None or reported_set is not None:
+            raise DossierError("dossier pilot signoff report identity is incomplete")
+    elif signers is None or reported_set is None:
+        raise DossierError("dossier pilot signoff report identity is incomplete")
 
 
 def _load_index(snapshots: dict[str, bytes]) -> dict:
@@ -1217,6 +1484,8 @@ def assemble_dossier(
     runtime_version: str,
     evidence_public_key_path: Path | None,
     expected_evidence_key_id: str | None,
+    pilot_signoff_trust_policy_path: Path | None = None,
+    expected_pilot_signoff_trust_policy_sha256: str | None = None,
 ) -> dict:
     snapshots = snapshot_fixed_tree(
         root, SOURCE_FILES, SOURCE_LIMITS, "release evidence root"
@@ -1227,6 +1496,50 @@ def assemble_dossier(
     expected_id_supplied = _validate_expected_key_id(
         expected_evidence_key_id, "evidence"
     )
+    pilot_policy_raw, pilot_policy_supplied = _external_file_optional(
+        pilot_signoff_trust_policy_path,
+        MAX_PILOT_SIGNOFF_TRUST_POLICY_BYTES,
+        "external pilot signoff trust policy",
+    )
+    _validate_expected_sha256(
+        expected_pilot_signoff_trust_policy_sha256,
+        "pilot signoff trust policy",
+    )
+    pilot_report: dict | None = None
+    invalid_pilot_trust = False
+    pilot_verification_raw = snapshots.get(
+        SOURCE_PATHS["pilot_signoff_verification"]
+    )
+    if pilot_verification_raw is not None:
+        try:
+            pilot_report = _load_pilot_signoff_verification(
+                pilot_verification_raw
+            )
+            if (
+                pilot_report["status"] == "fail"
+                or pilot_report["release_revision"] != candidate_revision
+                or (
+                    expected_pilot_signoff_trust_policy_sha256 is not None
+                    and pilot_report["trust_policy_sha256"]
+                    != expected_pilot_signoff_trust_policy_sha256
+                )
+            ):
+                invalid_pilot_trust = True
+            if pilot_policy_raw is not None:
+                _validate_pilot_signoff_trust(
+                    pilot_verification_raw,
+                    pilot_policy_raw,
+                    (
+                        expected_pilot_signoff_trust_policy_sha256
+                        or pilot_signoff_verification.trust_policy_sha256(
+                            _load_pilot_signoff_trust_policy(pilot_policy_raw)
+                        )
+                    ),
+                    candidate_revision,
+                    require_pass=False,
+                )
+        except DossierError:
+            invalid_pilot_trust = True
     malformed_key = False
     if evidence_key_raw is not None:
         try:
@@ -1245,6 +1558,8 @@ def assemble_dossier(
             runtime_version,
             evidence_key_raw,
             expected_evidence_key_id,
+            pilot_policy_raw,
+            expected_pilot_signoff_trust_policy_sha256,
         )
     except release_decision.ReleaseDecisionError as error:
         raise DossierError(f"release decision authority rejected the candidate: {error}") from error
@@ -1257,6 +1572,7 @@ def assemble_dossier(
         evidence_key_supplied,
         expected_id_supplied,
         malformed_key,
+        invalid_pilot_trust,
     )
     dossier = _build_dossier(
         output_files,
@@ -1266,11 +1582,18 @@ def assemble_dossier(
         status=status,
         evidence_public_key_supplied=evidence_key_supplied,
         expected_evidence_key_id=expected_evidence_key_id,
+        pilot_signoff_trust_policy_supplied=pilot_policy_supplied,
+        expected_pilot_signoff_trust_policy_sha256=(
+            expected_pilot_signoff_trust_policy_sha256
+        ),
+        pilot_signoff_report=pilot_report,
     )
     output_files[INDEX_PATH] = _json_bytes(dossier)
     protected = [root]
     if evidence_public_key_path is not None:
         protected.append(evidence_public_key_path)
+    if pilot_signoff_trust_policy_path is not None:
+        protected.append(pilot_signoff_trust_policy_path)
     publish_bundle(output, output_files, protected)
     return dossier
 
@@ -1280,23 +1603,52 @@ def _verify_preliminary(
     dossier: dict,
     evidence_public_key_path: Path | None,
     expected_evidence_key_id: str | None,
+    pilot_signoff_trust_policy_path: Path | None,
+    expected_pilot_signoff_trust_policy_sha256: str | None,
 ) -> tuple[dict, bytes]:
     trust = dossier["evidence_trust"]
     if trust["expected_key_id"] != expected_evidence_key_id:
         raise DossierError("external evidence key_id pin does not match the dossier")
     key_raw = None
-    if trust["public_key_supplied"] is True:
-        if evidence_public_key_path is None:
-            raise DossierBlocked("external evidence public key is required")
+    if evidence_public_key_path is not None:
         key_raw = read_supplied_regular_file(
             evidence_public_key_path,
             MAX_KEY_BYTES,
             "external evidence public key",
         )
+    elif trust["public_key_supplied"] is True:
+        raise DossierBlocked("external evidence public key is required")
     elif trust["public_key_supplied"] is not False:
         raise DossierError("dossier evidence trust presence is invalid")
+    pilot_trust = dossier["pilot_signoff_trust"]
+    if (
+        pilot_trust["expected_trust_policy_sha256"]
+        != expected_pilot_signoff_trust_policy_sha256
+    ):
+        raise DossierError(
+            "external pilot signoff trust-policy pin does not match the dossier"
+        )
+    _validate_expected_sha256(
+        expected_pilot_signoff_trust_policy_sha256,
+        "pilot signoff trust policy",
+    )
+    pilot_policy_raw = None
+    if pilot_signoff_trust_policy_path is not None:
+        pilot_policy_raw = read_supplied_regular_file(
+            pilot_signoff_trust_policy_path,
+            MAX_PILOT_SIGNOFF_TRUST_POLICY_BYTES,
+            "external pilot signoff trust policy",
+        )
+    elif pilot_trust["trust_policy_supplied"] is True:
+        raise DossierBlocked("external pilot signoff trust policy is required")
+    elif pilot_trust["trust_policy_supplied"] is not False:
+        raise DossierError("dossier pilot signoff trust presence is invalid")
     decision, decision_raw = _load_decision_from_snapshot(
-        snapshots, key_raw, expected_evidence_key_id
+        snapshots,
+        key_raw,
+        expected_evidence_key_id,
+        pilot_policy_raw,
+        expected_pilot_signoff_trust_policy_sha256,
     )
     malformed_key = False
     if key_raw is not None:
@@ -1310,12 +1662,48 @@ def _verify_preliminary(
                 )
         except release_decision.ReleaseDecisionError:
             malformed_key = True
+    pilot_report: dict | None = None
+    invalid_pilot_trust = False
+    pilot_verification_raw = snapshots.get(
+        SOURCE_PATHS["pilot_signoff_verification"]
+    )
+    if pilot_verification_raw is not None:
+        try:
+            pilot_report = _load_pilot_signoff_verification(
+                pilot_verification_raw
+            )
+            if (
+                pilot_report["status"] == "fail"
+                or pilot_report["release_revision"] != decision["release_revision"]
+                or (
+                    expected_pilot_signoff_trust_policy_sha256 is not None
+                    and pilot_report["trust_policy_sha256"]
+                    != expected_pilot_signoff_trust_policy_sha256
+                )
+            ):
+                invalid_pilot_trust = True
+            if pilot_policy_raw is not None:
+                _validate_pilot_signoff_trust(
+                    pilot_verification_raw,
+                    pilot_policy_raw,
+                    (
+                        expected_pilot_signoff_trust_policy_sha256
+                        or pilot_signoff_verification.trust_policy_sha256(
+                            _load_pilot_signoff_trust_policy(pilot_policy_raw)
+                        )
+                    ),
+                    decision["release_revision"],
+                    require_pass=False,
+                )
+        except DossierError:
+            invalid_pilot_trust = True
     expected_status = _preliminary_status(
         decision,
         snapshots,
         trust["public_key_supplied"],
         expected_evidence_key_id is not None,
         malformed_key,
+        invalid_pilot_trust,
     )
     expected = _build_dossier(
         snapshots,
@@ -1325,6 +1713,13 @@ def _verify_preliminary(
         status=expected_status,
         evidence_public_key_supplied=trust["public_key_supplied"],
         expected_evidence_key_id=expected_evidence_key_id,
+        pilot_signoff_trust_policy_supplied=pilot_trust[
+            "trust_policy_supplied"
+        ],
+        expected_pilot_signoff_trust_policy_sha256=(
+            expected_pilot_signoff_trust_policy_sha256
+        ),
+        pilot_signoff_report=pilot_report,
     )
     _assert_expected_dossier(dossier, expected)
     return decision, decision_raw
@@ -1338,6 +1733,8 @@ def finalize_dossier(
     expected_evidence_key_id: str | None,
     release_public_key_path: Path | None,
     expected_release_key_id: str | None,
+    pilot_signoff_trust_policy_path: Path | None = None,
+    expected_pilot_signoff_trust_policy_sha256: str | None = None,
 ) -> dict:
     snapshots = snapshot_fixed_tree(
         root, FINAL_FILES, _bundle_limits(), "preliminary dossier"
@@ -1352,15 +1749,26 @@ def finalize_dossier(
         raise DossierBlocked("external evidence trust pin is required")
     if expected_release_key_id is None or release_public_key_path is None:
         raise DossierBlocked("external release trust pin is required")
+    if (
+        pilot_signoff_trust_policy_path is None
+        or expected_pilot_signoff_trust_policy_sha256 is None
+    ):
+        raise DossierBlocked("external pilot signoff trust-policy pin is required")
     if release_attestation_path is None:
         raise DossierBlocked("release decision attestation is required")
     _validate_expected_key_id(expected_evidence_key_id, "evidence")
     _validate_expected_key_id(expected_release_key_id, "release")
+    _validate_expected_sha256(
+        expected_pilot_signoff_trust_policy_sha256,
+        "pilot signoff trust policy",
+    )
     _verify_preliminary(
         snapshots,
         dossier,
         evidence_public_key_path,
         expected_evidence_key_id,
+        pilot_signoff_trust_policy_path,
+        expected_pilot_signoff_trust_policy_sha256,
     )
     evidence_key_raw = read_supplied_regular_file(
         evidence_public_key_path, MAX_KEY_BYTES, "external evidence public key"
@@ -1371,11 +1779,17 @@ def finalize_dossier(
     release_attestation_raw = read_supplied_regular_file(
         release_attestation_path, MAX_KEY_BYTES, "release decision attestation"
     )
+    pilot_policy_raw = read_supplied_regular_file(
+        pilot_signoff_trust_policy_path,
+        MAX_PILOT_SIGNOFF_TRUST_POLICY_BYTES,
+        "external pilot signoff trust policy",
+    )
     with _materialized_inputs(
         snapshots,
         evidence_public_key=evidence_key_raw,
         release_public_key=release_key_raw,
         release_attestation=release_attestation_raw,
+        pilot_signoff_trust_policy=pilot_policy_raw,
     ) as (materialized, external):
         decision_raw, decision = release_decision.load_decision(
             materialized / DECISION_PATH
@@ -1387,6 +1801,8 @@ def finalize_dossier(
                 set(snapshots),
                 external["evidence_public_key"],
                 expected_evidence_key_id,
+                external["pilot_signoff_trust_policy"],
+                expected_pilot_signoff_trust_policy_sha256,
             ),
         )
         report = release_decision.verify_decision(
@@ -1397,6 +1813,12 @@ def finalize_dossier(
         )
     if decision["decision"] != "go" or report.get("status") != "pass":
         raise DossierError("only a verified GO release decision may be finalized")
+    pilot_report = _validate_pilot_signoff_trust(
+        snapshots[SOURCE_PATHS["pilot_signoff_verification"]],
+        pilot_policy_raw,
+        expected_pilot_signoff_trust_policy_sha256,
+        decision["release_revision"],
+    )
     if hmac.compare_digest(
         report["public_key_spki_sha256"],
         decision["evidence_signer_spki_sha256"],
@@ -1416,6 +1838,11 @@ def finalize_dossier(
         status="pass",
         evidence_public_key_supplied=True,
         expected_evidence_key_id=expected_evidence_key_id,
+        pilot_signoff_trust_policy_supplied=True,
+        expected_pilot_signoff_trust_policy_sha256=(
+            expected_pilot_signoff_trust_policy_sha256
+        ),
+        pilot_signoff_report=pilot_report,
         release_report=report,
         expected_release_key_id=expected_release_key_id,
     )
@@ -1428,6 +1855,7 @@ def finalize_dossier(
             evidence_public_key_path,
             release_public_key_path,
             release_attestation_path,
+            pilot_signoff_trust_policy_path,
         ],
     )
     return final_dossier
@@ -1439,6 +1867,8 @@ def verify_dossier(
     expected_evidence_key_id: str | None,
     release_public_key_path: Path | None = None,
     expected_release_key_id: str | None = None,
+    pilot_signoff_trust_policy_path: Path | None = None,
+    expected_pilot_signoff_trust_policy_sha256: str | None = None,
 ) -> dict:
     snapshots = snapshot_fixed_tree(root, FINAL_FILES, _bundle_limits(), "dossier")
     dossier = _load_index(snapshots)
@@ -1450,25 +1880,45 @@ def verify_dossier(
             dossier,
             evidence_public_key_path,
             expected_evidence_key_id,
+            pilot_signoff_trust_policy_path,
+            expected_pilot_signoff_trust_policy_sha256,
         )
         release_report = None
+        pilot_signoff_trust_policy_verified = False
     else:
         if evidence_public_key_path is None or expected_evidence_key_id is None:
             raise DossierBlocked("external evidence trust pin is required")
         if release_public_key_path is None or expected_release_key_id is None:
             raise DossierBlocked("external release trust pin is required")
+        if (
+            pilot_signoff_trust_policy_path is None
+            or expected_pilot_signoff_trust_policy_sha256 is None
+        ):
+            raise DossierBlocked(
+                "external pilot signoff trust-policy pin is required"
+            )
         _validate_expected_key_id(expected_evidence_key_id, "evidence")
         _validate_expected_key_id(expected_release_key_id, "release")
+        _validate_expected_sha256(
+            expected_pilot_signoff_trust_policy_sha256,
+            "pilot signoff trust policy",
+        )
         evidence_key_raw = read_supplied_regular_file(
             evidence_public_key_path, MAX_KEY_BYTES, "external evidence public key"
         )
         release_key_raw = read_supplied_regular_file(
             release_public_key_path, MAX_KEY_BYTES, "external release public key"
         )
+        pilot_policy_raw = read_supplied_regular_file(
+            pilot_signoff_trust_policy_path,
+            MAX_PILOT_SIGNOFF_TRUST_POLICY_BYTES,
+            "external pilot signoff trust policy",
+        )
         with _materialized_inputs(
             snapshots,
             evidence_public_key=evidence_key_raw,
             release_public_key=release_key_raw,
+            pilot_signoff_trust_policy=pilot_policy_raw,
         ) as (materialized, external):
             decision_raw, decision = release_decision.load_decision(
                 materialized / DECISION_PATH
@@ -1480,6 +1930,8 @@ def verify_dossier(
                     set(snapshots),
                     external["evidence_public_key"],
                     expected_evidence_key_id,
+                    external["pilot_signoff_trust_policy"],
+                    expected_pilot_signoff_trust_policy_sha256,
                 ),
             )
             release_report = release_decision.verify_decision(
@@ -1499,6 +1951,13 @@ def verify_dossier(
             decision["evidence_signer_spki_sha256"],
         ):
             raise DossierError("evidence and release roles must use different keys")
+        pilot_report = _validate_pilot_signoff_trust(
+            snapshots[SOURCE_PATHS["pilot_signoff_verification"]],
+            pilot_policy_raw,
+            expected_pilot_signoff_trust_policy_sha256,
+            decision["release_revision"],
+        )
+        pilot_signoff_trust_policy_verified = True
         expected = _build_dossier(
             snapshots,
             decision,
@@ -1507,6 +1966,11 @@ def verify_dossier(
             status="pass",
             evidence_public_key_supplied=True,
             expected_evidence_key_id=expected_evidence_key_id,
+            pilot_signoff_trust_policy_supplied=True,
+            expected_pilot_signoff_trust_policy_sha256=(
+                expected_pilot_signoff_trust_policy_sha256
+            ),
+            pilot_signoff_report=pilot_report,
             release_report=release_report,
             expected_release_key_id=expected_release_key_id,
         )
@@ -1523,6 +1987,9 @@ def verify_dossier(
         "semantic_authority": "ci.release_decision",
         "terminal_unsigned_index": True,
         "release_operator_attestation_verified": release_report is not None,
+        "pilot_signoff_trust_policy_verified": (
+            pilot_signoff_trust_policy_verified
+        ),
     }
 
 
@@ -1538,6 +2005,10 @@ def parse_args() -> argparse.Namespace:
     assemble.add_argument("--runtime-version", required=True)
     assemble.add_argument("--evidence-public-key", default=None)
     assemble.add_argument("--expected-evidence-key-id", default=None)
+    assemble.add_argument("--pilot-signoff-trust-policy", default=None)
+    assemble.add_argument(
+        "--expected-pilot-signoff-trust-policy-sha256", default=None
+    )
     assemble.add_argument("--output", required=True)
 
     finalize = subparsers.add_parser("finalize", help="Create a verified final dossier.")
@@ -1547,6 +2018,10 @@ def parse_args() -> argparse.Namespace:
     finalize.add_argument("--expected-evidence-key-id", default=None)
     finalize.add_argument("--release-public-key", default=None)
     finalize.add_argument("--expected-release-key-id", default=None)
+    finalize.add_argument("--pilot-signoff-trust-policy", default=None)
+    finalize.add_argument(
+        "--expected-pilot-signoff-trust-policy-sha256", default=None
+    )
     finalize.add_argument("--output", required=True)
 
     verify = subparsers.add_parser("verify", help="Re-verify an exact dossier bundle.")
@@ -1555,6 +2030,10 @@ def parse_args() -> argparse.Namespace:
     verify.add_argument("--expected-evidence-key-id", default=None)
     verify.add_argument("--release-public-key", default=None)
     verify.add_argument("--expected-release-key-id", default=None)
+    verify.add_argument("--pilot-signoff-trust-policy", default=None)
+    verify.add_argument(
+        "--expected-pilot-signoff-trust-policy-sha256", default=None
+    )
     verify.add_argument("--output", default=None)
     verify.add_argument("--require-pass", action="store_true")
     return parser.parse_args()
@@ -1575,6 +2054,8 @@ def main() -> int:
                 args.runtime_version,
                 _optional_path(args.evidence_public_key),
                 args.expected_evidence_key_id,
+                _optional_path(args.pilot_signoff_trust_policy),
+                args.expected_pilot_signoff_trust_policy_sha256,
             )
             print(
                 f"preliminary release dossier written to {args.output} "
@@ -1590,6 +2071,8 @@ def main() -> int:
                 args.expected_evidence_key_id,
                 _optional_path(args.release_public_key),
                 args.expected_release_key_id,
+                _optional_path(args.pilot_signoff_trust_policy),
+                args.expected_pilot_signoff_trust_policy_sha256,
             )
             print(
                 f"final release dossier written to {args.output} "
@@ -1603,11 +2086,17 @@ def main() -> int:
             args.expected_evidence_key_id,
             _optional_path(args.release_public_key),
             args.expected_release_key_id,
+            _optional_path(args.pilot_signoff_trust_policy),
+            args.expected_pilot_signoff_trust_policy_sha256,
         )
         raw = _json_bytes(report)
         if args.output is not None:
             protected = [Path(args.root)]
-            for value in (args.evidence_public_key, args.release_public_key):
+            for value in (
+                args.evidence_public_key,
+                args.release_public_key,
+                args.pilot_signoff_trust_policy,
+            ):
                 if value is not None:
                     protected.append(Path(value))
             _publish_report(Path(args.output), raw, protected)

@@ -1,7 +1,7 @@
 # Release decision contract
 
 `ci/release_decision.py` implements the top-level
-`aura.release_decision.v2` GO/NO-GO contract. It is deliberately separate from
+`aura.release_decision.v3` GO/NO-GO contract. It is deliberately separate from
 Apple `shippable` and the technical evidence manifest: a correctly built
 binary is not, by itself, authorization to release it.
 
@@ -20,10 +20,12 @@ A `go` decision requires all of the following for one exact candidate:
 - a passing, clean, shippable Apple artifact verification, the exact Apple
   release manifest, and a strict two-build reproducibility report binding
   source `H`, artifact `A`, and release revision `R`;
-- a passing `aura.pilot_gate_report.v2` whose report and each of exactly four
-  real review signoffs bind the exact release revision `R`, plus mandatory KIDS
-  checks, rollback triggers, stop conditions, and review cadence; reviewer
-  labels are governance assertions, not cryptographic identities;
+- a passing `aura.pilot_gate_report.v2` plus an
+  `aura.pilot_signoff_verification.v1` whose four embedded Ed25519 attestations
+  are re-verified against a caller-supplied external
+  `aura.pilot_signoff_trust_policy.v1` and canonical policy-digest pin; the
+  report, projection, and every claim bind exact release revision `R`, and all
+  reviewer/key/SPKI identities are distinct;
 - an external `aura.product_integration_acceptance.v2` produced after client
   contract tests accept the exact Apple artifact;
 - matching source revision, source-tree digest, runtime identity, artifact
@@ -58,6 +60,9 @@ python3 ci/release_decision.py create \
   --apple-artifact-reproducibility artifacts/apple-reproducibility.json \
   --apple-release-manifest dist/apple/release-manifest.json \
   --pilot-gate-report artifacts/pilot-gate-report.json \
+  --pilot-signoff-verification artifacts/pilot-signoff-verification.json \
+  --pilot-signoff-trust-policy /trusted/pilot-signoff-policy.json \
+  --expected-pilot-signoff-trust-policy-sha256 '<canonical policy digest>' \
   --product-integration-acceptance artifacts/product-integration-acceptance.json \
   --output artifacts/release-decision.json \
   --require-go
@@ -85,6 +90,9 @@ python3 ci/release_decision.py sign \
   --apple-artifact-reproducibility artifacts/apple-reproducibility.json \
   --apple-release-manifest dist/apple/release-manifest.json \
   --pilot-gate-report artifacts/pilot-gate-report.json \
+  --pilot-signoff-verification artifacts/pilot-signoff-verification.json \
+  --pilot-signoff-trust-policy /trusted/pilot-signoff-policy.json \
+  --expected-pilot-signoff-trust-policy-sha256 '<canonical policy digest>' \
   --product-integration-acceptance artifacts/product-integration-acceptance.json \
   --output artifacts/release-decision.attestation.json
 
@@ -103,9 +111,12 @@ against the pinned key and expected key identifier, requires the supplied
 derived report to match exactly, and recomputes every decision field except the
 generation timestamp. The detached Ed25519 signature binds the exact decision
 bytes, `H`/`A`/`R`, the raw evidence-attestation digest, and the evidence signer
-identity. The release-operator SPKI must differ from the evidence-signer SPKI;
-the verifier enforces the same separation. A `no-go` decision cannot be signed.
-Private keys must remain outside the repository and use owner-only permissions.
+identity plus the pilot policy ID/epoch/digest and ordered signer-SPKI set. The
+release-operator SPKI must differ from the evidence-signer SPKI and every pilot
+reviewer SPKI; the verifier enforces the same separation. The external policy
+and all public keys remain caller trust roots and are not embedded. A `no-go`
+decision cannot be signed. Private keys must remain outside the repository and
+use owner-only permissions.
 
 ## Security boundary
 

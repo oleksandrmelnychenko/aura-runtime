@@ -49,7 +49,13 @@ are absent; staging rehearsals may remain unsigned.
 
 `Promotion Gate` and `Release Evidence Freeze` are deliberately secretless.
 They generate and freeze unsigned evidence, but never receive an evidence
-private key and never run signing code from the candidate revision.
+private key and never run evidence-signing code from the candidate revision.
+For release, Promotion first consumes a caller-pinned successful
+`Pilot Signoff Ingest` run and re-verifies its exact signed four-role bundle
+against the externally configured public trust policy. Freeze repeats that
+verification and binds `pilot-signoff-verification.json` into the regenerated
+manifest. The pilot policy is not copied into the artifact and is distinct from
+the evidence-signing key.
 
 After the unsigned evidence is frozen, an approved external signing boundary
 must attest its exact manifest bytes. Use a reviewed immutable signer or a

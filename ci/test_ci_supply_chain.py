@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIRECTORY = ROOT / ".github" / "workflows"
 APPLE_WORKFLOW = WORKFLOW_DIRECTORY / "apple-artifact.yml"
 RELEASE_EVIDENCE_WORKFLOW = WORKFLOW_DIRECTORY / "release-evidence-finalize.yml"
+PILOT_SIGNOFF_WORKFLOW = WORKFLOW_DIRECTORY / "pilot-signoff-ingest.yml"
+PROMOTION_WORKFLOW = WORKFLOW_DIRECTORY / "promotion-gate.yml"
 FULL_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 CARGO_LOCKED_COMMAND = re.compile(r"\bcargo\s+(?:build|clippy|install|run|test)\b")
 JOB_HEADER = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
@@ -26,6 +28,14 @@ class CiSupplyChainTests(unittest.TestCase):
     @staticmethod
     def release_evidence_workflow() -> str:
         return RELEASE_EVIDENCE_WORKFLOW.read_text(encoding="utf-8")
+
+    @staticmethod
+    def pilot_signoff_workflow() -> str:
+        return PILOT_SIGNOFF_WORKFLOW.read_text(encoding="utf-8")
+
+    @staticmethod
+    def promotion_workflow() -> str:
+        return PROMOTION_WORKFLOW.read_text(encoding="utf-8")
 
     def test_external_actions_are_pinned_to_full_commit_sha(self):
         for workflow in workflows():
@@ -226,7 +236,9 @@ class CiSupplyChainTests(unittest.TestCase):
             'test "$PROMOTION_RUN_ATTEMPT" = "1"',
             'test "$APPLE_RUN_ATTEMPT" = "1"',
             'run.get("status") != "completed" or run.get("conclusion") != "success"',
-            'run.get("event") not in {"workflow_dispatch", "push"}',
+            'run.get("event") not in expected_events',
+            'expected_events={"workflow_dispatch"}',
+            'expected_events={"workflow_dispatch", "push"}',
             'head_repository.get("full_name") != expected_repo',
             "expected exactly one artifact named",
             'artifact.get("expired") is not False',
@@ -244,10 +256,12 @@ class CiSupplyChainTests(unittest.TestCase):
         )[0]
         for required_argument in (
             "--pilot-gate-report incoming/promotion/pilot-gate-report.json",
+            "--pilot-signoff-verification incoming/promotion/pilot-signoff-verification.json",
             "--kids-preprod-dry-run-report incoming/promotion/kids-preprod-dry-run-matrix.json",
             "--apple-artifact-verification incoming/apple/apple-release-verification.json",
             "--apple-artifact-reproducibility incoming/apple/apple-reproducibility.json",
             "incoming/apple/apple-verified-dist/release-manifest.json",
+            '"$package/release-inputs/pilot/pilot-signoff-verification.json"',
         ):
             self.assertIn(required_argument, build_step)
         self.assertNotIn("if [ -f", build_step)
@@ -318,7 +332,126 @@ class CiSupplyChainTests(unittest.TestCase):
         self.assertIn("install -m 600", build_step)
         self.assertIn('test ! -e "$package"', build_step)
         self.assertNotIn("source-runs.json", build_step)
+        self.assertIn(
+            'release_dossier.SOURCE_PATHS["pilot_signoff_verification"]',
+            build_step,
+        )
         self.assertNotIn("cp -R", build_step)
+
+    def test_pilot_signoff_ingest_is_manual_bounded_tokenless_verification(self):
+        workflow = self.pilot_signoff_workflow()
+        trigger = workflow.split("on:", 1)[1].split("jobs:", 1)[0]
+        self.assertIn("workflow_dispatch:", trigger)
+        self.assertNotIn("pull_request:", trigger)
+        self.assertNotIn("push:", trigger)
+        for required_input in (
+            "release_revision:",
+            "bundle_base64:",
+            "bundle_sha256:",
+            "bundle_bytes:",
+        ):
+            self.assertIn(required_input, trigger)
+        for invariant in (
+            "declared_bytes > 32 * 1024",
+            'hashlib.sha256(bundle).hexdigest() != declared_sha256',
+            'test "$(git rev-parse HEAD)" = "$RELEASE_REVISION"',
+            "AURA_PILOT_SIGNOFF_TRUST_POLICY_B64",
+            "AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256",
+            "python3 ci/pilot_signoff_verification.py verify",
+            "--expected-trust-policy-sha256",
+            "--release-revision \"$RELEASE_REVISION\"",
+            "--require-pass",
+            "pilot-review-signoff-bundle.json",
+            "pilot-signoff-verification.json",
+            "pilot-review-signoffs.json",
+            "steps.publishability.outputs.ready == 'true'",
+            "path: artifacts/pilot-signoff-ingest",
+            "compression-level: 0",
+        ):
+            self.assertIn(invariant, workflow)
+        verify = workflow.split(
+            "- name: Verify every external pilot signoff offline", 1
+        )[1].split("- name:", 1)[0]
+        self.assertNotIn("GH_TOKEN", verify)
+        self.assertNotIn("github.token", verify)
+        self.assertNotIn("Authorization:", verify)
+        self.assertNotIn("private", workflow.lower())
+        self.assertNotIn("secrets.", workflow)
+        self.assertNotIn(" sign ", workflow)
+
+    def test_promotion_pins_and_reverifies_exact_pilot_signoff_artifact(self):
+        workflow = self.promotion_workflow()
+        trigger = workflow.split("on:", 1)[1].split("env:", 1)[0]
+        self.assertIn("workflow_dispatch:", trigger)
+        self.assertNotIn("push:", trigger)
+        self.assertNotIn("pull_request:", trigger)
+        for invariant in (
+            "pilot_signoff_run_id:",
+            "pilot_signoff_run_attempt:",
+            "AURA_PILOT_SIGNOFF_WORKFLOW_ID",
+            'test "$PILOT_SIGNOFF_RUN_ATTEMPT" = "1"',
+            'run.get("workflow_id") != expected_workflow_id',
+            'run.get("path") != ".github/workflows/pilot-signoff-ingest.yml"',
+            'run.get("head_sha") != os.environ["GITHUB_SHA"]',
+            'run.get("status") != "completed" or run.get("conclusion") != "success"',
+            "total_count != 1",
+            "len(artifacts) != 1",
+            '"PILOT_SIGNOFF_ARTIFACT_ID_EXACT": artifact_id',
+            '"PILOT_SIGNOFF_ARTIFACT_BYTES_EXACT": artifact_bytes',
+            '"PILOT_SIGNOFF_ARTIFACT_SHA256_EXACT": digest.removeprefix("sha256:")',
+            "actions/artifacts/$PILOT_SIGNOFF_ARTIFACT_ID_EXACT/zip",
+            '--expected-sha256 "$PILOT_SIGNOFF_ARTIFACT_SHA256_EXACT"',
+            '--expected-bytes "$PILOT_SIGNOFF_ARTIFACT_BYTES_EXACT"',
+            "--profile pilot_signoff",
+            "python3 ci/pilot_signoff_verification.py verify",
+            "cmp -s \"$ingested/pilot-signoff-verification.json\"",
+            "cmp -s \"$ingested/pilot-review-signoffs.json\"",
+            'install -m 600 "$ingested/pilot-review-signoff-bundle.json"',
+            'install -m 600 "$ingested/pilot-signoff-verification.json"',
+            'install -m 600 "$ingested/pilot-review-signoffs.json"',
+            '--review-signoffs "$AURA_PILOT_REVIEW_SIGNOFFS_PATH"',
+            "if: ${{ inputs.target == 'release' }}",
+        ):
+            self.assertIn(invariant, workflow)
+        download = workflow.split(
+            "- name: Resolve exact hosted pilot signoff artifact", 1
+        )[1].split("- name: Reverify and install hosted pilot signoffs offline", 1)[0]
+        offline = workflow.split(
+            "- name: Reverify and install hosted pilot signoffs offline", 1
+        )[1].split("- name: Build", 1)[0]
+        self.assertIn("GH_TOKEN: ${{ github.token }}", download)
+        self.assertNotIn("GH_TOKEN", offline)
+        self.assertNotIn("Authorization:", offline)
+        self.assertNotIn("actions/download-artifact", workflow)
+
+    def test_freeze_reverifies_and_carries_only_pilot_verification_leaf(self):
+        workflow = self.release_evidence_workflow()
+        reverify = workflow.split(
+            "- name: Reverify frozen pilot signoffs against external trust policy", 1
+        )[1].split("- name: Build exact final evidence manifest", 1)[0]
+        for invariant in (
+            "AURA_PILOT_SIGNOFF_TRUST_POLICY_B64",
+            "AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256",
+            "python3 ci/pilot_signoff_verification.py verify",
+            "--bundle incoming/promotion/pilot-review-signoff-bundle.json",
+            "--require-pass",
+            "cmp -s incoming/promotion/pilot-signoff-verification.json",
+            "cmp -s incoming/promotion/pilot-review-signoffs.json",
+        ):
+            self.assertIn(invariant, workflow)
+        self.assertNotIn("GH_TOKEN", reverify)
+        self.assertNotIn("Authorization:", reverify)
+        build = workflow.split("- name: Build exact final evidence manifest", 1)[1]
+        self.assertIn(
+            "incoming/promotion/pilot-signoff-verification.json", build
+        )
+        self.assertNotIn(
+            '"$package/release-inputs/pilot/pilot-review-signoff-bundle.json"',
+            build,
+        )
+        self.assertNotIn(
+            '"$package/release-inputs/pilot/pilot-review-signoffs.json"', build
+        )
 
 
 if __name__ == "__main__":

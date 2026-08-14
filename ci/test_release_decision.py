@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import shutil
@@ -9,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from ci import release_decision
+from ci import pilot_signoff_verification
 
 
 class ReleaseDecisionFixture(unittest.TestCase):
@@ -34,6 +36,13 @@ class ReleaseDecisionFixture(unittest.TestCase):
         self.apple_reproducibility = self.root / "apple-reproducibility.json"
         self.apple_manifest = self.root / "apple-release-manifest.json"
         self.pilot_gate = self.root / "pilot-gate.json"
+        self.pilot_signoff_verification = (
+            self.root / "pilot-signoff-verification.json"
+        )
+        self.pilot_signoff_trust_policy = self.root / "pilot-signoff-policy.json"
+        self.pilot_signoff_private_keys = [
+            self.root / f"pilot-signoff-{index}.pem" for index in range(4)
+        ]
         self.product_acceptance = self.root / "product-acceptance.json"
         self.write_all_valid_inputs()
 
@@ -49,6 +58,9 @@ class ReleaseDecisionFixture(unittest.TestCase):
         release_decision.crypto_support.write_json_atomic(path, payload)
 
     def evidence_payload(self, **summary_overrides) -> dict:
+        pilot_signoff = json.loads(
+            self.pilot_signoff_verification.read_text(encoding="utf-8")
+        )
         summary = {
             "runtime_release_version": self.runtime_version,
             "wire_package": "aura.messenger.v1",
@@ -69,6 +81,41 @@ class ReleaseDecisionFixture(unittest.TestCase):
             "pilot_gate_release_revision": self.release_revision,
             "pilot_gate_shadow_run_count": 2,
             "pilot_gate_check_count": 15,
+            "pilot_signoff_verification_status": "pass",
+            "pilot_signoff_verification_schema_version": pilot_signoff[
+                "schema_version"
+            ],
+            "pilot_signoff_verification_release_revision": pilot_signoff[
+                "release_revision"
+            ],
+            "pilot_signoff_verification_trust_policy_sha256": pilot_signoff[
+                "trust_policy_sha256"
+            ],
+            "pilot_signoff_verification_policy_id": pilot_signoff["policy_id"],
+            "pilot_signoff_verification_policy_epoch": pilot_signoff[
+                "policy_epoch"
+            ],
+            "pilot_signoff_verification_signature_algorithm": pilot_signoff[
+                "signature_algorithm"
+            ],
+            "pilot_signoff_verification_required_review_areas": pilot_signoff[
+                "required_review_areas"
+            ],
+            "pilot_signoff_verification_verified_signoff_count": pilot_signoff[
+                "verified_signoff_count"
+            ],
+            "pilot_signoff_verification_distinct_signer_count": pilot_signoff[
+                "distinct_signer_count"
+            ],
+            "pilot_signoff_verification_signer_spki_sha256": pilot_signoff[
+                "signer_spki_sha256"
+            ],
+            "pilot_signoff_verification_signoff_set_sha256": pilot_signoff[
+                "signoff_set_sha256"
+            ],
+            "pilot_signoff_verification_signer_spki_set_sha256": pilot_signoff[
+                "signer_spki_set_sha256"
+            ],
         }
         summary.update(summary_overrides)
         return {
@@ -87,6 +134,24 @@ class ReleaseDecisionFixture(unittest.TestCase):
                     "observed_status": "pass",
                     "schema_version": "aura.pilot_gate_report.v2",
                     "release_revision": self.release_revision,
+                },
+                "pilot_signoff_verification": {
+                    "sha256": self.digest(self.pilot_signoff_verification),
+                    "observed_status": "pass",
+                    "schema_version": pilot_signoff["schema_version"],
+                    "release_revision": pilot_signoff["release_revision"],
+                    "trust_policy_sha256": pilot_signoff[
+                        "trust_policy_sha256"
+                    ],
+                    "policy_id": pilot_signoff["policy_id"],
+                    "policy_epoch": pilot_signoff["policy_epoch"],
+                    "signer_spki_sha256": pilot_signoff[
+                        "signer_spki_sha256"
+                    ],
+                    "signoff_set_sha256": pilot_signoff["signoff_set_sha256"],
+                    "signer_spki_set_sha256": pilot_signoff[
+                        "signer_spki_set_sha256"
+                    ],
                 },
             },
         }
@@ -452,6 +517,133 @@ class ReleaseDecisionFixture(unittest.TestCase):
         payload.update(overrides)
         return payload
 
+    def sign_pilot_attestation(
+        self,
+        attestation: dict,
+        private_key: Path,
+        label: str,
+    ) -> str:
+        claims_path = self.root / f"pilot-signoff-claims-{label}.bin"
+        claims_path.write_bytes(
+            pilot_signoff_verification.canonical_attestation_claims(attestation)
+        )
+        signature = subprocess.run(
+            [
+                "openssl",
+                "pkeyutl",
+                "-sign",
+                "-rawin",
+                "-inkey",
+                private_key.as_posix(),
+                "-in",
+                claims_path.as_posix(),
+            ],
+            check=True,
+            capture_output=True,
+        ).stdout
+        return base64.b64encode(signature).decode("ascii")
+
+    def write_pilot_signoff_inputs(self) -> None:
+        signoffs = self.pilot_payload()["signoffs"]
+        roles = []
+        attestations = []
+        public_key_der = []
+        for index, (signoff, private_key) in enumerate(
+            zip(signoffs, self.pilot_signoff_private_keys, strict=True)
+        ):
+            subprocess.run(
+                [
+                    "openssl",
+                    "genpkey",
+                    "-algorithm",
+                    "Ed25519",
+                    "-out",
+                    private_key.as_posix(),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            os.chmod(private_key, 0o600)
+            der = subprocess.run(
+                [
+                    "openssl",
+                    "pkey",
+                    "-in",
+                    private_key.as_posix(),
+                    "-pubout",
+                    "-outform",
+                    "DER",
+                ],
+                check=True,
+                capture_output=True,
+            ).stdout
+            public_key_der.append(der)
+            roles.append(
+                {
+                    "area": signoff["area"],
+                    "reviewer": signoff["reviewer"],
+                    "key_id": f"pilot-signoff-key-{index}",
+                    "public_key_hex": der[-32:].hex(),
+                }
+            )
+        policy = {
+            "schema_version": (
+                pilot_signoff_verification.TRUST_POLICY_SCHEMA_VERSION
+            ),
+            "policy_id": "unit-test-pilot-signoff-policy",
+            "policy_epoch": 1,
+            "roles": roles,
+        }
+        self.expected_pilot_signoff_trust_policy_sha256 = (
+            pilot_signoff_verification.trust_policy_sha256(policy)
+        )
+        for index, (signoff, private_key, der) in enumerate(
+            zip(
+                signoffs,
+                self.pilot_signoff_private_keys,
+                public_key_der,
+                strict=True,
+            )
+        ):
+            claims = {
+                "schema_version": pilot_signoff_verification.CLAIM_SCHEMA_VERSION,
+                "policy_id": policy["policy_id"],
+                "policy_epoch": policy["policy_epoch"],
+                "trust_policy_sha256": (
+                    self.expected_pilot_signoff_trust_policy_sha256
+                ),
+                **signoff,
+            }
+            attestation = {
+                "schema_version": (
+                    pilot_signoff_verification.ATTESTATION_SCHEMA_VERSION
+                ),
+                "signature_algorithm": "Ed25519",
+                "key_id": roles[index]["key_id"],
+                "public_key_spki_sha256": sha256(der).hexdigest(),
+                "claims": claims,
+                "signature_base64": "",
+            }
+            attestation["signature_base64"] = self.sign_pilot_attestation(
+                attestation,
+                private_key,
+                str(index),
+            )
+            attestations.append(attestation)
+        bundle = {
+            "schema_version": pilot_signoff_verification.BUNDLE_SCHEMA_VERSION,
+            "release_revision": self.release_revision,
+            "attestations": attestations,
+        }
+        report = pilot_signoff_verification.verify_bundle(
+            bundle,
+            policy,
+            self.expected_pilot_signoff_trust_policy_sha256,
+            self.release_revision,
+        )
+        self.write(self.pilot_signoff_trust_policy, policy)
+        self.write(self.pilot_signoff_verification, report)
+
     def write_all_valid_inputs(self):
         self.write(self.apple_verification, self.apple_verification_payload())
         self.write(self.apple_manifest, self.apple_manifest_payload())
@@ -460,6 +652,7 @@ class ReleaseDecisionFixture(unittest.TestCase):
             self.apple_reproducibility_payload(),
         )
         self.write(self.pilot_gate, self.pilot_payload())
+        self.write_pilot_signoff_inputs()
         self.write(self.evidence_manifest, self.evidence_payload(
             apple_artifact_status="pass",
             apple_artifact_source_revision=self.source_revision,
@@ -523,6 +716,15 @@ class ReleaseDecisionFixture(unittest.TestCase):
             ),
             "apple_release_manifest": self.apple_manifest.as_posix(),
             "pilot_gate_report": self.pilot_gate.as_posix(),
+            "pilot_signoff_verification": (
+                self.pilot_signoff_verification.as_posix()
+            ),
+            "pilot_signoff_trust_policy": (
+                self.pilot_signoff_trust_policy.as_posix()
+            ),
+            "expected_pilot_signoff_trust_policy_sha256": (
+                self.expected_pilot_signoff_trust_policy_sha256
+            ),
             "product_integration_acceptance": self.product_acceptance.as_posix(),
         }
 
@@ -571,6 +773,7 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
     def test_complete_rules_only_candidate_is_go(self):
         decision = self.create()
 
+        self.assertEqual(decision["schema_version"], "aura.release_decision.v3")
         self.assertEqual(decision["decision"], "go")
         self.assertEqual(decision["blocking_reasons"], [])
         self.assertEqual(decision["artifact_integrity"], "pass")
@@ -582,6 +785,18 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
         self.assertEqual(decision["human_signoffs"], "pass")
         self.assertEqual(decision["model_readiness"], "not_in_scope")
         self.assertEqual(decision["relay_readiness"], "not_in_scope")
+        self.assertEqual(
+            decision["pilot_signoff_trust_policy_sha256"],
+            self.expected_pilot_signoff_trust_policy_sha256,
+        )
+        self.assertEqual(decision["pilot_signoff_policy_epoch"], 1)
+        self.assertEqual(len(decision["pilot_signoff_signer_spki_sha256"]), 4)
+        self.assertEqual(
+            decision["pilot_signoff_signer_spki_set_sha256"],
+            pilot_signoff_verification.signer_spki_set_sha256(
+                decision["pilot_signoff_signer_spki_sha256"]
+            ),
+        )
         self.assertEqual(
             decision["profile_scope"],
             {
@@ -1198,6 +1413,210 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
                 self.assertEqual(decision["human_signoffs"], "fail")
                 self.assertEqual(decision["decision"], "no-go")
 
+    def test_absent_pilot_signoff_trio_is_blocked(self):
+        paths = self.input_paths()
+        for field in (
+            "pilot_signoff_verification",
+            "pilot_signoff_trust_policy",
+            "expected_pilot_signoff_trust_policy_sha256",
+        ):
+            paths[field] = None
+
+        decision = self.create(paths)
+
+        self.assertEqual(decision["operational_readiness"], "blocked")
+        self.assertEqual(decision["human_signoffs"], "blocked")
+        self.assertEqual(decision["decision"], "no-go")
+
+    def test_every_partial_pilot_signoff_trio_fails(self):
+        fields = (
+            "pilot_signoff_verification",
+            "pilot_signoff_trust_policy",
+            "expected_pilot_signoff_trust_policy_sha256",
+        )
+        for supplied_mask in range(1, 7):
+            with self.subTest(supplied_mask=supplied_mask):
+                paths = self.input_paths()
+                for index, field in enumerate(fields):
+                    if supplied_mask & (1 << index) == 0:
+                        paths[field] = None
+
+                decision = self.create(paths)
+
+                self.assertEqual(decision["operational_readiness"], "fail")
+                self.assertEqual(decision["human_signoffs"], "fail")
+                self.assertEqual(decision["decision"], "no-go")
+
+    def test_supplied_nonexistent_pilot_report_or_policy_fails(self):
+        for field in (
+            "pilot_signoff_verification",
+            "pilot_signoff_trust_policy",
+        ):
+            with self.subTest(field=field):
+                paths = self.input_paths()
+                paths[field] = (self.root / f"missing-{field}.json").as_posix()
+
+                decision = self.create(paths)
+
+                self.assertEqual(decision["operational_readiness"], "fail")
+                self.assertEqual(decision["human_signoffs"], "fail")
+                self.assertEqual(decision["decision"], "no-go")
+
+    def test_invalid_or_stale_pilot_signoff_report_fails(self):
+        mutations = {
+            "malformed": lambda report: report.clear(),
+            "stale release": lambda report: report.__setitem__(
+                "release_revision", "e" * 40
+            ),
+            "nonpass": lambda report: report.__setitem__("status", "fail"),
+            "swapped signers": lambda report: report[
+                "signer_spki_sha256"
+            ].reverse(),
+            "forged distinct count": lambda report: report.__setitem__(
+                "distinct_signer_count", 3
+            ),
+            "bad signature": lambda report: report["attestations"][0].__setitem__(
+                "signature_base64", "A" * 88
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                self.write_all_valid_inputs()
+                report = json.loads(
+                    self.pilot_signoff_verification.read_text(encoding="utf-8")
+                )
+                mutate(report)
+                self.write(self.pilot_signoff_verification, report)
+
+                decision = self.create()
+
+                self.assertEqual(decision["operational_readiness"], "fail")
+                self.assertEqual(decision["human_signoffs"], "fail")
+                self.assertEqual(decision["decision"], "no-go")
+
+    def test_cryptographically_valid_nonpass_pilot_report_fails_release(self):
+        for claim_status, report_status in (
+            ("pending", "blocked"),
+            ("needs_changes", "fail"),
+        ):
+            with self.subTest(claim_status=claim_status):
+                self.write_all_valid_inputs()
+                report = json.loads(
+                    self.pilot_signoff_verification.read_text(encoding="utf-8")
+                )
+                report["attestations"][0]["claims"]["status"] = claim_status
+                report["attestations"][0][
+                    "signature_base64"
+                ] = self.sign_pilot_attestation(
+                    report["attestations"][0],
+                    self.pilot_signoff_private_keys[0],
+                    claim_status,
+                )
+                policy = json.loads(
+                    self.pilot_signoff_trust_policy.read_text(encoding="utf-8")
+                )
+                report = pilot_signoff_verification.verify_bundle(
+                    {
+                        "schema_version": (
+                            pilot_signoff_verification.BUNDLE_SCHEMA_VERSION
+                        ),
+                        "release_revision": self.release_revision,
+                        "attestations": report["attestations"],
+                    },
+                    policy,
+                    self.expected_pilot_signoff_trust_policy_sha256,
+                    self.release_revision,
+                )
+                self.assertEqual(report["status"], report_status)
+                self.write(self.pilot_signoff_verification, report)
+
+                decision = self.create()
+
+                self.assertEqual(decision["operational_readiness"], "fail")
+                self.assertEqual(decision["human_signoffs"], "fail")
+                self.assertEqual(decision["decision"], "no-go")
+
+    def test_wrong_pilot_policy_or_expected_digest_fails(self):
+        paths = self.input_paths()
+        paths["expected_pilot_signoff_trust_policy_sha256"] = "0" * 64
+        decision = self.create(paths)
+        self.assertEqual(decision["human_signoffs"], "fail")
+
+        policy = json.loads(
+            self.pilot_signoff_trust_policy.read_text(encoding="utf-8")
+        )
+        policy["roles"][0]["public_key_hex"] = "0" * 64
+        self.write(self.pilot_signoff_trust_policy, policy)
+        decision = self.create()
+        self.assertEqual(decision["operational_readiness"], "fail")
+        self.assertEqual(decision["human_signoffs"], "fail")
+
+    def test_authenticated_projection_must_match_pilot_gate_exactly(self):
+        pilot = self.pilot_payload()
+        pilot["signoffs"][0]["notes"] = "different signed claim projection"
+        self.assert_pilot_fails_closed(pilot)
+
+    def test_evidence_signer_must_differ_from_every_pilot_signer(self):
+        pilot_private_key = self.pilot_signoff_private_keys[0]
+        subprocess.run(
+            [
+                "openssl",
+                "pkey",
+                "-in",
+                pilot_private_key.as_posix(),
+                "-pubout",
+                "-out",
+                self.evidence_public_key.as_posix(),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        attestation = release_decision.crypto_support.sign_manifest(
+            self.evidence_manifest,
+            pilot_private_key,
+            self.expected_evidence_key_id,
+        )
+        self.write(self.evidence_attestation, attestation)
+        self.write(self.evidence_verification, self.evidence_verification_payload())
+        self.write(self.product_acceptance, self.product_payload())
+
+        decision = self.create()
+
+        self.assertEqual(decision["operational_readiness"], "fail")
+        self.assertEqual(decision["human_signoffs"], "fail")
+        self.assertIsNone(decision["pilot_signoff_signer_spki_sha256"])
+        self.assertEqual(decision["decision"], "no-go")
+
+    def test_signed_manifest_must_bind_authenticated_signoff_leaf(self):
+        mutations = {
+            "leaf omitted": lambda manifest: manifest["artifacts"].pop(
+                "pilot_signoff_verification"
+            ),
+            "digest substituted": lambda manifest: manifest["artifacts"][
+                "pilot_signoff_verification"
+            ].__setitem__("sha256", "0" * 64),
+            "policy substituted": lambda manifest: manifest["summary"].__setitem__(
+                "pilot_signoff_verification_trust_policy_sha256", "0" * 64
+            ),
+            "signoff set substituted": lambda manifest: manifest["summary"].__setitem__(
+                "pilot_signoff_verification_signoff_set_sha256", "0" * 64
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                self.write_all_valid_inputs()
+                manifest = json.loads(
+                    self.evidence_manifest.read_text(encoding="utf-8")
+                )
+                mutate(manifest)
+                self.write_signed_evidence(manifest)
+
+                decision = self.create()
+
+                self.assertEqual(decision["operational_readiness"], "fail")
+                self.assertEqual(decision["human_signoffs"], "fail")
+                self.assertEqual(decision["decision"], "no-go")
+
     def test_pilot_gate_rejects_forged_checks_rollbacks_or_cadence(self):
         mutations = {
             "check missing": lambda payload: payload["checks"].pop(),
@@ -1296,6 +1715,8 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
             "apple_artifact_reproducibility",
             "apple_release_manifest",
             "pilot_gate_report",
+            "pilot_signoff_verification",
+            "pilot_signoff_trust_policy",
             "product_integration_acceptance",
         )
         for field in file_fields:
@@ -1321,6 +1742,8 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
             "apple_artifact_reproducibility",
             "apple_release_manifest",
             "pilot_gate_report",
+            "pilot_signoff_verification",
+            "pilot_signoff_trust_policy",
             "product_integration_acceptance",
         )
         for field in file_fields:
@@ -1346,6 +1769,8 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
             "apple_artifact_reproducibility",
             "apple_release_manifest",
             "pilot_gate_report",
+            "pilot_signoff_verification",
+            "pilot_signoff_trust_policy",
             "product_integration_acceptance",
         )
         for field in json_fields:
@@ -1422,6 +1847,32 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
         self.assertEqual(release_decision.child_input_status(metadata), "fail")
         self.assertEqual(decision["product_integration"], "fail")
 
+    def test_unstable_pilot_signoff_report_or_policy_fails(self):
+        original_reader = release_decision.read_stable_regular_file
+        for field, target in (
+            ("pilot_signoff_verification", self.pilot_signoff_verification),
+            ("pilot_signoff_trust_policy", self.pilot_signoff_trust_policy),
+        ):
+            with self.subTest(field=field):
+                def unstable_reader(path: Path, maximum: int, label: str) -> bytes:
+                    if path == target:
+                        raise release_decision.ReleaseDecisionError(
+                            f"{label} changed while being read"
+                        )
+                    return original_reader(path, maximum, label)
+
+                with mock.patch.object(
+                    release_decision,
+                    "read_stable_regular_file",
+                    side_effect=unstable_reader,
+                ):
+                    decision = self.create()
+
+                metadata = decision["artifacts"][field]
+                self.assertEqual(metadata["observed_status"], "inaccessible")
+                self.assertEqual(decision["operational_readiness"], "fail")
+                self.assertEqual(decision["human_signoffs"], "fail")
+
     def test_supplied_malformed_raw_public_key_fails_attestation(self):
         malformed_key = self.root / "malformed-public.pem"
         malformed_key.write_text("not a public key\n", encoding="utf-8")
@@ -1458,6 +1909,29 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
             release_decision.ReleaseDecisionError, "contradicts"
         ):
             release_decision.validate_decision(decision)
+
+    def test_validator_rejects_forged_or_nondistinct_pilot_signer_set(self):
+        mutations = {
+            "set digest": lambda decision: decision.__setitem__(
+                "pilot_signoff_signer_spki_set_sha256", "0" * 64
+            ),
+            "duplicate signer": lambda decision: decision[
+                "pilot_signoff_signer_spki_sha256"
+            ].__setitem__(
+                1, decision["pilot_signoff_signer_spki_sha256"][0]
+            ),
+            "evidence signer reused": lambda decision: decision[
+                "pilot_signoff_signer_spki_sha256"
+            ].__setitem__(0, decision["evidence_signer_spki_sha256"]),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                decision = self.create()
+                mutate(decision)
+                with self.assertRaisesRegex(
+                    release_decision.ReleaseDecisionError, "identity"
+                ):
+                    release_decision.validate_decision(decision)
 
     def test_invalid_candidate_revision_is_rejected(self):
         with self.assertRaisesRegex(
@@ -1528,10 +2002,20 @@ class ReleaseDecisionAttestationTests(ReleaseDecisionFixture):
         )
 
         self.assertEqual(report["status"], "pass")
+        self.assertEqual(
+            report["schema_version"],
+            "aura.release_decision_attestation_verification.v3",
+        )
         self.assertEqual(report["decision"], "go")
         self.assertEqual(report["source_revision"], self.source_revision)
         self.assertEqual(report["artifact_revision"], self.artifact_revision)
         self.assertEqual(report["release_revision"], self.release_revision)
+        self.assertEqual(
+            report["pilot_signoff_signer_spki_sha256"],
+            json.loads(self.decision_path.read_text(encoding="utf-8"))[
+                "pilot_signoff_signer_spki_sha256"
+            ],
+        )
 
     def test_decision_tampering_is_rejected(self):
         self.sign()
@@ -1593,6 +2077,23 @@ class ReleaseDecisionAttestationTests(ReleaseDecisionFixture):
                 self.input_paths(),
             )
 
+    def test_sign_reverifies_pilot_signatures_and_exact_report(self):
+        report = json.loads(
+            self.pilot_signoff_verification.read_text(encoding="utf-8")
+        )
+        report["attestations"][0]["signature_base64"] = "A" * 88
+        self.write(self.pilot_signoff_verification, report)
+
+        with self.assertRaisesRegex(
+            release_decision.ReleaseDecisionError, "does not match"
+        ):
+            release_decision.sign_decision(
+                self.decision_path,
+                self.private_key,
+                "release-operator-2026",
+                self.input_paths(),
+            )
+
     def test_evidence_signer_cannot_also_be_release_operator(self):
         with self.assertRaisesRegex(
             release_decision.ReleaseDecisionError, "must differ"
@@ -1602,6 +2103,74 @@ class ReleaseDecisionAttestationTests(ReleaseDecisionFixture):
                 self.evidence_private_key,
                 "release-operator-2026",
                 self.input_paths(),
+            )
+
+    def test_pilot_signer_cannot_also_be_release_operator(self):
+        with self.assertRaisesRegex(
+            release_decision.ReleaseDecisionError, "pilot signoff keys"
+        ):
+            release_decision.sign_decision(
+                self.decision_path,
+                self.pilot_signoff_private_keys[0],
+                "release-operator-2026",
+                self.input_paths(),
+            )
+
+    def test_standalone_verifier_rejects_pilot_signer_as_operator(self):
+        pilot_public = self.root / "pilot-release-operator-public.pem"
+        subprocess.run(
+            [
+                "openssl",
+                "pkey",
+                "-in",
+                self.pilot_signoff_private_keys[0].as_posix(),
+                "-pubout",
+                "-out",
+                pilot_public.as_posix(),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        decision = json.loads(self.decision_path.read_text(encoding="utf-8"))
+        pilot_spki = sha256(
+            release_decision.crypto_support.public_key_der_from_public(pilot_public)
+        ).hexdigest()
+        self.assertIn(pilot_spki, decision["pilot_signoff_signer_spki_sha256"])
+        attestation = {
+            "schema_version": release_decision.ATTESTATION_SCHEMA_VERSION,
+            "signature_algorithm": "Ed25519",
+            "key_id": "release-operator-2026",
+            "decision_sha256": sha256(self.decision_path.read_bytes()).hexdigest(),
+            "candidate": decision["candidate"],
+            "profile": decision["profile"],
+            "source_revision": decision["source_revision"],
+            "artifact_revision": decision["artifact_revision"],
+            "release_revision": decision["release_revision"],
+            "evidence_signer_key_id": decision["evidence_signer_key_id"],
+            "evidence_signer_spki_sha256": decision[
+                "evidence_signer_spki_sha256"
+            ],
+            "pilot_signoff_trust_policy_sha256": decision[
+                "pilot_signoff_trust_policy_sha256"
+            ],
+            "pilot_signoff_policy_id": decision["pilot_signoff_policy_id"],
+            "pilot_signoff_policy_epoch": decision["pilot_signoff_policy_epoch"],
+            "pilot_signoff_signer_spki_sha256": decision[
+                "pilot_signoff_signer_spki_sha256"
+            ],
+            "pilot_signoff_signer_spki_set_sha256": decision[
+                "pilot_signoff_signer_spki_set_sha256"
+            ],
+            "public_key_spki_sha256": pilot_spki,
+            "signature_base64": base64.b64encode(b"\x00" * 64).decode("ascii"),
+        }
+        self.write(self.attestation_path, attestation)
+
+        with self.assertRaisesRegex(
+            release_decision.ReleaseDecisionError, "pilot signoff keys"
+        ):
+            release_decision.verify_decision(
+                self.decision_path, self.attestation_path, pilot_public
             )
 
     def test_verifier_enforces_evidence_and_release_role_separation(self):
@@ -1626,6 +2195,17 @@ class ReleaseDecisionAttestationTests(ReleaseDecisionFixture):
             "release_revision": decision["release_revision"],
             "evidence_signer_key_id": decision["evidence_signer_key_id"],
             "evidence_signer_spki_sha256": operator_spki,
+            "pilot_signoff_trust_policy_sha256": decision[
+                "pilot_signoff_trust_policy_sha256"
+            ],
+            "pilot_signoff_policy_id": decision["pilot_signoff_policy_id"],
+            "pilot_signoff_policy_epoch": decision["pilot_signoff_policy_epoch"],
+            "pilot_signoff_signer_spki_sha256": decision[
+                "pilot_signoff_signer_spki_sha256"
+            ],
+            "pilot_signoff_signer_spki_set_sha256": decision[
+                "pilot_signoff_signer_spki_set_sha256"
+            ],
             "public_key_spki_sha256": operator_spki,
         }
         with tempfile.NamedTemporaryFile() as claims:
@@ -1682,6 +2262,67 @@ class ReleaseDecisionAttestationTests(ReleaseDecisionFixture):
         )
         self.assertEqual(result.returncode, 2)
         self.assertIn("must not overwrite", result.stderr)
+
+    def test_cli_protects_pilot_signoff_inputs_from_output_alias(self):
+        for argument, path in (
+            ("--pilot-signoff-verification", self.pilot_signoff_verification),
+            ("--pilot-signoff-trust-policy", self.pilot_signoff_trust_policy),
+        ):
+            with self.subTest(argument=argument):
+                result = subprocess.run(
+                    [
+                        "python3",
+                        "ci/release_decision.py",
+                        "create",
+                        "--candidate-revision",
+                        self.revision,
+                        "--runtime-version",
+                        self.runtime_version,
+                        argument,
+                        path.as_posix(),
+                        "--output",
+                        path.as_posix(),
+                    ],
+                    cwd=Path(__file__).resolve().parents[1],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("must not overwrite", result.stderr)
+
+    @unittest.skipIf(os.name == "nt", "hard-link semantics differ on Windows")
+    def test_cli_rejects_hard_link_aliases_of_pilot_signoff_inputs(self):
+        for index, (argument, path) in enumerate(
+            (
+                ("--pilot-signoff-verification", self.pilot_signoff_verification),
+                ("--pilot-signoff-trust-policy", self.pilot_signoff_trust_policy),
+            )
+        ):
+            with self.subTest(argument=argument):
+                output = self.root / f"pilot-signoff-hardlink-{index}.json"
+                os.link(path, output)
+                result = subprocess.run(
+                    [
+                        "python3",
+                        "ci/release_decision.py",
+                        "create",
+                        "--candidate-revision",
+                        self.revision,
+                        "--runtime-version",
+                        self.runtime_version,
+                        argument,
+                        path.as_posix(),
+                        "--output",
+                        output.as_posix(),
+                    ],
+                    cwd=Path(__file__).resolve().parents[1],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("alias an input", result.stderr)
 
     def test_untrusted_operator_key_id_is_rejected(self):
         self.sign()

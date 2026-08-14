@@ -1474,6 +1474,7 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 "temporal_timestamp": root / "temporal-timestamp-verification.json",
                 "temporal_receipts": root / "temporal-review-receipts-verification.json",
                 "pilot_gate": root / "pilot-gate.json",
+                "pilot_signoff_verification": root / "pilot-signoff-verification.json",
                 "manifest": root / "manifest.json",
             }
             write_json(
@@ -1565,6 +1566,31 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                     "checks": [{}, {}, {}],
                 },
             )
+            pilot_signers = [f"{index:x}" * 64 for index in range(1, 5)]
+            write_json(
+                paths["pilot_signoff_verification"],
+                {
+                    "schema_version": "aura.pilot_signoff_verification.v1",
+                    "status": "pass",
+                    "release_revision": "f" * 40,
+                    "trust_policy_sha256": "a" * 64,
+                    "policy_id": "pilot-policy",
+                    "policy_epoch": 1,
+                    "signature_algorithm": "Ed25519",
+                    "required_review_areas": [
+                        "false_positive_hotspots",
+                        "self_harm_boundary_cases",
+                        "trusted_adult_scenarios",
+                        "reputation_image_abuse",
+                    ],
+                    "verified_signoff_count": 4,
+                    "distinct_signer_count": 4,
+                    "signer_spki_sha256": pilot_signers,
+                    "signoff_set_sha256": "b" * 64,
+                    "signer_spki_set_sha256": "c" * 64,
+                    "attestations": [],
+                },
+            )
 
             argv = [
                 "generate_evidence_manifest.py",
@@ -1602,6 +1628,8 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_receipts"].as_posix(),
                 "--pilot-gate-report",
                 paths["pilot_gate"].as_posix(),
+                "--pilot-signoff-verification",
+                paths["pilot_signoff_verification"].as_posix(),
             ]
             with patch.object(sys, "argv", argv):
                 self.assertEqual(generate_evidence_manifest.main(), 0)
@@ -1673,6 +1701,57 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
             self.assertEqual(
                 manifest["summary"]["pilot_gate_release_revision"], "f" * 40
             )
+            pilot_signoff_artifact = manifest["artifacts"][
+                "pilot_signoff_verification"
+            ]
+            self.assertEqual(pilot_signoff_artifact["observed_status"], "pass")
+            self.assertEqual(
+                pilot_signoff_artifact["sha256"],
+                sha256(paths["pilot_signoff_verification"].read_bytes()).hexdigest(),
+            )
+            self.assertEqual(
+                manifest["summary"][
+                    "pilot_signoff_verification_trust_policy_sha256"
+                ],
+                "a" * 64,
+            )
+            self.assertEqual(
+                manifest["summary"][
+                    "pilot_signoff_verification_signer_spki_sha256"
+                ],
+                pilot_signers,
+            )
+            self.assertEqual(
+                manifest["summary"][
+                    "pilot_signoff_verification_signature_algorithm"
+                ],
+                "Ed25519",
+            )
+
+
+class EvidenceManifestPilotSignoffTests(unittest.TestCase):
+    def test_status_is_optional_additive_and_fail_closed_when_supplied(self):
+        self.assertIsNone(
+            generate_evidence_manifest.pilot_signoff_verification_status(None)
+        )
+        self.assertEqual(
+            generate_evidence_manifest.pilot_signoff_verification_status(
+                {
+                    "schema_version": "aura.pilot_signoff_verification.v0",
+                    "status": "pass",
+                }
+            ),
+            "invalid_schema",
+        )
+        self.assertEqual(
+            generate_evidence_manifest.pilot_signoff_verification_status(
+                {
+                    "schema_version": "aura.pilot_signoff_verification.v1",
+                    "status": "fail",
+                }
+            ),
+            "fail",
+        )
 
 
 def write_json(path: Path, payload: dict):

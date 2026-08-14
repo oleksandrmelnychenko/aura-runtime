@@ -361,6 +361,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional path to pilot gate report JSON.",
     )
     parser.add_argument(
+        "--pilot-signoff-verification",
+        default=None,
+        help="Optional path to authenticated pilot signoff verification JSON.",
+    )
+    parser.add_argument(
         "--kids-preprod-dry-run-report",
         default=None,
         help="Optional path to KIDS pre-prod dry-run matrix report JSON.",
@@ -1450,6 +1455,14 @@ def pilot_gate_status(payload: dict | None) -> str | None:
     return payload.get("overall_status")
 
 
+def pilot_signoff_verification_status(payload: dict | None) -> str | None:
+    if payload is None:
+        return None
+    if payload.get("schema_version") != "aura.pilot_signoff_verification.v1":
+        return "invalid_schema"
+    return payload.get("status")
+
+
 def kids_preprod_dry_run_status(payload: dict | None) -> str | None:
     if payload is None:
         return None
@@ -1619,6 +1632,8 @@ def evidence_status(artifacts: dict, summary: dict) -> str:
         return "fail"
     if summary["pilot_gate_status"] not in (None, "pass"):
         return "fail"
+    if summary.get("pilot_signoff_verification_status") not in (None, "pass"):
+        return "fail"
     if summary["kids_preprod_dry_run_status"] not in (None, "pass"):
         return "fail"
     if summary["community_surface_status"] not in (None, "pass"):
@@ -1653,6 +1668,7 @@ def attach_payload_details(
     temporal_review_receipt_chain_verification_payload: dict | None,
     temporal_shadow_telemetry_validation_payload: dict | None,
     pilot_gate_payload: dict | None,
+    pilot_signoff_verification_payload: dict | None,
     kids_preprod_dry_run_payload: dict | None,
     community_surface_payload: dict | None,
     world_lifecycle_payload: dict | None,
@@ -1941,6 +1957,26 @@ def attach_payload_details(
         artifacts["pilot_gate_report"]["check_count"] = len(
             pilot_gate_payload.get("checks", [])
         )
+    if pilot_signoff_verification_payload is not None:
+        artifact = artifacts["pilot_signoff_verification"]
+        artifact["observed_status"] = pilot_signoff_verification_status(
+            pilot_signoff_verification_payload
+        )
+        for field in (
+            "schema_version",
+            "release_revision",
+            "trust_policy_sha256",
+            "policy_id",
+            "policy_epoch",
+            "signature_algorithm",
+            "required_review_areas",
+            "verified_signoff_count",
+            "distinct_signer_count",
+            "signer_spki_sha256",
+            "signoff_set_sha256",
+            "signer_spki_set_sha256",
+        ):
+            artifact[field] = pilot_signoff_verification_payload.get(field)
     if kids_preprod_dry_run_payload is not None:
         artifacts["kids_preprod_dry_run_report"][
             "observed_status"
@@ -2159,6 +2195,14 @@ def build_manifest(
     pilot_gate_payload, pilot_gate_artifact = load_artifact(
         args.pilot_gate_report, required=args.pilot_gate_report is not None
     ) if args.pilot_gate_report else (None, None)
+    pilot_signoff_verification_payload, pilot_signoff_verification_artifact = (
+        load_artifact(
+            args.pilot_signoff_verification,
+            required=args.pilot_signoff_verification is not None,
+        )
+        if args.pilot_signoff_verification
+        else (None, None)
+    )
     kids_preprod_dry_run_payload, kids_preprod_dry_run_artifact = load_artifact(
         args.kids_preprod_dry_run_report,
         required=args.kids_preprod_dry_run_report is not None,
@@ -2226,6 +2270,10 @@ def build_manifest(
         ] = temporal_shadow_telemetry_validation_artifact
     if pilot_gate_artifact is not None:
         artifacts["pilot_gate_report"] = pilot_gate_artifact
+    if pilot_signoff_verification_artifact is not None:
+        artifacts["pilot_signoff_verification"] = (
+            pilot_signoff_verification_artifact
+        )
     if kids_preprod_dry_run_artifact is not None:
         artifacts["kids_preprod_dry_run_report"] = kids_preprod_dry_run_artifact
     if community_surface_artifact is not None:
@@ -2268,6 +2316,7 @@ def build_manifest(
             temporal_shadow_telemetry_validation_payload
         ),
         pilot_gate_payload=pilot_gate_payload,
+        pilot_signoff_verification_payload=pilot_signoff_verification_payload,
         kids_preprod_dry_run_payload=kids_preprod_dry_run_payload,
         community_surface_payload=community_surface_payload,
         world_lifecycle_payload=world_lifecycle_payload,
@@ -2686,6 +2735,69 @@ def build_manifest(
             if pilot_gate_payload
             else None
         ),
+        "pilot_signoff_verification_status": pilot_signoff_verification_status(
+            pilot_signoff_verification_payload
+        ),
+        "pilot_signoff_verification_schema_version": (
+            pilot_signoff_verification_payload.get("schema_version")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_release_revision": (
+            pilot_signoff_verification_payload.get("release_revision")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_trust_policy_sha256": (
+            pilot_signoff_verification_payload.get("trust_policy_sha256")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_policy_id": (
+            pilot_signoff_verification_payload.get("policy_id")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_policy_epoch": (
+            pilot_signoff_verification_payload.get("policy_epoch")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_signature_algorithm": (
+            pilot_signoff_verification_payload.get("signature_algorithm")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_required_review_areas": (
+            pilot_signoff_verification_payload.get("required_review_areas")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_verified_signoff_count": (
+            pilot_signoff_verification_payload.get("verified_signoff_count")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_distinct_signer_count": (
+            pilot_signoff_verification_payload.get("distinct_signer_count")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_signer_spki_sha256": (
+            pilot_signoff_verification_payload.get("signer_spki_sha256")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_signoff_set_sha256": (
+            pilot_signoff_verification_payload.get("signoff_set_sha256")
+            if pilot_signoff_verification_payload
+            else None
+        ),
+        "pilot_signoff_verification_signer_spki_set_sha256": (
+            pilot_signoff_verification_payload.get("signer_spki_set_sha256")
+            if pilot_signoff_verification_payload
+            else None
+        ),
         "kids_preprod_dry_run_status": kids_preprod_dry_run_status(
             kids_preprod_dry_run_payload
         ),
@@ -2894,6 +3006,7 @@ def supplied_artifact_paths(args: argparse.Namespace) -> list[Path]:
         "temporal_review_receipt_chain_verification",
         "temporal_shadow_telemetry_validation",
         "pilot_gate_report",
+        "pilot_signoff_verification",
         "kids_preprod_dry_run_report",
         "community_surface_report",
         "world_lifecycle_report",

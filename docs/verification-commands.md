@@ -47,6 +47,7 @@ The exact GO/NO-GO creation and Ed25519 operator-signature commands are in
 
 ```bash
 python3 -m unittest ci.test_release_decision ci.test_release_dossier
+python3 -m unittest ci.test_pilot_signoff_verification ci.test_release_artifact_ingest ci.test_ci_supply_chain
 ```
 
 The current repository must remain `no-go` until the external Apple client
@@ -56,6 +57,47 @@ commands for the terminal fixed-layout bundle. The hosted
 `Release Evidence Freeze` workflow creates only its exact unsigned evidence
 input; external evidence signing and release-operator authorization remain
 separate and it cannot authorize a release.
+
+## Pilot Signoff Verification and Hosted Intake
+
+At policy enrollment, a separate reviewed governance process computes and
+records the canonical policy identity. Ordinary verification must retrieve
+that pinned digest independently; never derive the expected digest from the
+candidate policy file in the same verification invocation.
+
+Verify an externally signed four-role bundle locally with that independent
+pin:
+
+```bash
+EXPECTED_POLICY_SHA256='<governance-pinned canonical policy digest>'
+
+python3 ci/pilot_signoff_verification.py verify \
+  --bundle /external/pilot-review-signoff-bundle.json \
+  --trust-policy /trusted/pilot-signoff-policy.json \
+  --expected-trust-policy-sha256 "$EXPECTED_POLICY_SHA256" \
+  --release-revision '<R>' \
+  --output artifacts/pilot-signoff-verification.json \
+  --signoffs-output artifacts/pilot-review-signoffs.json \
+  --require-pass
+```
+
+`Pilot Signoff Ingest` takes exact `R`, standard base64 of the original bundle
+bytes, their lowercase SHA-256, and byte count (maximum 32768). A successful
+first-attempt run ID is then supplied to the release `Promotion Gate`; Freeze
+accepts only a successful Promotion artifact and re-verifies the pilot leaf.
+No hosted step receives a private key or signs anything.
+Promotion is manual-only. Tag pushes do not trigger or authorize it; a release
+dispatch must name the exact ingest run ID and attempt `1`.
+
+Hosted use is intentionally unavailable until administrators provision and
+govern the repository variables
+`AURA_PILOT_SIGNOFF_TRUST_POLICY_B64`,
+`AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256`, and
+`AURA_PILOT_SIGNOFF_WORKFLOW_ID`. Those variables are currently absent, so the
+three hosted stages fail closed. Repository variables are externally mutable
+configuration and are not intrinsically protected; administrators must add
+reviewed change/rotation controls. The policy digest above is canonical and
+domain-separated; do not replace it with SHA-256 of arbitrary JSON bytes.
 
 ## AURA Core Refactor Differential Gate
 

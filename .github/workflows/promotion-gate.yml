@@ -11,10 +11,15 @@ on:
         options:
           - staging
           - release
-  push:
-    tags:
-      - "v*"
-
+      pilot_signoff_run_id:
+        description: Exact successful Pilot Signoff Ingest run ID for this release revision
+        required: false
+        type: string
+      pilot_signoff_run_attempt:
+        description: Exact Pilot Signoff Ingest run attempt (must be 1)
+        required: false
+        default: "1"
+        type: string
 env:
   CARGO_TERM_COLOR: always
   AURA_RELEASE_REPORT_PATH: artifacts/release-report.json
@@ -38,6 +43,8 @@ env:
   AURA_REFACTOR_DIFF_REPORT_PATH: artifacts/refactor-diff-report.json
   AURA_REFACTOR_APPROVALS_PATH: docs/refactor-diff-approvals.json
   AURA_PILOT_GATE_REPORT_PATH: artifacts/pilot-gate-report.json
+  AURA_PILOT_SIGNOFF_BUNDLE_PATH: artifacts/pilot-review-signoff-bundle.json
+  AURA_PILOT_SIGNOFF_VERIFICATION_PATH: artifacts/pilot-signoff-verification.json
   AURA_PILOT_REVIEW_SIGNOFFS_PATH: artifacts/pilot-review-signoffs.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
   AURA_WORLD_LIFECYCLE_INPUT: crates/aura-core/data/world_lifecycle_suite
@@ -48,7 +55,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     timeout-minutes: 45
+    env:
+      PILOT_SIGNOFF_RUN_ID: ${{ inputs.pilot_signoff_run_id }}
+      PILOT_SIGNOFF_RUN_ATTEMPT: ${{ inputs.pilot_signoff_run_attempt }}
+      PILOT_SIGNOFF_WORKFLOW_ID: ${{ vars.AURA_PILOT_SIGNOFF_WORKFLOW_ID }}
+      PILOT_SIGNOFF_TRUST_POLICY_BASE64: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_B64 }}
+      EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256 }}
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -59,12 +73,182 @@ jobs:
     - name: Run CI Helper Tests
       run: python3 -m unittest discover -s ci -p 'test_*.py'
     - name: Resolve Promotion Target
+      run: echo "AURA_PROMOTION_TARGET=${{ inputs.target }}" >> "$GITHUB_ENV"
+    - name: Resolve exact hosted pilot signoff artifact
+      if: ${{ inputs.target == 'release' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      shell: bash
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "AURA_PROMOTION_TARGET=${{ inputs.target }}" >> "$GITHUB_ENV"
-        else
-          echo "AURA_PROMOTION_TARGET=release" >> "$GITHUB_ENV"
-        fi
+        set -euo pipefail
+        [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+        [[ "$PILOT_SIGNOFF_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+        [[ "$PILOT_SIGNOFF_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,9}$ ]]
+        [[ "$PILOT_SIGNOFF_WORKFLOW_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+        test "$PILOT_SIGNOFF_RUN_ATTEMPT" = "1"
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+        metadata="$RUNNER_TEMP/pilot-signoff-source-metadata"
+        test ! -e "$metadata"
+        mkdir -m 700 "$metadata"
+        gh api \
+          "repos/$GITHUB_REPOSITORY/actions/runs/$PILOT_SIGNOFF_RUN_ID" \
+          > "$metadata/run.json"
+        gh api \
+          "repos/$GITHUB_REPOSITORY/actions/runs/$PILOT_SIGNOFF_RUN_ID/artifacts?per_page=100" \
+          > "$metadata/artifacts.json"
+
+        python3 - <<'PY'
+        import json
+        import os
+        import re
+        from pathlib import Path
+
+        metadata = Path(os.environ["RUNNER_TEMP"]) / "pilot-signoff-source-metadata"
+        run = json.loads((metadata / "run.json").read_text(encoding="utf-8"))
+        response = json.loads((metadata / "artifacts.json").read_text(encoding="utf-8"))
+        expected_repo = os.environ["GITHUB_REPOSITORY"]
+        expected_run_id = int(os.environ["PILOT_SIGNOFF_RUN_ID"])
+        expected_workflow_id = int(os.environ["PILOT_SIGNOFF_WORKFLOW_ID"])
+        if not isinstance(run, dict) or run.get("id") != expected_run_id:
+            raise SystemExit("pilot signoff run ID mismatch")
+        if run.get("run_attempt") != 1:
+            raise SystemExit("rerun pilot signoff artifacts are ineligible")
+        if run.get("workflow_id") != expected_workflow_id:
+            raise SystemExit("pilot signoff workflow identity mismatch")
+        if run.get("path") != ".github/workflows/pilot-signoff-ingest.yml":
+            raise SystemExit("pilot signoff workflow path mismatch")
+        if run.get("head_sha") != os.environ["GITHUB_SHA"]:
+            raise SystemExit("pilot signoff release revision mismatch")
+        if run.get("event") != "workflow_dispatch":
+            raise SystemExit("pilot signoff source must be a manual trusted-repository run")
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            raise SystemExit("pilot signoff source run did not complete successfully")
+        repository = run.get("repository")
+        head_repository = run.get("head_repository")
+        if not isinstance(repository, dict) or repository.get("full_name") != expected_repo:
+            raise SystemExit("pilot signoff source repository mismatch")
+        if not isinstance(head_repository, dict) or head_repository.get("full_name") != expected_repo:
+            raise SystemExit("fork pilot signoff source runs are forbidden")
+        artifacts = response.get("artifacts") if isinstance(response, dict) else None
+        total_count = response.get("total_count") if isinstance(response, dict) else None
+        if (
+            not isinstance(artifacts, list)
+            or not isinstance(total_count, int)
+            or isinstance(total_count, bool)
+            or total_count != 1
+            or len(artifacts) != 1
+        ):
+            raise SystemExit("pilot signoff run must expose exactly one immutable artifact")
+        artifact = artifacts[0]
+        expected_name = f"aura-pilot-signoff-{os.environ['GITHUB_SHA']}"
+        if artifact.get("name") != expected_name or artifact.get("expired") is not False:
+            raise SystemExit("pilot signoff artifact name or expiry is invalid")
+        artifact_id = artifact.get("id")
+        artifact_bytes = artifact.get("size_in_bytes")
+        digest = artifact.get("digest")
+        if not isinstance(artifact_id, int) or isinstance(artifact_id, bool) or artifact_id <= 0:
+            raise SystemExit("pilot signoff artifact ID is invalid")
+        if (
+            not isinstance(artifact_bytes, int)
+            or isinstance(artifact_bytes, bool)
+            or not 1 <= artifact_bytes <= 1024 * 1024
+        ):
+            raise SystemExit("pilot signoff artifact byte length is invalid")
+        if not isinstance(digest, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None:
+            raise SystemExit("pilot signoff artifact transport digest is invalid")
+        workflow_run = artifact.get("workflow_run")
+        if not isinstance(workflow_run, dict) or workflow_run.get("id") != expected_run_id:
+            raise SystemExit("pilot signoff artifact is not bound to the pinned run")
+        exports = {
+            "PILOT_SIGNOFF_ARTIFACT_ID_EXACT": artifact_id,
+            "PILOT_SIGNOFF_ARTIFACT_BYTES_EXACT": artifact_bytes,
+            "PILOT_SIGNOFF_ARTIFACT_SHA256_EXACT": digest.removeprefix("sha256:"),
+        }
+        with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+            for name, value in exports.items():
+                output.write(f"{name}={value}\n")
+        PY
+
+        downloads="$RUNNER_TEMP/pilot-signoff-download"
+        test ! -e "$downloads"
+        mkdir -m 700 "$downloads"
+        curl \
+          --proto '=https' \
+          --tlsv1.2 \
+          --fail-with-body \
+          --location \
+          --silent \
+          --show-error \
+          --max-filesize "$PILOT_SIGNOFF_ARTIFACT_BYTES_EXACT" \
+          --header "Authorization: Bearer $GH_TOKEN" \
+          --header "Accept: application/vnd.github+json" \
+          --header "X-GitHub-Api-Version: 2022-11-28" \
+          "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$PILOT_SIGNOFF_ARTIFACT_ID_EXACT/zip" \
+          --output "$downloads/pilot-signoff.zip"
+        test "$(wc -c < "$downloads/pilot-signoff.zip" | tr -d ' ')" = "$PILOT_SIGNOFF_ARTIFACT_BYTES_EXACT"
+    - name: Reverify and install hosted pilot signoffs offline
+      if: ${{ inputs.target == 'release' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        downloads="$RUNNER_TEMP/pilot-signoff-download"
+        python3 ci/release_artifact_ingest.py \
+          --archive "$downloads/pilot-signoff.zip" \
+          --expected-sha256 "$PILOT_SIGNOFF_ARTIFACT_SHA256_EXACT" \
+          --expected-bytes "$PILOT_SIGNOFF_ARTIFACT_BYTES_EXACT" \
+          --profile pilot_signoff \
+          --output "$RUNNER_TEMP/pilot-signoff-ingested"
+        test ! -e "$RUNNER_TEMP/pilot-signoff-reverify"
+        mkdir -m 700 "$RUNNER_TEMP/pilot-signoff-reverify"
+
+        python3 - <<'PY'
+        import base64
+        import binascii
+        import os
+        from pathlib import Path
+
+        encoded = os.environ.get("PILOT_SIGNOFF_TRUST_POLICY_BASE64", "")
+        expected = os.environ.get("EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256", "")
+        if not encoded or len(expected) != 64:
+            raise SystemExit("configured pilot signoff trust configuration is absent")
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise SystemExit("configured pilot signoff trust policy is malformed") from error
+        if not 1 <= len(raw) <= 64 * 1024:
+            raise SystemExit("configured pilot signoff trust policy exceeds its bound")
+        path = Path(os.environ["RUNNER_TEMP"]) / "pilot-signoff-reverify" / "policy.json"
+        descriptor = os.open(
+            path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        try:
+            with os.fdopen(descriptor, "wb", closefd=False) as output:
+                output.write(raw)
+                output.flush()
+                os.fsync(output.fileno())
+        finally:
+            os.close(descriptor)
+        PY
+
+        ingested="$RUNNER_TEMP/pilot-signoff-ingested"
+        reverified="$RUNNER_TEMP/pilot-signoff-reverify"
+        python3 ci/pilot_signoff_verification.py verify \
+          --bundle "$ingested/pilot-review-signoff-bundle.json" \
+          --trust-policy "$reverified/policy.json" \
+          --expected-trust-policy-sha256 "$EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256" \
+          --release-revision "$GITHUB_SHA" \
+          --output "$reverified/pilot-signoff-verification.json" \
+          --signoffs-output "$reverified/pilot-review-signoffs.json" \
+          --require-pass
+        cmp -s "$ingested/pilot-signoff-verification.json" "$reverified/pilot-signoff-verification.json"
+        cmp -s "$ingested/pilot-review-signoffs.json" "$reverified/pilot-review-signoffs.json"
+        mkdir -p artifacts
+        install -m 600 "$ingested/pilot-review-signoff-bundle.json" "$AURA_PILOT_SIGNOFF_BUNDLE_PATH"
+        install -m 600 "$ingested/pilot-signoff-verification.json" "$AURA_PILOT_SIGNOFF_VERIFICATION_PATH"
+        install -m 600 "$ingested/pilot-review-signoffs.json" "$AURA_PILOT_REVIEW_SIGNOFFS_PATH"
     - name: Build
       run: cargo build --locked --workspace --all-features --all-targets --verbose
     - name: Run tests
@@ -222,6 +406,10 @@ jobs:
         if [ -f "$AURA_KIDS_PREPROD_DRY_RUN_PATH" ]; then
           KIDS_PREPROD_ARGS="--kids-preprod-dry-run-report $AURA_KIDS_PREPROD_DRY_RUN_PATH"
         fi
+        PILOT_SIGNOFF_ARGS=""
+        if [ -f "$AURA_PILOT_SIGNOFF_VERIFICATION_PATH" ]; then
+          PILOT_SIGNOFF_ARGS="--pilot-signoff-verification $AURA_PILOT_SIGNOFF_VERIFICATION_PATH"
+        fi
 
         python3 ci/generate_evidence_manifest.py \
           --output "$AURA_EVIDENCE_MANIFEST_PATH" \
@@ -236,6 +424,7 @@ jobs:
           --temporal-shadow-report "$AURA_TEMPORAL_SHADOW_REPORT_PATH" \
           --temporal-shadow-telemetry-validation "$AURA_TEMPORAL_SHADOW_TELEMETRY_VALIDATION_PATH" \
           $PILOT_GATE_ARGS \
+          $PILOT_SIGNOFF_ARGS \
           $KIDS_PREPROD_ARGS \
           --community-surface-report "$AURA_COMMUNITY_SURFACE_REPORT_PATH" \
           --world-lifecycle-report "$AURA_WORLD_LIFECYCLE_REPORT_PATH" \
@@ -367,6 +556,9 @@ jobs:
           ${{ env.AURA_WORLD_LIFECYCLE_REPORT_PATH }}
           ${{ env.AURA_WORLD_PERFORMANCE_REPORT_PATH }}
           ${{ env.AURA_PILOT_GATE_REPORT_PATH }}
+          ${{ env.AURA_PILOT_SIGNOFF_BUNDLE_PATH }}
+          ${{ env.AURA_PILOT_SIGNOFF_VERIFICATION_PATH }}
+          ${{ env.AURA_PILOT_REVIEW_SIGNOFFS_PATH }}
           ${{ env.AURA_REFACTOR_CANDIDATE_PATH }}
           ${{ env.AURA_REFACTOR_DIFF_REPORT_PATH }}
           ${{ env.AURA_FFI_SMOKE_EVIDENCE_PATH }}

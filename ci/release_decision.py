@@ -17,18 +17,20 @@ from pathlib import Path
 
 try:
     from ci import evidence_attestation as crypto_support
+    from ci import pilot_signoff_verification as pilot_signoff_support
 except ModuleNotFoundError:  # Direct execution from the ci/ directory.
     import evidence_attestation as crypto_support
+    import pilot_signoff_verification as pilot_signoff_support
 
 
-DECISION_SCHEMA_VERSION = "aura.release_decision.v2"
+DECISION_SCHEMA_VERSION = "aura.release_decision.v3"
 PRODUCT_ACCEPTANCE_SCHEMA_VERSION = "aura.product_integration_acceptance.v2"
-ATTESTATION_SCHEMA_VERSION = "aura.release_decision_attestation.v2"
-VERIFICATION_SCHEMA_VERSION = "aura.release_decision_attestation_verification.v2"
+ATTESTATION_SCHEMA_VERSION = "aura.release_decision_attestation.v3"
+VERIFICATION_SCHEMA_VERSION = "aura.release_decision_attestation_verification.v3"
 APPLE_REPRODUCIBILITY_SCHEMA_VERSION = "aura.apple_artifact_reproducibility.v1"
 PROFILE = "agent-kids-rules-context"
 SIGNATURE_ALGORITHM = "Ed25519"
-SIGNED_PAYLOAD_DOMAIN = b"aura.release-decision.attestation.v2\x00"
+SIGNED_PAYLOAD_DOMAIN = b"aura.release-decision.attestation.v3\x00"
 MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
 MAX_ATTESTATION_BYTES = 64 * 1024
 
@@ -50,6 +52,11 @@ DECISION_FIELDS = {
     "evidence_signer_key_id",
     "evidence_signer_spki_sha256",
     "evidence_signer_manifest_sha256",
+    "pilot_signoff_trust_policy_sha256",
+    "pilot_signoff_policy_id",
+    "pilot_signoff_policy_epoch",
+    "pilot_signoff_signer_spki_sha256",
+    "pilot_signoff_signer_spki_set_sha256",
     "artifact_integrity",
     "runtime_safety",
     "contract_compatibility",
@@ -111,6 +118,11 @@ ATTESTATION_FIELDS = {
     "release_revision",
     "evidence_signer_key_id",
     "evidence_signer_spki_sha256",
+    "pilot_signoff_trust_policy_sha256",
+    "pilot_signoff_policy_id",
+    "pilot_signoff_policy_epoch",
+    "pilot_signoff_signer_spki_sha256",
+    "pilot_signoff_signer_spki_set_sha256",
     "public_key_spki_sha256",
     "signature_base64",
 }
@@ -382,6 +394,12 @@ def parse_args() -> argparse.Namespace:
     create.add_argument("--apple-artifact-reproducibility", default=None)
     create.add_argument("--apple-release-manifest", default=None)
     create.add_argument("--pilot-gate-report", default=None)
+    create.add_argument("--pilot-signoff-verification", default=None)
+    create.add_argument("--pilot-signoff-trust-policy", default=None)
+    create.add_argument(
+        "--expected-pilot-signoff-trust-policy-sha256",
+        default=None,
+    )
     create.add_argument("--product-integration-acceptance", default=None)
     create.add_argument("--output", required=True)
     create.add_argument("--require-go", action="store_true")
@@ -399,6 +417,12 @@ def parse_args() -> argparse.Namespace:
     sign.add_argument("--apple-artifact-reproducibility", required=True)
     sign.add_argument("--apple-release-manifest", required=True)
     sign.add_argument("--pilot-gate-report", required=True)
+    sign.add_argument("--pilot-signoff-verification", required=True)
+    sign.add_argument("--pilot-signoff-trust-policy", required=True)
+    sign.add_argument(
+        "--expected-pilot-signoff-trust-policy-sha256",
+        required=True,
+    )
     sign.add_argument("--product-integration-acceptance", required=True)
     sign.add_argument("--output", required=True)
 
@@ -715,15 +739,22 @@ def evidence_manifest_binds_pilot_gate(
     manifest: dict | None,
     pilot: dict | None,
     pilot_sha256: object,
+    pilot_signoff_verification: dict | None,
+    pilot_signoff_verification_sha256: object,
     candidate_revision: str,
 ) -> bool:
-    if not isinstance(manifest, dict) or not isinstance(pilot, dict):
+    if (
+        not isinstance(manifest, dict)
+        or not isinstance(pilot, dict)
+        or not isinstance(pilot_signoff_verification, dict)
+    ):
         return False
     summary = manifest.get("summary")
     artifacts = manifest.get("artifacts")
     if not isinstance(summary, dict) or not isinstance(artifacts, dict):
         return False
     bound = artifacts.get("pilot_gate_report")
+    signoff_bound = artifacts.get("pilot_signoff_verification")
     return (
         isinstance(bound, dict)
         and bound.get("sha256") == pilot_sha256
@@ -737,6 +768,49 @@ def evidence_manifest_binds_pilot_gate(
         and summary.get("pilot_gate_shadow_run_count")
         == len(pilot.get("shadow_runs", []))
         and summary.get("pilot_gate_check_count") == len(pilot.get("checks", []))
+        and isinstance(signoff_bound, dict)
+        and signoff_bound.get("sha256") == pilot_signoff_verification_sha256
+        and signoff_bound.get("observed_status") == "pass"
+        and signoff_bound.get("schema_version")
+        == pilot_signoff_verification.get("schema_version")
+        and signoff_bound.get("release_revision") == candidate_revision
+        and signoff_bound.get("trust_policy_sha256")
+        == pilot_signoff_verification.get("trust_policy_sha256")
+        and signoff_bound.get("policy_id")
+        == pilot_signoff_verification.get("policy_id")
+        and signoff_bound.get("policy_epoch")
+        == pilot_signoff_verification.get("policy_epoch")
+        and signoff_bound.get("signoff_set_sha256")
+        == pilot_signoff_verification.get("signoff_set_sha256")
+        and signoff_bound.get("signer_spki_set_sha256")
+        == pilot_signoff_verification.get("signer_spki_set_sha256")
+        and signoff_bound.get("signer_spki_sha256")
+        == pilot_signoff_verification.get("signer_spki_sha256")
+        and summary.get("pilot_signoff_verification_status") == "pass"
+        and summary.get("pilot_signoff_verification_schema_version")
+        == pilot_signoff_verification.get("schema_version")
+        and summary.get("pilot_signoff_verification_release_revision")
+        == candidate_revision
+        and summary.get("pilot_signoff_verification_trust_policy_sha256")
+        == pilot_signoff_verification.get("trust_policy_sha256")
+        and summary.get("pilot_signoff_verification_policy_id")
+        == pilot_signoff_verification.get("policy_id")
+        and summary.get("pilot_signoff_verification_policy_epoch")
+        == pilot_signoff_verification.get("policy_epoch")
+        and summary.get("pilot_signoff_verification_signature_algorithm")
+        == pilot_signoff_verification.get("signature_algorithm")
+        and summary.get("pilot_signoff_verification_required_review_areas")
+        == pilot_signoff_verification.get("required_review_areas")
+        and summary.get("pilot_signoff_verification_verified_signoff_count")
+        == pilot_signoff_verification.get("verified_signoff_count")
+        and summary.get("pilot_signoff_verification_distinct_signer_count")
+        == pilot_signoff_verification.get("distinct_signer_count")
+        and summary.get("pilot_signoff_verification_signer_spki_sha256")
+        == pilot_signoff_verification.get("signer_spki_sha256")
+        and summary.get("pilot_signoff_verification_signoff_set_sha256")
+        == pilot_signoff_verification.get("signoff_set_sha256")
+        and summary.get("pilot_signoff_verification_signer_spki_set_sha256")
+        == pilot_signoff_verification.get("signer_spki_set_sha256")
     )
 
 
@@ -1234,6 +1308,14 @@ def _pilot_usize(value: object) -> bool:
     )
 
 
+def _pilot_policy_epoch(value: object) -> bool:
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 1 <= value <= pilot_signoff_support.MAX_POLICY_EPOCH
+    )
+
+
 def _nonempty_string(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
@@ -1498,6 +1580,101 @@ def evaluate_pilot_gate(
     return "pass", "pass"
 
 
+def evaluate_pilot_signoff_verification(
+    report: dict | None,
+    report_metadata: dict,
+    trust_policy: dict | None,
+    trust_policy_metadata: dict,
+    expected_trust_policy_sha256: str | None,
+    candidate_revision: str,
+    pilot_gate: dict | None,
+    evidence_signer: dict[str, str] | None,
+    supplied: tuple[bool, bool, bool],
+) -> tuple[str, dict | None]:
+    """Reverify every pilot signature and bind the exact pilot-gate projection."""
+
+    if not any(supplied):
+        return "blocked", None
+    if not all(supplied):
+        return "fail", None
+    report_base = child_input_status(report_metadata)
+    policy_base = child_input_status(trust_policy_metadata)
+    if report_base != "pass" or policy_base != "pass":
+        return "fail", None
+    if report is None or trust_policy is None:
+        return "fail", None
+    if not lowercase_sha256(expected_trust_policy_sha256):
+        return "fail", None
+    try:
+        pilot_signoff_support.validate_trust_policy(trust_policy)
+        validated_projection = pilot_signoff_support.validate_verification_report(
+            report,
+            trust_policy,
+            expected_trust_policy_sha256,
+            candidate_revision,
+        )
+        projection = pilot_signoff_support.review_signoffs_projection(report)
+    except (pilot_signoff_support.PilotSignoffError, OSError, TypeError, ValueError):
+        return "fail", None
+
+    verified = report
+
+    expected_projection = {
+        "schema_version": pilot_signoff_support.SIGNOFFS_SCHEMA_VERSION,
+        "release_revision": candidate_revision,
+        "signoffs": (
+            pilot_gate.get("signoffs") if isinstance(pilot_gate, dict) else None
+        ),
+    }
+    signer_spki_sha256 = verified.get("signer_spki_sha256")
+    if (
+        report.get("status") != "pass"
+        or verified.get("status") != "pass"
+        or not _json_exactly_equal(validated_projection, projection)
+        or not _json_exactly_equal(projection, expected_projection)
+        or verified.get("release_revision") != candidate_revision
+        or verified.get("trust_policy_sha256") != expected_trust_policy_sha256
+        or not isinstance(verified.get("policy_id"), str)
+        or not crypto_support.safe_key_id(verified["policy_id"])
+        or not _pilot_policy_epoch(verified.get("policy_epoch"))
+        or verified.get("signature_algorithm") != SIGNATURE_ALGORITHM
+        or verified.get("required_review_areas")
+        != list(pilot_signoff_support.REQUIRED_REVIEW_AREAS)
+        or verified.get("verified_signoff_count")
+        != len(PILOT_REQUIRED_REVIEW_AREAS)
+        or verified.get("distinct_signer_count")
+        != len(PILOT_REQUIRED_REVIEW_AREAS)
+        or not isinstance(signer_spki_sha256, list)
+        or len(signer_spki_sha256) != len(PILOT_REQUIRED_REVIEW_AREAS)
+        or any(not lowercase_sha256(value) for value in signer_spki_sha256)
+        or len(set(signer_spki_sha256)) != len(signer_spki_sha256)
+        or not lowercase_sha256(verified.get("signoff_set_sha256"))
+        or verified.get("signoff_set_sha256")
+        != pilot_signoff_support.signoff_set_sha256(projection)
+        or not lowercase_sha256(verified.get("signer_spki_set_sha256"))
+        or verified.get("signer_spki_set_sha256")
+        != pilot_signoff_support.signer_spki_set_sha256(signer_spki_sha256)
+    ):
+        return "fail", None
+    evidence_spki = (
+        evidence_signer.get("public_key_spki_sha256")
+        if isinstance(evidence_signer, dict)
+        else None
+    )
+    if evidence_spki is not None and any(
+        hmac.compare_digest(evidence_spki, signer)
+        for signer in signer_spki_sha256
+    ):
+        return "fail", None
+    return "pass", {
+        "trust_policy_sha256": verified["trust_policy_sha256"],
+        "policy_id": verified["policy_id"],
+        "policy_epoch": verified["policy_epoch"],
+        "signer_spki_sha256": list(signer_spki_sha256),
+        "signer_spki_set_sha256": verified["signer_spki_set_sha256"],
+    }
+
+
 def evaluate_product_acceptance(
     payload: dict | None,
     metadata: dict,
@@ -1604,6 +1781,8 @@ def create_decision(
         ("apple_artifact_reproducibility", "Apple artifact reproducibility"),
         ("apple_release_manifest", "Apple release manifest"),
         ("pilot_gate_report", "pilot gate report"),
+        ("pilot_signoff_verification", "pilot signoff verification"),
+        ("pilot_signoff_trust_policy", "pilot signoff trust policy"),
         ("product_integration_acceptance", "product integration acceptance"),
     ):
         maximum = (
@@ -1682,16 +1861,42 @@ def create_decision(
         artifacts["pilot_gate_report"],
         candidate_revision,
     )
-    if operational_status == "pass" and human_status == "pass" and not (
-        evidence_manifest_binds_pilot_gate(
-            payloads["evidence_manifest"],
-            payloads["pilot_gate_report"],
-            artifacts["pilot_gate_report"].get("sha256"),
+    pilot_signoff_status, pilot_signoff_identity = (
+        evaluate_pilot_signoff_verification(
+            payloads["pilot_signoff_verification"],
+            artifacts["pilot_signoff_verification"],
+            payloads["pilot_signoff_trust_policy"],
+            artifacts["pilot_signoff_trust_policy"],
+            paths.get("expected_pilot_signoff_trust_policy_sha256"),
             candidate_revision,
+            payloads["pilot_gate_report"],
+            evidence_signer,
+            (
+                paths.get("pilot_signoff_verification") is not None,
+                paths.get("pilot_signoff_trust_policy") is not None,
+                paths.get("expected_pilot_signoff_trust_policy_sha256") is not None,
+            ),
+        )
+    )
+    if (
+        operational_status == "pass"
+        and human_status == "pass"
+        and pilot_signoff_status == "pass"
+        and not (
+            evidence_manifest_binds_pilot_gate(
+                payloads["evidence_manifest"],
+                payloads["pilot_gate_report"],
+                artifacts["pilot_gate_report"].get("sha256"),
+                payloads["pilot_signoff_verification"],
+                artifacts["pilot_signoff_verification"].get("sha256"),
+                candidate_revision,
+            )
         )
     ):
-        operational_status = "fail"
-        human_status = "fail"
+        pilot_signoff_status = "fail"
+        pilot_signoff_identity = None
+    operational_status = combine_status(operational_status, pilot_signoff_status)
+    human_status = combine_status(human_status, pilot_signoff_status)
     product_status = evaluate_product_acceptance(
         payloads["product_integration_acceptance"],
         artifacts["product_integration_acceptance"],
@@ -1790,6 +1995,31 @@ def create_decision(
             if evidence_signer is not None
             else None
         ),
+        "pilot_signoff_trust_policy_sha256": (
+            pilot_signoff_identity["trust_policy_sha256"]
+            if pilot_signoff_identity is not None
+            else None
+        ),
+        "pilot_signoff_policy_id": (
+            pilot_signoff_identity["policy_id"]
+            if pilot_signoff_identity is not None
+            else None
+        ),
+        "pilot_signoff_policy_epoch": (
+            pilot_signoff_identity["policy_epoch"]
+            if pilot_signoff_identity is not None
+            else None
+        ),
+        "pilot_signoff_signer_spki_sha256": (
+            pilot_signoff_identity["signer_spki_sha256"]
+            if pilot_signoff_identity is not None
+            else None
+        ),
+        "pilot_signoff_signer_spki_set_sha256": (
+            pilot_signoff_identity["signer_spki_set_sha256"]
+            if pilot_signoff_identity is not None
+            else None
+        ),
         **categories,
         "profile_scope": profile_scope,
         "decision": decision,
@@ -1821,7 +2051,7 @@ def validate_artifact_metadata(metadata: object) -> None:
 
 def validate_decision(payload: dict) -> None:
     if set(payload) != DECISION_FIELDS:
-        raise ReleaseDecisionError("release decision fields do not match v2")
+        raise ReleaseDecisionError("release decision fields do not match v3")
     candidate = payload.get("candidate")
     source_revision = payload.get("source_revision")
     artifact_revision = payload.get("artifact_revision")
@@ -1834,6 +2064,24 @@ def validate_decision(payload: dict) -> None:
     evidence_signer_spki_sha256 = payload.get("evidence_signer_spki_sha256")
     evidence_signer_manifest_sha256 = payload.get(
         "evidence_signer_manifest_sha256"
+    )
+    pilot_signoff_trust_policy_sha256 = payload.get(
+        "pilot_signoff_trust_policy_sha256"
+    )
+    pilot_signoff_policy_id = payload.get("pilot_signoff_policy_id")
+    pilot_signoff_policy_epoch = payload.get("pilot_signoff_policy_epoch")
+    pilot_signoff_signer_spki_sha256 = payload.get(
+        "pilot_signoff_signer_spki_sha256"
+    )
+    pilot_signoff_signer_spki_set_sha256 = payload.get(
+        "pilot_signoff_signer_spki_set_sha256"
+    )
+    pilot_signoff_identity = (
+        pilot_signoff_trust_policy_sha256,
+        pilot_signoff_policy_id,
+        pilot_signoff_policy_epoch,
+        pilot_signoff_signer_spki_sha256,
+        pilot_signoff_signer_spki_set_sha256,
     )
     if (
         payload.get("schema_version") != DECISION_SCHEMA_VERSION
@@ -1869,6 +2117,41 @@ def validate_decision(payload: dict) -> None:
         and not lowercase_sha256(evidence_signer_spki_sha256)
         or evidence_signer_manifest_sha256 is not None
         and not lowercase_sha256(evidence_signer_manifest_sha256)
+        or any(value is None for value in pilot_signoff_identity)
+        and not all(value is None for value in pilot_signoff_identity)
+        or pilot_signoff_trust_policy_sha256 is not None
+        and not lowercase_sha256(pilot_signoff_trust_policy_sha256)
+        or pilot_signoff_policy_id is not None
+        and (
+            not isinstance(pilot_signoff_policy_id, str)
+            or not crypto_support.safe_key_id(pilot_signoff_policy_id)
+        )
+        or pilot_signoff_policy_epoch is not None
+        and not _pilot_policy_epoch(pilot_signoff_policy_epoch)
+        or pilot_signoff_signer_spki_sha256 is not None
+        and (
+            not isinstance(pilot_signoff_signer_spki_sha256, list)
+            or len(pilot_signoff_signer_spki_sha256)
+            != len(PILOT_REQUIRED_REVIEW_AREAS)
+            or any(
+                not lowercase_sha256(value)
+                for value in pilot_signoff_signer_spki_sha256
+            )
+            or len(set(pilot_signoff_signer_spki_sha256))
+            != len(pilot_signoff_signer_spki_sha256)
+        )
+        or pilot_signoff_signer_spki_set_sha256 is not None
+        and not lowercase_sha256(pilot_signoff_signer_spki_set_sha256)
+        or pilot_signoff_signer_spki_sha256 is not None
+        and not hmac.compare_digest(
+            pilot_signoff_signer_spki_set_sha256,
+            pilot_signoff_support.signer_spki_set_sha256(
+                pilot_signoff_signer_spki_sha256
+            ),
+        )
+        or evidence_signer_spki_sha256 is not None
+        and pilot_signoff_signer_spki_sha256 is not None
+        and evidence_signer_spki_sha256 in pilot_signoff_signer_spki_sha256
     ):
         raise ReleaseDecisionError("release decision identity is invalid")
     try:
@@ -1922,6 +2205,8 @@ def validate_decision(payload: dict) -> None:
         "apple_artifact_reproducibility",
         "apple_release_manifest",
         "pilot_gate_report",
+        "pilot_signoff_verification",
+        "pilot_signoff_trust_policy",
         "product_integration_acceptance",
     }:
         raise ReleaseDecisionError("release decision artifact set is invalid")
@@ -1967,6 +2252,21 @@ def validate_decision(payload: dict) -> None:
         and crypto_support.safe_key_id(evidence_signer_key_id)
         and lowercase_sha256(evidence_signer_spki_sha256)
         and lowercase_sha256(evidence_signer_manifest_sha256)
+        and lowercase_sha256(pilot_signoff_trust_policy_sha256)
+        and isinstance(pilot_signoff_policy_id, str)
+        and crypto_support.safe_key_id(pilot_signoff_policy_id)
+        and _pilot_policy_epoch(pilot_signoff_policy_epoch)
+        and isinstance(pilot_signoff_signer_spki_sha256, list)
+        and len(pilot_signoff_signer_spki_sha256)
+        == len(PILOT_REQUIRED_REVIEW_AREAS)
+        and all(
+            lowercase_sha256(value)
+            for value in pilot_signoff_signer_spki_sha256
+        )
+        and len(set(pilot_signoff_signer_spki_sha256))
+        == len(pilot_signoff_signer_spki_sha256)
+        and evidence_signer_spki_sha256 not in pilot_signoff_signer_spki_sha256
+        and lowercase_sha256(pilot_signoff_signer_spki_set_sha256)
         and evidence_signer_manifest_sha256
         == artifacts["evidence_manifest"]["sha256"]
         and evidence_attestation_sha256
@@ -2057,6 +2357,13 @@ def sign_decision(
             raise ReleaseDecisionError(
                 "release operator key must differ from evidence signer key"
             )
+        if any(
+            hmac.compare_digest(operator_spki_sha256, signer)
+            for signer in decision["pilot_signoff_signer_spki_sha256"]
+        ):
+            raise ReleaseDecisionError(
+                "release operator key must differ from pilot signoff keys"
+            )
         attestation = {
             "schema_version": ATTESTATION_SCHEMA_VERSION,
             "signature_algorithm": SIGNATURE_ALGORITHM,
@@ -2070,6 +2377,17 @@ def sign_decision(
             "evidence_signer_key_id": decision["evidence_signer_key_id"],
             "evidence_signer_spki_sha256": decision[
                 "evidence_signer_spki_sha256"
+            ],
+            "pilot_signoff_trust_policy_sha256": decision[
+                "pilot_signoff_trust_policy_sha256"
+            ],
+            "pilot_signoff_policy_id": decision["pilot_signoff_policy_id"],
+            "pilot_signoff_policy_epoch": decision["pilot_signoff_policy_epoch"],
+            "pilot_signoff_signer_spki_sha256": decision[
+                "pilot_signoff_signer_spki_sha256"
+            ],
+            "pilot_signoff_signer_spki_set_sha256": decision[
+                "pilot_signoff_signer_spki_set_sha256"
             ],
             "public_key_spki_sha256": operator_spki_sha256,
         }
@@ -2100,7 +2418,7 @@ def load_attestation(path: Path) -> dict:
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         raise ReleaseDecisionError("release attestation is invalid JSON") from error
     if not isinstance(payload, dict) or set(payload) != ATTESTATION_FIELDS:
-        raise ReleaseDecisionError("release attestation fields do not match v2")
+        raise ReleaseDecisionError("release attestation fields do not match v3")
     if (
         payload.get("schema_version") != ATTESTATION_SCHEMA_VERSION
         or payload.get("signature_algorithm") != SIGNATURE_ALGORITHM
@@ -2117,6 +2435,32 @@ def load_attestation(path: Path) -> dict:
         or not isinstance(payload.get("evidence_signer_key_id"), str)
         or not crypto_support.safe_key_id(payload["evidence_signer_key_id"])
         or not lowercase_sha256(payload.get("evidence_signer_spki_sha256"))
+        or not lowercase_sha256(
+            payload.get("pilot_signoff_trust_policy_sha256")
+        )
+        or not isinstance(payload.get("pilot_signoff_policy_id"), str)
+        or not crypto_support.safe_key_id(payload["pilot_signoff_policy_id"])
+        or not _pilot_policy_epoch(payload.get("pilot_signoff_policy_epoch"))
+        or not isinstance(payload.get("pilot_signoff_signer_spki_sha256"), list)
+        or len(payload["pilot_signoff_signer_spki_sha256"])
+        != len(PILOT_REQUIRED_REVIEW_AREAS)
+        or any(
+            not lowercase_sha256(value)
+            for value in payload["pilot_signoff_signer_spki_sha256"]
+        )
+        or len(set(payload["pilot_signoff_signer_spki_sha256"]))
+        != len(payload["pilot_signoff_signer_spki_sha256"])
+        or payload["evidence_signer_spki_sha256"]
+        in payload["pilot_signoff_signer_spki_sha256"]
+        or not lowercase_sha256(
+            payload.get("pilot_signoff_signer_spki_set_sha256")
+        )
+        or not hmac.compare_digest(
+            payload["pilot_signoff_signer_spki_set_sha256"],
+            pilot_signoff_support.signer_spki_set_sha256(
+                payload["pilot_signoff_signer_spki_sha256"]
+            ),
+        )
     ):
         raise ReleaseDecisionError("release attestation claims are invalid")
     try:
@@ -2154,6 +2498,17 @@ def verify_decision(
         "release_revision": decision["release_revision"],
         "evidence_signer_key_id": decision["evidence_signer_key_id"],
         "evidence_signer_spki_sha256": decision["evidence_signer_spki_sha256"],
+        "pilot_signoff_trust_policy_sha256": decision[
+            "pilot_signoff_trust_policy_sha256"
+        ],
+        "pilot_signoff_policy_id": decision["pilot_signoff_policy_id"],
+        "pilot_signoff_policy_epoch": decision["pilot_signoff_policy_epoch"],
+        "pilot_signoff_signer_spki_sha256": decision[
+            "pilot_signoff_signer_spki_sha256"
+        ],
+        "pilot_signoff_signer_spki_set_sha256": decision[
+            "pilot_signoff_signer_spki_set_sha256"
+        ],
     }
     if any(
         not hmac.compare_digest(str(attestation[field]), str(value))
@@ -2181,6 +2536,13 @@ def verify_decision(
         ):
             raise ReleaseDecisionError(
                 "release operator key must differ from evidence signer key"
+            )
+        if any(
+            hmac.compare_digest(public_key_digest, signer)
+            for signer in decision["pilot_signoff_signer_spki_sha256"]
+        ):
+            raise ReleaseDecisionError(
+                "release operator key must differ from pilot signoff keys"
             )
         signature = base64.b64decode(
             attestation["signature_base64"], validate=True
@@ -2216,6 +2578,17 @@ def verify_decision(
         "release_revision": decision["release_revision"],
         "evidence_signer_key_id": decision["evidence_signer_key_id"],
         "evidence_signer_spki_sha256": decision["evidence_signer_spki_sha256"],
+        "pilot_signoff_trust_policy_sha256": decision[
+            "pilot_signoff_trust_policy_sha256"
+        ],
+        "pilot_signoff_policy_id": decision["pilot_signoff_policy_id"],
+        "pilot_signoff_policy_epoch": decision["pilot_signoff_policy_epoch"],
+        "pilot_signoff_signer_spki_sha256": decision[
+            "pilot_signoff_signer_spki_sha256"
+        ],
+        "pilot_signoff_signer_spki_set_sha256": decision[
+            "pilot_signoff_signer_spki_set_sha256"
+        ],
         "source_tree_sha256": decision["source_tree_sha256"],
         "decision_sha256": expected_bindings["decision_sha256"],
         "public_key_spki_sha256": public_key_digest,
@@ -2233,6 +2606,8 @@ def protected_input_paths(args: argparse.Namespace) -> list[Path]:
         "apple_artifact_reproducibility",
         "apple_release_manifest",
         "pilot_gate_report",
+        "pilot_signoff_verification",
+        "pilot_signoff_trust_policy",
         "product_integration_acceptance",
         "decision",
         "attestation",
@@ -2245,12 +2620,30 @@ def protected_input_paths(args: argparse.Namespace) -> list[Path]:
     return result
 
 
+def ensure_distinct_release_output(output: Path, protected_paths: list[Path]) -> None:
+    crypto_support.ensure_distinct_output(output, protected_paths)
+    try:
+        output_metadata = os.stat(output, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    output_identity = (output_metadata.st_dev, output_metadata.st_ino)
+    for protected in protected_paths:
+        try:
+            protected_metadata = os.stat(protected, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
+        if output_identity == (protected_metadata.st_dev, protected_metadata.st_ino):
+            raise ReleaseDecisionError(
+                "release output must not overwrite or alias an input"
+            )
+
+
 def main() -> int:
     args = parse_args()
     try:
         if args.command == "create":
             output = Path(args.output)
-            crypto_support.ensure_distinct_output(output, protected_input_paths(args))
+            ensure_distinct_release_output(output, protected_input_paths(args))
             decision = create_decision(
                 args.candidate_revision,
                 args.runtime_version,
@@ -2269,6 +2662,15 @@ def main() -> int:
                     ),
                     "apple_release_manifest": args.apple_release_manifest,
                     "pilot_gate_report": args.pilot_gate_report,
+                    "pilot_signoff_verification": (
+                        args.pilot_signoff_verification
+                    ),
+                    "pilot_signoff_trust_policy": (
+                        args.pilot_signoff_trust_policy
+                    ),
+                    "expected_pilot_signoff_trust_policy_sha256": (
+                        args.expected_pilot_signoff_trust_policy_sha256
+                    ),
                     "product_integration_acceptance": (
                         args.product_integration_acceptance
                     ),
@@ -2280,7 +2682,7 @@ def main() -> int:
 
         if args.command == "sign":
             output = Path(args.output)
-            crypto_support.ensure_distinct_output(output, protected_input_paths(args))
+            ensure_distinct_release_output(output, protected_input_paths(args))
             attestation = sign_decision(
                 Path(args.decision),
                 Path(args.private_key),
@@ -2301,6 +2703,15 @@ def main() -> int:
                     ),
                     "apple_release_manifest": args.apple_release_manifest,
                     "pilot_gate_report": args.pilot_gate_report,
+                    "pilot_signoff_verification": (
+                        args.pilot_signoff_verification
+                    ),
+                    "pilot_signoff_trust_policy": (
+                        args.pilot_signoff_trust_policy
+                    ),
+                    "expected_pilot_signoff_trust_policy_sha256": (
+                        args.expected_pilot_signoff_trust_policy_sha256
+                    ),
                     "product_integration_acceptance": (
                         args.product_integration_acceptance
                     ),
@@ -2312,7 +2723,7 @@ def main() -> int:
 
         output = Path(args.output) if args.output else None
         if output is not None:
-            crypto_support.ensure_distinct_output(output, protected_input_paths(args))
+            ensure_distinct_release_output(output, protected_input_paths(args))
         report = verify_decision(
             Path(args.decision),
             Path(args.attestation),

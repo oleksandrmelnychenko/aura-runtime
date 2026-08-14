@@ -1,7 +1,8 @@
 # Release candidate dossier
 
-`ci/release_dossier.py` assembles the fixed-layout terminal bundle for the
-first production profile. The dossier is an unsigned index. It is not a new
+`ci/release_dossier.py` assembles the fixed-layout
+`aura.release_candidate_dossier.v2` terminal bundle for the first production
+profile. The dossier is an unsigned index. It is not a new
 authorization authority: `ci/release_decision.py` remains the semantic
 GO/NO-GO authority, and only its verified, role-separated Ed25519 operator
 attestation authorizes a release.
@@ -11,6 +12,8 @@ The evidence graph is deliberately acyclic:
 ```mermaid
 flowchart LR
     T["Technical, pilot, and Apple evidence"] --> E["Evidence manifest"]
+    PS["Externally signed four-role pilot bundle"] --> PV["Pilot verification bound to external trust policy"]
+    PV --> E
     E --> EA["Evidence attestation and verification"]
     EA --> P["External product acceptance"]
     P --> D["Release decision"]
@@ -36,6 +39,7 @@ apple/apple-release-verification.json
 apple/apple-reproducibility.json
 apple/release-manifest.json
 pilot/pilot-gate-report.json
+pilot/pilot-signoff-verification.json
 product/product-integration-acceptance.json
 ```
 
@@ -51,16 +55,19 @@ decision/release-decision.attestation.json
 decision/release-decision.attestation-verification.json
 ```
 
-The final bundle therefore contains exactly twelve regular, non-hard-linked
+The final bundle therefore contains exactly thirteen regular, non-hard-linked
 files. Extra paths, symlinks, FIFOs, device nodes, oversized files, duplicate
 JSON keys, non-finite JSON, changed files, and output aliases are rejected.
 Outputs are fresh, no-clobber publications beneath a pinned real parent
 directory.
 
-Public keys are external trust roots. They are used to re-verify the evidence
-signature and release-operator signature but are never copied into the
-dossier. The release-operator SPKI must differ from the evidence-signer SPKI.
-Private keys must never be placed in an input root or dossier.
+Public keys and the pilot trust policy are external trust roots. They are used
+to re-verify the evidence signature, every embedded pilot attestation, and the
+release-operator signature but are never copied into the dossier. The dossier
+records the caller-pinned canonical pilot-policy digest plus the ordered signer
+SPKI identities reported by the verified leaf. Evidence, pilot-reviewer, and
+release-operator keys are role-separated by the semantic authority. Private
+keys must never be placed in an input root or dossier.
 
 ## Assemble
 
@@ -75,6 +82,8 @@ python3 ci/release_dossier.py assemble \
   --runtime-version 0.2.0 \
   --evidence-public-key /trusted/evidence-signer-public.pem \
   --expected-evidence-key-id evidence-signer-2026-01 \
+  --pilot-signoff-trust-policy /trusted/pilot-signoff-policy.json \
+  --expected-pilot-signoff-trust-policy-sha256 '<64 lowercase canonical policy digest>' \
   --output artifacts/release-dossier-preliminary
 ```
 
@@ -93,6 +102,8 @@ python3 ci/release_dossier.py finalize \
   --expected-evidence-key-id evidence-signer-2026-01 \
   --release-public-key /trusted/release-operator-public.pem \
   --expected-release-key-id release-operator-2026-01 \
+  --pilot-signoff-trust-policy /trusted/pilot-signoff-policy.json \
+  --expected-pilot-signoff-trust-policy-sha256 '<64 lowercase canonical policy digest>' \
   --output artifacts/release-dossier-final
 
 python3 ci/release_dossier.py verify \
@@ -101,15 +112,18 @@ python3 ci/release_dossier.py verify \
   --expected-evidence-key-id evidence-signer-2026-01 \
   --release-public-key /trusted/release-operator-public.pem \
   --expected-release-key-id release-operator-2026-01 \
+  --pilot-signoff-trust-policy /trusted/pilot-signoff-policy.json \
+  --expected-pilot-signoff-trust-policy-sha256 '<64 lowercase canonical policy digest>' \
   --output artifacts/release-dossier-verification.json \
   --require-pass
 ```
 
 The verifier re-reads the exact fixed tree, recomputes the release decision
-from the bundled source evidence, verifies both signature chains against the
-caller-pinned keys and key identifiers, checks role separation, and rebuilds
-the dossier index canonically. A copied verification report is never treated
-as authority.
+from the bundled source evidence, re-verifies the four pilot attestations
+against the caller-supplied policy and digest, verifies both release signature
+chains against caller-pinned keys and key identifiers, checks role separation,
+and rebuilds the dossier index canonically. Copied verification reports are
+never treated as authority.
 
 ## Hosted evidence collection
 
@@ -118,8 +132,34 @@ precondition workflow named `Release Evidence Freeze`, not a GO workflow. It
 accepts exact Promotion Gate and Apple Artifact run IDs and attempts for one
 exact `R`, rejects PR/fork/stale/failed/expired sources, downloads the exact
 immutable artifact IDs, hard-checks their archive SHA-256 values, enforces fixed
-ZIP inventories, and rebuilds the final unsigned evidence manifest with every
+ZIP inventories, re-verifies the carried pilot leaf against the externally
+configured policy, and rebuilds the final unsigned evidence manifest with every
 production child.
+
+The preceding manual `Pilot Signoff Ingest` workflow accepts only a base64
+signed bundle plus caller-declared raw SHA-256 and byte length (maximum 32 KiB)
+for exact `R`. It writes no signatures and receives no private key. A valid
+signed `pending` or `needs_changes` bundle may retain its exact three-file
+diagnostic artifact, but its run is unsuccessful and therefore ineligible for
+Promotion. Promotion pins a successful first-attempt ingest run, derives and
+pins that run's sole artifact ID/digest/length from GitHub metadata, downloads
+with a token used only for metadata and transport, and then verifies offline
+before giving the exact projection to the Rust pilot gate. Freeze repeats that
+offline verification and carries only
+`pilot/pilot-signoff-verification.json` into the dossier source layout.
+`Promotion Gate` is manual-only: tag pushes no longer trigger or authorize
+promotion because they cannot supply the exact ingest source. For
+`target=release`, the ingest run ID is mandatory and its attempt must be `1`.
+
+Hosted execution is currently a governance prerequisite, not an enabled trust
+anchor. Repository variables `AURA_PILOT_SIGNOFF_TRUST_POLICY_B64`,
+`AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256`, and
+`AURA_PILOT_SIGNOFF_WORKFLOW_ID` must be externally provisioned with reviewed
+change control. Repository variables are mutable configuration, not
+intrinsically protected trust storage. The variables and registered workflow
+ID are currently absent, so hosted intake, release Promotion, and Freeze fail
+closed. The policy digest is the helper's domain-separated canonical policy
+identity, not the SHA-256 of arbitrary policy file bytes.
 
 Only first attempts are eligible. If a hosted run must be rerun, start a new
 run with a new immutable run ID; this avoids ambiguity between artifacts from

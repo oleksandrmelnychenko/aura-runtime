@@ -47,6 +47,9 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             ]: self.apple_manifest,
             release_dossier.SOURCE_PATHS["pilot_gate_report"]: self.pilot_gate,
             release_dossier.SOURCE_PATHS[
+                "pilot_signoff_verification"
+            ]: self.pilot_signoff_verification,
+            release_dossier.SOURCE_PATHS[
                 "product_integration_acceptance"
             ]: self.product_acceptance,
         }
@@ -91,6 +94,8 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             self.runtime_version,
             self.evidence_public_key,
             self.expected_evidence_key_id,
+            self.pilot_signoff_trust_policy,
+            self.expected_pilot_signoff_trust_policy_sha256,
         )
 
     def _bundle_evidence_paths(self) -> dict[str, str | None]:
@@ -100,6 +105,12 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
         } | {
             "evidence_public_key": self.evidence_public_key.as_posix(),
             "expected_evidence_key_id": self.expected_evidence_key_id,
+            "pilot_signoff_trust_policy": (
+                self.pilot_signoff_trust_policy.as_posix()
+            ),
+            "expected_pilot_signoff_trust_policy_sha256": (
+                self.expected_pilot_signoff_trust_policy_sha256
+            ),
         }
 
     def _sign_preliminary_decision(self) -> dict:
@@ -123,6 +134,8 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             self.expected_evidence_key_id,
             self.release_public_key,
             self.release_key_id,
+            self.pilot_signoff_trust_policy,
+            self.expected_pilot_signoff_trust_policy_sha256,
         )
 
     def _write_same_key_release_attestation(self) -> dict:
@@ -144,6 +157,17 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             "evidence_signer_key_id": decision["evidence_signer_key_id"],
             "evidence_signer_spki_sha256": decision[
                 "evidence_signer_spki_sha256"
+            ],
+            "pilot_signoff_trust_policy_sha256": decision[
+                "pilot_signoff_trust_policy_sha256"
+            ],
+            "pilot_signoff_policy_id": decision["pilot_signoff_policy_id"],
+            "pilot_signoff_policy_epoch": decision["pilot_signoff_policy_epoch"],
+            "pilot_signoff_signer_spki_sha256": decision[
+                "pilot_signoff_signer_spki_sha256"
+            ],
+            "pilot_signoff_signer_spki_set_sha256": decision[
+                "pilot_signoff_signer_spki_set_sha256"
             ],
             "public_key_spki_sha256": sha256(public_der).hexdigest(),
         }
@@ -226,6 +250,8 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             self.expected_evidence_key_id,
             self.release_public_key,
             self.release_key_id,
+            self.pilot_signoff_trust_policy,
+            self.expected_pilot_signoff_trust_policy_sha256,
         )
 
         self.assertEqual(dossier["status"], "pass")
@@ -233,6 +259,8 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
         self.assertEqual(report["status"], "pass")
         self.assertEqual(report["authorization"], "go")
         self.assertTrue(report["release_operator_attestation_verified"])
+        self.assertTrue(report["pilot_signoff_trust_policy_verified"])
+        self.assertEqual(len(release_dossier.FINAL_FILES), 13)
         self.assertEqual(
             {
                 path.relative_to(self.final).as_posix()
@@ -241,7 +269,39 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             },
             set(release_dossier.FINAL_FILES),
         )
+        self.assertTrue(
+            (
+                self.final
+                / release_dossier.SOURCE_PATHS["pilot_signoff_verification"]
+            ).is_file()
+        )
+        self.assertEqual(len(dossier["inventory"]), 12)
         self.assertFalse(any("key" in path.name for path in self.final.rglob("*")))
+        self.assertFalse(
+            any(
+                "trust-policy" in path.relative_to(self.final).as_posix()
+                for path in self.final.rglob("*")
+            )
+        )
+        pilot_trust = dossier["pilot_signoff_trust"]
+        self.assertTrue(pilot_trust["external_trust_policy_required"])
+        self.assertFalse(pilot_trust["trust_policy_embedded"])
+        self.assertTrue(pilot_trust["trust_policy_supplied"])
+        self.assertEqual(
+            pilot_trust["expected_trust_policy_sha256"],
+            self.expected_pilot_signoff_trust_policy_sha256,
+        )
+        self.assertEqual(
+            pilot_trust["verification_report_trust_policy_sha256"],
+            self.expected_pilot_signoff_trust_policy_sha256,
+        )
+        self.assertEqual(
+            len(pilot_trust["verification_report_signer_spki_sha256"]), 4
+        )
+        self.assertRegex(
+            pilot_trust["verification_report_signer_spki_set_sha256"],
+            r"^[0-9a-f]{64}$",
+        )
         assurance = dossier["assurance"]
         self.assertTrue(assurance["terminal_unsigned_index"])
         self.assertFalse(assurance["index_self_hash_included"])
@@ -273,6 +333,10 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             self.preliminary,
             self.evidence_public_key,
             self.expected_evidence_key_id,
+            pilot_signoff_trust_policy_path=self.pilot_signoff_trust_policy,
+            expected_pilot_signoff_trust_policy_sha256=(
+                self.expected_pilot_signoff_trust_policy_sha256
+            ),
         )
         self.assertEqual(report["status"], "fail")
 
@@ -310,6 +374,36 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
 
         self.assertFalse(self.preliminary.exists())
 
+    def test_preliminary_verify_reads_a_supplied_key_even_when_recorded_absent(self):
+        release_dossier.assemble_dossier(
+            self.source_root,
+            self.preliminary,
+            self.revision,
+            self.runtime_version,
+            None,
+            None,
+        )
+
+        with self.assertRaisesRegex(
+            release_dossier.DossierError, "supplied.*missing"
+        ):
+            release_dossier.verify_dossier(
+                self.preliminary,
+                self.root / "provided-but-missing.pem",
+                None,
+            )
+
+        malformed = self.root / "provided-malformed.pem"
+        malformed.write_text("not a public key\n", encoding="utf-8")
+        with self.assertRaises(
+            (release_dossier.DossierError, release_decision.ReleaseDecisionError)
+        ):
+            release_dossier.verify_dossier(
+                self.preliminary,
+                malformed,
+                None,
+            )
+
     def test_final_child_mutation_is_rejected(self):
         self._assemble()
         self._sign_preliminary_decision()
@@ -328,6 +422,8 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
                 self.expected_evidence_key_id,
                 self.release_public_key,
                 self.release_key_id,
+                self.pilot_signoff_trust_policy,
+                self.expected_pilot_signoff_trust_policy_sha256,
             )
 
     def test_index_mutation_is_rejected(self):
@@ -675,6 +771,98 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
                 self.release_key_id,
             )
 
+    def test_finalization_and_final_verification_require_external_pilot_trust(self):
+        self._assemble()
+        self._sign_preliminary_decision()
+
+        with self.assertRaisesRegex(
+            release_dossier.DossierBlocked, "pilot signoff trust-policy pin"
+        ):
+            release_dossier.finalize_dossier(
+                self.preliminary,
+                self.final,
+                self.release_attestation,
+                self.evidence_public_key,
+                self.expected_evidence_key_id,
+                self.release_public_key,
+                self.release_key_id,
+            )
+
+        self._finalize()
+        with self.assertRaisesRegex(
+            release_dossier.DossierBlocked, "pilot signoff trust-policy pin"
+        ):
+            release_dossier.verify_dossier(
+                self.final,
+                self.evidence_public_key,
+                self.expected_evidence_key_id,
+                self.release_public_key,
+                self.release_key_id,
+            )
+
+    def test_supplied_missing_or_wrong_pilot_trust_policy_fails(self):
+        self._assemble()
+        self._sign_preliminary_decision()
+
+        with self.assertRaisesRegex(release_dossier.DossierError, "supplied.*missing"):
+            release_dossier.finalize_dossier(
+                self.preliminary,
+                self.final,
+                self.release_attestation,
+                self.evidence_public_key,
+                self.expected_evidence_key_id,
+                self.release_public_key,
+                self.release_key_id,
+                self.root / "provided-but-missing-policy.json",
+                self.expected_pilot_signoff_trust_policy_sha256,
+            )
+        with self.assertRaises(release_dossier.DossierError):
+            release_dossier.finalize_dossier(
+                self.preliminary,
+                self.final,
+                self.release_attestation,
+                self.evidence_public_key,
+                self.expected_evidence_key_id,
+                self.release_public_key,
+                self.release_key_id,
+                self.pilot_signoff_trust_policy,
+                "0" * 64,
+            )
+        self.assertFalse(self.final.exists())
+
+    def test_pilot_verification_leaf_mutation_is_rejected(self):
+        self._assemble()
+        self._sign_preliminary_decision()
+        self._finalize()
+        verification_path = (
+            self.final
+            / release_dossier.SOURCE_PATHS["pilot_signoff_verification"]
+        )
+        report = json.loads(verification_path.read_text(encoding="utf-8"))
+        report["attestations"][0]["signature_base64"] = "AA=="
+        verification_path.write_text(json.dumps(report) + "\n", encoding="utf-8")
+
+        with self.assertRaises(
+            (release_dossier.DossierError, release_decision.ReleaseDecisionError)
+        ):
+            release_dossier.verify_dossier(
+                self.final,
+                self.evidence_public_key,
+                self.expected_evidence_key_id,
+                self.release_public_key,
+                self.release_key_id,
+                self.pilot_signoff_trust_policy,
+                self.expected_pilot_signoff_trust_policy_sha256,
+            )
+
+    def test_report_output_cannot_alias_external_pilot_trust_policy(self):
+        with self.assertRaisesRegex(release_dossier.DossierError, "alias"):
+            release_dossier._publish_report(
+                self.pilot_signoff_trust_policy,
+                b"{}\n",
+                [self.pilot_signoff_trust_policy],
+            )
+
     def test_supplied_missing_release_key_fails_finalization(self):
         self._assemble()
         self._sign_preliminary_decision()
@@ -691,6 +879,8 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
                 self.expected_evidence_key_id,
                 supplied_missing_key,
                 self.release_key_id,
+                self.pilot_signoff_trust_policy,
+                self.expected_pilot_signoff_trust_policy_sha256,
             )
 
         self.assertFalse(self.final.exists())
@@ -723,6 +913,8 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
                 self.expected_evidence_key_id,
                 self.evidence_public_key,
                 "same-role-key",
+                self.pilot_signoff_trust_policy,
+                self.expected_pilot_signoff_trust_policy_sha256,
             )
 
     def test_verify_rejects_a_direct_same_spki_attestation(self):
@@ -744,6 +936,8 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
                 self.expected_evidence_key_id,
                 self.evidence_public_key,
                 "same-role-key",
+                self.pilot_signoff_trust_policy,
+                self.expected_pilot_signoff_trust_policy_sha256,
             )
 
     def test_verify_report_cannot_be_written_inside_bundle(self):
@@ -752,6 +946,10 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             self.preliminary,
             self.evidence_public_key,
             self.expected_evidence_key_id,
+            pilot_signoff_trust_policy_path=self.pilot_signoff_trust_policy,
+            expected_pilot_signoff_trust_policy_sha256=(
+                self.expected_pilot_signoff_trust_policy_sha256
+            ),
         )
         with self.assertRaisesRegex(release_dossier.DossierError, "alias"):
             release_dossier._publish_report(
@@ -766,6 +964,10 @@ class ReleaseDossierTests(ReleaseDecisionFixture):
             self.preliminary,
             self.evidence_public_key,
             self.expected_evidence_key_id,
+            pilot_signoff_trust_policy_path=self.pilot_signoff_trust_policy,
+            expected_pilot_signoff_trust_policy_sha256=(
+                self.expected_pilot_signoff_trust_policy_sha256
+            ),
         )
         output = self.root / "verification.json"
 
