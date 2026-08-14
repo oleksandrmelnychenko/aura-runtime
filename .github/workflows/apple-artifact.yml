@@ -2,9 +2,6 @@ name: Apple Artifact
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
   pull_request:
     paths:
       # Source identity v2 covers almost every tracked file. Keep this workflow

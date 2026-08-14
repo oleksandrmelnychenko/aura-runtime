@@ -93,11 +93,14 @@ Hosted use is intentionally unavailable until administrators provision and
 govern the repository variables
 `AURA_PILOT_SIGNOFF_TRUST_POLICY_B64`,
 `AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256`, and
-`AURA_PILOT_SIGNOFF_WORKFLOW_ID`. Those variables are currently absent, so the
-three hosted stages fail closed. Repository variables are externally mutable
-configuration and are not intrinsically protected; administrators must add
-reviewed change/rotation controls. The policy digest above is canonical and
-domain-separated; do not replace it with SHA-256 of arbitrary JSON bytes.
+`AURA_PILOT_SIGNOFF_WORKFLOW_ID`. The workflow ID is provisioned, but the two
+policy variables remain absent, so the three hosted stages fail closed. They
+also require protected `main` and approval through the `release` environment,
+which forbids self-review and admin bypass. Repository variables are externally
+mutable configuration and are not intrinsically protected; administrators must
+appoint an independent release reviewer and maintain reviewed change/rotation
+controls. The policy digest above is canonical and domain-separated; do not
+replace it with SHA-256 of arbitrary JSON bytes.
 
 ## AURA Core Refactor Differential Gate
 

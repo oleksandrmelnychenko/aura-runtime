@@ -27,6 +27,9 @@ concurrency:
 jobs:
   ingest:
     runs-on: ubuntu-latest
+    environment:
+      name: release
+      deployment: false
     permissions:
       contents: read
     timeout-minutes: 10
@@ -39,6 +42,14 @@ jobs:
       EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256 }}
 
     steps:
+      - name: Require protected main release ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_REF_PROTECTED" = "true"
+          test "$GITHUB_SHA" = "$RELEASE_REVISION"
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false

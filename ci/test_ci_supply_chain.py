@@ -9,6 +9,7 @@ APPLE_WORKFLOW = WORKFLOW_DIRECTORY / "apple-artifact.yml"
 RELEASE_EVIDENCE_WORKFLOW = WORKFLOW_DIRECTORY / "release-evidence-finalize.yml"
 PILOT_SIGNOFF_WORKFLOW = WORKFLOW_DIRECTORY / "pilot-signoff-ingest.yml"
 PROMOTION_WORKFLOW = WORKFLOW_DIRECTORY / "promotion-gate.yml"
+CODEOWNERS = ROOT / ".github" / "CODEOWNERS"
 FULL_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 CARGO_LOCKED_COMMAND = re.compile(r"\bcargo\s+(?:build|clippy|install|run|test)\b")
 JOB_HEADER = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
@@ -107,6 +108,41 @@ class CiSupplyChainTests(unittest.TestCase):
             text = (WORKFLOW_DIRECTORY / name).read_text(encoding="utf-8")
             self.assertIn(discovery, text)
 
+    def test_release_source_has_a_bootstrap_code_owner(self):
+        self.assertEqual(
+            CODEOWNERS.read_text(encoding="utf-8").splitlines()[-1],
+            "* @oleksandrmelnychenko",
+        )
+
+    def test_release_workflows_bind_protected_main_and_release_environment(self):
+        fixed_environment = "environment:\n      name: release\n      deployment: false"
+        for workflow in (
+            self.pilot_signoff_workflow(),
+            self.release_evidence_workflow(),
+        ):
+            self.assertIn(fixed_environment, workflow)
+            self.assertIn('test "$GITHUB_REF" = "refs/heads/main"', workflow)
+            self.assertIn('test "$GITHUB_REF_PROTECTED" = "true"', workflow)
+            self.assertIn('test "$GITHUB_SHA" = "$RELEASE_REVISION"', workflow)
+
+        promotion = self.promotion_workflow()
+        authorize = promotion.split("  authorize-release:", 1)[1].split(
+            "  promotion-gate:", 1
+        )[0]
+        gate = promotion.split("  promotion-gate:", 1)[1]
+        self.assertIn("if: ${{ inputs.target == 'release' }}", authorize)
+        self.assertIn(fixed_environment, authorize)
+        self.assertIn('test "$GITHUB_REF" = "refs/heads/main"', authorize)
+        self.assertIn('test "$GITHUB_REF_PROTECTED" = "true"', authorize)
+        self.assertEqual(promotion.count(fixed_environment), 1)
+        self.assertIn("needs: authorize-release", gate)
+        self.assertIn(
+            "inputs.target == 'staging' || needs.authorize-release.result == 'success'",
+            gate,
+        )
+        self.assertIn('test "$GITHUB_REF" = "refs/heads/main"', gate)
+        self.assertIn('test "$GITHUB_REF_PROTECTED" = "true"', gate)
+
     def test_apple_workflow_materializes_exact_head_with_full_history(self):
         workflow = self.apple_workflow()
         checkout = workflow.split("uses: actions/checkout@", 1)[1].split(
@@ -121,6 +157,10 @@ class CiSupplyChainTests(unittest.TestCase):
 
     def test_apple_workflow_covers_all_artifact_provenance_paths(self):
         workflow = self.apple_workflow()
+        trigger = workflow.split("on:", 1)[1].split("concurrency:", 1)[0]
+        self.assertIn("workflow_dispatch:", trigger)
+        self.assertIn("pull_request:", trigger)
+        self.assertNotIn("push:", trigger)
         for path in (
             '"**"',
             '"dist/apple/**"',
@@ -232,19 +272,20 @@ class CiSupplyChainTests(unittest.TestCase):
             'APPLE_WORKFLOW_ID: "320479820"',
             'test "$(git rev-parse HEAD)" = "$RELEASE_REVISION"',
             'run.get("head_sha") != os.environ["RELEASE_REVISION"]',
+            'run.get("head_branch") != "main"',
             'run.get("run_attempt") != expected_attempt',
             'test "$PROMOTION_RUN_ATTEMPT" = "1"',
             'test "$APPLE_RUN_ATTEMPT" = "1"',
             'run.get("status") != "completed" or run.get("conclusion") != "success"',
             'run.get("event") not in expected_events',
             'expected_events={"workflow_dispatch"}',
-            'expected_events={"workflow_dispatch", "push"}',
             'head_repository.get("full_name") != expected_repo',
             "expected exactly one artifact named",
             'artifact.get("expired") is not False',
             'sha256:[0-9a-f]{64}',
         ):
             self.assertIn(invariant, workflow)
+        self.assertEqual(workflow.count('expected_events={"workflow_dispatch"}'), 2)
         self.assertNotIn("gh run list", workflow)
         self.assertNotIn("--limit", workflow)
         self.assertNotIn("pull_request", workflow.split("on:", 1)[1].split("jobs:", 1)[0])
@@ -272,7 +313,7 @@ class CiSupplyChainTests(unittest.TestCase):
         self.assertIn("name: Release Evidence Freeze", workflow)
         self.assertNotIn("  sign:", workflow)
         self.assertNotIn("secrets.", workflow)
-        self.assertNotIn("\n    environment:", workflow)
+        self.assertIn("\n    environment:\n      name: release", workflow)
         self.assertNotIn("evidence_attestation.py sign", workflow)
         self.assertNotIn("release_decision.py sign", workflow)
         self.assertNotIn("source-runs.json", workflow)
@@ -355,6 +396,7 @@ class CiSupplyChainTests(unittest.TestCase):
             "declared_bytes > 32 * 1024",
             'hashlib.sha256(bundle).hexdigest() != declared_sha256',
             'test "$(git rev-parse HEAD)" = "$RELEASE_REVISION"',
+            'test "$GITHUB_SHA" = "$RELEASE_REVISION"',
             "AURA_PILOT_SIGNOFF_TRUST_POLICY_B64",
             "AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256",
             "python3 ci/pilot_signoff_verification.py verify",
@@ -392,6 +434,7 @@ class CiSupplyChainTests(unittest.TestCase):
             'test "$PILOT_SIGNOFF_RUN_ATTEMPT" = "1"',
             'run.get("workflow_id") != expected_workflow_id',
             'run.get("path") != ".github/workflows/pilot-signoff-ingest.yml"',
+            'run.get("head_branch") != "main"',
             'run.get("head_sha") != os.environ["GITHUB_SHA"]',
             'run.get("status") != "completed" or run.get("conclusion") != "success"',
             "total_count != 1",

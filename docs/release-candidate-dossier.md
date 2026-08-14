@@ -156,9 +156,12 @@ anchor. Repository variables `AURA_PILOT_SIGNOFF_TRUST_POLICY_B64`,
 `AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256`, and
 `AURA_PILOT_SIGNOFF_WORKFLOW_ID` must be externally provisioned with reviewed
 change control. Repository variables are mutable configuration, not
-intrinsically protected trust storage. The variables and registered workflow
-ID are currently absent, so hosted intake, release Promotion, and Freeze fail
-closed. The policy digest is the helper's domain-separated canonical policy
+intrinsically protected trust storage. The registered workflow ID is
+provisioned, but both policy variables remain absent, so hosted intake, release
+Promotion, and Freeze fail closed. Those stages additionally require protected
+`main` and the `release` environment; self-review and admin bypass are disabled.
+An independent release reviewer must be appointed before hosted release can
+proceed. The policy digest is the helper's domain-separated canonical policy
 identity, not the SHA-256 of arbitrary policy file bytes.
 
 Only first attempts are eligible. If a hosted run must be rerun, start a new

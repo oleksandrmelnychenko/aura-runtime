@@ -51,7 +51,27 @@ env:
   AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
 
 jobs:
+  authorize-release:
+    if: ${{ inputs.target == 'release' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: release
+      deployment: false
+    timeout-minutes: 1
+    steps:
+      - name: Bind release approval to protected main revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_REF_PROTECTED" = "true"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+
   promotion-gate:
+    needs: authorize-release
+    if: ${{ always() && !cancelled() && (inputs.target == 'staging' || needs.authorize-release.result == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,6 +85,12 @@ jobs:
       EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256 }}
 
     steps:
+    - name: Require protected main workflow ref
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "$GITHUB_REF" = "refs/heads/main"
+        test "$GITHUB_REF_PROTECTED" = "true"
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
@@ -118,6 +144,8 @@ jobs:
             raise SystemExit("pilot signoff workflow identity mismatch")
         if run.get("path") != ".github/workflows/pilot-signoff-ingest.yml":
             raise SystemExit("pilot signoff workflow path mismatch")
+        if run.get("head_branch") != "main":
+            raise SystemExit("pilot signoff source must run from main")
         if run.get("head_sha") != os.environ["GITHUB_SHA"]:
             raise SystemExit("pilot signoff release revision mismatch")
         if run.get("event") != "workflow_dispatch":

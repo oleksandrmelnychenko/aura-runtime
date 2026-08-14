@@ -222,12 +222,14 @@ Required repository variables are
 `AURA_PILOT_SIGNOFF_TRUST_POLICY_B64`,
 `AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256`, and
 `AURA_PILOT_SIGNOFF_WORKFLOW_ID`. They are externally configured governance
-inputs, not proof that change control is already protected. They are currently
-absent; hosted intake, release Promotion, and Freeze therefore fail closed
-until repository administrators establish review/rotation controls and
-provision exact values. The digest is the helper's domain-separated canonical
-policy identity, not a raw-file digest. Committing a policy, private key,
-signoff bundle, or generated projection is not a substitute.
+inputs, not proof that change control is already protected. The workflow ID is
+provisioned, while both trust-policy variables remain absent. Hosted intake,
+release Promotion, and Freeze therefore fail closed until an independent
+release reviewer is appointed and the reviewed policy pair is provisioned.
+All three stages bind execution to protected `main`; the `release` environment
+disallows self-review and admin bypass. The digest is the helper's
+domain-separated canonical policy identity, not a raw-file digest. Committing a
+policy, private key, signoff bundle, or generated projection is not a substitute.
 
 When pilot gate runs with `--require-kids-memory-pass`, missing mandatory
 `kids.memory.*` reasons are treated as a blocking/failing condition instead of a

@@ -82,7 +82,7 @@ implementation optimization under the `v2` identifier.
 ## Hardened Provenance Sequence
 
 Let `H` be the reviewed source commit, `A` its generated artifact commit, and
-`R` the exact tagged or dispatched release revision. `R` may equal `A`, or it
+`R` the exact manually dispatched release revision on protected `main`. `R` may equal `A`, or it
 may be a later governance-only descendant that records approval of `A`. A
 shippable candidate is valid only when all of the following hold:
 

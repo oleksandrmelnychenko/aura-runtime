@@ -33,6 +33,9 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    environment:
+      name: release
+      deployment: false
     permissions:
       contents: read
       actions: read
@@ -50,6 +53,14 @@ jobs:
       EXPECTED_PILOT_SIGNOFF_TRUST_POLICY_SHA256: ${{ vars.AURA_PILOT_SIGNOFF_TRUST_POLICY_SHA256 }}
 
     steps:
+      - name: Require protected main release ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_REF_PROTECTED" = "true"
+          test "$GITHUB_SHA" = "$RELEASE_REVISION"
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -119,6 +130,8 @@ jobs:
                   raise SystemExit("GitHub workflow identity mismatch")
               if run.get("path") != expected_path:
                   raise SystemExit("GitHub workflow path mismatch")
+              if run.get("head_branch") != "main":
+                  raise SystemExit("GitHub source run must originate from main")
               if run.get("head_sha") != os.environ["RELEASE_REVISION"]:
                   raise SystemExit("GitHub run head SHA mismatch")
               if run.get("status") != "completed" or run.get("conclusion") != "success":
@@ -182,7 +195,7 @@ jobs:
               expected_attempt=int(os.environ["APPLE_RUN_ATTEMPT"]),
               expected_workflow_id=int(os.environ["APPLE_WORKFLOW_ID"]),
               expected_path=".github/workflows/apple-artifact.yml",
-              expected_events={"workflow_dispatch", "push"},
+              expected_events={"workflow_dispatch"},
           )
 
           promotion_artifact = exact_artifact(
