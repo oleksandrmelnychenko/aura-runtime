@@ -3,7 +3,7 @@
 This document defines the operator-facing process for running AURA in shadow
 mode or controlled pilot rollout.
 
-Status: synchronized with current pilot/runtime behavior on March 25, 2026.
+Status: synchronized with current pilot/runtime behavior on August 14, 2026.
 
 ## Pilot-Ready Contract
 
@@ -26,7 +26,8 @@ cargo run --example pilot_gate -p aura-core -- \
   --pilot-regression-report artifacts/pilot-regression-report.json \
   --shadow-bundle artifacts/pilot-shadow-run-a.json \
   --shadow-bundle artifacts/pilot-shadow-run-b.json \
-  --review-signoffs docs/pilot-review-signoffs.json \
+  --review-signoffs artifacts/pilot-review-signoffs.json \
+  --release-revision "$(git rev-parse HEAD)" \
   --kids-memory-health-report artifacts/kids-memory-health.json \
   --kids-preprod-dry-run-report artifacts/kids-preprod-dry-run-matrix.json \
   --output artifacts/pilot-gate-report.json \
@@ -37,7 +38,7 @@ cargo run --example pilot_gate -p aura-core -- \
 
 ## Required Signoff Areas
 
-Every pilot gate requires one latest signoff for each area:
+Every pilot gate requires exactly one signoff for each area:
 
 - `false_positive_hotspots`
 - `self_harm_boundary_cases`
@@ -58,17 +59,34 @@ Statuses:
 
 ## Signoff Source
 
-The current expected format is JSON and matches
-`Vec<PilotReviewSignoff>` from:
+The current expected format is the strict
+`aura.pilot_review_signoffs.v2` envelope from:
 
-- [pilot_gate.rs](/c:/Users/123/ecliptix-aura/crates/aura-core/src/pilot_gate.rs)
+- [`pilot_gate.rs`](../crates/aura-core/src/pilot_gate.rs)
 
 Use the template:
 
-- [pilot-review-signoffs.template.json](/c:/Users/123/ecliptix-aura/docs/pilot-review-signoffs.template.json)
+- [`pilot-review-signoffs.template.json`](./pilot-review-signoffs.template.json)
+
+Create the real file only after the immutable release candidate `R` exists, and
+keep it outside the tracked source tree, for example at
+`artifacts/pilot-review-signoffs.json`. The envelope and every one of its
+exactly four signoffs must repeat the same full lowercase 40-character `R`.
+The resulting `aura.pilot_gate_report.v2` repeats that `R`, and the terminal
+release-decision evaluator compares the report and every signoff with its own
+candidate revision. A v1 array, a stale revision, a mixed-revision set, a
+duplicate area, or an incomplete set fails closed.
+
+`H`, `A`, and `source_tree_sha256` remain bound by the separate verified Apple
+artifact and reproducibility evidence. They are deliberately not copied into
+the human signoff document: requiring them in tracked source would make the
+release candidate self-referential, while repeating them in unsigned operator
+input would add no independent trust.
 
 Do not commit fake approved signoffs just to satisfy automation. Approved
-signoffs must represent real operator review.
+signoffs must represent real operator review. Reviewer strings are recorded
+labels, not authenticated identities; candidate binding prevents stale replay
+but does not replace an external identity/authentication process.
 
 ## Shadow-Mode Review Checklist
 
@@ -137,7 +155,7 @@ Strict baseline and rollback thresholds:
 
 Current pilot rollback triggers are encoded in:
 
-- [pilot_gate.rs](/c:/Users/123/ecliptix-aura/crates/aura-core/src/pilot_gate.rs)
+- [`pilot_gate.rs`](../crates/aura-core/src/pilot_gate.rs)
 
 High-signal triggers:
 
@@ -153,11 +171,17 @@ Local rehearsal already understands optional pilot signoffs:
 ```bash
 python3 ci/run_promotion_rehearsal.py \
   --target staging \
-  --pilot-review-signoffs docs/pilot-review-signoffs.json
+  --pilot-review-signoffs artifacts/pilot-review-signoffs.json
 ```
 
-CI and `Promotion Gate` also understand optional pilot gate artifacts if a real
-signoff file is present at the configured path.
+CI and `Promotion Gate` look only for the untracked
+`artifacts/pilot-review-signoffs.json` path and pass the checked-out
+`GITHUB_SHA` as the expected `R`. No repository-owned hosted step currently
+ingests or authenticates that external file. Consequently hosted automation
+skips pilot-gate generation when the file is absent, and the downstream release
+chain remains fail-closed/no-go. Adding an authenticated external ingestion
+stage is an explicit operational prerequisite; committing signoffs into the
+repository is not a substitute.
 
 When pilot gate runs with `--require-kids-memory-pass`, missing mandatory
 `kids.memory.*` reasons are treated as a blocking/failing condition instead of a

@@ -5,7 +5,9 @@ import base64
 import binascii
 import hmac
 import json
+import math
 import os
+import secrets
 import stat
 import subprocess
 import sys
@@ -48,11 +50,19 @@ def _reject_json_constant(value: str) -> None:
     raise ValueError(f"non-finite JSON value is forbidden: {value}")
 
 
+def _strict_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"non-finite JSON value is forbidden: {value}")
+    return parsed
+
+
 def strict_json_loads(raw: bytes) -> object:
     return json.loads(
         raw.decode("utf-8"),
         object_pairs_hook=_strict_json_object,
         parse_constant=_reject_json_constant,
+        parse_float=_strict_json_float,
     )
 
 
@@ -257,23 +267,176 @@ def canonical_claims(attestation: dict) -> bytes:
 
 
 def write_json_atomic(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    descriptor, temporary_path = tempfile.mkstemp(
-        prefix=f".{path.name}.", dir=path.parent.as_posix()
-    )
+    if path.name in ("", ".", ".."):
+        raise AttestationError("output path must name a file")
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(serialized)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary_path, path)
-    except Exception:
+        serialized = (
+            json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
+        ).encode("utf-8")
+    except (TypeError, ValueError) as error:
+        raise AttestationError("output payload is not finite JSON") from error
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    parent_path = Path(os.path.abspath(path.parent))
+    try:
+        parent_before = os.lstat(parent_path)
+    except OSError as error:
+        raise AttestationError("output parent is inaccessible") from error
+    if stat.S_ISLNK(parent_before.st_mode) or not stat.S_ISDIR(
+        parent_before.st_mode
+    ):
+        raise AttestationError("output parent must be a real directory")
+
+    directory_flags = os.O_RDONLY
+    for name in ("O_DIRECTORY", "O_CLOEXEC", "O_NOFOLLOW"):
+        directory_flags |= getattr(os, name, 0)
+    try:
+        directory_descriptor = os.open(parent_path, directory_flags)
+    except OSError as error:
+        raise AttestationError("output parent cannot be opened safely") from error
+
+    temporary_name = f".{path.name}.{secrets.token_hex(16)}.tmp"
+    descriptor: int | None = None
+
+    def assert_parent_bound() -> None:
+        opened = os.fstat(directory_descriptor)
         try:
-            os.unlink(temporary_path)
-        except FileNotFoundError:
-            pass
-        raise
+            observed = os.lstat(parent_path)
+        except OSError as error:
+            raise AttestationError("output parent changed during publication") from error
+        if (
+            stat.S_ISLNK(observed.st_mode)
+            or not stat.S_ISDIR(observed.st_mode)
+            or (observed.st_dev, observed.st_ino)
+            != (opened.st_dev, opened.st_ino)
+        ):
+            raise AttestationError("output parent changed during publication")
+
+    def verify_descriptor(label: str) -> None:
+        if descriptor is None:
+            raise AttestationError(f"{label} is not open")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        before = os.fstat(descriptor)
+        chunks: list[bytes] = []
+        observed = 0
+        while True:
+            chunk = os.read(
+                descriptor,
+                min(1024 * 1024, len(serialized) - observed + 1),
+            )
+            if not chunk:
+                break
+            observed += len(chunk)
+            if observed > len(serialized):
+                raise AttestationError(f"{label} exceeds its expected bytes")
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or observed != len(serialized)
+            or b"".join(chunks) != serialized
+            or (
+                before.st_dev,
+                before.st_ino,
+                before.st_nlink,
+                before.st_size,
+                before.st_mtime_ns,
+                before.st_ctime_ns,
+            )
+            != (
+                after.st_dev,
+                after.st_ino,
+                after.st_nlink,
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+            )
+        ):
+            raise AttestationError(f"{label} changed during verification")
+
+    def assert_published_name() -> None:
+        if descriptor is None:
+            raise AttestationError("published output is not open")
+        try:
+            observed = os.stat(
+                path.name,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as error:
+            raise AttestationError("published output name is inaccessible") from error
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(observed.st_mode)
+            or observed.st_nlink != 1
+            or (observed.st_dev, observed.st_ino)
+            != (opened.st_dev, opened.st_ino)
+        ):
+            raise AttestationError("published output was replaced during publication")
+
+    try:
+        try:
+            opened_parent = os.fstat(directory_descriptor)
+            if (opened_parent.st_dev, opened_parent.st_ino) != (
+                parent_before.st_dev,
+                parent_before.st_ino,
+            ):
+                raise AttestationError("output parent changed while opening")
+            try:
+                existing = os.stat(
+                    path.name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                pass
+            else:
+                if stat.S_ISLNK(existing.st_mode) or not stat.S_ISREG(
+                    existing.st_mode
+                ):
+                    raise AttestationError(
+                        "output target must be a regular non-symlink file"
+                    )
+            flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
+            for name in ("O_CLOEXEC", "O_NOFOLLOW"):
+                flags |= getattr(os, name, 0)
+            descriptor = os.open(
+                temporary_name,
+                flags,
+                0o600,
+                dir_fd=directory_descriptor,
+            )
+            offset = 0
+            while offset < len(serialized):
+                written = os.write(descriptor, serialized[offset:])
+                if written <= 0:
+                    raise AttestationError("output write made no progress")
+                offset += written
+            os.fsync(descriptor)
+            verify_descriptor("staged JSON output")
+            assert_parent_bound()
+            os.replace(
+                temporary_name,
+                path.name,
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+            )
+            assert_published_name()
+            verify_descriptor("published JSON output")
+            os.fsync(directory_descriptor)
+            assert_parent_bound()
+            assert_published_name()
+        except AttestationError:
+            raise
+        except OSError as error:
+            raise AttestationError("JSON output could not be published safely") from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        # Never unlink a random staging name after an error; a concurrent
+        # writer may have replaced it between failure and cleanup.
+        os.close(directory_descriptor)
 
 
 def ensure_distinct_output(output: Path, protected_paths: list[Path]) -> None:

@@ -5,6 +5,7 @@ import base64
 import binascii
 import hmac
 import json
+import math
 import os
 import re
 import stat
@@ -114,7 +115,9 @@ ATTESTATION_FIELDS = {
     "signature_base64",
 }
 REQUIRED_PILOT_CHECKS = {
+    "candidate_release_revision",
     "release_gate",
+    "release_social_context_inference",
     "pilot_regression",
     "kids_memory_health",
     "kids_preprod_dry_run",
@@ -122,11 +125,140 @@ REQUIRED_PILOT_CHECKS = {
     "shadow_event_volume",
     "shadow_privacy_and_findings",
     "shadow_contract_stability",
+    "review_signoff_set",
     "review_signoff.false_positive_hotspots",
     "review_signoff.self_harm_boundary_cases",
     "review_signoff.trusted_adult_scenarios",
     "review_signoff.reputation_image_abuse",
 }
+PILOT_GATE_FIELDS = {
+    "schema_version",
+    "release_revision",
+    "overall_status",
+    "config",
+    "release",
+    "pilot_regression",
+    "shadow_runs",
+    "kids_memory_health",
+    "kids_preprod_dry_run",
+    "signoffs",
+    "checks",
+    "rollback_triggers",
+    "operator_review_cadence",
+}
+PILOT_CONFIG_FIELDS = {
+    "min_shadow_runs",
+    "min_shadow_total_events",
+    "require_release_pass",
+    "require_pilot_regression_pass",
+    "require_kids_memory_pass",
+    "require_kids_preprod_dry_run_pass",
+    "required_review_areas",
+}
+PILOT_RELEASE_FIELDS = {
+    "schema_version",
+    "overall_status",
+    "social_context_inference",
+}
+PILOT_SOCIAL_CONTEXT_FIELDS = {
+    "passed",
+    "total_expectations",
+    "failed_expectations",
+}
+PILOT_REGRESSION_FIELDS = {
+    "schema_version",
+    "overall_status",
+    "suite_id",
+    "scenario_count",
+}
+PILOT_SHADOW_FIELDS = {
+    "schema_version",
+    "source_kind",
+    "source_label",
+    "wire_package",
+    "protection_level",
+    "total_events",
+    "threat_events",
+    "finding_count",
+    "raw_text_present",
+    "raw_identifier_fields_present",
+}
+PILOT_KIDS_MEMORY_FIELDS = {
+    "schema_version",
+    "overall_status",
+    "total_memory_hits",
+    "missing_mandatory_reason_codes",
+}
+PILOT_KIDS_PREPROD_FIELDS = {
+    "schema_version",
+    "overall_status",
+    "checks_failed",
+}
+PILOT_SIGNOFF_FIELDS = {
+    "area",
+    "reviewer",
+    "status",
+    "reviewed_at_utc",
+    "notes",
+    "release_revision",
+}
+PILOT_CHECK_FIELDS = {"check_id", "status", "summary"}
+PILOT_ROLLBACK_TRIGGER_FIELDS = {
+    "trigger_id",
+    "severity",
+    "condition",
+    "operator_action",
+}
+PILOT_REQUIRED_REVIEW_AREAS = (
+    "false_positive_hotspots",
+    "self_harm_boundary_cases",
+    "trusted_adult_scenarios",
+    "reputation_image_abuse",
+)
+PILOT_OPERATOR_REVIEW_CADENCE = (
+    "daily for the first 7 pilot days, then every 3 days while stable"
+)
+PILOT_ROLLBACK_TRIGGERS = (
+    {
+        "trigger_id": "privacy_shadow_plaintext",
+        "severity": "urgent",
+        "condition": "any pilot shadow bundle contains raw text or raw identifiers",
+        "operator_action": "disable pilot capture and revert to offline replay only",
+    },
+    {
+        "trigger_id": "self_harm_boundary_disagreement",
+        "severity": "urgent",
+        "condition": (
+            "human review finds self-harm boundary cases where supportive replies "
+            "are escalated or crisis content is suppressed"
+        ),
+        "operator_action": "pause live guardian-enabled pilot and return to shadow mode",
+    },
+    {
+        "trigger_id": "trusted_adult_false_positive_hotspot",
+        "severity": "high",
+        "condition": (
+            "trusted-adult educational or supportive traffic accumulates repeated "
+            "high-severity interventions"
+        ),
+        "operator_action": (
+            "disable child-facing enforcement for the affected slice and review "
+            "recent bundles"
+        ),
+    },
+    {
+        "trigger_id": "pilot_slice_regression",
+        "severity": "high",
+        "condition": (
+            "pilot regression corpus or repeated shadow runs regress below the "
+            "approved baseline"
+        ),
+        "operator_action": (
+            "block further rollout promotion until the slice is re-approved"
+        ),
+    },
+)
+PILOT_USIZE_MAX = (1 << 64) - 1
 EXPECTED_APPLE_SLICES = {
     "ios-arm64": ["arm64"],
     "ios-arm64_x86_64-simulator": ["arm64", "x86_64"],
@@ -372,11 +504,19 @@ def _reject_json_constant(value: str) -> None:
     raise ValueError(f"non-finite JSON value is forbidden: {value}")
 
 
+def _strict_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"non-finite JSON value is forbidden: {value}")
+    return parsed
+
+
 def strict_json_loads(raw: bytes) -> object:
     return json.loads(
         raw.decode("utf-8"),
         object_pairs_hook=_strict_json_object,
         parse_constant=_reject_json_constant,
+        parse_float=_strict_json_float,
     )
 
 
@@ -463,7 +603,11 @@ def load_raw_child(
 
 def child_input_status(metadata: dict) -> str:
     if metadata["present"] is not True:
-        return "blocked"
+        return (
+            "blocked"
+            if metadata.get("observed_status") == "missing"
+            else "fail"
+        )
     if metadata["observed_status"] == "invalid_json":
         return "fail"
     return "pass"
@@ -564,6 +708,35 @@ def evidence_manifest_binds_apple_identity(
         == identity["release_revision"]
         and summary.get("apple_reproducibility_source_tree_sha256")
         == identity["source_tree_sha256"]
+    )
+
+
+def evidence_manifest_binds_pilot_gate(
+    manifest: dict | None,
+    pilot: dict | None,
+    pilot_sha256: object,
+    candidate_revision: str,
+) -> bool:
+    if not isinstance(manifest, dict) or not isinstance(pilot, dict):
+        return False
+    summary = manifest.get("summary")
+    artifacts = manifest.get("artifacts")
+    if not isinstance(summary, dict) or not isinstance(artifacts, dict):
+        return False
+    bound = artifacts.get("pilot_gate_report")
+    return (
+        isinstance(bound, dict)
+        and bound.get("sha256") == pilot_sha256
+        and bound.get("observed_status") == "pass"
+        and bound.get("schema_version") == "aura.pilot_gate_report.v2"
+        and bound.get("release_revision") == candidate_revision
+        and summary.get("pilot_gate_status") == "pass"
+        and summary.get("pilot_gate_schema_version")
+        == "aura.pilot_gate_report.v2"
+        and summary.get("pilot_gate_release_revision") == candidate_revision
+        and summary.get("pilot_gate_shadow_run_count")
+        == len(pilot.get("shadow_runs", []))
+        and summary.get("pilot_gate_check_count") == len(pilot.get("checks", []))
     )
 
 
@@ -1053,56 +1226,276 @@ def evaluate_apple_reproducibility(
     return "pass", identity
 
 
-def evaluate_pilot_gate(payload: dict | None, metadata: dict) -> tuple[str, str]:
+def _pilot_usize(value: object) -> bool:
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 0 <= value <= PILOT_USIZE_MAX
+    )
+
+
+def _nonempty_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _utc_timestamp(value: object) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return (
+        parsed.tzinfo is not None
+        and parsed.utcoffset() == timezone.utc.utcoffset(parsed)
+    )
+
+
+def _pilot_check(check_id: str, summary: str) -> dict[str, str]:
+    return {"check_id": check_id, "status": "pass", "summary": summary}
+
+
+def evaluate_pilot_gate(
+    payload: dict | None,
+    metadata: dict,
+    candidate_revision: str,
+) -> tuple[str, str]:
+    """Validate the exact strict-profile report emitted by the Rust producer.
+
+    Reviewer values are opaque producer-supplied labels. This validates recorded
+    approvals and their report consistency; it does not authenticate identities.
+    """
+
     base = child_input_status(metadata)
     if base != "pass" or payload is None:
         return base, base
-    checks = payload.get("checks")
-    rollback_triggers = payload.get("rollback_triggers")
+    if not isinstance(payload, dict):
+        return "fail", "fail"
     if (
-        payload.get("schema_version") != "aura.pilot_gate_report.v1"
+        set(payload) != PILOT_GATE_FIELDS
+        or payload.get("schema_version") != "aura.pilot_gate_report.v2"
         or payload.get("overall_status") != "pass"
-        or not isinstance(checks, list)
-        or not isinstance(rollback_triggers, list)
+        or not git_revision(payload.get("release_revision"))
+        or payload.get("release_revision") != candidate_revision
     ):
         return "fail", "fail"
-    check_statuses = {}
-    for check in checks:
-        if not isinstance(check, dict) or not isinstance(check.get("check_id"), str):
-            return "fail", "fail"
-        if check["check_id"] in check_statuses:
-            return "fail", "fail"
-        check_statuses[check["check_id"]] = check.get("status")
-    if any(check_statuses.get(check_id) != "pass" for check_id in REQUIRED_PILOT_CHECKS):
+    release_revision = payload["release_revision"]
+
+    config = payload.get("config")
+    if (
+        not isinstance(config, dict)
+        or set(config) != PILOT_CONFIG_FIELDS
+        or not _pilot_usize(config.get("min_shadow_runs"))
+        or config["min_shadow_runs"] < 2
+        or not _pilot_usize(config.get("min_shadow_total_events"))
+        or config["min_shadow_total_events"] < 500
+        or config.get("require_release_pass") is not True
+        or config.get("require_pilot_regression_pass") is not True
+        or config.get("require_kids_memory_pass") is not True
+        or config.get("require_kids_preprod_dry_run_pass") is not True
+        or config.get("required_review_areas")
+        != list(PILOT_REQUIRED_REVIEW_AREAS)
+    ):
         return "fail", "fail"
-    trigger_ids = []
-    for trigger in rollback_triggers:
+
+    release = payload.get("release")
+    inference = (
+        release.get("social_context_inference")
+        if isinstance(release, dict)
+        else None
+    )
+    if (
+        not isinstance(release, dict)
+        or set(release) != PILOT_RELEASE_FIELDS
+        or release.get("schema_version") != "aura.release_report.v3"
+        or release.get("overall_status") != "pass"
+        or not isinstance(inference, dict)
+        or set(inference) != PILOT_SOCIAL_CONTEXT_FIELDS
+        or inference.get("passed") is not True
+        or not _pilot_usize(inference.get("total_expectations"))
+        or inference["total_expectations"] == 0
+        or inference.get("failed_expectations") != 0
+    ):
+        return "fail", "fail"
+
+    regression = payload.get("pilot_regression")
+    if (
+        not isinstance(regression, dict)
+        or set(regression) != PILOT_REGRESSION_FIELDS
+        or regression.get("schema_version")
+        != "aura.pilot_simulation_regression_report.v1"
+        or regression.get("overall_status") != "pass"
+        or not _nonempty_string(regression.get("suite_id"))
+        or not _pilot_usize(regression.get("scenario_count"))
+        or regression["scenario_count"] == 0
+    ):
+        return "fail", "fail"
+
+    shadow_runs = payload.get("shadow_runs")
+    if (
+        not isinstance(shadow_runs, list)
+        or len(shadow_runs) < config["min_shadow_runs"]
+    ):
+        return "fail", "fail"
+    total_shadow_events = 0
+    for run in shadow_runs:
         if (
-            not isinstance(trigger, dict)
-            or not isinstance(trigger.get("trigger_id"), str)
-            or not trigger.get("condition")
-            or not trigger.get("operator_action")
+            not isinstance(run, dict)
+            or set(run) != PILOT_SHADOW_FIELDS
+            or run.get("schema_version") != "aura.shadow_mode_bundle.v1"
+            or run.get("source_kind") != "world_sim"
+            or not _nonempty_string(run.get("source_label"))
+            or run.get("wire_package") != "aura.messenger.v1"
+            or run.get("protection_level") != "high"
+            or not _pilot_usize(run.get("total_events"))
+            or run["total_events"] == 0
+            or not _pilot_usize(run.get("threat_events"))
+            or run["threat_events"] > run["total_events"]
+            or run.get("finding_count") != 0
+            or run.get("raw_text_present") is not False
+            or run.get("raw_identifier_fields_present") is not False
         ):
             return "fail", "fail"
-        trigger_ids.append(trigger["trigger_id"])
-    operational = (
-        "pass"
-        if len(trigger_ids) >= 4
-        and len(set(trigger_ids)) == len(trigger_ids)
-        and isinstance(payload.get("operator_review_cadence"), str)
-        and bool(payload["operator_review_cadence"].strip())
-        else "fail"
-    )
-    human = (
-        "pass"
-        if all(
-            check_statuses.get(check_id) == "pass"
-            for check_id in REQUIRED_PILOT_CHECKS
-            if check_id.startswith("review_signoff.")
+        total_shadow_events += run["total_events"]
+        if total_shadow_events > PILOT_USIZE_MAX:
+            return "fail", "fail"
+    if total_shadow_events < config["min_shadow_total_events"]:
+        return "fail", "fail"
+
+    kids_memory = payload.get("kids_memory_health")
+    if (
+        not isinstance(kids_memory, dict)
+        or set(kids_memory) != PILOT_KIDS_MEMORY_FIELDS
+        or kids_memory.get("schema_version")
+        != "aura.kids_memory_health_snapshot.v1"
+        or kids_memory.get("overall_status") != "pass"
+        or not _pilot_usize(kids_memory.get("total_memory_hits"))
+        or kids_memory["total_memory_hits"] == 0
+        or kids_memory.get("missing_mandatory_reason_codes") != []
+    ):
+        return "fail", "fail"
+
+    kids_preprod = payload.get("kids_preprod_dry_run")
+    if (
+        not isinstance(kids_preprod, dict)
+        or set(kids_preprod) != PILOT_KIDS_PREPROD_FIELDS
+        or kids_preprod.get("schema_version")
+        != "aura.kids_preprod_dry_run_matrix.v1"
+        or kids_preprod.get("overall_status") != "pass"
+        or kids_preprod.get("checks_failed") != 0
+        or isinstance(kids_preprod.get("checks_failed"), bool)
+    ):
+        return "fail", "fail"
+
+    signoffs = payload.get("signoffs")
+    if not isinstance(signoffs, list) or len(signoffs) != len(
+        PILOT_REQUIRED_REVIEW_AREAS
+    ):
+        return "fail", "fail"
+    latest_signoffs: dict[str, dict] = {}
+    for signoff in signoffs:
+        if (
+            not isinstance(signoff, dict)
+            or set(signoff) != PILOT_SIGNOFF_FIELDS
+            or signoff.get("area") not in PILOT_REQUIRED_REVIEW_AREAS
+            or not _nonempty_string(signoff.get("reviewer"))
+            or signoff.get("status")
+            not in {"approved", "pending", "needs_changes"}
+            or not _utc_timestamp(signoff.get("reviewed_at_utc"))
+            or (
+                signoff.get("notes") is not None
+                and not isinstance(signoff.get("notes"), str)
+            )
+            or signoff.get("release_revision") != release_revision
+        ):
+            return "fail", "fail"
+        latest_signoffs[signoff["area"]] = signoff
+    if (
+        set(latest_signoffs) != set(PILOT_REQUIRED_REVIEW_AREAS)
+        or any(
+            latest_signoffs[area].get("status") != "approved"
+            for area in PILOT_REQUIRED_REVIEW_AREAS
         )
-        else "fail"
+    ):
+        return "fail", "fail"
+
+    expected_checks = [
+        _pilot_check(
+            "candidate_release_revision",
+            f"pilot candidate is bound to release {release_revision}",
+        ),
+        _pilot_check("release_gate", "Phase 2 release gate passed"),
+        _pilot_check(
+            "release_social_context_inference",
+            "social-context inference expectations passed "
+            f"({inference['total_expectations']}/{inference['total_expectations']})",
+        ),
+        _pilot_check("pilot_regression", "pilot regression corpus passed"),
+        _pilot_check(
+            "kids_memory_health",
+            "kids memory health passed "
+            f"(total_hits={kids_memory['total_memory_hits']})",
+        ),
+        _pilot_check(
+            "kids_preprod_dry_run",
+            "kids preprod dry-run matrix passed with no failed checks",
+        ),
+        _pilot_check(
+            "shadow_run_count",
+            f"observed {len(shadow_runs)} shadow runs "
+            f"(required {config['min_shadow_runs']})",
+        ),
+        _pilot_check(
+            "shadow_event_volume",
+            f"shadow runs cover {total_shadow_events} total events "
+            f"(required >= {config['min_shadow_total_events']})",
+        ),
+        _pilot_check(
+            "shadow_privacy_and_findings",
+            "all shadow runs are clean and privacy-safe",
+        ),
+        _pilot_check(
+            "shadow_contract_stability",
+            "shadow runs share stable schema, wire package, and protection level",
+        ),
+        _pilot_check(
+            "review_signoff_set",
+            "all required review signoffs bind the exact release revision",
+        ),
+    ]
+    expected_checks.extend(
+        _pilot_check(
+            f"review_signoff.{area}",
+            f"{area} approved by {latest_signoffs[area]['reviewer']}",
+        )
+        for area in PILOT_REQUIRED_REVIEW_AREAS
     )
-    return operational, human
+    checks = payload.get("checks")
+    if (
+        not isinstance(checks, list)
+        or any(
+            not isinstance(check, dict) or set(check) != PILOT_CHECK_FIELDS
+            for check in checks
+        )
+        or checks != expected_checks
+        or {check["check_id"] for check in checks} != REQUIRED_PILOT_CHECKS
+    ):
+        return "fail", "fail"
+
+    rollback_triggers = payload.get("rollback_triggers")
+    if (
+        not isinstance(rollback_triggers, list)
+        or any(
+            not isinstance(trigger, dict)
+            or set(trigger) != PILOT_ROLLBACK_TRIGGER_FIELDS
+            for trigger in rollback_triggers
+        )
+        or rollback_triggers != list(PILOT_ROLLBACK_TRIGGERS)
+        or payload.get("operator_review_cadence")
+        != PILOT_OPERATOR_REVIEW_CADENCE
+    ):
+        return "fail", "fail"
+    return "pass", "pass"
 
 
 def evaluate_product_acceptance(
@@ -1285,8 +1678,20 @@ def create_decision(
     )
     artifact_status = combine_status(artifact_status, reproduction_status)
     operational_status, human_status = evaluate_pilot_gate(
-        payloads["pilot_gate_report"], artifacts["pilot_gate_report"]
+        payloads["pilot_gate_report"],
+        artifacts["pilot_gate_report"],
+        candidate_revision,
     )
+    if operational_status == "pass" and human_status == "pass" and not (
+        evidence_manifest_binds_pilot_gate(
+            payloads["evidence_manifest"],
+            payloads["pilot_gate_report"],
+            artifacts["pilot_gate_report"].get("sha256"),
+            candidate_revision,
+        )
+    ):
+        operational_status = "fail"
+        human_status = "fail"
     product_status = evaluate_product_acceptance(
         payloads["product_integration_acceptance"],
         artifacts["product_integration_acceptance"],
@@ -1502,7 +1907,10 @@ def validate_decision(payload: dict) -> None:
         "military_enabled",
     }:
         raise ReleaseDecisionError("release decision profile scope is invalid")
-    if any(value not in (True, False, None) for value in scope.values()):
+    if any(
+        value is not True and value is not False and value is not None
+        for value in scope.values()
+    ):
         raise ReleaseDecisionError("release decision profile scope values are invalid")
     artifacts = payload.get("artifacts")
     if not isinstance(artifacts, dict) or set(artifacts) != {

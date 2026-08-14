@@ -161,6 +161,16 @@ class EvidenceAttestationTests(unittest.TestCase):
             )
 
         self.attestation.write_text(
+            serialized[:-1] + ',"unexpected":1e999}', encoding="utf-8"
+        )
+        with self.assertRaisesRegex(
+            evidence_attestation.AttestationError, "invalid JSON"
+        ):
+            evidence_attestation.verify_manifest(
+                self.manifest, self.attestation, self.public_key
+            )
+
+        self.attestation.write_text(
             serialized[:-1] + ',"unexpected":NaN}', encoding="utf-8"
         )
         with self.assertRaisesRegex(
@@ -186,6 +196,94 @@ class EvidenceAttestationTests(unittest.TestCase):
                 self.manifest,
                 [self.manifest, self.private_key],
             )
+
+    def test_atomic_writer_rejects_a_swapped_staging_inode(self):
+        output = self.root / "report.json"
+        escaped = self.root / "verified-staging.json"
+        original = evidence_attestation.os.replace
+
+        def swap_staging(source, target, *, src_dir_fd, dst_dir_fd):
+            os.rename(
+                source,
+                escaped.name,
+                src_dir_fd=src_dir_fd,
+                dst_dir_fd=src_dir_fd,
+            )
+            replacement = os.open(
+                source,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=src_dir_fd,
+            )
+            os.write(replacement, b'{"attacker":true}\n')
+            os.close(replacement)
+            original(
+                source,
+                target,
+                src_dir_fd=src_dir_fd,
+                dst_dir_fd=dst_dir_fd,
+            )
+
+        with mock.patch.object(
+            evidence_attestation.os,
+            "replace",
+            side_effect=swap_staging,
+        ):
+            with self.assertRaisesRegex(
+                evidence_attestation.AttestationError,
+                "replaced during publication",
+            ):
+                evidence_attestation.write_json_atomic(output, {"status": "pass"})
+
+        self.assertEqual(output.read_bytes(), b'{"attacker":true}\n')
+        self.assertEqual(
+            json.loads(escaped.read_text(encoding="utf-8")),
+            {"status": "pass"},
+        )
+
+    def test_atomic_writer_never_deletes_a_swapped_staging_name_on_error(self):
+        output = self.root / "report.json"
+        escaped = self.root / "verified-staging.json"
+        replacement_name = None
+
+        def fail_after_swap(source, _target, *, src_dir_fd, dst_dir_fd):
+            nonlocal replacement_name
+            self.assertEqual(src_dir_fd, dst_dir_fd)
+            replacement_name = source
+            os.rename(
+                source,
+                escaped.name,
+                src_dir_fd=src_dir_fd,
+                dst_dir_fd=src_dir_fd,
+            )
+            replacement = os.open(
+                source,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=src_dir_fd,
+            )
+            os.write(replacement, b"do not delete\n")
+            os.close(replacement)
+            raise OSError("fixture replace failure")
+
+        with mock.patch.object(
+            evidence_attestation.os,
+            "replace",
+            side_effect=fail_after_swap,
+        ):
+            with self.assertRaisesRegex(
+                evidence_attestation.AttestationError,
+                "could not be published",
+            ):
+                evidence_attestation.write_json_atomic(output, {"status": "pass"})
+
+        self.assertIsNotNone(replacement_name)
+        self.assertEqual((self.root / replacement_name).read_bytes(), b"do not delete\n")
+        self.assertEqual(
+            json.loads(escaped.read_text(encoding="utf-8")),
+            {"status": "pass"},
+        )
+        self.assertFalse(output.exists())
 
     def test_nonpassing_manifest_is_rejected(self):
         self.manifest.write_text(

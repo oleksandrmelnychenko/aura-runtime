@@ -548,6 +548,16 @@ account. Kill switch не повинен переводити явний риз�
 pilot signoff поточний кандидат зобов'язаний залишатися `no-go`; автоматизація
 не підміняє ці зовнішні рішення.
 
+Фіксований terminal bundle реалізовано в `ci/release_dossier.py`. Він збирає
+лише allowlisted evidence, decision та detached attestations, повторно
+перевіряє їх через `ci.release_decision` і публікує unsigned index
+`aura.release_candidate_dossier.v1`. Цей index не є новим підписом або
+дозволом: `GO` залишається чинним лише завдяки перевіреному release-operator
+attestation. Hosted `Release Evidence Freeze` без секретів заморожує exact
+unsigned evidence leaf; зовнішній evidence operator підписує його окремо.
+Workflow не генерує product acceptance чи human signoff і сам не може видати
+`GO`.
+
 ```json
 {
   "schema_version": "aura.release_decision.v2",

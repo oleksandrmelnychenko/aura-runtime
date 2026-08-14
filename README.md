@@ -243,7 +243,8 @@ example output. The current release bundle includes:
 - FFI header smoke evidence
 - FFI state-sync soak evidence
 - unified evidence manifest (`aura.evidence_manifest.v1`)
-- optional detached Ed25519 evidence attestation, required for release promotion
+- detached Ed25519 evidence attestation created only after the unsigned release
+  evidence is frozen, and required before product acceptance or final release
 
 Default workflow entrypoints:
 

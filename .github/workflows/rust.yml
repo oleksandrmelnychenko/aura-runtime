@@ -29,7 +29,7 @@ env:
   AURA_REFACTOR_DIFF_REPORT_PATH: artifacts/refactor-diff-report.json
   AURA_REFACTOR_APPROVALS_PATH: docs/refactor-diff-approvals.json
   AURA_PILOT_GATE_REPORT_PATH: artifacts/pilot-gate-report.json
-  AURA_PILOT_REVIEW_SIGNOFFS_PATH: docs/pilot-review-signoffs.json
+  AURA_PILOT_REVIEW_SIGNOFFS_PATH: artifacts/pilot-review-signoffs.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
   AURA_WORLD_LIFECYCLE_INPUT: crates/aura-core/data/world_lifecycle_suite
   AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
@@ -146,6 +146,7 @@ jobs:
           --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
           --review-signoffs "$AURA_PILOT_REVIEW_SIGNOFFS_PATH" \
+          --release-revision "$GITHUB_SHA" \
           --kids-memory-health-report "$AURA_KIDS_MEMORY_HEALTH_PATH" \
           --kids-preprod-dry-run-report "$AURA_KIDS_PREPROD_DRY_RUN_PATH" \
           --output "$AURA_PILOT_GATE_REPORT_PATH" \

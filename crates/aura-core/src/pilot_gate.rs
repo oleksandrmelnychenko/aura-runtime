@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ProtectionLevel, ShadowModeBundle};
 
-pub const PILOT_GATE_SCHEMA_VERSION: &str = "aura.pilot_gate_report.v1";
+pub const PILOT_GATE_SCHEMA_VERSION: &str = "aura.pilot_gate_report.v2";
+pub const PILOT_REVIEW_SIGNOFFS_SCHEMA_VERSION: &str = "aura.pilot_review_signoffs.v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -105,12 +106,28 @@ pub struct PilotSocialContextInferenceSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PilotReviewSignoff {
     pub area: PilotReviewArea,
     pub reviewer: String,
     pub status: PilotReviewSignoffStatus,
     pub reviewed_at_utc: String,
     pub notes: Option<String>,
+    pub release_revision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PilotReviewSignoffs {
+    pub schema_version: String,
+    pub release_revision: String,
+    pub signoffs: Vec<PilotReviewSignoff>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PilotReviewInput {
+    pub expected_release_revision: String,
+    pub signoffs: PilotReviewSignoffs,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,6 +163,7 @@ pub struct PilotRollbackTrigger {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PilotGateReport {
     pub schema_version: String,
+    pub release_revision: String,
     pub overall_status: PilotGateStatus,
     pub config: PilotGateConfig,
     pub release: PilotReleaseSnapshot,
@@ -219,8 +237,16 @@ pub fn parse_pilot_shadow_snapshot(json: &str) -> Result<PilotShadowSnapshot, St
     })
 }
 
-pub fn parse_pilot_review_signoffs(json: &str) -> Result<Vec<PilotReviewSignoff>, String> {
-    serde_json::from_str(json).map_err(|err| format!("invalid pilot review signoffs json: {err}"))
+pub fn parse_pilot_review_signoffs(json: &str) -> Result<PilotReviewSignoffs, String> {
+    let signoffs: PilotReviewSignoffs = serde_json::from_str(json)
+        .map_err(|err| format!("invalid pilot review signoffs json: {err}"))?;
+    if signoffs.schema_version != PILOT_REVIEW_SIGNOFFS_SCHEMA_VERSION {
+        return Err(format!(
+            "unsupported pilot review signoffs schema: {}",
+            signoffs.schema_version
+        ));
+    }
+    Ok(signoffs)
 }
 
 pub fn parse_kids_memory_health_snapshot(json: &str) -> Result<KidsMemoryHealthSnapshot, String> {
@@ -300,9 +326,34 @@ pub fn run_pilot_gate(
     shadow_runs: Vec<PilotShadowSnapshot>,
     kids_memory_health: Option<KidsMemoryHealthSnapshot>,
     kids_preprod_dry_run: Option<KidsPreprodDryRunSnapshot>,
-    signoffs: Vec<PilotReviewSignoff>,
+    review: PilotReviewInput,
 ) -> PilotGateReport {
     let mut checks = Vec::new();
+    let PilotReviewInput {
+        expected_release_revision,
+        signoffs: review_signoffs,
+    } = review;
+    let PilotReviewSignoffs {
+        schema_version: signoffs_schema_version,
+        release_revision,
+        signoffs,
+    } = review_signoffs;
+
+    let candidate_revision_valid = signoffs_schema_version == PILOT_REVIEW_SIGNOFFS_SCHEMA_VERSION
+        && is_full_lowercase_revision(&release_revision)
+        && is_full_lowercase_revision(&expected_release_revision)
+        && release_revision == expected_release_revision;
+    checks.push(if candidate_revision_valid {
+        pass_check(
+            "candidate_release_revision",
+            format!("pilot candidate is bound to release {release_revision}"),
+        )
+    } else {
+        fail_check(
+            "candidate_release_revision",
+            "pilot candidate release revision is invalid or stale".to_string(),
+        )
+    });
 
     if config.require_release_pass {
         checks.push(if release.overall_status == "pass" {
@@ -491,13 +542,41 @@ pub fn run_pilot_gate(
     });
 
     let latest_signoffs = latest_signoffs_by_area(&signoffs);
+    let signoff_set_valid = signoffs.len() == config.required_review_areas.len()
+        && latest_signoffs.len() == config.required_review_areas.len()
+        && latest_signoffs
+            .keys()
+            .all(|area| config.required_review_areas.contains(area))
+        && signoffs
+            .iter()
+            .all(|signoff| signoff.release_revision == release_revision);
+    checks.push(if signoff_set_valid {
+        pass_check(
+            "review_signoff_set",
+            "all required review signoffs bind the exact release revision",
+        )
+    } else {
+        fail_check(
+            "review_signoff_set",
+            "review signoffs are incomplete, duplicated, or bound to another release".to_string(),
+        )
+    });
     for area in &config.required_review_areas {
         let check_id = format!("review_signoff.{}", area_key(*area));
         match latest_signoffs.get(area) {
-            Some(signoff) if signoff.status == PilotReviewSignoffStatus::Approved => {
+            Some(signoff)
+                if signoff.status == PilotReviewSignoffStatus::Approved
+                    && signoff.release_revision == release_revision =>
+            {
                 checks.push(pass_check(
                     check_id,
                     format!("{} approved by {}", area_key(*area), signoff.reviewer),
+                ));
+            }
+            Some(signoff) if signoff.release_revision != release_revision => {
+                checks.push(fail_check(
+                    check_id,
+                    format!("{} signoff targets another release", area_key(*area)),
                 ));
             }
             Some(signoff) if signoff.status == PilotReviewSignoffStatus::Pending => {
@@ -539,6 +618,7 @@ pub fn run_pilot_gate(
 
     PilotGateReport {
         schema_version: PILOT_GATE_SCHEMA_VERSION.to_string(),
+        release_revision,
         overall_status,
         config,
         release,
@@ -552,6 +632,13 @@ pub fn run_pilot_gate(
         operator_review_cadence: "daily for the first 7 pilot days, then every 3 days while stable"
             .to_string(),
     }
+}
+
+fn is_full_lowercase_revision(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn latest_signoffs_by_area(
@@ -663,6 +750,8 @@ fn blocked_check(check_id: impl Into<String>, summary: impl Into<String>) -> Pil
 mod tests {
     use super::*;
 
+    const RELEASE_REVISION: &str = "ffffffffffffffffffffffffffffffffffffffff";
+
     fn release_snapshot() -> PilotReleaseSnapshot {
         PilotReleaseSnapshot {
             schema_version: Some("aura.release_report.v3".to_string()),
@@ -699,37 +788,52 @@ mod tests {
         }
     }
 
-    fn approved_signoffs() -> Vec<PilotReviewSignoff> {
-        vec![
-            PilotReviewSignoff {
-                area: PilotReviewArea::FalsePositiveHotspots,
-                reviewer: "ops_1".to_string(),
-                status: PilotReviewSignoffStatus::Approved,
-                reviewed_at_utc: "2026-03-16T10:00:00Z".to_string(),
-                notes: None,
-            },
-            PilotReviewSignoff {
-                area: PilotReviewArea::SelfHarmBoundaryCases,
-                reviewer: "ops_2".to_string(),
-                status: PilotReviewSignoffStatus::Approved,
-                reviewed_at_utc: "2026-03-16T10:05:00Z".to_string(),
-                notes: None,
-            },
-            PilotReviewSignoff {
-                area: PilotReviewArea::TrustedAdultScenarios,
-                reviewer: "ops_3".to_string(),
-                status: PilotReviewSignoffStatus::Approved,
-                reviewed_at_utc: "2026-03-16T10:10:00Z".to_string(),
-                notes: None,
-            },
-            PilotReviewSignoff {
-                area: PilotReviewArea::ReputationImageAbuse,
-                reviewer: "ops_4".to_string(),
-                status: PilotReviewSignoffStatus::Approved,
-                reviewed_at_utc: "2026-03-16T10:15:00Z".to_string(),
-                notes: None,
-            },
-        ]
+    fn approved_signoffs() -> PilotReviewSignoffs {
+        PilotReviewSignoffs {
+            schema_version: PILOT_REVIEW_SIGNOFFS_SCHEMA_VERSION.to_string(),
+            release_revision: RELEASE_REVISION.to_string(),
+            signoffs: vec![
+                PilotReviewSignoff {
+                    area: PilotReviewArea::FalsePositiveHotspots,
+                    reviewer: "ops_1".to_string(),
+                    status: PilotReviewSignoffStatus::Approved,
+                    reviewed_at_utc: "2026-03-16T10:00:00Z".to_string(),
+                    notes: None,
+                    release_revision: RELEASE_REVISION.to_string(),
+                },
+                PilotReviewSignoff {
+                    area: PilotReviewArea::SelfHarmBoundaryCases,
+                    reviewer: "ops_2".to_string(),
+                    status: PilotReviewSignoffStatus::Approved,
+                    reviewed_at_utc: "2026-03-16T10:05:00Z".to_string(),
+                    notes: None,
+                    release_revision: RELEASE_REVISION.to_string(),
+                },
+                PilotReviewSignoff {
+                    area: PilotReviewArea::TrustedAdultScenarios,
+                    reviewer: "ops_3".to_string(),
+                    status: PilotReviewSignoffStatus::Approved,
+                    reviewed_at_utc: "2026-03-16T10:10:00Z".to_string(),
+                    notes: None,
+                    release_revision: RELEASE_REVISION.to_string(),
+                },
+                PilotReviewSignoff {
+                    area: PilotReviewArea::ReputationImageAbuse,
+                    reviewer: "ops_4".to_string(),
+                    status: PilotReviewSignoffStatus::Approved,
+                    reviewed_at_utc: "2026-03-16T10:15:00Z".to_string(),
+                    notes: None,
+                    release_revision: RELEASE_REVISION.to_string(),
+                },
+            ],
+        }
+    }
+
+    fn review_input(signoffs: PilotReviewSignoffs) -> PilotReviewInput {
+        PilotReviewInput {
+            expected_release_revision: RELEASE_REVISION.to_string(),
+            signoffs,
+        }
     }
 
     fn healthy_kids_memory_snapshot() -> KidsMemoryHealthSnapshot {
@@ -758,7 +862,7 @@ mod tests {
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
             None,
             None,
-            approved_signoffs(),
+            review_input(approved_signoffs()),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Pass);
         assert!(report.checks.iter().any(|check| {
@@ -776,7 +880,7 @@ mod tests {
             vec![shadow_snapshot("run_a")],
             None,
             None,
-            approved_signoffs(),
+            review_input(approved_signoffs()),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Blocked);
         assert!(report
@@ -789,7 +893,7 @@ mod tests {
     #[test]
     fn pilot_gate_fails_when_review_needs_changes() {
         let mut signoffs = approved_signoffs();
-        signoffs[0].status = PilotReviewSignoffStatus::NeedsChanges;
+        signoffs.signoffs[0].status = PilotReviewSignoffStatus::NeedsChanges;
         let report = run_pilot_gate(
             PilotGateConfig::default(),
             release_snapshot(),
@@ -797,7 +901,7 @@ mod tests {
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
             None,
             None,
-            signoffs,
+            review_input(signoffs),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Fail);
     }
@@ -819,7 +923,7 @@ mod tests {
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
             Some(kids_memory),
             None,
-            approved_signoffs(),
+            review_input(approved_signoffs()),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Fail);
         assert!(report
@@ -845,7 +949,7 @@ mod tests {
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
             None,
             Some(dry_run),
-            approved_signoffs(),
+            review_input(approved_signoffs()),
         );
         assert_eq!(report.overall_status, PilotGateStatus::Fail);
         assert!(report
@@ -904,7 +1008,7 @@ mod tests {
             vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
             None,
             None,
-            approved_signoffs(),
+            review_input(approved_signoffs()),
         );
 
         assert_eq!(report.overall_status, PilotGateStatus::Fail);
@@ -912,5 +1016,78 @@ mod tests {
             check.check_id == "release_social_context_inference"
                 && check.status == PilotGateStatus::Fail
         }));
+    }
+
+    #[test]
+    fn pilot_gate_fails_when_signoffs_target_a_stale_release() {
+        let mut signoffs = approved_signoffs();
+        signoffs.release_revision = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_string();
+        for signoff in &mut signoffs.signoffs {
+            signoff.release_revision = signoffs.release_revision.clone();
+        }
+
+        let report = run_pilot_gate(
+            PilotGateConfig::default(),
+            release_snapshot(),
+            regression_snapshot(),
+            vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            None,
+            None,
+            review_input(signoffs),
+        );
+
+        assert_eq!(report.overall_status, PilotGateStatus::Fail);
+        assert!(report.checks.iter().any(|check| {
+            check.check_id == "candidate_release_revision" && check.status == PilotGateStatus::Fail
+        }));
+    }
+
+    #[test]
+    fn pilot_gate_fails_when_one_signoff_targets_another_release() {
+        let mut signoffs = approved_signoffs();
+        signoffs.signoffs[0].release_revision =
+            "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_string();
+
+        let report = run_pilot_gate(
+            PilotGateConfig::default(),
+            release_snapshot(),
+            regression_snapshot(),
+            vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            None,
+            None,
+            review_input(signoffs),
+        );
+
+        assert_eq!(report.overall_status, PilotGateStatus::Fail);
+        assert!(report.checks.iter().any(|check| {
+            check.check_id == "review_signoff_set" && check.status == PilotGateStatus::Fail
+        }));
+    }
+
+    #[test]
+    fn pilot_gate_fails_when_review_area_is_duplicated() {
+        let mut signoffs = approved_signoffs();
+        signoffs.signoffs[1].area = PilotReviewArea::FalsePositiveHotspots;
+
+        let report = run_pilot_gate(
+            PilotGateConfig::default(),
+            release_snapshot(),
+            regression_snapshot(),
+            vec![shadow_snapshot("run_a"), shadow_snapshot("run_b")],
+            None,
+            None,
+            review_input(signoffs),
+        );
+
+        assert_eq!(report.overall_status, PilotGateStatus::Fail);
+        assert!(report.checks.iter().any(|check| {
+            check.check_id == "review_signoff_set" && check.status == PilotGateStatus::Fail
+        }));
+    }
+
+    #[test]
+    fn pilot_review_signoffs_v1_array_is_rejected() {
+        let json = r#"[{"area":"false_positive_hotspots"}]"#;
+        assert!(parse_pilot_review_signoffs(json).is_err());
     }
 }

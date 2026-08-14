@@ -38,12 +38,10 @@ env:
   AURA_REFACTOR_DIFF_REPORT_PATH: artifacts/refactor-diff-report.json
   AURA_REFACTOR_APPROVALS_PATH: docs/refactor-diff-approvals.json
   AURA_PILOT_GATE_REPORT_PATH: artifacts/pilot-gate-report.json
-  AURA_PILOT_REVIEW_SIGNOFFS_PATH: docs/pilot-review-signoffs.json
+  AURA_PILOT_REVIEW_SIGNOFFS_PATH: artifacts/pilot-review-signoffs.json
   AURA_PILOT_SHADOW_INPUT: crates/aura-core/data/world_sim_2k.json
   AURA_WORLD_LIFECYCLE_INPUT: crates/aura-core/data/world_lifecycle_suite
   AURA_EVIDENCE_MANIFEST_PATH: artifacts/evidence-manifest.json
-  AURA_EVIDENCE_ATTESTATION_PATH: artifacts/evidence-manifest.attestation.json
-  AURA_EVIDENCE_ATTESTATION_VERIFICATION_PATH: artifacts/evidence-manifest.attestation-verification.json
 
 jobs:
   promotion-gate:
@@ -159,6 +157,7 @@ jobs:
           --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH" \
           --shadow-bundle "$AURA_PILOT_SHADOW_BUNDLE_PATH_2" \
           --review-signoffs "$AURA_PILOT_REVIEW_SIGNOFFS_PATH" \
+          --release-revision "$GITHUB_SHA" \
           --kids-memory-health-report "$AURA_KIDS_MEMORY_HEALTH_PATH" \
           --kids-preprod-dry-run-report "$AURA_KIDS_PREPROD_DRY_RUN_PATH" \
           --output "$AURA_PILOT_GATE_REPORT_PATH" \
@@ -243,46 +242,6 @@ jobs:
           --world-performance-report "$AURA_WORLD_PERFORMANCE_REPORT_PATH" \
           --refactor-diff-report "$AURA_REFACTOR_DIFF_REPORT_PATH" \
           --ffi-smoke "$AURA_FFI_SMOKE_EVIDENCE_PATH"
-    - name: Attest Evidence Manifest
-      if: ${{ always() }}
-      env:
-        AURA_EVIDENCE_PRIVATE_KEY_B64: ${{ secrets.AURA_EVIDENCE_ED25519_PRIVATE_KEY_B64 }}
-        AURA_EVIDENCE_PUBLIC_KEY_B64: ${{ secrets.AURA_EVIDENCE_ED25519_PUBLIC_KEY_B64 }}
-        AURA_EVIDENCE_KEY_ID: ${{ vars.AURA_EVIDENCE_ED25519_KEY_ID }}
-      run: |
-        if [ ! -f "$AURA_EVIDENCE_MANIFEST_PATH" ]; then
-          echo "evidence manifest is missing; cannot attest" >&2
-          exit 1
-        fi
-        if [ -z "$AURA_EVIDENCE_PRIVATE_KEY_B64" ] && [ -z "$AURA_EVIDENCE_PUBLIC_KEY_B64" ] && [ -z "$AURA_EVIDENCE_KEY_ID" ]; then
-          if [ "$AURA_PROMOTION_TARGET" = "release" ]; then
-            echo "release promotion requires configured Ed25519 evidence signing secrets" >&2
-            exit 1
-          fi
-          echo "staging promotion has no evidence signing key; detached attestation skipped"
-          exit 0
-        fi
-        if [ -z "$AURA_EVIDENCE_PRIVATE_KEY_B64" ] || [ -z "$AURA_EVIDENCE_PUBLIC_KEY_B64" ] || [ -z "$AURA_EVIDENCE_KEY_ID" ]; then
-          echo "partial Ed25519 evidence signing configuration is invalid" >&2
-          exit 1
-        fi
-        umask 077
-        PRIVATE_KEY_PATH="$RUNNER_TEMP/aura-evidence-private.pem"
-        PUBLIC_KEY_PATH="$RUNNER_TEMP/aura-evidence-public.pem"
-        printf '%s' "$AURA_EVIDENCE_PRIVATE_KEY_B64" | base64 --decode > "$PRIVATE_KEY_PATH"
-        printf '%s' "$AURA_EVIDENCE_PUBLIC_KEY_B64" | base64 --decode > "$PUBLIC_KEY_PATH"
-        python3 ci/evidence_attestation.py sign \
-          --manifest "$AURA_EVIDENCE_MANIFEST_PATH" \
-          --private-key "$PRIVATE_KEY_PATH" \
-          --key-id "$AURA_EVIDENCE_KEY_ID" \
-          --output "$AURA_EVIDENCE_ATTESTATION_PATH"
-        python3 ci/evidence_attestation.py verify \
-          --manifest "$AURA_EVIDENCE_MANIFEST_PATH" \
-          --attestation "$AURA_EVIDENCE_ATTESTATION_PATH" \
-          --public-key "$PUBLIC_KEY_PATH" \
-          --expected-key-id "$AURA_EVIDENCE_KEY_ID" \
-          --output "$AURA_EVIDENCE_ATTESTATION_VERIFICATION_PATH" \
-          --require-pass
     - name: Summarize Promotion Gate
       if: ${{ always() }}
       run: |
@@ -352,8 +311,7 @@ jobs:
             summary.write(f"- temporal_policy_activation_readiness: `{summary_data.get('temporal_policy_activation_readiness', 'missing')}`\n")
             summary.write(f"- temporal_shadow_telemetry_on_prem_inputs: `{summary_data.get('temporal_shadow_telemetry_on_prem_inputs', 'missing')}`\n")
             summary.write(f"- temporal_shadow_telemetry_adk_inputs: `{summary_data.get('temporal_shadow_telemetry_adk_inputs', 'missing')}`\n")
-            summary.write(f"- evidence_attestation: `{'present' if pathlib.Path(os.environ['AURA_EVIDENCE_ATTESTATION_PATH']).exists() else 'missing'}`\n")
-            summary.write(f"- evidence_attestation_verification: `{'present' if pathlib.Path(os.environ['AURA_EVIDENCE_ATTESTATION_VERIFICATION_PATH']).exists() else 'missing'}`\n")
+            summary.write("- evidence_attestation: `external_post_freeze`\n")
             summary.write(f"- pilot_shadow_bundle: `{summary_data['pilot_shadow_status']}`\n")
             summary.write(f"- pilot_shadow_total_events: `{summary_data['pilot_shadow_total_events']}`\n")
             summary.write(f"- pilot_shadow_finding_count: `{summary_data['pilot_shadow_finding_count']}`\n")
@@ -414,6 +372,4 @@ jobs:
           ${{ env.AURA_FFI_SMOKE_EVIDENCE_PATH }}
           ${{ env.AURA_FFI_SOAK_EVIDENCE_PATH }}
           ${{ env.AURA_EVIDENCE_MANIFEST_PATH }}
-          ${{ env.AURA_EVIDENCE_ATTESTATION_PATH }}
-          ${{ env.AURA_EVIDENCE_ATTESTATION_VERIFICATION_PATH }}
         if-no-files-found: warn

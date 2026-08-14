@@ -7,6 +7,7 @@ use aura_core::{
     parse_kids_memory_health_snapshot, parse_kids_preprod_dry_run_snapshot,
     parse_pilot_regression_snapshot, parse_pilot_release_snapshot, parse_pilot_review_signoffs,
     parse_pilot_shadow_snapshot, run_pilot_gate, PilotGateConfig, PilotGateStatus,
+    PilotReviewInput,
 };
 
 struct CliArgs {
@@ -14,6 +15,7 @@ struct CliArgs {
     pilot_regression_report: PathBuf,
     shadow_bundles: Vec<PathBuf>,
     review_signoffs: PathBuf,
+    release_revision: String,
     kids_memory_health_report: Option<PathBuf>,
     kids_preprod_dry_run_report: Option<PathBuf>,
     output: Option<PathBuf>,
@@ -30,7 +32,7 @@ enum ParseArgsResult {
 }
 
 fn usage() -> &'static str {
-    "usage: cargo run --example pilot_gate -p aura-core -- --release-report PATH --pilot-regression-report PATH --shadow-bundle PATH [--shadow-bundle PATH ...] --review-signoffs PATH [--kids-memory-health-report PATH] [--kids-preprod-dry-run-report PATH] [--output PATH] [--require-pass] [--require-kids-memory-pass] [--require-kids-preprod-dry-run-pass] [--min-shadow-runs N] [--min-shadow-total-events N]"
+    "usage: cargo run --example pilot_gate -p aura-core -- --release-report PATH --pilot-regression-report PATH --shadow-bundle PATH [--shadow-bundle PATH ...] --review-signoffs PATH --release-revision FULL_SHA [--kids-memory-health-report PATH] [--kids-preprod-dry-run-report PATH] [--output PATH] [--require-pass] [--require-kids-memory-pass] [--require-kids-preprod-dry-run-pass] [--min-shadow-runs N] [--min-shadow-total-events N]"
 }
 
 fn parse_args() -> Result<ParseArgsResult, String> {
@@ -40,6 +42,7 @@ fn parse_args() -> Result<ParseArgsResult, String> {
     let mut pilot_regression_report = None;
     let mut shadow_bundles = Vec::new();
     let mut review_signoffs = None;
+    let mut release_revision = None;
     let mut kids_memory_health_report = None;
     let mut kids_preprod_dry_run_report = None;
     let mut output = None;
@@ -74,6 +77,12 @@ fn parse_args() -> Result<ParseArgsResult, String> {
                     Some(PathBuf::from(args.next().ok_or_else(|| {
                         "missing path after --review-signoffs".to_string()
                     })?));
+            }
+            "--release-revision" => {
+                release_revision = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value after --release-revision".to_string())?,
+                );
             }
             "--kids-memory-health-report" => {
                 kids_memory_health_report = Some(PathBuf::from(args.next().ok_or_else(|| {
@@ -124,6 +133,8 @@ fn parse_args() -> Result<ParseArgsResult, String> {
         shadow_bundles,
         review_signoffs: review_signoffs
             .ok_or_else(|| "missing required --review-signoffs".to_string())?,
+        release_revision: release_revision
+            .ok_or_else(|| "missing required --release-revision".to_string())?,
         kids_memory_health_report,
         kids_preprod_dry_run_report,
         output,
@@ -237,7 +248,10 @@ fn main() {
         shadow_runs,
         kids_memory_health,
         kids_preprod_dry_run,
-        signoffs,
+        PilotReviewInput {
+            expected_release_revision: args.release_revision,
+            signoffs,
+        },
     );
     let json = serde_json::to_string_pretty(&report).expect("serialize pilot gate report");
 

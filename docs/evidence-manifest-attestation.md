@@ -45,15 +45,16 @@ the environment variables `AURA_EVIDENCE_SIGNING_PRIVATE_KEY_PATH`,
 `AURA_EVIDENCE_SIGNING_KEY_ID`. Release rehearsals are blocked when credentials
 are absent; staging rehearsals may remain unsigned.
 
-## GitHub promotion configuration
+## Hosted release boundary
 
-Release promotion requires these repository settings:
+`Promotion Gate` and `Release Evidence Freeze` are deliberately secretless.
+They generate and freeze unsigned evidence, but never receive an evidence
+private key and never run signing code from the candidate revision.
 
-- secret `AURA_EVIDENCE_ED25519_PRIVATE_KEY_B64`;
-- secret `AURA_EVIDENCE_ED25519_PUBLIC_KEY_B64`;
-- variable `AURA_EVIDENCE_ED25519_KEY_ID`.
-
-The key files are reconstructed with owner-only permissions in the ephemeral
-runner directory. A release promotion fails when any value is absent or the
-newly created attestation cannot be verified. Staging may skip signing when no
-key is configured.
+After the unsigned evidence is frozen, an approved external signing boundary
+must attest its exact manifest bytes. Use a reviewed immutable signer or a
+non-exportable KMS/HSM key, then verify the detached attestation against an
+externally pinned public key and expected key identifier. Product acceptance
+and the final release decision fail closed until those externally produced
+artifacts are present and valid. Do not configure the evidence private key as a
+repository-scoped Actions secret or expose it to a candidate-controlled job.

@@ -1,0 +1,343 @@
+name: Release Evidence Freeze
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_revision:
+        description: Exact 40-character release revision R
+        required: true
+        type: string
+      promotion_run_id:
+        description: Exact successful Promotion Gate run ID for R
+        required: true
+        type: string
+      promotion_run_attempt:
+        description: Exact Promotion Gate run attempt (must be 1; reruns are ineligible)
+        required: true
+        default: "1"
+        type: string
+      apple_run_id:
+        description: Exact successful Apple Artifact run ID for R
+        required: true
+        type: string
+      apple_run_attempt:
+        description: Exact Apple Artifact run attempt (must be 1; reruns are ineligible)
+        required: true
+        default: "1"
+        type: string
+
+concurrency:
+  group: release-evidence-${{ inputs.release_revision }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: 20
+    env:
+      RELEASE_REVISION: ${{ inputs.release_revision }}
+      PROMOTION_RUN_ID: ${{ inputs.promotion_run_id }}
+      PROMOTION_RUN_ATTEMPT: ${{ inputs.promotion_run_attempt }}
+      APPLE_RUN_ID: ${{ inputs.apple_run_id }}
+      APPLE_RUN_ATTEMPT: ${{ inputs.apple_run_attempt }}
+      PROMOTION_WORKFLOW_ID: "246571367"
+      APPLE_WORKFLOW_ID: "320479820"
+      PROMOTION_ARTIFACT_NAME: aura-promotion-evidence-release
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ inputs.release_revision }}
+
+      - name: Validate exact release and source runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ "$RELEASE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PROMOTION_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$APPLE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$PROMOTION_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,9}$ ]]
+          [[ "$APPLE_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,9}$ ]]
+          test "$PROMOTION_RUN_ATTEMPT" = "1"
+          test "$APPLE_RUN_ATTEMPT" = "1"
+          test "$(git rev-parse HEAD)" = "$RELEASE_REVISION"
+
+          mkdir -p "$RUNNER_TEMP/release-source-metadata"
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$PROMOTION_RUN_ID" \
+            > "$RUNNER_TEMP/release-source-metadata/promotion-run.json"
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$PROMOTION_RUN_ID/artifacts?per_page=100" \
+            > "$RUNNER_TEMP/release-source-metadata/promotion-artifacts.json"
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$APPLE_RUN_ID" \
+            > "$RUNNER_TEMP/release-source-metadata/apple-run.json"
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$APPLE_RUN_ID/artifacts?per_page=100" \
+            > "$RUNNER_TEMP/release-source-metadata/apple-artifacts.json"
+
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          metadata = Path(os.environ["RUNNER_TEMP"]) / "release-source-metadata"
+          sha256_digest = re.compile(r"sha256:[0-9a-f]{64}")
+
+          def load(name: str) -> dict:
+              value = json.loads((metadata / name).read_text(encoding="utf-8"))
+              if not isinstance(value, dict):
+                  raise SystemExit(f"GitHub metadata {name} is not an object")
+              return value
+
+          def validate_run(
+              run: dict,
+              *,
+              expected_id: int,
+              expected_attempt: int,
+              expected_workflow_id: int,
+              expected_path: str,
+          ) -> None:
+              expected_repo = os.environ["GITHUB_REPOSITORY"]
+              if run.get("id") != expected_id:
+                  raise SystemExit("GitHub run ID mismatch")
+              if run.get("run_attempt") != expected_attempt:
+                  raise SystemExit("GitHub run-attempt mismatch")
+              if run.get("workflow_id") != expected_workflow_id:
+                  raise SystemExit("GitHub workflow identity mismatch")
+              if run.get("path") != expected_path:
+                  raise SystemExit("GitHub workflow path mismatch")
+              if run.get("head_sha") != os.environ["RELEASE_REVISION"]:
+                  raise SystemExit("GitHub run head SHA mismatch")
+              if run.get("status") != "completed" or run.get("conclusion") != "success":
+                  raise SystemExit("GitHub source run did not complete successfully")
+              if run.get("event") not in {"workflow_dispatch", "push"}:
+                  raise SystemExit("pull-request or unknown source runs are forbidden")
+              repository = run.get("repository")
+              head_repository = run.get("head_repository")
+              if not isinstance(repository, dict) or repository.get("full_name") != expected_repo:
+                  raise SystemExit("GitHub source-run repository mismatch")
+              if not isinstance(head_repository, dict) or head_repository.get("full_name") != expected_repo:
+                  raise SystemExit("fork source runs are forbidden")
+
+          def exact_artifact(payload: dict, expected_name: str) -> dict:
+              artifacts = payload.get("artifacts")
+              total_count = payload.get("total_count")
+              if (
+                  not isinstance(artifacts, list)
+                  or not isinstance(total_count, int)
+                  or isinstance(total_count, bool)
+                  or total_count != len(artifacts)
+              ):
+                  raise SystemExit("GitHub artifact response is malformed")
+              matching = [item for item in artifacts if item.get("name") == expected_name]
+              if len(matching) != 1:
+                  raise SystemExit(f"expected exactly one artifact named {expected_name}")
+              artifact = matching[0]
+              if artifact.get("expired") is not False:
+                  raise SystemExit(f"artifact {expected_name} is expired")
+              if not isinstance(artifact.get("id"), int) or artifact["id"] <= 0:
+                  raise SystemExit(f"artifact {expected_name} has an invalid ID")
+              if not isinstance(artifact.get("size_in_bytes"), int) or artifact["size_in_bytes"] <= 0:
+                  raise SystemExit(f"artifact {expected_name} is empty")
+              if artifact["size_in_bytes"] > 1024 * 1024 * 1024:
+                  raise SystemExit(f"artifact {expected_name} exceeds the 1 GiB archive limit")
+              digest = artifact.get("digest")
+              if not isinstance(digest, str) or sha256_digest.fullmatch(digest) is None:
+                  raise SystemExit(f"artifact {expected_name} lacks a SHA-256 transport digest")
+              return {
+                  "id": artifact["id"],
+                  "name": expected_name,
+                  "size_in_bytes": artifact["size_in_bytes"],
+                  "digest": digest,
+                  "created_at": artifact.get("created_at"),
+                  "expires_at": artifact.get("expires_at"),
+              }
+
+          promotion_run = load("promotion-run.json")
+          apple_run = load("apple-run.json")
+          validate_run(
+              promotion_run,
+              expected_id=int(os.environ["PROMOTION_RUN_ID"]),
+              expected_attempt=int(os.environ["PROMOTION_RUN_ATTEMPT"]),
+              expected_workflow_id=int(os.environ["PROMOTION_WORKFLOW_ID"]),
+              expected_path=".github/workflows/promotion-gate.yml",
+          )
+          validate_run(
+              apple_run,
+              expected_id=int(os.environ["APPLE_RUN_ID"]),
+              expected_attempt=int(os.environ["APPLE_RUN_ATTEMPT"]),
+              expected_workflow_id=int(os.environ["APPLE_WORKFLOW_ID"]),
+              expected_path=".github/workflows/apple-artifact.yml",
+          )
+
+          promotion_artifact = exact_artifact(
+              load("promotion-artifacts.json"),
+              os.environ["PROMOTION_ARTIFACT_NAME"],
+          )
+          apple_artifact_name = f"aura-agent-apple-{os.environ['RELEASE_REVISION']}"
+          apple_artifact = exact_artifact(
+              load("apple-artifacts.json"),
+              apple_artifact_name,
+          )
+
+          exports = {
+              "PROMOTION_ARTIFACT_ID_EXACT": promotion_artifact["id"],
+              "PROMOTION_ARTIFACT_BYTES_EXACT": promotion_artifact["size_in_bytes"],
+              "PROMOTION_ARTIFACT_SHA256_EXACT": promotion_artifact["digest"].removeprefix("sha256:"),
+              "APPLE_ARTIFACT_ID_EXACT": apple_artifact["id"],
+              "APPLE_ARTIFACT_BYTES_EXACT": apple_artifact["size_in_bytes"],
+              "APPLE_ARTIFACT_SHA256_EXACT": apple_artifact["digest"].removeprefix("sha256:"),
+          }
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              for name, value in exports.items():
+                  environment.write(f"{name}={value}\n")
+          PY
+
+      - name: Download exact immutable artifact archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          downloads="$RUNNER_TEMP/release-evidence-downloads"
+          test ! -e "$downloads"
+          mkdir -m 700 "$downloads"
+
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail-with-body \
+            --location \
+            --silent \
+            --show-error \
+            --max-filesize "$PROMOTION_ARTIFACT_BYTES_EXACT" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$PROMOTION_ARTIFACT_ID_EXACT/zip" \
+            --output "$downloads/promotion.zip"
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail-with-body \
+            --location \
+            --silent \
+            --show-error \
+            --max-filesize "$APPLE_ARTIFACT_BYTES_EXACT" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$APPLE_ARTIFACT_ID_EXACT/zip" \
+            --output "$downloads/apple.zip"
+
+          test "$(wc -c < "$downloads/promotion.zip" | tr -d ' ')" = "$PROMOTION_ARTIFACT_BYTES_EXACT"
+          test "$(wc -c < "$downloads/apple.zip" | tr -d ' ')" = "$APPLE_ARTIFACT_BYTES_EXACT"
+
+      - name: Verify and ingest exact immutable artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          downloads="$RUNNER_TEMP/release-evidence-downloads"
+          test -d "$downloads"
+          test ! -e incoming
+          mkdir -m 700 incoming
+
+          python3 ci/release_artifact_ingest.py \
+            --archive "$downloads/promotion.zip" \
+            --expected-sha256 "$PROMOTION_ARTIFACT_SHA256_EXACT" \
+            --expected-bytes "$PROMOTION_ARTIFACT_BYTES_EXACT" \
+            --profile promotion \
+            --output incoming/promotion
+          python3 ci/release_artifact_ingest.py \
+            --archive "$downloads/apple.zip" \
+            --expected-sha256 "$APPLE_ARTIFACT_SHA256_EXACT" \
+            --expected-bytes "$APPLE_ARTIFACT_BYTES_EXACT" \
+            --profile apple \
+            --output incoming/apple
+          rm -f "$downloads/promotion.zip" "$downloads/apple.zip"
+
+      - name: Build exact final evidence manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package="artifacts/release-evidence-unsigned"
+          mkdir -p artifacts
+          test ! -e "$package"
+          mkdir -m 700 "$package"
+          mkdir -m 700 "$package/release-inputs"
+          mkdir -m 700 \
+            "$package/release-inputs/evidence" \
+            "$package/release-inputs/apple" \
+            "$package/release-inputs/pilot"
+
+          python3 ci/generate_evidence_manifest.py \
+            --output "$package/release-inputs/evidence/evidence-manifest.json" \
+            --label "release-final-$RELEASE_REVISION" \
+            --release-report incoming/promotion/release-report.json \
+            --contract-evidence incoming/promotion/contract-evidence.json \
+            --ffi-soak incoming/promotion/ffi-state-sync-soak.json \
+            --ffi-smoke incoming/promotion/ffi-header-smoke.json \
+            --dataset-evidence incoming/promotion/dataset-evidence.json \
+            --audit-evidence incoming/promotion/audit-evidence.json \
+            --pilot-shadow-bundle incoming/promotion/pilot-shadow-bundle.json \
+            --pilot-regression-report incoming/promotion/pilot-regression-report.json \
+            --temporal-shadow-report incoming/promotion/temporal-shadow-report.json \
+            --temporal-shadow-telemetry-validation incoming/promotion/temporal-shadow-telemetry-validation.json \
+            --pilot-gate-report incoming/promotion/pilot-gate-report.json \
+            --kids-preprod-dry-run-report incoming/promotion/kids-preprod-dry-run-matrix.json \
+            --community-surface-report incoming/promotion/community-surface-report.json \
+            --world-lifecycle-report incoming/promotion/world-lifecycle-suite-report.json \
+            --world-performance-report incoming/promotion/performance/world-performance-summary.json \
+            --refactor-diff-report incoming/promotion/refactor-diff-report.json \
+            --apple-artifact-verification incoming/apple/apple-release-verification.json \
+            --apple-artifact-reproducibility incoming/apple/apple-reproducibility.json
+
+          install -m 600 incoming/apple/apple-release-verification.json \
+            "$package/release-inputs/apple/apple-release-verification.json"
+          install -m 600 incoming/apple/apple-reproducibility.json \
+            "$package/release-inputs/apple/apple-reproducibility.json"
+          install -m 600 incoming/apple/apple-verified-dist/release-manifest.json \
+            "$package/release-inputs/apple/release-manifest.json"
+          install -m 600 incoming/promotion/pilot-gate-report.json \
+            "$package/release-inputs/pilot/pilot-gate-report.json"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          from ci import release_dossier
+
+          root = Path("artifacts/release-evidence-unsigned/release-inputs")
+          snapshots = release_dossier.snapshot_fixed_tree(
+              root,
+              release_dossier.SOURCE_FILES,
+              release_dossier.SOURCE_LIMITS,
+              "frozen unsigned release evidence",
+          )
+          expected = {
+              release_dossier.SOURCE_PATHS["evidence_manifest"],
+              release_dossier.SOURCE_PATHS["apple_artifact_verification"],
+              release_dossier.SOURCE_PATHS["apple_artifact_reproducibility"],
+              release_dossier.SOURCE_PATHS["apple_release_manifest"],
+              release_dossier.SOURCE_PATHS["pilot_gate_report"],
+          }
+          if set(snapshots) != expected:
+              raise SystemExit("unsigned release evidence inventory is not exact")
+          PY
+
+      - name: Upload frozen unsigned evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aura-release-evidence-unsigned-${{ inputs.release_revision }}
+          path: artifacts/release-evidence-unsigned/release-inputs
+          if-no-files-found: error
+          retention-days: 14

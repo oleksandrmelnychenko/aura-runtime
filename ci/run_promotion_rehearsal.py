@@ -408,6 +408,17 @@ def main() -> int:
         return result
 
     try:
+        release_revision = None
+        if args.pilot_review_signoffs:
+            revision_result = record_and_require(["git", "rev-parse", "HEAD"])
+            if not revision_result["stdout_tail"]:
+                raise RuntimeError("git rev-parse HEAD returned no release revision")
+            release_revision = revision_result["stdout_tail"][-1]
+            if len(release_revision) != 40 or any(
+                char not in "0123456789abcdef" for char in release_revision
+            ):
+                raise RuntimeError("git rev-parse HEAD returned an invalid release revision")
+
         if not args.skip_build:
             record_and_require(["cargo", "build", "--verbose"])
         if not args.skip_tests:
@@ -634,6 +645,8 @@ def main() -> int:
                     paths["pilot_shadow_bundle_2"].as_posix(),
                     "--review-signoffs",
                     args.pilot_review_signoffs,
+                    "--release-revision",
+                    release_revision,
                     "--kids-memory-health-report",
                     paths["kids_memory_health"].as_posix(),
                     "--kids-preprod-dry-run-report",

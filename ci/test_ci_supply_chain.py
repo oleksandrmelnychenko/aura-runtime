@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIRECTORY = ROOT / ".github" / "workflows"
 APPLE_WORKFLOW = WORKFLOW_DIRECTORY / "apple-artifact.yml"
+RELEASE_EVIDENCE_WORKFLOW = WORKFLOW_DIRECTORY / "release-evidence-finalize.yml"
 FULL_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 CARGO_LOCKED_COMMAND = re.compile(r"\bcargo\s+(?:build|clippy|install|run|test)\b")
 JOB_HEADER = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
@@ -21,6 +22,10 @@ class CiSupplyChainTests(unittest.TestCase):
     @staticmethod
     def apple_workflow() -> str:
         return APPLE_WORKFLOW.read_text(encoding="utf-8")
+
+    @staticmethod
+    def release_evidence_workflow() -> str:
+        return RELEASE_EVIDENCE_WORKFLOW.read_text(encoding="utf-8")
 
     def test_external_actions_are_pinned_to_full_commit_sha(self):
         for workflow in workflows():
@@ -201,6 +206,119 @@ class CiSupplyChainTests(unittest.TestCase):
             "- name:", 1
         )[0]
         self.assertNotIn("|| true", audit_step)
+
+    def test_release_evidence_uses_exact_runs_and_release_revision(self):
+        workflow = self.release_evidence_workflow()
+        for required_input in (
+            "release_revision:",
+            "promotion_run_id:",
+            "promotion_run_attempt:",
+            "apple_run_id:",
+            "apple_run_attempt:",
+        ):
+            self.assertIn(required_input, workflow)
+        for invariant in (
+            'PROMOTION_WORKFLOW_ID: "246571367"',
+            'APPLE_WORKFLOW_ID: "320479820"',
+            'test "$(git rev-parse HEAD)" = "$RELEASE_REVISION"',
+            'run.get("head_sha") != os.environ["RELEASE_REVISION"]',
+            'run.get("run_attempt") != expected_attempt',
+            'test "$PROMOTION_RUN_ATTEMPT" = "1"',
+            'test "$APPLE_RUN_ATTEMPT" = "1"',
+            'run.get("status") != "completed" or run.get("conclusion") != "success"',
+            'run.get("event") not in {"workflow_dispatch", "push"}',
+            'head_repository.get("full_name") != expected_repo',
+            "expected exactly one artifact named",
+            'artifact.get("expired") is not False',
+            'sha256:[0-9a-f]{64}',
+        ):
+            self.assertIn(invariant, workflow)
+        self.assertNotIn("gh run list", workflow)
+        self.assertNotIn("--limit", workflow)
+        self.assertNotIn("pull_request", workflow.split("on:", 1)[1].split("jobs:", 1)[0])
+
+    def test_release_evidence_profile_never_silently_omits_production_children(self):
+        workflow = self.release_evidence_workflow()
+        build_step = workflow.split("- name: Build exact final evidence manifest", 1)[1].split(
+            "- name: Upload frozen unsigned evidence", 1
+        )[0]
+        for required_argument in (
+            "--pilot-gate-report incoming/promotion/pilot-gate-report.json",
+            "--kids-preprod-dry-run-report incoming/promotion/kids-preprod-dry-run-matrix.json",
+            "--apple-artifact-verification incoming/apple/apple-release-verification.json",
+            "--apple-artifact-reproducibility incoming/apple/apple-reproducibility.json",
+            "incoming/apple/apple-verified-dist/release-manifest.json",
+        ):
+            self.assertIn(required_argument, build_step)
+        self.assertNotIn("if [ -f", build_step)
+        self.assertNotIn("|| true", build_step)
+
+    def test_release_evidence_freeze_has_no_signing_key_or_go_authority(self):
+        workflow = self.release_evidence_workflow()
+        self.assertIn("name: Release Evidence Freeze", workflow)
+        self.assertNotIn("  sign:", workflow)
+        self.assertNotIn("secrets.", workflow)
+        self.assertNotIn("\n    environment:", workflow)
+        self.assertNotIn("evidence_attestation.py sign", workflow)
+        self.assertNotIn("release_decision.py sign", workflow)
+        self.assertNotIn("source-runs.json", workflow)
+        self.assertIn(
+            "path: artifacts/release-evidence-unsigned/release-inputs", workflow
+        )
+        self.assertNotIn("cp -R incoming", workflow)
+
+    def test_promotion_gate_has_no_evidence_signing_key(self):
+        workflow = (WORKFLOW_DIRECTORY / "promotion-gate.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("secrets.AURA_EVIDENCE", workflow)
+        self.assertNotIn("AURA_EVIDENCE_ED25519_PRIVATE_KEY_B64", workflow)
+        self.assertNotIn("evidence_attestation.py sign", workflow)
+        self.assertNotIn("AURA_EVIDENCE_ATTESTATION_PATH", workflow)
+        self.assertIn("evidence_attestation: `external_post_freeze`", workflow)
+
+    def test_release_evidence_downloads_pinned_ids_and_hard_checks_archives(self):
+        workflow = self.release_evidence_workflow()
+        for invariant in (
+            '"PROMOTION_ARTIFACT_ID_EXACT": promotion_artifact["id"]',
+            '"APPLE_ARTIFACT_ID_EXACT": apple_artifact["id"]',
+            "actions/artifacts/$PROMOTION_ARTIFACT_ID_EXACT/zip",
+            "actions/artifacts/$APPLE_ARTIFACT_ID_EXACT/zip",
+            '--expected-sha256 "$PROMOTION_ARTIFACT_SHA256_EXACT"',
+            '--expected-sha256 "$APPLE_ARTIFACT_SHA256_EXACT"',
+            '--expected-bytes "$PROMOTION_ARTIFACT_BYTES_EXACT"',
+            '--expected-bytes "$APPLE_ARTIFACT_BYTES_EXACT"',
+            "python3 ci/release_artifact_ingest.py",
+            "--profile promotion",
+            "--profile apple",
+            "artifacts?per_page=100",
+            "total_count != len(artifacts)",
+            '--max-filesize "$PROMOTION_ARTIFACT_BYTES_EXACT"',
+            '--max-filesize "$APPLE_ARTIFACT_BYTES_EXACT"',
+        ):
+            self.assertIn(invariant, workflow)
+        self.assertNotIn("actions/download-artifact", workflow)
+        download = workflow.split(
+            "- name: Download exact immutable artifact archives", 1
+        )[1].split("- name: Verify and ingest exact immutable artifacts", 1)[0]
+        ingest = workflow.split(
+            "- name: Verify and ingest exact immutable artifacts", 1
+        )[1].split("- name: Build exact final evidence manifest", 1)[0]
+        self.assertIn("GH_TOKEN: ${{ github.token }}", download)
+        self.assertNotIn("GH_TOKEN", ingest)
+        self.assertNotIn("Authorization: Bearer", ingest)
+
+    def test_release_evidence_upload_inventory_is_exact_and_allowlisted(self):
+        workflow = self.release_evidence_workflow()
+        build_step = workflow.split("- name: Build exact final evidence manifest", 1)[1].split(
+            "- name: Upload frozen unsigned evidence", 1
+        )[0]
+        self.assertIn("release_dossier.snapshot_fixed_tree", build_step)
+        self.assertIn("if set(snapshots) != expected", build_step)
+        self.assertIn("install -m 600", build_step)
+        self.assertIn('test ! -e "$package"', build_step)
+        self.assertNotIn("source-runs.json", build_step)
+        self.assertNotIn("cp -R", build_step)
 
 
 if __name__ == "__main__":

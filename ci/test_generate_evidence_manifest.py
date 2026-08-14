@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from ci import generate_evidence_manifest
@@ -335,6 +336,15 @@ class WorldLifecycleStatusTests(unittest.TestCase):
 
 
 class ArtifactSnapshotTests(unittest.TestCase):
+    def assert_required_status(self, artifact: dict, expected: str) -> None:
+        self.assertEqual(
+            generate_evidence_manifest.evidence_status(
+                {"required_fixture": artifact},
+                {},
+            ),
+            expected,
+        )
+
     def test_digest_and_payload_come_from_one_stable_snapshot(self):
         raw = b'{"schema_version":"fixture.v1","status":"pass"}\n'
         with tempfile.TemporaryDirectory() as directory:
@@ -381,6 +391,85 @@ class ArtifactSnapshotTests(unittest.TestCase):
                     self.assertIsNone(payload)
                     self.assertTrue(artifact["exists"])
                     self.assertEqual(artifact["status"], "invalid_file")
+                    self.assert_required_status(artifact, "fail")
+
+    def test_missing_required_artifact_blocks_but_inaccessible_artifact_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            missing = root / "missing.json"
+            payload, artifact = generate_evidence_manifest.load_json_artifact(
+                missing.as_posix(), required=True
+            )
+            self.assertIsNone(payload)
+            self.assertFalse(artifact["exists"])
+            self.assertEqual(artifact["status"], "missing")
+            self.assert_required_status(artifact, "blocked")
+
+            inaccessible = root / "inaccessible.json"
+            inaccessible.write_text("{}", encoding="utf-8")
+            original_open = generate_evidence_manifest.os.open
+
+            def deny_fixture(path, flags, *args, **kwargs):
+                if Path(path) == inaccessible:
+                    raise PermissionError("fixture denied")
+                return original_open(path, flags, *args, **kwargs)
+
+            with patch.object(
+                generate_evidence_manifest.os,
+                "open",
+                side_effect=deny_fixture,
+            ):
+                payload, artifact = generate_evidence_manifest.load_json_artifact(
+                    inaccessible.as_posix(), required=True
+                )
+            self.assertIsNone(payload)
+            self.assertTrue(artifact["exists"])
+            self.assertEqual(artifact["status"], "invalid_file")
+            self.assert_required_status(artifact, "fail")
+
+    def test_directory_and_unstable_artifact_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload, artifact = generate_evidence_manifest.load_json_artifact(
+                root.as_posix(), required=True
+            )
+            self.assertIsNone(payload)
+            self.assertEqual(artifact["status"], "invalid_file")
+            self.assert_required_status(artifact, "fail")
+
+            unstable = root / "unstable.json"
+            unstable.write_text("{}", encoding="utf-8")
+            original_fstat = generate_evidence_manifest.os.fstat
+            calls = 0
+
+            def unstable_fstat(descriptor):
+                nonlocal calls
+                calls += 1
+                metadata = original_fstat(descriptor)
+                if calls != 2:
+                    return metadata
+                return SimpleNamespace(
+                    st_dev=metadata.st_dev,
+                    st_ino=metadata.st_ino,
+                    st_mode=metadata.st_mode,
+                    st_nlink=metadata.st_nlink,
+                    st_size=metadata.st_size,
+                    st_mtime_ns=metadata.st_mtime_ns + 1,
+                    st_ctime_ns=metadata.st_ctime_ns,
+                )
+
+            with patch.object(
+                generate_evidence_manifest.os,
+                "fstat",
+                side_effect=unstable_fstat,
+            ):
+                payload, artifact = generate_evidence_manifest.load_json_artifact(
+                    unstable.as_posix(), required=True
+                )
+            self.assertIsNone(payload)
+            self.assertEqual(artifact["status"], "invalid_file")
+            self.assertIn("changed", artifact["error"])
+            self.assert_required_status(artifact, "fail")
 
     def test_oversize_duplicate_and_nonfinite_json_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -395,10 +484,12 @@ class ArtifactSnapshotTests(unittest.TestCase):
                 )
             self.assertIsNone(payload)
             self.assertEqual(artifact["status"], "invalid_file")
+            self.assert_required_status(artifact, "fail")
 
             for name, raw in (
                 ("duplicate.json", b'{"status":"pass","status":"fail"}'),
                 ("nonfinite.json", b'{"value":NaN}'),
+                ("overflow.json", b'{"value":1e999}'),
                 ("array.json", b"[]"),
             ):
                 with self.subTest(name=name):
@@ -411,10 +502,11 @@ class ArtifactSnapshotTests(unittest.TestCase):
                     )
                     self.assertIsNone(payload)
                     self.assertEqual(artifact["status"], "invalid_json")
+                    self.assert_required_status(artifact, "fail")
 
-    def test_supplied_invalid_optional_artifact_blocks_evidence_status(self):
+    def test_supplied_invalid_artifact_fails_evidence_status(self):
         artifacts = {
-            "optional_input": {
+            "required_input": {
                 "required": True,
                 "exists": True,
                 "status": "invalid_file",
@@ -423,8 +515,369 @@ class ArtifactSnapshotTests(unittest.TestCase):
 
         self.assertEqual(
             generate_evidence_manifest.evidence_status(artifacts, {}),
-            "blocked",
+            "fail",
         )
+
+
+class FrozenAtomicManifestOutputTests(unittest.TestCase):
+    def test_distinct_existing_regular_output_is_replaced_atomically(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "evidence.json"
+            output = root / "manifest.json"
+            evidence.write_bytes(b"{}")
+            output.write_bytes(b"old manifest")
+
+            with generate_evidence_manifest.FrozenAtomicManifestOutput(
+                output,
+                [evidence],
+            ) as frozen_output:
+                frozen_output.write_bytes(b"new manifest\n")
+
+            self.assertEqual(output.read_bytes(), b"new manifest\n")
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(
+                list(root.glob(".aura-evidence-*.tmp")),
+                [],
+            )
+
+    def test_failed_replace_preserves_existing_output_and_retains_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "manifest.json"
+            output.write_bytes(b"old manifest")
+
+            with generate_evidence_manifest.FrozenAtomicManifestOutput(
+                output,
+                [],
+            ) as frozen_output:
+                with (
+                    patch.object(
+                        generate_evidence_manifest.os,
+                        "replace",
+                        side_effect=OSError("fixture replace failure"),
+                    ),
+                    self.assertRaisesRegex(
+                        generate_evidence_manifest.EvidenceManifestError,
+                        "atomically",
+                    ),
+                ):
+                    frozen_output.write_bytes(b"new manifest\n")
+
+            self.assertEqual(output.read_bytes(), b"old manifest")
+            staging = list(root.glob(".aura-evidence-*.tmp"))
+            self.assertEqual(len(staging), 1)
+            self.assertEqual(staging[0].read_bytes(), b"new manifest\n")
+
+    def test_published_name_must_match_the_verified_staging_inode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "manifest.json"
+            escaped = root / "verified-staging.json"
+            original = generate_evidence_manifest.os.replace
+
+            def swap_staging(source, target, *, src_dir_fd, dst_dir_fd):
+                os.rename(
+                    source,
+                    escaped.name,
+                    src_dir_fd=src_dir_fd,
+                    dst_dir_fd=src_dir_fd,
+                )
+                replacement = os.open(
+                    source,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=src_dir_fd,
+                )
+                os.write(replacement, b"attacker replacement\n")
+                os.close(replacement)
+                original(
+                    source,
+                    target,
+                    src_dir_fd=src_dir_fd,
+                    dst_dir_fd=dst_dir_fd,
+                )
+
+            with generate_evidence_manifest.FrozenAtomicManifestOutput(
+                output,
+                [],
+            ) as frozen_output:
+                with (
+                    patch.object(
+                        generate_evidence_manifest.os,
+                        "replace",
+                        side_effect=swap_staging,
+                    ),
+                    self.assertRaisesRegex(
+                        generate_evidence_manifest.EvidenceManifestError,
+                        "replaced during publication",
+                    ),
+                ):
+                    frozen_output.write_bytes(b"verified manifest\n")
+
+            self.assertEqual(output.read_bytes(), b"attacker replacement\n")
+            self.assertEqual(escaped.read_bytes(), b"verified manifest\n")
+
+    def test_output_cannot_alias_an_input_by_path_or_inode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "evidence.json"
+            evidence.write_bytes(b"ORIGINAL")
+
+            with self.assertRaisesRegex(
+                generate_evidence_manifest.EvidenceManifestError,
+                "must not overwrite",
+            ):
+                generate_evidence_manifest.FrozenAtomicManifestOutput(
+                    evidence,
+                    [evidence],
+                )
+
+            hardlink = root / "manifest.json"
+            os.link(evidence, hardlink)
+            with self.assertRaisesRegex(
+                generate_evidence_manifest.EvidenceManifestError,
+                "must not overwrite",
+            ):
+                generate_evidence_manifest.FrozenAtomicManifestOutput(
+                    hardlink,
+                    [evidence],
+                )
+            self.assertEqual(evidence.read_bytes(), b"ORIGINAL")
+
+    def test_missing_input_alias_through_ancestor_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            real_parent = root / "real-parent"
+            real_parent.mkdir()
+            alias_parent = root / "alias-parent"
+            alias_parent.symlink_to(real_parent, target_is_directory=True)
+            protected = alias_parent / "manifest.json"
+            output = real_parent / "manifest.json"
+
+            with self.assertRaisesRegex(
+                generate_evidence_manifest.EvidenceManifestError,
+                "must not overwrite",
+            ):
+                generate_evidence_manifest.FrozenAtomicManifestOutput(
+                    output,
+                    [protected],
+                )
+
+            self.assertFalse(output.exists())
+
+    def test_late_input_parent_alias_is_rechecked_before_replace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output_parent = root / "output-parent"
+            benign_parent = root / "benign-parent"
+            output_parent.mkdir()
+            benign_parent.mkdir()
+            input_parent = root / "input-parent"
+            input_parent.symlink_to(benign_parent, target_is_directory=True)
+            output = output_parent / "manifest.json"
+            protected = input_parent / "manifest.json"
+
+            with generate_evidence_manifest.FrozenAtomicManifestOutput(
+                output,
+                [protected],
+            ) as frozen_output:
+                input_parent.unlink()
+                input_parent.symlink_to(output_parent, target_is_directory=True)
+                with self.assertRaisesRegex(
+                    generate_evidence_manifest.EvidenceManifestError,
+                    "must not overwrite",
+                ):
+                    frozen_output.write_bytes(b"manifest\n")
+
+            self.assertFalse(output.exists())
+
+    def test_identity_observed_during_read_is_protected_before_replace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "late-evidence.json"
+            output = root / "manifest.json"
+            protected_identities: set[tuple[int, int]] = set()
+
+            with generate_evidence_manifest.FrozenAtomicManifestOutput(
+                output,
+                [evidence],
+            ) as frozen_output:
+                evidence.write_bytes(b"{}")
+                payload, artifact = generate_evidence_manifest.load_json_artifact(
+                    evidence.as_posix(),
+                    required=True,
+                    protected_identities=protected_identities,
+                )
+                self.assertEqual(payload, {})
+                self.assertEqual(artifact["status"], "loaded")
+                os.link(evidence, output)
+                with self.assertRaisesRegex(
+                    generate_evidence_manifest.EvidenceManifestError,
+                    "must not overwrite",
+                ):
+                    frozen_output.protect_identities(protected_identities)
+
+            self.assertEqual(evidence.read_bytes(), b"{}")
+
+    def test_symbolic_and_special_output_targets_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target.json"
+            target.write_bytes(b"ORIGINAL")
+            symbolic = root / "symbolic.json"
+            symbolic.symlink_to(target)
+            fifo = root / "manifest.fifo"
+            os.mkfifo(fifo)
+
+            for output in (symbolic, fifo):
+                with (
+                    self.subTest(output=output.name),
+                    self.assertRaises(
+                        generate_evidence_manifest.EvidenceManifestError
+                    ),
+                ):
+                    generate_evidence_manifest.FrozenAtomicManifestOutput(
+                        output,
+                        [],
+                    )
+            self.assertEqual(target.read_bytes(), b"ORIGINAL")
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory-descriptor semantics")
+    def test_symbolic_output_parent_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            real_parent = root / "real-parent"
+            real_parent.mkdir()
+            symbolic_parent = root / "symbolic-parent"
+            symbolic_parent.symlink_to(real_parent, target_is_directory=True)
+
+            with self.assertRaisesRegex(
+                generate_evidence_manifest.EvidenceManifestError,
+                "output parent",
+            ):
+                generate_evidence_manifest.FrozenAtomicManifestOutput(
+                    symbolic_parent / "manifest.json",
+                    [],
+                )
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory-descriptor semantics")
+    def test_parent_swap_cannot_redirect_atomic_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            live_parent = root / "live-parent"
+            frozen_parent = root / "frozen-parent"
+            replacement_parent = root / "replacement-parent"
+            live_parent.mkdir()
+            replacement_parent.mkdir()
+            output = live_parent / "manifest.json"
+
+            with generate_evidence_manifest.FrozenAtomicManifestOutput(
+                output,
+                [],
+            ) as frozen_output:
+                live_parent.rename(frozen_parent)
+                live_parent.symlink_to(
+                    replacement_parent,
+                    target_is_directory=True,
+                )
+                frozen_output.write_bytes(b"frozen manifest\n")
+
+            self.assertEqual(
+                (frozen_parent / "manifest.json").read_bytes(),
+                b"frozen manifest\n",
+            )
+            self.assertFalse((replacement_parent / "manifest.json").exists())
+
+
+class EvidenceManifestFailureIntegrationTests(unittest.TestCase):
+    def core_argv(self, root: Path) -> tuple[list[str], dict[str, Path]]:
+        paths = {
+            "release": root / "release.json",
+            "contract": root / "contract.json",
+            "soak": root / "soak.json",
+            "dataset": root / "dataset.json",
+            "audit": root / "audit.json",
+            "manifest": root / "manifest.json",
+        }
+        write_json(
+            paths["contract"],
+            {
+                "runtime_release_version": "test",
+                "wire": {"proto_package": "aura.test", "wire_major_version": 1},
+                "persisted_state": {"schema_version": 1},
+                "abi": {"request_limits_bytes": [], "exported_functions": []},
+            },
+        )
+        write_json(
+            paths["soak"],
+            {"status": "pass", "iterations": 1, "attempts_run": 1},
+        )
+        write_json(paths["dataset"], {"status": "pass", "datasets": []})
+        write_json(
+            paths["audit"],
+            {
+                "status": "pass",
+                "audit_schema_version": "aura.audit.v1",
+                "forbidden_fields_absent": True,
+            },
+        )
+        argv = [
+            "generate_evidence_manifest.py",
+            "--output",
+            paths["manifest"].as_posix(),
+            "--label",
+            "failure-fixture",
+            "--release-report",
+            paths["release"].as_posix(),
+            "--contract-evidence",
+            paths["contract"].as_posix(),
+            "--ffi-soak",
+            paths["soak"].as_posix(),
+            "--dataset-evidence",
+            paths["dataset"].as_posix(),
+            "--audit-evidence",
+            paths["audit"].as_posix(),
+        ]
+        return argv, paths
+
+    def test_missing_required_file_emits_blocked_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            argv, paths = self.core_argv(Path(directory))
+            with patch.object(sys, "argv", argv):
+                self.assertEqual(generate_evidence_manifest.main(), 1)
+
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            self.assertEqual(
+                set(manifest),
+                {
+                    "schema_version",
+                    "generated_at_utc",
+                    "label",
+                    "evidence_status",
+                    "summary",
+                    "artifacts",
+                },
+            )
+            self.assertEqual(manifest["evidence_status"], "blocked")
+            self.assertEqual(
+                manifest["artifacts"]["release_report"]["status"],
+                "missing",
+            )
+
+    def test_malformed_required_file_emits_fail_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            argv, paths = self.core_argv(Path(directory))
+            paths["release"].write_bytes(b'{"overall_status":"pass","x":NaN}')
+            with patch.object(sys, "argv", argv):
+                self.assertEqual(generate_evidence_manifest.main(), 1)
+
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            self.assertEqual(manifest["evidence_status"], "fail")
+            self.assertEqual(
+                manifest["artifacts"]["release_report"]["status"],
+                "invalid_json",
+            )
 
 
 class RefactorEvidenceStatusTests(unittest.TestCase):
@@ -1020,6 +1473,7 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 "temporal_attestation": root / "temporal-attestation-verification.json",
                 "temporal_timestamp": root / "temporal-timestamp-verification.json",
                 "temporal_receipts": root / "temporal-review-receipts-verification.json",
+                "pilot_gate": root / "pilot-gate.json",
                 "manifest": root / "manifest.json",
             }
             write_json(
@@ -1101,6 +1555,16 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_receipts"],
                 temporal_review_receipt_chain_verification_payload(),
             )
+            write_json(
+                paths["pilot_gate"],
+                {
+                    "schema_version": "aura.pilot_gate_report.v2",
+                    "release_revision": "f" * 40,
+                    "overall_status": "pass",
+                    "shadow_runs": [{}, {}],
+                    "checks": [{}, {}, {}],
+                },
+            )
 
             argv = [
                 "generate_evidence_manifest.py",
@@ -1136,6 +1600,8 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
                 paths["temporal_timestamp"].as_posix(),
                 "--temporal-review-receipt-chain-verification",
                 paths["temporal_receipts"].as_posix(),
+                "--pilot-gate-report",
+                paths["pilot_gate"].as_posix(),
             ]
             with patch.object(sys, "argv", argv):
                 self.assertEqual(generate_evidence_manifest.main(), 0)
@@ -1187,6 +1653,25 @@ class EvidenceManifestWorldLifecycleTests(unittest.TestCase):
             self.assertEqual(
                 manifest["artifacts"]["world_lifecycle_report"]["observed_status"],
                 "pass",
+            )
+            self.assertEqual(
+                manifest["artifacts"]["pilot_gate_report"],
+                {
+                    "bytes": paths["pilot_gate"].stat().st_size,
+                    "check_count": 3,
+                    "exists": True,
+                    "observed_status": "pass",
+                    "path": paths["pilot_gate"].as_posix(),
+                    "release_revision": "f" * 40,
+                    "required": True,
+                    "schema_version": "aura.pilot_gate_report.v2",
+                    "sha256": sha256(paths["pilot_gate"].read_bytes()).hexdigest(),
+                    "shadow_run_count": 2,
+                    "status": "loaded",
+                },
+            )
+            self.assertEqual(
+                manifest["summary"]["pilot_gate_release_revision"], "f" * 40
             )
 
 

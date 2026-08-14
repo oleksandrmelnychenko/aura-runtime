@@ -20,8 +20,10 @@ A `go` decision requires all of the following for one exact candidate:
 - a passing, clean, shippable Apple artifact verification, the exact Apple
   release manifest, and a strict two-build reproducibility report binding
   source `H`, artifact `A`, and release revision `R`;
-- a passing pilot gate containing all four real review signoffs, mandatory
-  KIDS checks, rollback triggers, stop conditions, and review cadence;
+- a passing `aura.pilot_gate_report.v2` whose report and each of exactly four
+  real review signoffs bind the exact release revision `R`, plus mandatory KIDS
+  checks, rollback triggers, stop conditions, and review cadence; reviewer
+  labels are governance assertions, not cryptographic identities;
 - an external `aura.product_integration_acceptance.v2` produced after client
   contract tests accept the exact Apple artifact;
 - matching source revision, source-tree digest, runtime identity, artifact
@@ -113,3 +115,9 @@ prove that a human reviewer was independent or honest, that an external client
 test was competently designed, or that no signing key was compromised. Those
 claims remain organizational controls and must not be inferred from the JSON
 alone.
+
+After signing, package and re-verify the exact evidence graph with the
+fixed-layout terminal dossier described in
+`docs/release-candidate-dossier.md`. Its unsigned index is inventory and
+transport metadata only; it never replaces this signed decision as the release
+authority.

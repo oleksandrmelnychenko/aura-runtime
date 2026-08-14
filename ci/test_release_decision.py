@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from hashlib import sha256
 from pathlib import Path
+from unittest import mock
 
 from ci import release_decision
 
@@ -44,7 +45,7 @@ class ReleaseDecisionFixture(unittest.TestCase):
         return sha256(path.read_bytes()).hexdigest()
 
     @staticmethod
-    def write(path: Path, payload: dict) -> None:
+    def write(path: Path, payload: object) -> None:
         release_decision.crypto_support.write_json_atomic(path, payload)
 
     def evidence_payload(self, **summary_overrides) -> dict:
@@ -63,6 +64,11 @@ class ReleaseDecisionFixture(unittest.TestCase):
             "dataset_evidence_status": "pass",
             "audit_evidence_status": "pass",
             "audit_forbidden_fields_absent": True,
+            "pilot_gate_status": "pass",
+            "pilot_gate_schema_version": "aura.pilot_gate_report.v2",
+            "pilot_gate_release_revision": self.release_revision,
+            "pilot_gate_shadow_run_count": 2,
+            "pilot_gate_check_count": 15,
         }
         summary.update(summary_overrides)
         return {
@@ -75,6 +81,12 @@ class ReleaseDecisionFixture(unittest.TestCase):
                 },
                 "apple_artifact_reproducibility": {
                     "sha256": self.digest(self.apple_reproducibility)
+                },
+                "pilot_gate_report": {
+                    "sha256": self.digest(self.pilot_gate),
+                    "observed_status": "pass",
+                    "schema_version": "aura.pilot_gate_report.v2",
+                    "release_revision": self.release_revision,
                 },
             },
         }
@@ -237,24 +249,163 @@ class ReleaseDecisionFixture(unittest.TestCase):
         return payload
 
     def pilot_payload(self, **overrides) -> dict:
-        checks = [
-            {"check_id": check_id, "status": "pass", "summary": "pass"}
-            for check_id in sorted(release_decision.REQUIRED_PILOT_CHECKS)
-        ]
-        payload = {
-            "schema_version": "aura.pilot_gate_report.v1",
+        review_areas = list(release_decision.PILOT_REQUIRED_REVIEW_AREAS)
+        config = {
+            "min_shadow_runs": 2,
+            "min_shadow_total_events": 500,
+            "require_release_pass": True,
+            "require_pilot_regression_pass": True,
+            "require_kids_memory_pass": True,
+            "require_kids_preprod_dry_run_pass": True,
+            "required_review_areas": review_areas,
+        }
+        release = {
+            "schema_version": "aura.release_report.v3",
             "overall_status": "pass",
+            "social_context_inference": {
+                "passed": True,
+                "total_expectations": 8,
+                "failed_expectations": 0,
+            },
+        }
+        pilot_regression = {
+            "schema_version": "aura.pilot_simulation_regression_report.v1",
+            "overall_status": "pass",
+            "suite_id": "unit-test-pilot-suite",
+            "scenario_count": 12,
+        }
+        shadow_runs = [
+            {
+                "schema_version": "aura.shadow_mode_bundle.v1",
+                "source_kind": "world_sim",
+                "source_label": f"unit-test-shadow-{index}",
+                "wire_package": "aura.messenger.v1",
+                "protection_level": "high",
+                "total_events": 300,
+                "threat_events": 40,
+                "finding_count": 0,
+                "raw_text_present": False,
+                "raw_identifier_fields_present": False,
+            }
+            for index in range(2)
+        ]
+        kids_memory = {
+            "schema_version": "aura.kids_memory_health_snapshot.v1",
+            "overall_status": "pass",
+            "total_memory_hits": 6,
+            "missing_mandatory_reason_codes": [],
+        }
+        kids_preprod = {
+            "schema_version": "aura.kids_preprod_dry_run_matrix.v1",
+            "overall_status": "pass",
+            "checks_failed": 0,
+        }
+        signoffs = [
+            {
+                "area": area,
+                "reviewer": f"unit-test-reviewer-{index}",
+                "status": "approved",
+                "reviewed_at_utc": f"2026-03-16T10:{index:02d}:00Z",
+                "notes": "unit-test fixture only; not an authenticated identity",
+                "release_revision": self.release_revision,
+            }
+            for index, area in enumerate(review_areas)
+        ]
+        checks = [
+            {
+                "check_id": "candidate_release_revision",
+                "status": "pass",
+                "summary": (
+                    "pilot candidate is bound to release "
+                    f"{self.release_revision}"
+                ),
+            },
+            {
+                "check_id": "release_gate",
+                "status": "pass",
+                "summary": "Phase 2 release gate passed",
+            },
+            {
+                "check_id": "release_social_context_inference",
+                "status": "pass",
+                "summary": "social-context inference expectations passed (8/8)",
+            },
+            {
+                "check_id": "pilot_regression",
+                "status": "pass",
+                "summary": "pilot regression corpus passed",
+            },
+            {
+                "check_id": "kids_memory_health",
+                "status": "pass",
+                "summary": "kids memory health passed (total_hits=6)",
+            },
+            {
+                "check_id": "kids_preprod_dry_run",
+                "status": "pass",
+                "summary": (
+                    "kids preprod dry-run matrix passed with no failed checks"
+                ),
+            },
+            {
+                "check_id": "shadow_run_count",
+                "status": "pass",
+                "summary": "observed 2 shadow runs (required 2)",
+            },
+            {
+                "check_id": "shadow_event_volume",
+                "status": "pass",
+                "summary": "shadow runs cover 600 total events (required >= 500)",
+            },
+            {
+                "check_id": "shadow_privacy_and_findings",
+                "status": "pass",
+                "summary": "all shadow runs are clean and privacy-safe",
+            },
+            {
+                "check_id": "shadow_contract_stability",
+                "status": "pass",
+                "summary": (
+                    "shadow runs share stable schema, wire package, and "
+                    "protection level"
+                ),
+            },
+            {
+                "check_id": "review_signoff_set",
+                "status": "pass",
+                "summary": (
+                    "all required review signoffs bind the exact release revision"
+                ),
+            },
+        ]
+        checks.extend(
+            {
+                "check_id": f"review_signoff.{signoff['area']}",
+                "status": "pass",
+                "summary": (
+                    f"{signoff['area']} approved by {signoff['reviewer']}"
+                ),
+            }
+            for signoff in signoffs
+        )
+        payload = {
+            "schema_version": "aura.pilot_gate_report.v2",
+            "release_revision": self.release_revision,
+            "overall_status": "pass",
+            "config": config,
+            "release": release,
+            "pilot_regression": pilot_regression,
+            "shadow_runs": shadow_runs,
+            "kids_memory_health": kids_memory,
+            "kids_preprod_dry_run": kids_preprod,
+            "signoffs": signoffs,
             "checks": checks,
-            "rollback_triggers": [
-                {
-                    "trigger_id": f"trigger-{index}",
-                    "severity": "high",
-                    "condition": "defined stop condition",
-                    "operator_action": "pause rollout",
-                }
-                for index in range(4)
-            ],
-            "operator_review_cadence": "daily for the first seven days",
+            "rollback_triggers": json.loads(
+                json.dumps(release_decision.PILOT_ROLLBACK_TRIGGERS)
+            ),
+            "operator_review_cadence": (
+                release_decision.PILOT_OPERATOR_REVIEW_CADENCE
+            ),
         }
         payload.update(overrides)
         return payload
@@ -308,6 +459,7 @@ class ReleaseDecisionFixture(unittest.TestCase):
             self.apple_reproducibility,
             self.apple_reproducibility_payload(),
         )
+        self.write(self.pilot_gate, self.pilot_payload())
         self.write(self.evidence_manifest, self.evidence_payload(
             apple_artifact_status="pass",
             apple_artifact_source_revision=self.source_revision,
@@ -354,7 +506,6 @@ class ReleaseDecisionFixture(unittest.TestCase):
             self.evidence_verification,
             self.evidence_verification_payload(),
         )
-        self.write(self.pilot_gate, self.pilot_payload())
         self.write(self.product_acceptance, self.product_payload())
 
     def input_paths(self) -> dict[str, str | None]:
@@ -383,6 +534,20 @@ class ReleaseDecisionFixture(unittest.TestCase):
             self.expected_evidence_key_id,
         )
 
+    def write_signed_evidence(self, manifest: dict) -> None:
+        self.write(self.evidence_manifest, manifest)
+        attestation = release_decision.crypto_support.sign_manifest(
+            self.evidence_manifest,
+            self.evidence_private_key,
+            self.expected_evidence_key_id,
+        )
+        self.write(self.evidence_attestation, attestation)
+        self.write(
+            self.evidence_verification,
+            self.evidence_verification_payload(),
+        )
+        self.write(self.product_acceptance, self.product_payload())
+
     def create(self, paths: dict[str, str | None] | None = None) -> dict:
         return release_decision.create_decision(
             self.revision,
@@ -390,6 +555,16 @@ class ReleaseDecisionFixture(unittest.TestCase):
             release_decision.PROFILE,
             self.input_paths() if paths is None else paths,
         )
+
+    def assert_pilot_fails_closed(self, payload: object) -> None:
+        self.write(self.pilot_gate, payload)
+        self.write(self.product_acceptance, self.product_payload())
+
+        decision = self.create()
+
+        self.assertEqual(decision["operational_readiness"], "fail")
+        self.assertEqual(decision["human_signoffs"], "fail")
+        self.assertEqual(decision["decision"], "no-go")
 
 
 class ReleaseDecisionTests(ReleaseDecisionFixture):
@@ -415,6 +590,17 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
                 "military_enabled": False,
             },
         )
+
+    def test_integer_profile_scope_values_are_rejected(self):
+        for value in (0, 1):
+            with self.subTest(value=value):
+                decision = self.create()
+                decision["profile_scope"]["model_enabled"] = value
+                with self.assertRaisesRegex(
+                    release_decision.ReleaseDecisionError,
+                    "profile scope values",
+                ):
+                    release_decision.validate_decision(decision)
 
     def test_missing_external_evidence_is_no_go_not_an_exception(self):
         paths = {key: None for key in self.input_paths()}
@@ -722,6 +908,341 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
         self.assertEqual(decision["human_signoffs"], "fail")
         self.assertEqual(decision["decision"], "no-go")
 
+    def test_pilot_gate_rejects_unknown_or_incomplete_top_level_contract(self):
+        mutations = {
+            "extra field": lambda payload: payload.__setitem__(
+                "unexpected", "mirrored"
+            ),
+            "missing config": lambda payload: payload.pop("config"),
+            "wrong schema": lambda payload: payload.__setitem__(
+                "schema_version", "aura.pilot_gate_report.v1"
+            ),
+            "non-pass overall": lambda payload: payload.__setitem__(
+                "overall_status", "blocked"
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                pilot = self.pilot_payload()
+                mutate(pilot)
+                self.assert_pilot_fails_closed(pilot)
+
+    def test_pilot_gate_rejects_v1_array_without_crashing(self):
+        self.assert_pilot_fails_closed(
+            [
+                {
+                    "area": "false_positive_hotspots",
+                    "reviewer": "stale-reviewer",
+                    "status": "approved",
+                }
+            ]
+        )
+
+    def test_pilot_gate_rejects_weakened_or_malformed_config(self):
+        mutations = {
+            "extra field": lambda payload: payload["config"].__setitem__(
+                "unexpected", True
+            ),
+            "too few shadow runs": lambda payload: payload["config"].__setitem__(
+                "min_shadow_runs", 1
+            ),
+            "boolean shadow runs": lambda payload: payload["config"].__setitem__(
+                "min_shadow_runs", True
+            ),
+            "too few shadow events": lambda payload: payload["config"].__setitem__(
+                "min_shadow_total_events", 499
+            ),
+            "release disabled": lambda payload: payload["config"].__setitem__(
+                "require_release_pass", False
+            ),
+            "regression disabled": lambda payload: payload["config"].__setitem__(
+                "require_pilot_regression_pass", False
+            ),
+            "kids memory disabled": lambda payload: payload["config"].__setitem__(
+                "require_kids_memory_pass", False
+            ),
+            "kids preprod disabled": lambda payload: payload["config"].__setitem__(
+                "require_kids_preprod_dry_run_pass", False
+            ),
+            "review area missing": lambda payload: payload["config"][
+                "required_review_areas"
+            ].pop(),
+            "review areas reordered": lambda payload: payload["config"].__setitem__(
+                "required_review_areas",
+                list(reversed(payload["config"]["required_review_areas"])),
+            ),
+            "unknown review area": lambda payload: payload["config"][
+                "required_review_areas"
+            ].append("unknown"),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                pilot = self.pilot_payload()
+                mutate(pilot)
+                self.assert_pilot_fails_closed(pilot)
+
+    def test_pilot_gate_rejects_malformed_release_or_regression_snapshots(self):
+        mutations = {
+            "release extra": lambda payload: payload["release"].__setitem__(
+                "unexpected", True
+            ),
+            "release schema": lambda payload: payload["release"].__setitem__(
+                "schema_version", "aura.release_report.v2"
+            ),
+            "release inference absent": lambda payload: payload["release"].__setitem__(
+                "social_context_inference", None
+            ),
+            "release inference failed": lambda payload: payload["release"][
+                "social_context_inference"
+            ].__setitem__("passed", False),
+            "release inference empty": lambda payload: payload["release"][
+                "social_context_inference"
+            ].__setitem__("total_expectations", 0),
+            "release inference failures": lambda payload: payload["release"][
+                "social_context_inference"
+            ].__setitem__("failed_expectations", 1),
+            "regression extra": lambda payload: payload[
+                "pilot_regression"
+            ].__setitem__("unexpected", True),
+            "regression schema": lambda payload: payload[
+                "pilot_regression"
+            ].__setitem__("schema_version", "aura.pilot_regression.v0"),
+            "regression empty suite": lambda payload: payload[
+                "pilot_regression"
+            ].__setitem__("suite_id", ""),
+            "regression empty scenarios": lambda payload: payload[
+                "pilot_regression"
+            ].__setitem__("scenario_count", 0),
+            "regression boolean scenarios": lambda payload: payload[
+                "pilot_regression"
+            ].__setitem__("scenario_count", True),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                pilot = self.pilot_payload()
+                mutate(pilot)
+                self.assert_pilot_fails_closed(pilot)
+
+    def test_pilot_gate_rejects_unsafe_or_malformed_shadow_snapshots(self):
+        mutations = {
+            "no runs": lambda payload: payload.__setitem__("shadow_runs", []),
+            "too few runs": lambda payload: payload["shadow_runs"].pop(),
+            "extra field": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "unexpected", True
+            ),
+            "wrong schema": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "schema_version", "aura.shadow_mode_bundle.v0"
+            ),
+            "wrong source": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "source_kind", "uploaded"
+            ),
+            "empty label": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "source_label", " "
+            ),
+            "wrong wire": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "wire_package", "aura.messenger.v2"
+            ),
+            "weaker protection": lambda payload: payload["shadow_runs"][
+                0
+            ].__setitem__("protection_level", "medium"),
+            "empty events": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "total_events", 0
+            ),
+            "boolean events": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "total_events", True
+            ),
+            "threats exceed total": lambda payload: payload["shadow_runs"][
+                0
+            ].__setitem__("threat_events", 301),
+            "findings": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "finding_count", 1
+            ),
+            "raw text": lambda payload: payload["shadow_runs"][0].__setitem__(
+                "raw_text_present", True
+            ),
+            "raw identifiers": lambda payload: payload["shadow_runs"][
+                0
+            ].__setitem__("raw_identifier_fields_present", True),
+            "insufficient volume": lambda payload: [
+                run.__setitem__("total_events", 200)
+                for run in payload["shadow_runs"]
+            ],
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                pilot = self.pilot_payload()
+                mutate(pilot)
+                self.assert_pilot_fails_closed(pilot)
+
+    def test_pilot_gate_rejects_malformed_kids_or_signoff_content(self):
+        mutations = {
+            "kids memory absent": lambda payload: payload.__setitem__(
+                "kids_memory_health", None
+            ),
+            "kids memory extra": lambda payload: payload[
+                "kids_memory_health"
+            ].__setitem__("unexpected", True),
+            "kids memory schema": lambda payload: payload[
+                "kids_memory_health"
+            ].__setitem__("schema_version", "aura.kids_memory_health_snapshot.v0"),
+            "kids memory no hits": lambda payload: payload[
+                "kids_memory_health"
+            ].__setitem__("total_memory_hits", 0),
+            "kids memory missing reasons": lambda payload: payload[
+                "kids_memory_health"
+            ].__setitem__("missing_mandatory_reason_codes", ["kids.memory.missing"]),
+            "kids preprod absent": lambda payload: payload.__setitem__(
+                "kids_preprod_dry_run", None
+            ),
+            "kids preprod extra": lambda payload: payload[
+                "kids_preprod_dry_run"
+            ].__setitem__("unexpected", True),
+            "kids preprod schema": lambda payload: payload[
+                "kids_preprod_dry_run"
+            ].__setitem__("schema_version", "aura.kids_preprod_dry_run_matrix.v0"),
+            "kids preprod failure": lambda payload: payload[
+                "kids_preprod_dry_run"
+            ].__setitem__("checks_failed", 1),
+            "kids preprod boolean": lambda payload: payload[
+                "kids_preprod_dry_run"
+            ].__setitem__("checks_failed", False),
+            "signoff missing": lambda payload: payload["signoffs"].pop(),
+            "signoff extra": lambda payload: payload["signoffs"][0].__setitem__(
+                "unexpected", True
+            ),
+            "signoff unknown area": lambda payload: payload["signoffs"][
+                0
+            ].__setitem__("area", "unknown"),
+            "signoff empty reviewer": lambda payload: payload["signoffs"][
+                0
+            ].__setitem__("reviewer", ""),
+            "signoff pending": lambda payload: payload["signoffs"][0].__setitem__(
+                "status", "pending"
+            ),
+            "signoff malformed time": lambda payload: payload["signoffs"][
+                0
+            ].__setitem__("reviewed_at_utc", "yesterday"),
+            "signoff non-utc time": lambda payload: payload["signoffs"][
+                0
+            ].__setitem__("reviewed_at_utc", "2026-03-16T10:00:00+02:00"),
+            "signoff malformed notes": lambda payload: payload["signoffs"][
+                0
+            ].__setitem__("notes", {}),
+            "signoff missing release": lambda payload: payload["signoffs"][
+                0
+            ].pop("release_revision"),
+            "signoff stale release": lambda payload: payload["signoffs"][
+                0
+            ].__setitem__("release_revision", "e" * 40),
+            "signoff duplicate area": lambda payload: payload["signoffs"][
+                1
+            ].__setitem__("area", payload["signoffs"][0]["area"]),
+            "signoff fifth entry": lambda payload: payload["signoffs"].append(
+                dict(payload["signoffs"][0])
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                pilot = self.pilot_payload()
+                mutate(pilot)
+                self.assert_pilot_fails_closed(pilot)
+
+    def test_pilot_gate_rejects_stale_or_malformed_candidate_revision(self):
+        mutations = {
+            "stale report release": lambda payload: payload.__setitem__(
+                "release_revision", "e" * 40
+            ),
+            "uppercase report release": lambda payload: payload.__setitem__(
+                "release_revision", "F" * 40
+            ),
+            "short report release": lambda payload: payload.__setitem__(
+                "release_revision", "f" * 39
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                pilot = self.pilot_payload()
+                mutate(pilot)
+                self.assert_pilot_fails_closed(pilot)
+
+    def test_signed_manifest_must_bind_the_exact_pilot_gate(self):
+        mutations = {
+            "pilot leaf omitted": lambda manifest: manifest["artifacts"].pop(
+                "pilot_gate_report"
+            ),
+            "pilot digest substituted": lambda manifest: manifest["artifacts"][
+                "pilot_gate_report"
+            ].__setitem__("sha256", "0" * 64),
+            "pilot artifact release stale": lambda manifest: manifest["artifacts"][
+                "pilot_gate_report"
+            ].__setitem__("release_revision", "e" * 40),
+            "pilot summary release stale": lambda manifest: manifest["summary"].__setitem__(
+                "pilot_gate_release_revision", "e" * 40
+            ),
+            "pilot summary count forged": lambda manifest: manifest["summary"].__setitem__(
+                "pilot_gate_check_count", 16
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                self.write_all_valid_inputs()
+                manifest = json.loads(
+                    self.evidence_manifest.read_text(encoding="utf-8")
+                )
+                mutate(manifest)
+                self.write_signed_evidence(manifest)
+
+                decision = self.create()
+
+                self.assertEqual(decision["operational_readiness"], "fail")
+                self.assertEqual(decision["human_signoffs"], "fail")
+                self.assertEqual(decision["decision"], "no-go")
+
+    def test_pilot_gate_rejects_forged_checks_rollbacks_or_cadence(self):
+        mutations = {
+            "check missing": lambda payload: payload["checks"].pop(),
+            "check reordered": lambda payload: payload["checks"].reverse(),
+            "check unknown": lambda payload: payload["checks"].append(
+                {"check_id": "unknown", "status": "pass", "summary": "pass"}
+            ),
+            "check duplicate": lambda payload: payload["checks"].append(
+                dict(payload["checks"][0])
+            ),
+            "check extra field": lambda payload: payload["checks"][0].__setitem__(
+                "unexpected", True
+            ),
+            "check forged status": lambda payload: payload["checks"][0].__setitem__(
+                "status", "approved"
+            ),
+            "check forged summary": lambda payload: payload["checks"][
+                0
+            ].__setitem__("summary", "trust me"),
+            "rollback missing": lambda payload: payload["rollback_triggers"].pop(),
+            "rollback extra": lambda payload: payload["rollback_triggers"].append(
+                dict(payload["rollback_triggers"][0])
+            ),
+            "rollback unknown": lambda payload: payload["rollback_triggers"][
+                0
+            ].__setitem__("trigger_id", "unknown"),
+            "rollback severity": lambda payload: payload["rollback_triggers"][
+                0
+            ].__setitem__("severity", "low"),
+            "rollback condition": lambda payload: payload["rollback_triggers"][
+                0
+            ].__setitem__("condition", "anything"),
+            "cadence empty": lambda payload: payload.__setitem__(
+                "operator_review_cadence", ""
+            ),
+            "cadence changed": lambda payload: payload.__setitem__(
+                "operator_review_cadence", "weekly"
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                pilot = self.pilot_payload()
+                mutate(pilot)
+                self.assert_pilot_fails_closed(pilot)
+
     def test_artifact_metadata_exports_hashes_but_not_local_paths(self):
         decision = self.create()
 
@@ -740,7 +1261,7 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
 
         decision = self.create(paths)
 
-        self.assertEqual(decision["product_integration"], "blocked")
+        self.assertEqual(decision["product_integration"], "fail")
         self.assertEqual(
             decision["artifacts"]["product_integration_acceptance"][
                 "observed_status"
@@ -757,13 +1278,161 @@ class ReleaseDecisionTests(ReleaseDecisionFixture):
 
         decision = self.create(paths)
 
-        self.assertEqual(decision["product_integration"], "blocked")
+        self.assertEqual(decision["product_integration"], "fail")
         self.assertEqual(
             decision["artifacts"]["product_integration_acceptance"][
                 "observed_status"
             ],
             "inaccessible",
         )
+
+    def test_only_genuinely_omitted_children_have_blocked_input_status(self):
+        file_fields = (
+            "evidence_manifest",
+            "evidence_attestation",
+            "evidence_public_key",
+            "evidence_attestation_verification",
+            "apple_artifact_verification",
+            "apple_artifact_reproducibility",
+            "apple_release_manifest",
+            "pilot_gate_report",
+            "product_integration_acceptance",
+        )
+        for field in file_fields:
+            with self.subTest(field=field):
+                paths = self.input_paths()
+                paths[field] = None
+
+                decision = self.create(paths)
+                metadata = decision["artifacts"][field]
+
+                self.assertEqual(metadata["observed_status"], "missing")
+                self.assertEqual(
+                    release_decision.child_input_status(metadata), "blocked"
+                )
+
+    def test_every_supplied_inaccessible_child_has_fail_input_status(self):
+        file_fields = (
+            "evidence_manifest",
+            "evidence_attestation",
+            "evidence_public_key",
+            "evidence_attestation_verification",
+            "apple_artifact_verification",
+            "apple_artifact_reproducibility",
+            "apple_release_manifest",
+            "pilot_gate_report",
+            "product_integration_acceptance",
+        )
+        for field in file_fields:
+            with self.subTest(field=field):
+                paths = self.input_paths()
+                paths[field] = (self.root / f"absent-{field}").as_posix()
+
+                decision = self.create(paths)
+                metadata = decision["artifacts"][field]
+
+                self.assertEqual(metadata["observed_status"], "inaccessible")
+                self.assertEqual(release_decision.child_input_status(metadata), "fail")
+                self.assertEqual(decision["decision"], "no-go")
+
+    def test_every_supplied_malformed_json_child_has_fail_input_status(self):
+        malformed = self.root / "malformed.json"
+        malformed.write_bytes(b'{"schema_version":')
+        json_fields = (
+            "evidence_manifest",
+            "evidence_attestation",
+            "evidence_attestation_verification",
+            "apple_artifact_verification",
+            "apple_artifact_reproducibility",
+            "apple_release_manifest",
+            "pilot_gate_report",
+            "product_integration_acceptance",
+        )
+        for field in json_fields:
+            with self.subTest(field=field):
+                paths = self.input_paths()
+                paths[field] = malformed.as_posix()
+
+                decision = self.create(paths)
+                metadata = decision["artifacts"][field]
+
+                self.assertEqual(metadata["observed_status"], "invalid_json")
+                self.assertEqual(release_decision.child_input_status(metadata), "fail")
+                self.assertEqual(decision["decision"], "no-go")
+
+    def test_overflowing_json_float_is_invalid_json_and_fails_closed(self):
+        malformed = self.root / "overflowing-float.json"
+        malformed.write_bytes(b'{"schema_version":"invalid","value":1e999}')
+        paths = self.input_paths()
+        paths["pilot_gate_report"] = malformed.as_posix()
+
+        decision = self.create(paths)
+
+        self.assertEqual(
+            decision["artifacts"]["pilot_gate_report"]["observed_status"],
+            "invalid_json",
+        )
+        self.assertEqual(decision["decision"], "no-go")
+
+    def test_supplied_empty_directory_and_oversize_children_fail(self):
+        empty = self.root / "empty.json"
+        empty.touch()
+        directory = self.root / "directory-input"
+        directory.mkdir()
+        oversize = self.root / "oversize.json"
+        with oversize.open("wb") as handle:
+            handle.truncate(release_decision.MAX_ARTIFACT_BYTES + 1)
+
+        for name, path in {
+            "empty": empty,
+            "directory": directory,
+            "oversize": oversize,
+        }.items():
+            with self.subTest(name=name):
+                paths = self.input_paths()
+                paths["product_integration_acceptance"] = path.as_posix()
+
+                decision = self.create(paths)
+                metadata = decision["artifacts"][
+                    "product_integration_acceptance"
+                ]
+
+                self.assertEqual(metadata["observed_status"], "inaccessible")
+                self.assertEqual(decision["product_integration"], "fail")
+
+    def test_supplied_unstable_child_fails(self):
+        original_reader = release_decision.read_stable_regular_file
+
+        def unstable_reader(path: Path, maximum: int, label: str) -> bytes:
+            if path == self.product_acceptance:
+                raise release_decision.ReleaseDecisionError(
+                    "product integration acceptance changed while being read"
+                )
+            return original_reader(path, maximum, label)
+
+        with mock.patch.object(
+            release_decision,
+            "read_stable_regular_file",
+            side_effect=unstable_reader,
+        ):
+            decision = self.create()
+
+        metadata = decision["artifacts"]["product_integration_acceptance"]
+        self.assertEqual(metadata["observed_status"], "inaccessible")
+        self.assertEqual(release_decision.child_input_status(metadata), "fail")
+        self.assertEqual(decision["product_integration"], "fail")
+
+    def test_supplied_malformed_raw_public_key_fails_attestation(self):
+        malformed_key = self.root / "malformed-public.pem"
+        malformed_key.write_text("not a public key\n", encoding="utf-8")
+        paths = self.input_paths()
+        paths["evidence_public_key"] = malformed_key.as_posix()
+
+        decision = self.create(paths)
+
+        self.assertEqual(decision["runtime_safety"], "fail")
+        self.assertEqual(decision["privacy_security"], "fail")
+        self.assertEqual(decision["decision"], "no-go")
 
     def test_validator_rejects_handcrafted_go_with_blocked_category(self):
         decision = self.create()

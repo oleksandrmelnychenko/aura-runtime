@@ -46,11 +46,16 @@ The exact GO/NO-GO creation and Ed25519 operator-signature commands are in
 `docs/release-decision.md`. Run its focused contract tests with:
 
 ```bash
-python3 -m unittest ci.test_release_decision
+python3 -m unittest ci.test_release_decision ci.test_release_dossier
 ```
 
 The current repository must remain `no-go` until the external Apple client
 acceptance and four real pilot signoffs exist for the same candidate.
+`docs/release-candidate-dossier.md` contains the exact assemble/finalize/verify
+commands for the terminal fixed-layout bundle. The hosted
+`Release Evidence Freeze` workflow creates only its exact unsigned evidence
+input; external evidence signing and release-operator authorization remain
+separate and it cannot authorize a release.
 
 ## AURA Core Refactor Differential Gate
 
@@ -305,7 +310,8 @@ cargo run --locked --example pilot_gate -p aura-core -- \
   --pilot-regression-report artifacts/pilot-regression-report.json \
   --shadow-bundle artifacts/pilot-shadow-run-a.json \
   --shadow-bundle artifacts/pilot-shadow-run-b.json \
-  --review-signoffs docs/pilot-review-signoffs.json \
+  --review-signoffs artifacts/pilot-review-signoffs.json \
+  --release-revision "$(git rev-parse HEAD)" \
   --kids-memory-health-report artifacts/kids-memory-health.json \
   --kids-preprod-dry-run-report artifacts/kids-preprod-dry-run-matrix.json \
   --output artifacts/pilot-gate-report.json \
@@ -313,6 +319,13 @@ cargo run --locked --example pilot_gate -p aura-core -- \
   --require-kids-preprod-dry-run-pass \
   --require-pass
 ```
+
+The untracked signoff input must use `aura.pilot_review_signoffs.v2`; its
+top-level `release_revision` and all four signoff-level revisions must equal
+the command's exact `--release-revision`. The v2 pilot report preserves that
+binding for the release-decision evaluator. Hosted workflows do not yet own an
+authenticated ingestion step for this external human input, so absence remains
+an intentional no-go condition.
 
 ## KIDS Memory Daily Health Snapshot
 

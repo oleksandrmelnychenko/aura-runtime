@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import os
+import secrets
 import stat
 import sys
 from datetime import datetime, timezone
@@ -29,6 +30,264 @@ TEMPORAL_TELEMETRY_VALIDATION_SCHEMA_VERSION = (
 )
 TEMPORAL_TELEMETRY_SCHEMA_VERSION = "aura.military.temporal_shadow_telemetry.v1"
 MAX_JSON_ARTIFACT_BYTES = 256 * 1024 * 1024
+
+
+class EvidenceManifestError(Exception):
+    pass
+
+
+class FrozenAtomicManifestOutput:
+    """Atomically replace one safe output without ever overwriting an input.
+
+    The output directory is opened once and all target inspection, temporary
+    file creation, and replacement are relative to that descriptor.  A rename
+    followed by a parent-directory symlink swap therefore cannot redirect the
+    final write.  Both lexical input paths and the regular-file identities
+    observed before and during input reads are protected.
+    """
+
+    def __init__(self, output: Path, protected_paths: list[Path]):
+        if output.name in ("", ".", ".."):
+            raise EvidenceManifestError("output path must name a file")
+        lexical_output = self._lexical_path(output)
+        lexical_protected = {self._lexical_path(path) for path in protected_paths}
+        if lexical_output in lexical_protected:
+            raise EvidenceManifestError(
+                "output path must not overwrite an evidence input"
+            )
+
+        self.output = output
+        self._name = output.name
+        self._protected_paths = tuple(protected_paths)
+        self._directory_descriptor: int | None = None
+        self._protected_identities = frozenset(
+            identity
+            for path in protected_paths
+            if (identity := self._regular_identity(path)) is not None
+        )
+        self._written = False
+
+        try:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            directory_flags = os.O_RDONLY
+            for name in ("O_DIRECTORY", "O_CLOEXEC", "O_NOFOLLOW"):
+                directory_flags |= getattr(os, name, 0)
+            self._directory_descriptor = os.open(output.parent, directory_flags)
+            directory_metadata = os.fstat(self._directory_descriptor)
+            if not stat.S_ISDIR(directory_metadata.st_mode):
+                raise EvidenceManifestError("output parent is not a directory")
+            self._validate_target()
+        except EvidenceManifestError:
+            self.close()
+            raise
+        except OSError as error:
+            self.close()
+            raise EvidenceManifestError(
+                "output parent is missing, symbolic, or cannot be opened safely: "
+                f"{output.parent}"
+            ) from error
+
+    @staticmethod
+    def _lexical_path(path: Path) -> Path:
+        return Path(os.path.abspath(os.path.normpath(path)))
+
+    @staticmethod
+    def _regular_identity(path: Path) -> tuple[int, int] | None:
+        try:
+            metadata = os.stat(path, follow_symlinks=False)
+        except OSError:
+            return None
+        if not stat.S_ISREG(metadata.st_mode):
+            return None
+        return metadata.st_dev, metadata.st_ino
+
+    def _validate_target(self) -> None:
+        if self._directory_descriptor is None:
+            raise EvidenceManifestError("output directory is not open")
+        output_directory = os.fstat(self._directory_descriptor)
+        for protected in self._protected_paths:
+            parent_flags = os.O_RDONLY
+            for name in ("O_DIRECTORY", "O_CLOEXEC"):
+                parent_flags |= getattr(os, name, 0)
+            try:
+                protected_parent = os.open(protected.parent, parent_flags)
+            except OSError:
+                continue
+            try:
+                parent_metadata = os.fstat(protected_parent)
+                if (
+                    protected.name == self._name
+                    and (parent_metadata.st_dev, parent_metadata.st_ino)
+                    == (output_directory.st_dev, output_directory.st_ino)
+                ):
+                    raise EvidenceManifestError(
+                        "output path must not overwrite an evidence input"
+                    )
+            finally:
+                os.close(protected_parent)
+        try:
+            metadata = os.stat(
+                self._name,
+                dir_fd=self._directory_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            return
+        except OSError as error:
+            raise EvidenceManifestError(
+                "output target cannot be inspected safely"
+            ) from error
+        if stat.S_ISLNK(metadata.st_mode):
+            raise EvidenceManifestError("output target must not be a symbolic link")
+        if not stat.S_ISREG(metadata.st_mode):
+            raise EvidenceManifestError("output target must be a regular file")
+        if (metadata.st_dev, metadata.st_ino) in self._protected_identities:
+            raise EvidenceManifestError(
+                "output path must not overwrite an evidence input"
+            )
+
+    def protect_identities(self, identities: set[tuple[int, int]]) -> None:
+        if self._written:
+            raise EvidenceManifestError(
+                "cannot add protected inputs after output is written"
+            )
+        self._protected_identities = frozenset(
+            set(self._protected_identities) | identities
+        )
+        self._validate_target()
+
+    def write_bytes(self, payload: bytes) -> None:
+        if self._directory_descriptor is None:
+            raise EvidenceManifestError("output directory is not open")
+        if self._written:
+            raise EvidenceManifestError("output may only be written once")
+        if not isinstance(payload, bytes):
+            raise EvidenceManifestError("output payload must be bytes")
+
+        temporary_name = f".aura-evidence-{secrets.token_hex(16)}.tmp"
+        temporary_descriptor: int | None = None
+
+        def verify_open_payload(label: str) -> None:
+            if temporary_descriptor is None:
+                raise EvidenceManifestError(f"{label} is not open")
+            os.lseek(temporary_descriptor, 0, os.SEEK_SET)
+            before = os.fstat(temporary_descriptor)
+            chunks: list[bytes] = []
+            observed = 0
+            while True:
+                chunk = os.read(
+                    temporary_descriptor,
+                    min(1024 * 1024, len(payload) - observed + 1),
+                )
+                if not chunk:
+                    break
+                observed += len(chunk)
+                if observed > len(payload):
+                    raise EvidenceManifestError(f"{label} exceeds its payload")
+                chunks.append(chunk)
+            after = os.fstat(temporary_descriptor)
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or observed != len(payload)
+                or b"".join(chunks) != payload
+                or (
+                    before.st_dev,
+                    before.st_ino,
+                    before.st_nlink,
+                    before.st_size,
+                    before.st_mtime_ns,
+                    before.st_ctime_ns,
+                )
+                != (
+                    after.st_dev,
+                    after.st_ino,
+                    after.st_nlink,
+                    after.st_size,
+                    after.st_mtime_ns,
+                    after.st_ctime_ns,
+                )
+            ):
+                raise EvidenceManifestError(f"{label} changed during verification")
+
+        def verify_published_name() -> None:
+            if temporary_descriptor is None or self._directory_descriptor is None:
+                raise EvidenceManifestError("published output is not open")
+            try:
+                observed = os.stat(
+                    self._name,
+                    dir_fd=self._directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except OSError as error:
+                raise EvidenceManifestError(
+                    "published output name is inaccessible"
+                ) from error
+            opened = os.fstat(temporary_descriptor)
+            if (
+                not stat.S_ISREG(observed.st_mode)
+                or observed.st_nlink != 1
+                or (observed.st_dev, observed.st_ino)
+                != (opened.st_dev, opened.st_ino)
+            ):
+                raise EvidenceManifestError(
+                    "published output was replaced during publication"
+                )
+
+        try:
+            flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
+            for name in ("O_CLOEXEC", "O_NOFOLLOW"):
+                flags |= getattr(os, name, 0)
+            temporary_descriptor = os.open(
+                temporary_name,
+                flags,
+                0o600,
+                dir_fd=self._directory_descriptor,
+            )
+            offset = 0
+            while offset < len(payload):
+                written = os.write(temporary_descriptor, payload[offset:])
+                if written <= 0:
+                    raise EvidenceManifestError("output write made no progress")
+                offset += written
+            os.fsync(temporary_descriptor)
+            verify_open_payload("staged evidence manifest")
+
+            self._validate_target()
+            os.replace(
+                temporary_name,
+                self._name,
+                src_dir_fd=self._directory_descriptor,
+                dst_dir_fd=self._directory_descriptor,
+            )
+            verify_published_name()
+            verify_open_payload("published evidence manifest")
+            os.fsync(self._directory_descriptor)
+            verify_published_name()
+            self._written = True
+        except EvidenceManifestError:
+            raise
+        except OSError as error:
+            raise EvidenceManifestError(
+                "output could not be written atomically"
+            ) from error
+        finally:
+            if temporary_descriptor is not None:
+                os.close(temporary_descriptor)
+            # On failure retain the private random staging file. Unlinking by
+            # name is unsafe if another writer can swap that name after the
+            # failure but before cleanup.
+
+    def close(self) -> None:
+        if self._directory_descriptor is not None:
+            os.close(self._directory_descriptor)
+            self._directory_descriptor = None
+
+    def __enter__(self) -> "FrozenAtomicManifestOutput":
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
+        self.close()
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,15 +415,26 @@ def _reject_json_constant(value: str) -> None:
     raise ValueError(f"non-finite JSON value is forbidden: {value}")
 
 
+def _strict_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"non-finite JSON value is forbidden: {value}")
+    return parsed
+
+
 def strict_json_loads(raw: bytes) -> object:
     return json.loads(
         raw.decode("utf-8"),
         object_pairs_hook=_strict_json_object,
         parse_constant=_reject_json_constant,
+        parse_float=_strict_json_float,
     )
 
 
-def read_json_artifact_snapshot(path: Path) -> bytes:
+def read_json_artifact_snapshot(
+    path: Path,
+    protected_identities: set[tuple[int, int]] | None = None,
+) -> bytes:
     flags = os.O_RDONLY
     for name in ("O_CLOEXEC", "O_NOFOLLOW", "O_NONBLOCK"):
         flags |= getattr(os, name, 0)
@@ -173,6 +443,8 @@ def read_json_artifact_snapshot(path: Path) -> bytes:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
             raise ValueError("artifact is not a regular file")
+        if protected_identities is not None:
+            protected_identities.add((metadata.st_dev, metadata.st_ino))
         if not 1 <= metadata.st_size <= MAX_JSON_ARTIFACT_BYTES:
             raise ValueError(
                 "artifact size must be within "
@@ -218,14 +490,19 @@ def read_json_artifact_snapshot(path: Path) -> bytes:
         os.close(descriptor)
 
 
-def load_json_artifact(path_str: str, required: bool) -> tuple[dict | None, dict]:
+def load_json_artifact(
+    path_str: str,
+    required: bool,
+    *,
+    protected_identities: set[tuple[int, int]] | None = None,
+) -> tuple[dict | None, dict]:
     path = Path(path_str)
     artifact = {
         "required": required,
         "path": path.as_posix(),
     }
     try:
-        raw = read_json_artifact_snapshot(path)
+        raw = read_json_artifact_snapshot(path, protected_identities)
     except FileNotFoundError:
         artifact["exists"] = False
         artifact["status"] = "missing"
@@ -247,7 +524,12 @@ def load_json_artifact(path_str: str, required: bool) -> tuple[dict | None, dict
         payload = strict_json_loads(raw)
         if not isinstance(payload, dict):
             raise ValueError("top-level JSON value must be an object")
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        ValueError,
+    ) as error:
         artifact["status"] = "invalid_json"
         artifact["error"] = str(error)
         return None, artifact
@@ -1284,10 +1566,15 @@ def apple_reproducibility_status(payload: dict | None) -> str | None:
 
 def evidence_status(artifacts: dict, summary: dict) -> str:
     if any(
-        meta["required"] and meta.get("status") != "loaded"
+        meta["required"] and meta.get("status") == "missing"
         for meta in artifacts.values()
     ):
         return "blocked"
+    if any(
+        meta["required"] and meta.get("status") != "loaded"
+        for meta in artifacts.values()
+    ):
+        return "fail"
     if summary["release_report_status"] != "pass":
         return "fail"
     if summary["ffi_soak_status"] != "pass":
@@ -1645,6 +1932,9 @@ def attach_payload_details(
         artifacts["pilot_gate_report"]["schema_version"] = pilot_gate_payload.get(
             "schema_version"
         )
+        artifacts["pilot_gate_report"]["release_revision"] = pilot_gate_payload.get(
+            "release_revision"
+        )
         artifacts["pilot_gate_report"]["shadow_run_count"] = len(
             pilot_gate_payload.get("shadow_runs", [])
         )
@@ -1789,25 +2079,33 @@ def attach_payload_details(
         artifact["inventory_count"] = len(inventory) if isinstance(inventory, list) else None
 
 
-def main() -> int:
-    args = parse_args()
+def build_manifest(
+    args: argparse.Namespace,
+    protected_identities: set[tuple[int, int]],
+) -> dict:
+    def load_artifact(path_str: str, required: bool) -> tuple[dict | None, dict]:
+        return load_json_artifact(
+            path_str,
+            required,
+            protected_identities=protected_identities,
+        )
 
-    release_payload, release_artifact = load_json_artifact(args.release_report, required=True)
-    contract_payload, contract_artifact = load_json_artifact(args.contract_evidence, required=True)
-    soak_payload, soak_artifact = load_json_artifact(args.ffi_soak, required=True)
-    dataset_payload, dataset_artifact = load_json_artifact(args.dataset_evidence, required=True)
-    audit_payload, audit_artifact = load_json_artifact(args.audit_evidence, required=True)
-    pilot_shadow_payload, pilot_shadow_artifact = load_json_artifact(
+    release_payload, release_artifact = load_artifact(args.release_report, required=True)
+    contract_payload, contract_artifact = load_artifact(args.contract_evidence, required=True)
+    soak_payload, soak_artifact = load_artifact(args.ffi_soak, required=True)
+    dataset_payload, dataset_artifact = load_artifact(args.dataset_evidence, required=True)
+    audit_payload, audit_artifact = load_artifact(args.audit_evidence, required=True)
+    pilot_shadow_payload, pilot_shadow_artifact = load_artifact(
         args.pilot_shadow_bundle, required=args.pilot_shadow_bundle is not None
     ) if args.pilot_shadow_bundle else (None, None)
-    pilot_regression_payload, pilot_regression_artifact = load_json_artifact(
+    pilot_regression_payload, pilot_regression_artifact = load_artifact(
         args.pilot_regression_report, required=args.pilot_regression_report is not None
     ) if args.pilot_regression_report else (None, None)
-    temporal_shadow_payload, temporal_shadow_artifact = load_json_artifact(
+    temporal_shadow_payload, temporal_shadow_artifact = load_artifact(
         args.temporal_shadow_report, required=args.temporal_shadow_report is not None
     ) if args.temporal_shadow_report else (None, None)
     temporal_independent_review_payload, temporal_independent_review_artifact = (
-        load_json_artifact(
+        load_artifact(
             args.temporal_independent_review_report,
             required=args.temporal_independent_review_report is not None,
         )
@@ -1818,7 +2116,7 @@ def main() -> int:
         temporal_study_attestation_verification_payload,
         temporal_study_attestation_verification_artifact,
     ) = (
-        load_json_artifact(
+        load_artifact(
             args.temporal_study_attestation_verification,
             required=args.temporal_study_attestation_verification is not None,
         )
@@ -1829,7 +2127,7 @@ def main() -> int:
         temporal_study_timestamp_verification_payload,
         temporal_study_timestamp_verification_artifact,
     ) = (
-        load_json_artifact(
+        load_artifact(
             args.temporal_study_timestamp_verification,
             required=args.temporal_study_timestamp_verification is not None,
         )
@@ -1840,7 +2138,7 @@ def main() -> int:
         temporal_review_receipt_chain_verification_payload,
         temporal_review_receipt_chain_verification_artifact,
     ) = (
-        load_json_artifact(
+        load_artifact(
             args.temporal_review_receipt_chain_verification,
             required=args.temporal_review_receipt_chain_verification is not None,
         )
@@ -1851,45 +2149,45 @@ def main() -> int:
         temporal_shadow_telemetry_validation_payload,
         temporal_shadow_telemetry_validation_artifact,
     ) = (
-        load_json_artifact(
+        load_artifact(
             args.temporal_shadow_telemetry_validation,
             required=args.temporal_shadow_telemetry_validation is not None,
         )
         if args.temporal_shadow_telemetry_validation
         else (None, None)
     )
-    pilot_gate_payload, pilot_gate_artifact = load_json_artifact(
+    pilot_gate_payload, pilot_gate_artifact = load_artifact(
         args.pilot_gate_report, required=args.pilot_gate_report is not None
     ) if args.pilot_gate_report else (None, None)
-    kids_preprod_dry_run_payload, kids_preprod_dry_run_artifact = load_json_artifact(
+    kids_preprod_dry_run_payload, kids_preprod_dry_run_artifact = load_artifact(
         args.kids_preprod_dry_run_report,
         required=args.kids_preprod_dry_run_report is not None,
     ) if args.kids_preprod_dry_run_report else (None, None)
-    community_surface_payload, community_surface_artifact = load_json_artifact(
+    community_surface_payload, community_surface_artifact = load_artifact(
         args.community_surface_report,
         required=args.community_surface_report is not None,
     ) if args.community_surface_report else (None, None)
-    world_lifecycle_payload, world_lifecycle_artifact = load_json_artifact(
+    world_lifecycle_payload, world_lifecycle_artifact = load_artifact(
         args.world_lifecycle_report,
         required=args.world_lifecycle_report is not None,
     ) if args.world_lifecycle_report else (None, None)
-    world_performance_payload, world_performance_artifact = load_json_artifact(
+    world_performance_payload, world_performance_artifact = load_artifact(
         args.world_performance_report,
         required=args.world_performance_report is not None,
     ) if args.world_performance_report else (None, None)
-    refactor_diff_payload, refactor_diff_artifact = load_json_artifact(
+    refactor_diff_payload, refactor_diff_artifact = load_artifact(
         args.refactor_diff_report,
         required=args.refactor_diff_report is not None,
     ) if args.refactor_diff_report else (None, None)
-    apple_artifact_payload, apple_artifact_artifact = load_json_artifact(
+    apple_artifact_payload, apple_artifact_artifact = load_artifact(
         args.apple_artifact_verification,
         required=args.apple_artifact_verification is not None,
     ) if args.apple_artifact_verification else (None, None)
-    apple_reproducibility_payload, apple_reproducibility_artifact = load_json_artifact(
+    apple_reproducibility_payload, apple_reproducibility_artifact = load_artifact(
         args.apple_artifact_reproducibility,
         required=args.apple_artifact_reproducibility is not None,
     ) if args.apple_artifact_reproducibility else (None, None)
-    smoke_payload, smoke_artifact = load_json_artifact(
+    smoke_payload, smoke_artifact = load_artifact(
         args.ffi_smoke, required=args.ffi_smoke is not None
     ) if args.ffi_smoke else (None, None)
 
@@ -2375,6 +2673,9 @@ def main() -> int:
         "pilot_gate_schema_version": (
             pilot_gate_payload.get("schema_version") if pilot_gate_payload else None
         ),
+        "pilot_gate_release_revision": (
+            pilot_gate_payload.get("release_revision") if pilot_gate_payload else None
+        ),
         "pilot_gate_shadow_run_count": (
             len(pilot_gate_payload.get("shadow_runs", []))
             if pilot_gate_payload
@@ -2573,12 +2874,60 @@ def main() -> int:
         "artifacts": artifacts,
     }
     manifest["evidence_status"] = evidence_status(artifacts, summary)
+    return manifest
 
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+def supplied_artifact_paths(args: argparse.Namespace) -> list[Path]:
+    argument_names = (
+        "release_report",
+        "contract_evidence",
+        "ffi_soak",
+        "ffi_smoke",
+        "dataset_evidence",
+        "audit_evidence",
+        "pilot_shadow_bundle",
+        "pilot_regression_report",
+        "temporal_shadow_report",
+        "temporal_independent_review_report",
+        "temporal_study_attestation_verification",
+        "temporal_study_timestamp_verification",
+        "temporal_review_receipt_chain_verification",
+        "temporal_shadow_telemetry_validation",
+        "pilot_gate_report",
+        "kids_preprod_dry_run_report",
+        "community_surface_report",
+        "world_lifecycle_report",
+        "world_performance_report",
+        "refactor_diff_report",
+        "apple_artifact_verification",
+        "apple_artifact_reproducibility",
+    )
+    return [
+        Path(path_str)
+        for name in argument_names
+        if (path_str := getattr(args, name)) is not None
+    ]
+
+
+def main() -> int:
+    args = parse_args()
+    protected_identities: set[tuple[int, int]] = set()
+    with FrozenAtomicManifestOutput(
+        Path(args.output),
+        supplied_artifact_paths(args),
+    ) as frozen_output:
+        manifest = build_manifest(args, protected_identities)
+        frozen_output.protect_identities(protected_identities)
+        serialized = (
+            json.dumps(manifest, indent=2, allow_nan=False) + "\n"
+        ).encode("utf-8")
+        frozen_output.write_bytes(serialized)
     return 0 if manifest["evidence_status"] == "pass" else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except EvidenceManifestError as error:
+        print(f"evidence manifest error: {error}", file=sys.stderr)
+        sys.exit(2)
