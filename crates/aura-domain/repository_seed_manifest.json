@@ -12,7 +12,7 @@
     { "path": "crates/aura-core/data/external_curated_chat_cases.json", "sha256": "f503181000062caaa39d1af07729d31aa0f73eb77a802697ff683b893faefc4b" },
     { "path": "crates/aura-core/data/pilot_simulation_regression_cases.json", "sha256": "9a7a864c523eea9b8459f3cadc39e03a29659c836983b073ecb617e7808fa882" },
     { "path": "crates/aura-core/data/realistic_chat_cases.json", "sha256": "25ff98e4a8b71d6ae07b89131939b3c0df72e4f5ce59f7820a0a27f3ce85e64a" },
-    { "path": "crates/aura-core/data/refactor_baseline_v1.json", "sha256": "2bf749e2727a1887a506388163f6996f28960fa10bb4686396390c7938d814b4" },
+    { "path": "crates/aura-core/data/refactor_baseline_v1.json", "sha256": "b3d042a799699d784e5717641d84a8a338741c88293b5ec15dcc62700bf20f46" },
     { "path": "crates/aura-core/data/safety_world_v2_schema.example.json", "sha256": "f0376b94a57c104f796f7a1e066bb1bc75270edccd13022133a0a1a21b2e1bb2" },
     { "path": "crates/aura-core/data/social_context_cohorts.json", "sha256": "ddc287361fc30f13be769c9f8649d02ba61c0f5e29fba4cdb0aa2e4854f33c6f" },
     { "path": "crates/aura-core/data/wave1_gate_baseline.json", "sha256": "fd7b42ba7557d2d29c552125d29b5a64f75fb4dc7d8a494eb36dc068804cfd10" },
