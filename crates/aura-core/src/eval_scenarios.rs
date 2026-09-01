@@ -1,6 +1,7 @@
 use crate::{
     AccountType, AuraConfig, ContentType, ConversationType, DomainMode, MessageInput,
-    ProtectionLevel, ScenarioCase, ScenarioStep, ThreatType,
+    ProtectionLevel, RelationshipTrustSource, ScenarioCase, ScenarioStep, SenderRelationship,
+    ThreatType,
 };
 
 pub fn canonical_messenger_scenarios() -> Vec<ScenarioCase> {
@@ -1755,7 +1756,7 @@ pub fn negative_control_teen_flirting_case() -> ScenarioCase {
         steps: vec![
             ScenarioStep {
                 timestamp_ms: 0,
-                input: direct_msg(
+                input: verified_peer_msg(
                     "I really like talking to you. Want to go to the school dance together?",
                     "teen_1",
                     "teen_flirt_1",
@@ -1764,7 +1765,7 @@ pub fn negative_control_teen_flirting_case() -> ScenarioCase {
             },
             ScenarioStep {
                 timestamp_ms: hour,
-                input: direct_msg(
+                input: verified_peer_msg(
                     "Yeah, I'd like that. My parents said I can stay until nine.",
                     "teen_2",
                     "teen_flirt_1",
@@ -1773,7 +1774,7 @@ pub fn negative_control_teen_flirting_case() -> ScenarioCase {
             },
             ScenarioStep {
                 timestamp_ms: 2 * hour,
-                input: direct_msg(
+                input: verified_peer_msg(
                     "Cool, let's meet by the gym after class tomorrow.",
                     "teen_1",
                     "teen_flirt_1",
@@ -2544,6 +2545,14 @@ pub(crate) fn direct_msg(text: &str, sender: &str, conversation_id: &str) -> Mes
         member_count: None,
         sender_relationship: Default::default(),
         relationship_trust_source: Default::default(),
+    }
+}
+
+fn verified_peer_msg(text: &str, sender: &str, conversation_id: &str) -> MessageInput {
+    MessageInput {
+        sender_relationship: SenderRelationship::Peer,
+        relationship_trust_source: RelationshipTrustSource::PlatformVerified,
+        ..direct_msg(text, sender, conversation_id)
     }
 }
 

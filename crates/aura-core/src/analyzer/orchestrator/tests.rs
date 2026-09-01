@@ -2411,6 +2411,87 @@ fn supportive_selfharm_response_cannot_retain_filtered_kids_domain_action() {
 }
 
 #[test]
+fn confirmed_selfharm_context_recognizes_ambiguous_same_sender_followup() {
+    let db = PatternDatabase::default_mvp();
+    let mut analyzer = Analyzer::new(child_config(), &db);
+    let sender = "self-harm-author";
+    let conversation = "self-harm-followup";
+
+    let seed = analyzer.analyze_with_context(
+        &child_input(
+            "I don't want to live anymore. I want to end it all.",
+            sender,
+            conversation,
+        ),
+        1_000,
+    );
+    assert_eq!(seed.threat_type, ThreatType::SelfHarm, "{seed:?}");
+
+    let followup = analyzer.analyze_with_context(
+        &child_input(
+            "Tonight feels like the night I finally do it.",
+            sender,
+            conversation,
+        ),
+        2_000,
+    );
+    assert_eq!(followup.threat_type, ThreatType::SelfHarm, "{followup:?}");
+    assert_eq!(followup.action, Action::Warn, "{followup:?}");
+    assert!(
+        followup
+            .reason_codes
+            .iter()
+            .any(|code| code == "domain.kids.memory.self_harm_followup"),
+        "{followup:?}"
+    );
+}
+
+#[test]
+fn ambiguous_selfharm_language_is_clean_without_history_and_in_protective_report() {
+    let db = PatternDatabase::default_mvp();
+    let sender = "self-harm-boundary-author";
+    let conversation = "self-harm-boundary";
+
+    let mut standalone_analyzer = Analyzer::new(child_config(), &db);
+    let standalone = standalone_analyzer.analyze_with_context(
+        &child_input(
+            "Tonight feels like the night I finally do it.",
+            sender,
+            conversation,
+        ),
+        1_000,
+    );
+    assert_eq!(standalone.threat_type, ThreatType::None, "{standalone:?}");
+
+    let mut analyzer = Analyzer::new(child_config(), &db);
+    let _ = analyzer.analyze_with_context(
+        &child_input(
+            "I don't want to live anymore. I want to end it all.",
+            sender,
+            conversation,
+        ),
+        1_000,
+    );
+    let report = analyzer.analyze_with_context(
+        &child_input(
+            "“Goodbye everyone. This is the end.” I reject this quoted message and will report it to the counselor.",
+            sender,
+            conversation,
+        ),
+        2_000,
+    );
+    assert_eq!(report.threat_type, ThreatType::None, "{report:?}");
+    assert_eq!(report.action, Action::Allow, "{report:?}");
+    assert!(
+        !report
+            .reason_codes
+            .iter()
+            .any(|code| code == "domain.kids.memory.self_harm_followup"),
+        "{report:?}"
+    );
+}
+
+#[test]
 fn filtered_supportive_selfharm_cannot_seed_kids_bullying_memory() {
     let db = PatternDatabase::default_mvp();
     let mut analyzer = Analyzer::new(child_config(), &db);

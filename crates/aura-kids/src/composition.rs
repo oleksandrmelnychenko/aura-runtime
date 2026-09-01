@@ -107,6 +107,8 @@ const ANGER: u8 = 63;
 const FRIENDS: u8 = 64;
 const ABSENCE: u8 = 65;
 const BETTER_WITHOUT: u8 = 66;
+const FINALITY: u8 = 67;
+const ANAPHORIC_ACTION: u8 = 68;
 
 /// Detects bounded compositional candidates without assigning final context.
 ///
@@ -116,6 +118,72 @@ const BETTER_WITHOUT: u8 = 66;
 /// a fixed semantic bound. Callers must keep the existing detector fallback and
 /// must not treat this error as evidence that the message is safe.
 pub(crate) fn detect(text: &str) -> Result<Vec<DomainCandidate>, SemanticPrepareError> {
+    let (semantic, clauses) = prepare_concepts(text)?;
+
+    let mut candidates = Vec::with_capacity(MAX_COMPOSITIONAL_CANDIDATES);
+    let mut emitted = Concepts::default();
+    for index in 0..clauses.len() {
+        let window = clause_window(&semantic, &clauses, index);
+        emit_matches(window, &mut emitted, &mut candidates);
+        if candidates.len() == MAX_COMPOSITIONAL_CANDIDATES {
+            break;
+        }
+    }
+    Ok(candidates)
+}
+
+/// Returns whether an otherwise ambiguous message is an acute continuation of
+/// already-confirmed self-harm context.
+///
+/// This deliberately cannot create a standalone self-harm candidate. The
+/// conversation-memory boundary must first establish same-sender self-harm,
+/// which keeps ordinary uses of words such as "done" and "end" from becoming
+/// crisis alerts on their own.
+pub(crate) fn is_ambiguous_self_harm_followup(text: &str) -> Result<bool, SemanticPrepareError> {
+    let (semantic, clauses) = prepare_concepts(text)?;
+    let combined = clauses
+        .into_iter()
+        .fold(Concepts::default(), Concepts::union);
+
+    let finality_declaration = contains_token_sequence(&semantic, &["this", "is", "the", "end"])
+        || contains_token_sequence(&semantic, &["це", "кінець"])
+        || contains_token_sequence(&semantic, &["це", "все"])
+        || contains_token_sequence(&semantic, &["это", "конец"])
+        || contains_token_sequence(&semantic, &["это", "всё"])
+        || contains_token_sequence(&semantic, &["это", "все"]);
+    let farewell_finality = combined.contains(FAREWELL) && finality_declaration;
+    let self_directed_finality = combined.contains(FIRST_PERSON)
+        && (finality_declaration
+            || combined.contains(FINALITY)
+                && combined.contains(COMPEL)
+                && combined.contains(ANAPHORIC_ACTION)
+                && combined.contains_any(&[FUTURE, URGENCY]));
+
+    Ok(farewell_finality || self_directed_finality)
+}
+
+fn contains_token_sequence(semantic: &PreparedSemanticText<'_>, expected: &[&str]) -> bool {
+    if expected.is_empty() {
+        return false;
+    }
+    semantic.tokens().windows(expected.len()).any(|tokens| {
+        let Some(first) = tokens.first() else {
+            return false;
+        };
+        tokens
+            .iter()
+            .all(|token| token.clause_index() == first.clause_index())
+            && tokens.iter().zip(expected).all(|(token, expected)| {
+                semantic
+                    .slice(token.span())
+                    .is_ok_and(|lexeme| eq_folded(lexeme, expected))
+            })
+    })
+}
+
+fn prepare_concepts(
+    text: &str,
+) -> Result<(PreparedSemanticText<'_>, Vec<Concepts>), SemanticPrepareError> {
     let semantic = PreparedSemanticText::new(text)?;
     let mut clauses = vec![Concepts::default(); semantic.clauses().len()];
 
@@ -146,16 +214,7 @@ pub(crate) fn detect(text: &str) -> Result<Vec<DomainCandidate>, SemanticPrepare
         classify_lexeme(lexeme, clause);
     }
 
-    let mut candidates = Vec::with_capacity(MAX_COMPOSITIONAL_CANDIDATES);
-    let mut emitted = Concepts::default();
-    for index in 0..clauses.len() {
-        let window = clause_window(&semantic, &clauses, index);
-        emit_matches(window, &mut emitted, &mut candidates);
-        if candidates.len() == MAX_COMPOSITIONAL_CANDIDATES {
-            break;
-        }
-    }
-    Ok(candidates)
+    Ok((semantic, clauses))
 }
 
 fn clause_window(
@@ -676,6 +735,31 @@ fn classify_lexeme(lexeme: &str, concepts: &mut Concepts) {
         concepts,
         FAREWELL,
         &["goodbye", "farewell", "прощ", "прощ"],
+    );
+    mark_prefix(
+        lexeme,
+        concepts,
+        FINALITY,
+        &[
+            "finally",
+            "done",
+            "end",
+            "finish",
+            "нарешті",
+            "закінч",
+            "кінец",
+            "заверш",
+            "наконец",
+            "конец",
+            "оконч",
+            "заверш",
+        ],
+    );
+    mark_exact(
+        lexeme,
+        concepts,
+        ANAPHORIC_ACTION,
+        &["it", "all", "everything", "це", "это", "все"],
     );
     mark_prefix(
         lexeme,
@@ -1346,7 +1430,7 @@ fn starts_with_folded(value: &str, prefix_lower: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::detect;
+    use super::{detect, is_ambiguous_self_harm_followup};
     use aura_domain::{DomainEventKind, QuoteContext};
 
     fn families(text: &str) -> Vec<String> {
@@ -1370,6 +1454,41 @@ mod tests {
 
         for (text, family) in cases {
             assert!(families(text).iter().any(|item| item == family), "{text}");
+        }
+    }
+
+    #[test]
+    fn identifies_only_structured_ambiguous_self_harm_followups() {
+        for text in [
+            "Goodbye everyone. This is the end.",
+            "tonight feels like the night i finally do it",
+            "I'll finally do it tonight",
+            "im done trying, this is the end",
+            "Сьогодні я нарешті це зроблю.",
+            "Сегодня я наконец это сделаю.",
+            "Прощавайте. Це кінець.",
+        ] {
+            assert!(
+                is_ambiguous_self_harm_followup(text).expect("bounded semantic preparation"),
+                "{text}"
+            );
+            assert!(
+                !families(text).iter().any(|family| family == "self_harm"),
+                "ambiguous followup must not become standalone evidence: {text}"
+            );
+        }
+
+        for text in [
+            "Goodbye everyone, the school meeting is done.",
+            "I'm done trying to solve this homework tonight.",
+            "This is the end of the movie.",
+            "Я нарешті закінчу звіт сьогодні.",
+            "Я наконец закончу отчёт сегодня.",
+        ] {
+            assert!(
+                !is_ambiguous_self_harm_followup(text).expect("bounded semantic preparation"),
+                "{text}"
+            );
         }
     }
 

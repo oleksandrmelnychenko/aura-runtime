@@ -390,6 +390,7 @@ fn apply_kids_conversation_memory_amplifiers(
     let mut repeated_conversation_bullying = 0usize;
     let mut conversation_has_self_harm = false;
     let mut conversation_has_grooming = false;
+    let mut sender_has_prior_self_harm = false;
 
     let Ok(mut guard) = conversation_memory(memory_store).lock() else {
         return;
@@ -423,6 +424,9 @@ fn apply_kids_conversation_memory_amplifiers(
             if snapshot.has_manipulation {
                 sender_risk_score += 0.8;
             }
+            if snapshot.has_self_harm && !is_current_entry {
+                sender_has_prior_self_harm = true;
+            }
             // ML sub-threshold contributions: accumulate risk from messages
             // where the ML model detected a signal above the memory threshold
             // but no lexicon rule fired. Prevents gradual escalation by
@@ -450,6 +454,25 @@ fn apply_kids_conversation_memory_amplifiers(
     } else {
         settings.sender_risk_min + settings.sender_risk_known_sender_delta
     };
+    let has_ambiguous_self_harm_followup = input
+        .text
+        .as_deref()
+        .is_some_and(|text| composition::is_ambiguous_self_harm_followup(text).unwrap_or(false));
+    if sender_present
+        && sender_has_prior_self_harm
+        && !current.has_self_harm
+        && has_ambiguous_self_harm_followup
+    {
+        signals.push(DomainSignal {
+            threat_key: "kids_memory_self_harm_followup".to_string(),
+            reason_code: "kids.memory.self_harm_followup".to_string(),
+            score: 0.92,
+            threat_type: Some("self_harm".to_string()),
+            severity: Some("critical".to_string()),
+            priority: Some(100),
+            action: Some(DomainAction::Warn),
+        });
+    }
     if sender_present
         && repeated_sender_grooming >= settings.grooming_progression_min
         && current.has_manipulation
@@ -1628,6 +1651,77 @@ mod tests {
         }
         assert!(has_memory_signal);
         assert_eq!(output.action, Some(DomainAction::Warn));
+    }
+
+    #[test]
+    fn pipeline_carries_confirmed_self_harm_into_ambiguous_same_sender_followups() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let message = |text: &str, sender: &str| DomainInput {
+            text: Some(text.to_string()),
+            language: Some("en".to_string()),
+            language_evidence: None,
+            sender_id: Some(sender.to_string()),
+            conversation_id: Some("conv_self_harm_followup".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+            ml_safety_hint: None,
+        };
+
+        let seed = run_kids_pipeline(&message(
+            "I don't want to live anymore. I want to end it all.",
+            "author",
+        ));
+        assert!(seed
+            .signals
+            .iter()
+            .any(|signal| signal.threat_type.as_deref() == Some("self_harm")));
+
+        for text in [
+            "tonight feels like the night i finally do it",
+            "I'll finally do it tonight",
+            "im done trying, this is the end",
+            "Goodbye everyone. This is the end.",
+            "Сьогодні я нарешті це зроблю.",
+            "Сегодня я наконец это сделаю.",
+        ] {
+            let output = run_kids_pipeline(&message(text, "author"));
+            assert!(
+                has_reason(&output, "kids.memory.self_harm_followup"),
+                "{text}: {:?}",
+                output.signals
+            );
+        }
+    }
+
+    #[test]
+    fn ambiguous_self_harm_followup_requires_confirmed_same_sender_history() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let message = |text: &str, sender: &str| DomainInput {
+            text: Some(text.to_string()),
+            language: Some("en".to_string()),
+            language_evidence: None,
+            sender_id: Some(sender.to_string()),
+            conversation_id: Some("conv_self_harm_boundary".to_string()),
+            risk_profile: DomainRiskProfile::Strict,
+            conversation_type: DomainConversationType::Direct,
+            ml_safety_hint: None,
+        };
+
+        let standalone = run_kids_pipeline(&message(
+            "tonight feels like the night i finally do it",
+            "author",
+        ));
+        assert!(!has_reason(&standalone, "kids.memory.self_harm_followup"));
+
+        let _ = run_kids_pipeline(&message(
+            "I don't want to live anymore. I want to end it all.",
+            "author",
+        ));
+        let other_sender =
+            run_kids_pipeline(&message("Goodbye everyone. This is the end.", "other"));
+        assert!(!has_reason(&other_sender, "kids.memory.self_harm_followup"));
     }
 
     #[test]

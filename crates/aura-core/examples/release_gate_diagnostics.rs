@@ -5,10 +5,11 @@ use std::path::PathBuf;
 use std::process;
 
 use aura_core::{
-    external_curated_gold_bundle, realistic_chat_bundle, run_external_curated_gold_suite,
-    run_realistic_chat_suite, run_scenario_case, ExternalCuratedSliceSummary,
-    ExternalCuratedSuiteSummary, RealisticChatSliceSummary, RealisticChatSuiteSummary,
-    ScenarioClassificationRecord, ScenarioPolicyRecord,
+    build_calibration_report, canonical_messenger_scenarios, external_curated_gold_bundle,
+    realistic_chat_bundle, run_external_curated_gold_suite, run_realistic_chat_suite,
+    run_scenario_case, run_scenario_cases, ExternalCuratedSliceSummary,
+    ExternalCuratedSuiteSummary, RealisticChatSliceSummary, RealisticChatSuiteSummary, RiskExample,
+    ScenarioClassificationRecord, ScenarioPolicyRecord, ScenarioRunResult, ThreatType,
 };
 use aura_patterns::PatternDatabase;
 use serde::Deserialize;
@@ -192,6 +193,60 @@ fn print_policy_failures(records: &[ScenarioPolicyRecord]) {
     }
 }
 
+fn print_calibration_breakdown(label: &str, runs: &[ScenarioRunResult], threat_type: ThreatType) {
+    let mut examples = runs
+        .iter()
+        .flat_map(|run| {
+            run.calibration_examples
+                .iter()
+                .enumerate()
+                .filter(move |(_, example)| example.threat_type == threat_type)
+                .map(move |(index, example)| {
+                    let step_index = index / run.tracked_threats.len().max(1);
+                    (run.name.as_str(), step_index, example, run)
+                })
+        })
+        .collect::<Vec<(&str, usize, &RiskExample, &ScenarioRunResult)>>();
+    examples.sort_by(|left, right| {
+        let left_error = (left.2.predicted_score - left.2.target_probability).abs();
+        let right_error = (right.2.predicted_score - right.2.target_probability).abs();
+        right_error.total_cmp(&left_error)
+    });
+
+    let flattened = examples
+        .iter()
+        .map(|(_, _, example, _)| (*example).clone())
+        .collect::<Vec<_>>();
+    let report = build_calibration_report(&flattened, 5);
+    println!(
+        "## calibration {label} threat={threat_type:?} count={} brier={:.6} ece={:.6}",
+        report.count, report.brier_score, report.expected_calibration_error
+    );
+    for bin in &report.bins {
+        println!(
+            "  bin=[{:.1},{:.1}) count={} prediction={:.6} target={:.6} gap={:.6}",
+            bin.lower_bound,
+            bin.upper_bound,
+            bin.count,
+            bin.avg_prediction,
+            bin.observed_rate,
+            bin.gap
+        );
+    }
+    for (scenario, step_index, example, run) in examples {
+        let result = &run.step_results[step_index];
+        println!(
+            "  example scenario={scenario} step={} prediction={:.6} target={:.6} error={:.6} reasons={:?}",
+            step_index + 1,
+            example.predicted_score,
+            example.target_probability,
+            (example.predicted_score - example.target_probability).abs(),
+            result.reason_codes,
+        );
+    }
+    println!();
+}
+
 fn print_realistic_suite(report: &ReleaseSuite, summary: &RealisticChatSuiteSummary) {
     let map = realistic_slice_map(summary);
     let fail_slices = report
@@ -281,6 +336,17 @@ fn print_external_suite(report: &ReleaseSuite, summary: &ExternalCuratedSuiteSum
 }
 
 fn print_trace(db: &PatternDatabase, scenario_id: &str) {
+    let canonical = canonical_messenger_scenarios();
+    if let Some(scenario) = canonical
+        .iter()
+        .find(|scenario| scenario.name == scenario_id)
+    {
+        let run = run_scenario_case(db, scenario);
+        println!("## trace {} (canonical_messenger)", scenario_id);
+        print_trace_steps(&run);
+        return;
+    }
+
     let realistic = realistic_chat_bundle();
     if let Some(scenario) = realistic
         .scenarios
@@ -289,35 +355,7 @@ fn print_trace(db: &PatternDatabase, scenario_id: &str) {
     {
         let run = run_scenario_case(db, &scenario.case);
         println!("## trace {} (realistic_chat)", scenario_id);
-        for (index, result) in run.step_results.iter().enumerate() {
-            println!(
-                "step={} threat={:?} score={:.3} action={:?}",
-                index + 1,
-                result.threat_type,
-                result.score,
-                result.action
-            );
-            if let Some(recommendation) = result.recommended_action.as_ref() {
-                println!(
-                    "  ui_actions={:?} alert={:?}",
-                    recommendation.ui_actions, recommendation.parent_alert
-                );
-            }
-            if !result.reason_codes.is_empty() {
-                println!("  reason_codes={:?}", result.reason_codes);
-            }
-            if !result.context_markers.is_empty() {
-                println!("  context_markers={:?}", result.context_markers);
-            }
-            if !result.inference.latent_states.is_empty() {
-                println!(
-                    "  inference horizon={:?} escalation_24h={:.3} latent_states={:?}",
-                    result.inference.risk_horizon,
-                    result.inference.escalation_likelihood_24h,
-                    result.inference.latent_states
-                );
-            }
-        }
+        print_trace_steps(&run);
         return;
     }
 
@@ -329,32 +367,47 @@ fn print_trace(db: &PatternDatabase, scenario_id: &str) {
     {
         let run = run_scenario_case(db, &scenario.case);
         println!("## trace {} (external_curated_gold)", scenario_id);
-        for (index, result) in run.step_results.iter().enumerate() {
-            println!(
-                "step={} threat={:?} score={:.3} action={:?}",
-                index + 1,
-                result.threat_type,
-                result.score,
-                result.action
-            );
-            if let Some(recommendation) = result.recommended_action.as_ref() {
-                println!(
-                    "  ui_actions={:?} alert={:?}",
-                    recommendation.ui_actions, recommendation.parent_alert
-                );
-            }
-            if !result.reason_codes.is_empty() {
-                println!("  reason_codes={:?}", result.reason_codes);
-            }
-            if !result.context_markers.is_empty() {
-                println!("  context_markers={:?}", result.context_markers);
-            }
-        }
+        print_trace_steps(&run);
         return;
     }
 
     eprintln!("scenario not found in realistic_chat or external_curated_gold: {scenario_id}");
     process::exit(2);
+}
+
+fn print_trace_steps(run: &ScenarioRunResult) {
+    for (index, result) in run.step_results.iter().enumerate() {
+        println!(
+            "step={} threat={:?} score={:.3} action={:?}",
+            index + 1,
+            result.threat_type,
+            result.score,
+            result.action
+        );
+        if let Some(recommendation) = result.recommended_action.as_ref() {
+            println!(
+                "  ui_actions={:?} alert={:?}",
+                recommendation.ui_actions, recommendation.parent_alert
+            );
+        }
+        if !result.detected_threats.is_empty() {
+            println!("  detected_threats={:?}", result.detected_threats);
+        }
+        if !result.reason_codes.is_empty() {
+            println!("  reason_codes={:?}", result.reason_codes);
+        }
+        if !result.context_markers.is_empty() {
+            println!("  context_markers={:?}", result.context_markers);
+        }
+        if !result.inference.latent_states.is_empty() {
+            println!(
+                "  inference horizon={:?} escalation_24h={:.3} latent_states={:?}",
+                result.inference.risk_horizon,
+                result.inference.escalation_likelihood_24h,
+                result.inference.latent_states
+            );
+        }
+    }
 }
 
 fn main() {
@@ -379,12 +432,36 @@ fn main() {
     let realistic_summary = run_realistic_chat_suite(&db, 5);
     let external_gold_summary = run_external_curated_gold_suite(&db, 5);
 
+    if report
+        .suites
+        .iter()
+        .any(|suite| suite.suite_id == "canonical_messenger" && suite.status == "fail")
+    {
+        let cases = canonical_messenger_scenarios();
+        let runs = run_scenario_cases(&db, cases.iter()).runs;
+        print_calibration_breakdown("canonical_messenger", &runs, ThreatType::Grooming);
+    }
+
     if let Some(realistic_report) = report
         .suites
         .iter()
         .find(|suite| suite.suite_id == "realistic_chat")
     {
         print_realistic_suite(realistic_report, &realistic_summary);
+        if realistic_report.status == "fail" {
+            let bundle = realistic_chat_bundle();
+            let runs = bundle
+                .scenarios
+                .iter()
+                .filter(|scenario| scenario.metadata.relationship == "self")
+                .map(|scenario| run_scenario_case(&db, &scenario.case))
+                .collect::<Vec<_>>();
+            print_calibration_breakdown(
+                "realistic_chat.relationship:self",
+                &runs,
+                ThreatType::SelfHarm,
+            );
+        }
     }
 
     if let Some(external_report) = report

@@ -385,14 +385,7 @@ impl ContextInterpreter {
         let mut adjusted_signals = Vec::with_capacity(signals.len());
         let mut suppressed_reason_codes = Vec::new();
         for mut signal in signals {
-            if self.should_suppress_signal(
-                &frame,
-                &signal,
-                &semantics.lower,
-                semantics.protective_report,
-                semantics.crisis_support,
-                semantics.author_self_distress,
-            ) {
+            if self.should_suppress_signal(input, &frame, &signal, &semantics) {
                 if !signal.reason_code.is_empty() {
                     suppressed_reason_codes.push(signal.reason_code.clone());
                 }
@@ -409,14 +402,7 @@ impl ContextInterpreter {
 
         let mut confirmed_event_hints = Vec::with_capacity(event_hints.len());
         for event_hint in event_hints {
-            if self.should_suppress_event_kind(
-                &frame,
-                &event_hint.kind,
-                &semantics.lower,
-                semantics.protective_report,
-                semantics.crisis_support,
-                semantics.author_self_distress,
-            ) {
+            if self.should_suppress_event_kind(input, &frame, &event_hint.kind, &semantics) {
                 continue;
             }
             confirmed_event_hints.push(event_hint);
@@ -540,13 +526,21 @@ impl ContextInterpreter {
 
     fn should_suppress_signal(
         &self,
+        input: &MessageInput,
         frame: &ThreatContextFrame,
         signal: &DetectionSignal,
-        lower: &str,
-        protective_report: bool,
-        crisis_support: bool,
-        author_self_distress: bool,
+        semantics: &MessageSemantics,
     ) -> bool {
+        let lower = semantics.lower.as_str();
+        let protective_report = semantics.protective_report;
+        let crisis_support = semantics.crisis_support;
+        let author_self_distress = semantics.author_self_distress;
+        if signal.reason_code == "ml.intent.meeting"
+            && is_verified_peer_school_meeting(input, frame, lower)
+        {
+            return true;
+        }
+
         if signal.reason_code == "ml.uncertainty.guardian_review"
             && (matches!(
                 frame.speech_act,
@@ -732,13 +726,21 @@ impl ContextInterpreter {
 
     fn should_suppress_event_kind(
         &self,
+        input: &MessageInput,
         frame: &ThreatContextFrame,
         kind: &EventKind,
-        lower: &str,
-        protective_report: bool,
-        crisis_support: bool,
-        author_self_distress: bool,
+        semantics: &MessageSemantics,
     ) -> bool {
+        let lower = semantics.lower.as_str();
+        let protective_report = semantics.protective_report;
+        let crisis_support = semantics.crisis_support;
+        let author_self_distress = semantics.author_self_distress;
+        if *kind == EventKind::MeetingRequest
+            && is_verified_peer_school_meeting(input, frame, lower)
+        {
+            return true;
+        }
+
         if looks_like_opsec_warning_context(lower)
             && matches!(
                 kind,
@@ -3106,6 +3108,94 @@ fn looks_like_trusted_logistics_context(frame: &ThreatContextFrame, lower: &str)
         )
 }
 
+fn is_verified_peer_school_meeting(
+    input: &MessageInput,
+    frame: &ThreatContextFrame,
+    lower: &str,
+) -> bool {
+    let verified_peer = input.sender_relationship == SenderRelationship::Peer
+        && matches!(
+            input.relationship_trust_source,
+            RelationshipTrustSource::UserVerified
+                | RelationshipTrustSource::GuardianVerified
+                | RelationshipTrustSource::PlatformVerified
+                | RelationshipTrustSource::AddressBook
+                | RelationshipTrustSource::SchoolDirectory
+        );
+    if !verified_peer {
+        return false;
+    }
+
+    let school_logistics = contains_any(
+        lower,
+        &[
+            "school dance",
+            "after class",
+            "after school",
+            "school gym",
+            "by the gym",
+            "in the classroom",
+            "at school",
+            "після уроків",
+            "після школи",
+            "біля спортзалу",
+            "у класі",
+            "в школі",
+            "после уроков",
+            "после школы",
+            "у спортзала",
+            "в классе",
+            "в школе",
+        ],
+    );
+    let high_risk_context = contains_any(
+        lower,
+        &[
+            "secret",
+            "private",
+            "alone",
+            "don't tell",
+            "dont tell",
+            "do not tell",
+            "without your parents",
+            "address",
+            "where you live",
+            "hotel",
+            "photo",
+            "picture",
+            "nude",
+            "gift",
+            "money",
+            "таєм",
+            "секрет",
+            "приват",
+            "наодин",
+            "не кажи",
+            "без батьків",
+            "адрес",
+            "де ти живеш",
+            "готел",
+            "фото",
+            "подар",
+            "грош",
+            "личн",
+            "наедин",
+            "не говори",
+            "без родителей",
+            "где ты живешь",
+            "отел",
+            "подар",
+            "деньг",
+        ],
+    );
+
+    let risky_trajectory = frame.trajectory.repeated_by_sender
+        || frame.trajectory.escalating
+        || frame.trajectory.cross_conversation;
+
+    school_logistics && !high_risk_context && !risky_trajectory
+}
+
 fn looks_like_documentary_media_request(lower: &str) -> bool {
     let documentary_cue = contains_any(
         lower,
@@ -4024,6 +4114,96 @@ mod tests {
 
         assert!(result.adjusted_signals.is_empty(), "{result:?}");
         assert!(result.confirmed_events.is_empty(), "{result:?}");
+    }
+
+    #[test]
+    fn verified_peer_school_meeting_suppresses_bare_ml_meeting_intent() {
+        let interpreter = ContextInterpreter::new();
+        let text = "Cool, let's meet by the gym after class tomorrow.";
+        let mut message = input(text);
+        message.sender_relationship = SenderRelationship::Peer;
+        message.relationship_trust_source = RelationshipTrustSource::PlatformVerified;
+        let result = interpreter.interpret_observations(
+            &message,
+            Some(text),
+            Some(1_000),
+            None,
+            vec![RawObservation::signal_with_event(
+                signal(ThreatType::Grooming, "ml.intent.meeting", 0.60),
+                EventKind::MeetingRequest,
+                0.8,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert!(result.adjusted_signals.is_empty(), "{result:?}");
+        assert!(result.confirmed_events.is_empty(), "{result:?}");
+    }
+
+    #[test]
+    fn peer_school_meeting_suppression_requires_trust_and_no_risk_anchors() {
+        let interpreter = ContextInterpreter::new();
+        for (text, configure_verified_peer) in [
+            ("Cool, let's meet by the gym after class tomorrow.", false),
+            (
+                "Let's meet alone by the gym after class and don't tell your parents.",
+                true,
+            ),
+        ] {
+            let mut message = input(text);
+            if configure_verified_peer {
+                message.sender_relationship = SenderRelationship::Peer;
+                message.relationship_trust_source = RelationshipTrustSource::PlatformVerified;
+            }
+            let result = interpreter.interpret_observations(
+                &message,
+                Some(text),
+                Some(1_000),
+                None,
+                vec![RawObservation::signal_with_event(
+                    signal(ThreatType::Grooming, "ml.intent.meeting", 0.60),
+                    EventKind::MeetingRequest,
+                    0.8,
+                    None,
+                    None,
+                )],
+                None,
+            );
+
+            assert_eq!(result.adjusted_signals.len(), 1, "{text}: {result:?}");
+            assert_eq!(result.confirmed_events.len(), 1, "{text}: {result:?}");
+        }
+    }
+
+    #[test]
+    fn verified_peer_school_meeting_does_not_hide_risky_trajectory() {
+        let interpreter = ContextInterpreter::new();
+        let text = "Cool, let's meet by the gym after class tomorrow.";
+        let mut message = input(text);
+        message.sender_relationship = SenderRelationship::Peer;
+        message.relationship_trust_source = RelationshipTrustSource::PlatformVerified;
+        let mut prior = event(EventKind::SecrecyRequest);
+        prior.timestamp_ms = 700;
+        let timeline = timeline_with(vec![prior]);
+        let result = interpreter.interpret_observations(
+            &message,
+            Some(text),
+            Some(1_000),
+            Some(&timeline),
+            vec![RawObservation::signal_with_event(
+                signal(ThreatType::Grooming, "ml.intent.meeting", 0.60),
+                EventKind::MeetingRequest,
+                0.8,
+                None,
+                None,
+            )],
+            None,
+        );
+
+        assert_eq!(result.adjusted_signals.len(), 1, "{result:?}");
+        assert_eq!(result.confirmed_events.len(), 1, "{result:?}");
     }
 
     #[test]

@@ -1098,8 +1098,8 @@ const MODAL_CUES: &[&str] = &[
     "планирую",
 ];
 const FIRST_PERSON_REFERENCES: &[&str] = &[
-    "i", "me", "my", "mine", "we", "us", "our", "ours", "я", "мене", "мені", "мій", "ми", "нас",
-    "наш", "мне", "мой",
+    "i", "im", "i'm", "i’m", "i'll", "i’ll", "me", "my", "mine", "we", "us", "our", "ours", "я",
+    "мене", "мені", "мій", "ми", "нас", "наш", "мне", "мой",
 ];
 const SECOND_PERSON_REFERENCES: &[&str] = &[
     "you", "your", "yours", "ти", "тебе", "тобі", "твій", "ви", "вас", "вам", "ваш", "ты", "тебя",
@@ -1321,6 +1321,26 @@ mod tests {
                 SemanticAtomKind::ModalCue,
             ]
         );
+    }
+
+    #[test]
+    fn first_person_contractions_remain_actor_references() {
+        for text in [
+            "im done",
+            "I'm done",
+            "I’m done",
+            "I'll do it",
+            "I’ll do it",
+        ] {
+            let prepared = PreparedSemanticText::new(text).expect("valid structure");
+            assert!(
+                prepared.atoms().iter().any(|atom| {
+                    atom.kind()
+                        == SemanticAtomKind::ActorReference(ActorReferenceCandidate::FirstPerson)
+                }),
+                "{text}"
+            );
+        }
     }
 
     #[test]
