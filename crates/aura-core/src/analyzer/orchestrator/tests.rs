@@ -3697,6 +3697,12 @@ fn community_surface_recall_anchors_route_to_expected_threats() {
             0.55,
         ),
         (
+            "sEnD yOuR pAsSwOrD fOr A mInUtE, dOnT bE dRaMaTiC",
+            "en",
+            ThreatType::Manipulation,
+            0.75,
+        ),
+        (
             "не бачу сенсу прокидатися завтра",
             "uk",
             ThreatType::SelfHarm,

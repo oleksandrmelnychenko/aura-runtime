@@ -109,6 +109,7 @@ const ABSENCE: u8 = 65;
 const BETTER_WITHOUT: u8 = 66;
 const FINALITY: u8 = 67;
 const ANAPHORIC_ACTION: u8 = 68;
+const MINIMIZATION: u8 = 69;
 
 /// Detects bounded compositional candidates without assigning final context.
 ///
@@ -298,6 +299,9 @@ fn emit_matches(concepts: Concepts, emitted: &mut Concepts, candidates: &mut Vec
         );
     }
     if !emitted.contains(COMPEL) && matches_manipulation(concepts) {
+        let credential_minimizing_pressure = concepts.contains(CREDENTIAL)
+            && concepts.contains(REQUEST)
+            && concepts.contains(MINIMIZATION);
         let event_kind = if concepts.contains(DEBT) {
             DomainEventKind::DebtCreation
         } else if concepts.contains(FALSE_CONSENSUS) {
@@ -316,7 +320,11 @@ fn emit_matches(concepts: Concepts, emitted: &mut Concepts, candidates: &mut Vec
             "semantic_manipulation_composition_v1",
             "kids.composition.manipulation.v1",
             "manipulation",
-            0.87,
+            if credential_minimizing_pressure {
+                0.78
+            } else {
+                0.87
+            },
             "high",
             93,
             event_kind,
@@ -485,6 +493,7 @@ fn matches_manipulation(c: Concepts) -> bool {
         || (c.contains(BLACKMAIL) && c.contains_any(&[COMPEL, REQUEST, CONDITIONAL]))
         || (c.contains(ULTIMATUM) && c.contains_any(&[COMPEL, FAMILY, LOVE]))
         || (c.contains(IGNORE) && c.contains_any(&[APOLOGY, CONDITIONAL, COMPEL]))
+        || (c.contains(CREDENTIAL) && c.contains(REQUEST) && c.contains(MINIMIZATION))
 }
 
 fn matches_bullying(c: Concepts) -> bool {
@@ -645,6 +654,7 @@ fn classify_lexeme(lexeme: &str, concepts: &mut Concepts) {
             "забер",
         ],
     );
+    mark_exact(lexeme, concepts, REQUEST, &["скинь"]);
     mark_exact(
         lexeme,
         concepts,
@@ -1154,6 +1164,12 @@ fn classify_lexeme(lexeme: &str, concepts: &mut Concepts) {
     mark_prefix(lexeme, concepts, LOVE, &["love", "кохан", "люб"]);
     mark_prefix(lexeme, concepts, APOLOGY, &["apolog", "вибач", "извин"]);
     mark_prefix(lexeme, concepts, IGNORE, &["ignore", "ігнор", "игнор"]);
+    mark_prefix(
+        lexeme,
+        concepts,
+        MINIMIZATION,
+        &["dramatic", "dramatiz", "драмат"],
+    );
 
     mark_prefix(
         lexeme,
@@ -1511,6 +1527,33 @@ mod tests {
 
         for (text, family) in cases {
             assert!(families(text).iter().any(|item| item == family), "{text}");
+        }
+    }
+
+    #[test]
+    fn credential_requests_with_minimizing_pressure_emit_both_risk_families() {
+        for text in [
+            "Send your password for a minute, don't be dramatic.",
+            "Скинь пароль на хвилину, не драматизуй.",
+            "Скинь пароль на минуту, не драматизируй.",
+        ] {
+            let detected = families(text);
+            assert!(detected.iter().any(|family| family == "phishing"), "{text}");
+            assert!(
+                detected.iter().any(|family| family == "manipulation"),
+                "{text}"
+            );
+        }
+
+        for text in [
+            "The drama club updated its password policy.",
+            "I forgot my password and the movie was dramatic.",
+            "Не надсилай свій пароль нікому.",
+        ] {
+            assert!(
+                !families(text).iter().any(|family| family == "manipulation"),
+                "{text}"
+            );
         }
     }
 
