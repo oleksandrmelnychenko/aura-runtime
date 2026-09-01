@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "samples": [
+    {
+      "id": "mono-uk-01",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "uk", "text": "Сьогодні надворі спокійна погода, і наша родина планує прогулятися парком після вечері." }
+      ]
+    },
+    {
+      "id": "mono-uk-02-loanwords",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "uk", "text": "Я відкрила Telegram на iPhone, а потім продовжила читати українську книжку в кімнаті." }
+      ]
+    },
+    {
+      "id": "mono-uk-03-cognates",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "uk", "text": "Ми були вдома, спокійно обговорили плани та домовилися зустрітися завтра вранці." }
+      ]
+    },
+    {
+      "id": "mono-ru-01",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "ru", "text": "Сегодня на улице спокойная погода, и наша семья планирует прогуляться по парку после ужина." }
+      ]
+    },
+    {
+      "id": "mono-ru-02-loanwords",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "ru", "text": "Я открыла Telegram на iPhone, а потом продолжила читать русскую книгу в комнате." }
+      ]
+    },
+    {
+      "id": "mono-en-01",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "en", "text": "The weather is calm today, and our family plans to walk through the park after dinner." }
+      ]
+    },
+    {
+      "id": "switch-uk-ru-sentence",
+      "category": "switch_supported_sentence",
+      "segments": [
+        { "language": "uk", "text": "Ми зустрінемося завтра після роботи. " },
+        { "language": "ru", "text": "Потом поедем домой и спокойно обсудим планы." }
+      ]
+    },
+    {
+      "id": "switch-ru-uk-sentence",
+      "category": "switch_supported_sentence",
+      "segments": [
+        { "language": "ru", "text": "Мы закончим работу и спокойно выпьем чай. " },
+        { "language": "uk", "text": "Потім разом підемо додому та обговоримо плани." }
+      ]
+    },
+    {
+      "id": "switch-uk-en-sentence",
+      "category": "switch_supported_sentence",
+      "segments": [
+        { "language": "uk", "text": "Ми завершили зустріч і записали всі рішення. " },
+        { "language": "en", "text": "Tomorrow we will review the notes and prepare a short summary." }
+      ]
+    },
+    {
+      "id": "switch-en-ru-sentence",
+      "category": "switch_supported_sentence",
+      "segments": [
+        { "language": "en", "text": "We finished the meeting and wrote down every decision. " },
+        { "language": "ru", "text": "Завтра мы проверим записи и подготовим короткое резюме." }
+      ]
+    },
+    {
+      "id": "switch-uk-ru-inline",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "uk", "text": "Я сказала, що повернуся завтра, " },
+        { "language": "ru", "text": "но он ответил, что ждать не будет." }
+      ]
+    },
+    {
+      "id": "switch-ru-uk-inline",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "ru", "text": "Мы решили встретиться утром, " },
+        { "language": "uk", "text": "але потім домовилися перенести розмову на вечір." }
+      ]
+    },
+    {
+      "id": "switch-uk-en-inline",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "uk", "text": "Ми вже завершили обговорення, " },
+        { "language": "en", "text": "so please send the final notes before dinner." }
+      ]
+    },
+    {
+      "id": "switch-en-uk-inline",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "en", "text": "We already finished the discussion, " },
+        { "language": "uk", "text": "тож надішли остаточні нотатки до вечері." }
+      ]
+    },
+    {
+      "id": "switch-uk-ru-uk-inline",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "uk", "text": "Спочатку ми говорили спокійно, " },
+        { "language": "ru", "text": "потом обсудили новые планы, " },
+        { "language": "uk", "text": "а наприкінці разом підсумували рішення." }
+      ]
+    },
+    {
+      "id": "switch-uk-ru-short",
+      "category": "switch_supported_short",
+      "segments": [
+        { "language": "uk", "text": "Ми вже завершили роботу, " },
+        { "language": "ru", "text": "всё хорошо, " },
+        { "language": "uk", "text": "тож тепер спокійно йдемо додому." }
+      ]
+    },
+    {
+      "id": "switch-uk-ru-quoted",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "uk", "text": "Вона прочитала повідомлення: «" },
+        { "language": "ru", "text": "мы завтра спокойно обсудим планы" },
+        { "language": "uk", "text": "», а потім закрила телефон." }
+      ]
+    },
+    {
+      "id": "mono-be-01",
+      "category": "monolingual_unsupported",
+      "segments": [
+        { "language": "be", "text": "Заўтра мы разам паедзем у горад, спакойна сустрэнемся з сябрамі і абмяркуем планы." }
+      ]
+    },
+    {
+      "id": "mono-sr-01",
+      "category": "monolingual_unsupported",
+      "segments": [
+        { "language": "sr", "text": "Сутра ћемо заједно отићи у град, мирно се срести са пријатељима и разговарати о плановима." }
+      ]
+    },
+    {
+      "id": "mono-bg-01",
+      "category": "monolingual_unsupported",
+      "segments": [
+        { "language": "bg", "text": "Утре ще отидем заедно в града, спокойно ще се срещнем с приятели и ще обсъдим плановете." }
+      ]
+    },
+    {
+      "id": "mono-kk-01",
+      "category": "monolingual_unsupported",
+      "segments": [
+        { "language": "kk", "text": "Ертең біз бірге қалаға барып, достарымызбен тыныш кездесіп, жоспарларды талқылаймыз." }
+      ]
+    },
+    {
+      "id": "switch-uk-be-sentence",
+      "category": "switch_unsupported",
+      "segments": [
+        { "language": "uk", "text": "Сьогодні ми спокійно працюємо вдома. " },
+        { "language": "be", "text": "Заўтра мы разам паедзем у горад." }
+      ]
+    },
+    {
+      "id": "switch-ru-sr-sentence",
+      "category": "switch_unsupported",
+      "segments": [
+        { "language": "ru", "text": "Сегодня мы спокойно работаем дома. " },
+        { "language": "sr", "text": "Сутра ћемо заједно отићи у град." }
+      ]
+    },
+    {
+      "id": "switch-en-be-inline",
+      "category": "switch_unsupported",
+      "segments": [
+        { "language": "en", "text": "We finished the meeting, " },
+        { "language": "be", "text": "а заўтра разам абмяркуем новыя планы." }
+      ]
+    }
+  ]
+}

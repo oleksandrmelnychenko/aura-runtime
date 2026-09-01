@@ -1,5 +1,94 @@
 use super::*;
 
+fn supported_languages(languages: &[&str]) -> HashSet<String> {
+    languages
+        .iter()
+        .map(|language| (*language).to_string())
+        .collect()
+}
+
+#[test]
+fn language_routing_adds_cyrillic_packs_for_latin_hint_with_cyrillic_span() {
+    let evidence = LanguageEvidence::from_text_and_hints(
+        "keep this secret не кажи батькам",
+        Some("en-US"),
+        Some("en"),
+    );
+
+    assert_eq!(
+        routed_pattern_languages(&evidence, &supported_languages(&["en", "uk", "ru"])),
+        vec!["en", "uk", "ru"]
+    );
+}
+
+#[test]
+fn language_routing_hint_cannot_suppress_governed_release_packs() {
+    let evidence = LanguageEvidence::from_text_and_hints("не кажи батькам", Some("uk"), Some("uk"));
+
+    assert_eq!(
+        routed_pattern_languages(&evidence, &supported_languages(&["en", "uk", "ru"])),
+        vec!["uk", "en", "ru"]
+    );
+}
+
+#[test]
+fn language_routing_preserves_legacy_no_hint_coverage() {
+    let evidence = LanguageEvidence::from_text_and_hints("hello", None, Some("uk"));
+
+    assert_eq!(
+        routed_pattern_languages(&evidence, &supported_languages(&["en", "uk", "ru"])),
+        vec!["uk", "en", "ru"]
+    );
+}
+
+#[test]
+fn language_routing_keeps_universal_rules_for_unsupported_hint() {
+    let evidence = LanguageEvidence::from_text_and_hints("bonjour", Some("fr-FR"), Some("uk"));
+
+    assert_eq!(
+        routed_pattern_languages(&evidence, &supported_languages(&["en", "uk", "ru"])),
+        vec!["fr-fr", "en", "uk", "ru"]
+    );
+}
+
+#[test]
+fn language_routing_does_not_treat_japanese_han_as_chinese_code_switch() {
+    let evidence = LanguageEvidence::from_text_and_hints("安全です", Some("ja"), Some("en"));
+
+    assert_eq!(
+        routed_pattern_languages(&evidence, &supported_languages(&["en", "ja", "zh"])),
+        vec!["ja", "en"]
+    );
+}
+
+#[test]
+fn language_routing_includes_region_specific_and_primary_packs() {
+    let evidence = LanguageEvidence::from_text_and_hints("colour", Some("en-GB"), Some("uk"));
+
+    assert_eq!(
+        routed_pattern_languages(&evidence, &supported_languages(&["en", "en-gb", "uk"])),
+        vec!["en-gb", "en", "uk"]
+    );
+}
+
+#[test]
+fn language_routing_uses_classifier_candidates_for_same_script_code_switching() {
+    let candidates = ["uk", "ru"]
+        .into_iter()
+        .map(|tag| {
+            LanguageCandidate::try_new(tag, 0.9, LanguageEvidenceSource::OnDeviceClassifier)
+                .expect("valid classifier candidate")
+        })
+        .collect();
+    let evidence =
+        LanguageEvidence::try_new(candidates, Vec::new(), "привіт секрет").expect("valid evidence");
+
+    assert_eq!(
+        routed_pattern_languages(&evidence, &supported_languages(&["en", "uk", "ru"])),
+        vec!["uk", "ru", "en"]
+    );
+}
+
 fn test_db() -> PatternDatabase {
     let json = r#"{
             "version": "test",
@@ -138,6 +227,7 @@ fn default_input(text: &str) -> MessageInput {
         sender_id: "user_123".into(),
         conversation_id: "conv_456".into(),
         language: Some("en".to_string()),
+        language_evidence: None,
         conversation_type: ConversationType::Direct,
         member_count: None,
         sender_relationship: Default::default(),
@@ -153,11 +243,83 @@ fn child_input(text: &str, sender: &str, conversation: &str) -> MessageInput {
         sender_id: sender.into(),
         conversation_id: conversation.into(),
         language: Some("en".to_string()),
+        language_evidence: None,
         conversation_type: ConversationType::Direct,
         member_count: None,
         sender_relationship: Default::default(),
         relationship_trust_source: Default::default(),
     }
+}
+
+fn analyze_russian_child_message(text: &str) -> AnalysisResult {
+    let db = PatternDatabase::default_mvp();
+    let mut config = child_config();
+    config.language = "ru".to_string();
+    let mut analyzer = Analyzer::new(config, &db);
+    let mut input = child_input(text, "ru_sender", "ru_conversation");
+    input.language = Some("ru".to_string());
+    analyzer.analyze(&input)
+}
+
+#[test]
+fn russian_parent_deception_pair_preserves_risk_and_filters_correction() {
+    let risky = analyze_russian_child_message(
+        "Скажи родителям, что я твой одноклассник, чтобы они ничего не заподозрили.",
+    );
+    let safe = analyze_russian_child_message(
+        "Не говори родителям, что незнакомец одноклассник; расскажи им правду.",
+    );
+
+    assert!(
+        crate::predicted_score_for_threat(&risky, ThreatType::Grooming) >= 0.55,
+        "{risky:?}"
+    );
+    assert_eq!(safe.threat_type, ThreatType::None, "{safe:?}");
+}
+
+#[test]
+fn russian_blackmail_pair_preserves_risk_and_filters_report() {
+    let risky =
+        analyze_russian_child_message("Если не сделаешь это, я разошлю всем твоё личное фото.");
+    let safe = analyze_russian_child_message(
+        "Сообщение «если не сделаешь это, я разошлю фото» является шантажом — сохрани доказательство.",
+    );
+
+    assert!(
+        crate::predicted_score_for_threat(&risky, ThreatType::Manipulation) >= 0.55,
+        "{risky:?}"
+    );
+    assert_eq!(safe.threat_type, ThreatType::None, "{safe:?}");
+}
+
+#[test]
+fn russian_suicide_coercion_pair_preserves_risk_and_filters_report() {
+    let risky = analyze_russian_child_message(
+        "Если ты уйдешь, мне нет смысла жить, и это будет твоя вина.",
+    );
+    let safe = analyze_russian_child_message(
+        "Фраза «если ты уйдешь, мне нет смысла жить» — опасное давление; ты не отвечаешь за чужие угрозы.",
+    );
+
+    assert!(
+        crate::predicted_score_for_threat(&risky, ThreatType::Manipulation) >= 0.55,
+        "{risky:?}"
+    );
+    assert_eq!(safe.threat_type, ThreatType::None, "{safe:?}");
+}
+
+#[test]
+fn russian_threatened_violence_pair_preserves_risk_and_filters_report() {
+    let risky = analyze_russian_child_message("После школы мы тебя побьём, жди у ворот.");
+    let safe = analyze_russian_child_message(
+        "Угрозу «после школы мы тебя побьём» уже передали учителю и родителям.",
+    );
+
+    assert!(
+        crate::predicted_score_for_threat(&risky, ThreatType::Bullying) >= 0.55,
+        "{risky:?}"
+    );
+    assert_eq!(safe.threat_type, ThreatType::None, "{safe:?}");
 }
 
 fn child_input_with_relationship(
@@ -861,6 +1023,38 @@ fn primary_threat_score_is_not_inflated_by_lower_priority_signal() {
 }
 
 #[test]
+fn grooming_memory_does_not_relabel_direct_coercive_manipulation() {
+    let db = test_db();
+    let analyzer = Analyzer::new(child_config(), &db);
+    let signals = vec![
+        DetectionSignal::pattern(
+            ThreatType::Manipulation,
+            0.84,
+            Confidence::High,
+            "pattern.debt_creation_uk",
+            "direct debt leverage",
+        ),
+        DetectionSignal::context(
+            ThreatType::Grooming,
+            1.0,
+            Confidence::High,
+            SignalFamily::Conversation,
+            "domain.kids.memory.grooming_progression",
+            "prior grooming progression",
+        ),
+    ];
+
+    let result =
+        analyzer.combine_signals(signals, ProtectionLevel::High, ConversationType::Direct, 42);
+
+    assert_eq!(result.threat_type, ThreatType::Manipulation, "{result:?}");
+    assert!(result
+        .detected_threats
+        .iter()
+        .any(|(threat, score)| *threat == ThreatType::Grooming && *score == 1.0));
+}
+
+#[test]
 fn propaganda_action_uses_reason_code_of_top_scoring_signal() {
     let db = test_db();
     let analyzer = Analyzer::new(child_config(), &db);
@@ -1113,6 +1307,7 @@ fn sextortion_photo_blackmail_sequence_detected() {
             sender_id: "sextort".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -1147,6 +1342,7 @@ fn substance_offer_and_pressure_detected_as_manipulation() {
             sender_id: "dealer".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -1164,6 +1360,7 @@ fn substance_offer_and_pressure_detected_as_manipulation() {
             sender_id: "dealer".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2270,6 +2467,7 @@ fn supportive_bystander_rescue_filters_late_night_minor_contact() {
             sender_id: "rescue_peer".into(),
             conversation_id: conv.into(),
             language: Some("en".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2471,6 +2669,7 @@ fn none_text_returns_clean_result() {
         sender_id: "u".into(),
         conversation_id: "c".into(),
         language: None,
+        language_evidence: None,
         conversation_type: ConversationType::Direct,
         member_count: None,
         sender_relationship: Default::default(),
@@ -2569,6 +2768,7 @@ fn integration_pii_warns_not_blocks() {
         sender_id: "child_1".into(),
         conversation_id: "conv_pii".into(),
         language: None,
+        language_evidence: None,
         conversation_type: ConversationType::Direct,
         member_count: None,
         sender_relationship: Default::default(),
@@ -2597,6 +2797,7 @@ fn integration_repeated_secrecy_escalates() {
             sender_id: "stranger_1".into(),
             conversation_id: "conv_secrecy".into(),
             language: Some("en".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2612,6 +2813,7 @@ fn integration_repeated_secrecy_escalates() {
         sender_id: "stranger_1".into(),
         conversation_id: "conv_secrecy".into(),
         language: Some("en".to_string()),
+        language_evidence: None,
         conversation_type: ConversationType::Direct,
         member_count: None,
         sender_relationship: Default::default(),
@@ -2656,6 +2858,7 @@ fn integration_casual_meeting_from_stranger_with_context() {
             sender_id: "predator".into(),
             conversation_id: "conv_meet".into(),
             language: Some("en".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2671,6 +2874,7 @@ fn integration_casual_meeting_from_stranger_with_context() {
         sender_id: "predator".into(),
         conversation_id: "conv_meet".into(),
         language: Some("en".to_string()),
+        language_evidence: None,
         conversation_type: ConversationType::Direct,
         member_count: None,
         sender_relationship: Default::default(),
@@ -2707,6 +2911,7 @@ fn integration_screenshot_blackmail_accumulates() {
             sender_id: "bully".into(),
             conversation_id: "conv_ss".into(),
             language: None,
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2748,6 +2953,7 @@ fn integration_dare_with_gaslighting() {
             sender_id: "manipulator".into(),
             conversation_id: "conv_dare".into(),
             language: None,
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2791,6 +2997,7 @@ fn gaslighting_cycle_stays_manipulation_primary() {
             sender_id: "gaslighter".into(),
             conversation_id: "gaslight_cycle".into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2843,6 +3050,7 @@ fn control_pattern_without_grooming_anchor_does_not_primary_label_as_grooming() 
             sender_id: "controller".into(),
             conversation_id: "control_cycle".into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2877,6 +3085,7 @@ fn integration_suicide_coercion_pattern() {
             sender_id: "manipulator".into(),
             conversation_id: "conv_sc".into(),
             language: None,
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2908,6 +3117,7 @@ fn integration_teen_slang_platform_switch() {
             sender_id: "stranger".into(),
             conversation_id: "conv_ps".into(),
             language: None,
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2942,6 +3152,7 @@ fn integration_noisy_platform_switch_and_probing_shorthand() {
             sender_id: sender.into(),
             conversation_id: conv.into(),
             language: Some("en".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -2958,6 +3169,7 @@ fn integration_noisy_platform_switch_and_probing_shorthand() {
             sender_id: sender.into(),
             conversation_id: conv.into(),
             language: Some("en".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3009,6 +3221,7 @@ fn integration_network_poisoning() {
             sender_id: "manipulator".into(),
             conversation_id: "conv_np".into(),
             language: None,
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3040,6 +3253,7 @@ fn integration_gaming_bribery() {
             sender_id: "stranger".into(),
             conversation_id: "conv_gb".into(),
             language: None,
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3073,6 +3287,7 @@ fn integration_combined_advanced_scenario() {
                 sender_id: "predator".into(),
                 conversation_id: "conv_adv".into(),
                 language: None,
+                language_evidence: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 sender_relationship: Default::default(),
@@ -3112,6 +3327,7 @@ fn mild_ukrainian_euphemism_does_not_trigger_explicit() {
             sender_id: "maria".into(),
             conversation_id: "class_chat".into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Group,
             member_count: Some(25),
             sender_relationship: Default::default(),
@@ -3149,6 +3365,7 @@ fn friendly_joke_sequence_stays_clean() {
             sender_id: "bestie".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3166,6 +3383,7 @@ fn friendly_joke_sequence_stays_clean() {
             sender_id: "olena".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3183,6 +3401,7 @@ fn friendly_joke_sequence_stays_clean() {
             sender_id: "bestie".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3213,6 +3432,7 @@ fn group_project_deescalation_stays_clean_after_mild_conflict() {
         sender_id: sender.into(),
         conversation_id: conv.into(),
         language: Some("uk".to_string()),
+        language_evidence: None,
         conversation_type: ConversationType::Group,
         member_count: Some(12),
         sender_relationship: Default::default(),
@@ -3239,6 +3459,7 @@ fn group_project_deescalation_stays_clean_after_mild_conflict() {
             sender_id: "peer_3".into(),
             conversation_id: "uk_project_dm".into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3276,6 +3497,7 @@ fn sports_team_deescalation_stays_clean_after_tactical_disagreement() {
         sender_id: sender.into(),
         conversation_id: conv.into(),
         language: Some("uk".to_string()),
+        language_evidence: None,
         conversation_type: ConversationType::Group,
         member_count: Some(16),
         sender_relationship: Default::default(),
@@ -3441,6 +3663,7 @@ fn community_surface_recall_anchors_route_to_expected_threats() {
             sender_id: format!("sender_{idx}").into(),
             conversation_id: format!("conv_{idx}").into(),
             language: Some((*lang).to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3476,6 +3699,7 @@ fn reciprocal_peer_compliments_do_not_trigger_grooming() {
             sender_id: "classmate_f".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3493,6 +3717,7 @@ fn reciprocal_peer_compliments_do_not_trigger_grooming() {
             sender_id: "olena".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3524,6 +3749,7 @@ fn meme_media_share_sequence_stays_clean() {
             sender_id: "maria".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3541,6 +3767,7 @@ fn meme_media_share_sequence_stays_clean() {
             sender_id: "olena".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3558,6 +3785,7 @@ fn meme_media_share_sequence_stays_clean() {
             sender_id: "maria".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3598,6 +3826,7 @@ fn toxic_friend_suicide_coercion_stays_manipulation_primary() {
                 sender_id: "toxic_bff".into(),
                 conversation_id: conv.into(),
                 language: Some("uk".to_string()),
+                language_evidence: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 sender_relationship: Default::default(),
@@ -3649,6 +3878,7 @@ fn peer_pressure_roof_challenge_detected_as_manipulation() {
                 sender_id: (*sender).into(),
                 conversation_id: conv.into(),
                 language: Some("uk".to_string()),
+                language_evidence: None,
                 conversation_type: ConversationType::Group,
                 member_count: Some(6),
                 sender_relationship: Default::default(),
@@ -3699,6 +3929,7 @@ fn cyberbullying_social_humiliation_sequence_is_detected() {
                 sender_id: (*sender).into(),
                 conversation_id: conv.into(),
                 language: Some("uk".to_string()),
+                language_evidence: None,
                 conversation_type: ConversationType::Group,
                 member_count: Some(10),
                 sender_relationship: Default::default(),
@@ -3750,6 +3981,7 @@ fn gaming_rage_sequence_stays_clean() {
                 sender_id: (*sender).into(),
                 conversation_id: conv.into(),
                 language: Some("uk".to_string()),
+                language_evidence: None,
                 conversation_type: ConversationType::Group,
                 member_count: Some(6),
                 sender_relationship: Default::default(),
@@ -3784,6 +4016,7 @@ fn short_media_curiosity_sequence_stays_clean() {
             sender_id: "maria".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3801,6 +4034,7 @@ fn short_media_curiosity_sequence_stays_clean() {
             sender_id: "olena".into(),
             conversation_id: conv.into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -3841,6 +4075,7 @@ fn group_selfie_sequence_stays_clean() {
                 sender_id: (*sender).into(),
                 conversation_id: conv.into(),
                 language: Some("uk".to_string()),
+                language_evidence: None,
                 conversation_type: ConversationType::Group,
                 member_count: Some(10),
                 sender_relationship: Default::default(),
@@ -3874,6 +4109,7 @@ fn obfuscated_hate_speech_is_detected() {
             sender_id: "hater1".into(),
             conversation_id: "hate_chat".into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Group,
             member_count: Some(20),
             sender_relationship: Default::default(),
@@ -3911,6 +4147,7 @@ fn direct_location_threat_stays_threat_primary() {
             sender_id: "threat2".into(),
             conversation_id: "dm_threat2".into(),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -4542,6 +4779,7 @@ fn reciprocal_teen_friendship_hangout_stays_below_grooming_threshold() {
                 sender_id: (*sender).into(),
                 conversation_id: conv.into(),
                 language: Some("uk".to_string()),
+                language_evidence: None,
                 conversation_type: ConversationType::Direct,
                 member_count: None,
                 sender_relationship: Default::default(),

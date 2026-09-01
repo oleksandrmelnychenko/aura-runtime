@@ -535,6 +535,7 @@ fn build_pilot_simulation_regression_bundle(
                                         .clone()
                                         .unwrap_or_else(|| spec.default_language.clone()),
                                 ),
+                                language_evidence: None,
                                 conversation_type: spec.conversation_type,
                                 member_count: spec.member_count,
                                 sender_relationship: Default::default(),

@@ -2301,6 +2301,118 @@ public nonisolated enum AuraAgentNativeAuraExecutionPolicyApplyDisposition: Swif
 
 }
 
+public nonisolated enum AuraAgentNativeLanguageEvidenceSource: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case clientDeclared // = 1
+  case onDeviceClassifier // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .clientDeclared
+    case 2: self = .onDeviceClassifier
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .clientDeclared: return 1
+    case .onDeviceClassifier: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [AuraAgentNativeLanguageEvidenceSource] = [
+    .unspecified,
+    .clientDeclared,
+    .onDeviceClassifier,
+  ]
+
+}
+
+public nonisolated enum AuraAgentNativeLanguageScript: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case latin // = 1
+  case cyrillic // = 2
+  case greek // = 3
+  case arabic // = 4
+  case hebrew // = 5
+  case devanagari // = 6
+  case han // = 7
+  case hiragana // = 8
+  case katakana // = 9
+  case hangul // = 10
+  case other // = 11
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .latin
+    case 2: self = .cyrillic
+    case 3: self = .greek
+    case 4: self = .arabic
+    case 5: self = .hebrew
+    case 6: self = .devanagari
+    case 7: self = .han
+    case 8: self = .hiragana
+    case 9: self = .katakana
+    case 10: self = .hangul
+    case 11: self = .other
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .latin: return 1
+    case .cyrillic: return 2
+    case .greek: return 3
+    case .arabic: return 4
+    case .hebrew: return 5
+    case .devanagari: return 6
+    case .han: return 7
+    case .hiragana: return 8
+    case .katakana: return 9
+    case .hangul: return 10
+    case .other: return 11
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [AuraAgentNativeLanguageScript] = [
+    .unspecified,
+    .latin,
+    .cyrillic,
+    .greek,
+    .arabic,
+    .hebrew,
+    .devanagari,
+    .han,
+    .hiragana,
+    .katakana,
+    .hangul,
+    .other,
+  ]
+
+}
+
 public nonisolated enum AuraAgentNativeSafetyCaseLifecycleStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
@@ -3557,6 +3669,60 @@ public nonisolated struct AuraAgentNativeAuraExecutionPolicyApplicationReceipt: 
   public init() {}
 }
 
+public nonisolated struct AuraAgentNativeLanguageCandidateV1: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var languageTag: String = String()
+
+  public var confidence: Float = 0
+
+  public var source: AuraAgentNativeLanguageEvidenceSource = .unspecified
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct AuraAgentNativeLanguageSpanV1: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var languageTag: String = String()
+
+  public var script: AuraAgentNativeLanguageScript = .unspecified
+
+  public var confidence: Float = 0
+
+  public var source: AuraAgentNativeLanguageEvidenceSource = .unspecified
+
+  public var startUtf8: UInt32 = 0
+
+  public var endUtf8: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct AuraAgentNativeLanguageEvidenceV1: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var schemaVersion: UInt32 = 0
+
+  public var candidates: [AuraAgentNativeLanguageCandidateV1] = []
+
+  public var spans: [AuraAgentNativeLanguageSpanV1] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct AuraAgentNativeMessageInput: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -3612,6 +3778,17 @@ public nonisolated struct AuraAgentNativeMessageInput: Sendable {
   /// Source used to derive sender_relationship. Self-declared data is not trust.
   public var relationshipTrustSource: AuraAgentNativeRelationshipTrustSource = .unspecified
 
+  /// Bounded, content-free evidence produced locally by the client.
+  /// Legacy senders may continue to populate only `language`.
+  public var languageEvidence: AuraAgentNativeLanguageEvidenceV1 {
+    get {_languageEvidence ?? AuraAgentNativeLanguageEvidenceV1()}
+    set {_languageEvidence = newValue}
+  }
+  /// Returns true if `languageEvidence` has been explicitly set.
+  public var hasLanguageEvidence: Bool {self._languageEvidence != nil}
+  /// Clears the value of `languageEvidence`. Subsequent reads from it will return its default value.
+  public mutating func clearLanguageEvidence() {self._languageEvidence = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3620,6 +3797,7 @@ public nonisolated struct AuraAgentNativeMessageInput: Sendable {
   fileprivate var _imageData: Data? = nil
   fileprivate var _language: String? = nil
   fileprivate var _memberCount: UInt32? = nil
+  fileprivate var _languageEvidence: AuraAgentNativeLanguageEvidenceV1? = nil
 }
 
 public nonisolated struct AuraAgentNativeAnalyzeContextRequest: Sendable {
@@ -6075,6 +6253,14 @@ nonisolated extension AuraAgentNativeAuraExecutionPolicyApplyDisposition: SwiftP
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AURA_EXECUTION_POLICY_APPLY_DISPOSITION_UNSPECIFIED\0\u{1}AURA_EXECUTION_POLICY_APPLY_DISPOSITION_APPLIED\0\u{1}AURA_EXECUTION_POLICY_APPLY_DISPOSITION_UNCHANGED\0")
 }
 
+nonisolated extension AuraAgentNativeLanguageEvidenceSource: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0LANGUAGE_EVIDENCE_SOURCE_UNSPECIFIED\0\u{1}LANGUAGE_EVIDENCE_SOURCE_CLIENT_DECLARED\0\u{1}LANGUAGE_EVIDENCE_SOURCE_ON_DEVICE_CLASSIFIER\0")
+}
+
+nonisolated extension AuraAgentNativeLanguageScript: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0LANGUAGE_SCRIPT_UNSPECIFIED\0\u{1}LANGUAGE_SCRIPT_LATIN\0\u{1}LANGUAGE_SCRIPT_CYRILLIC\0\u{1}LANGUAGE_SCRIPT_GREEK\0\u{1}LANGUAGE_SCRIPT_ARABIC\0\u{1}LANGUAGE_SCRIPT_HEBREW\0\u{1}LANGUAGE_SCRIPT_DEVANAGARI\0\u{1}LANGUAGE_SCRIPT_HAN\0\u{1}LANGUAGE_SCRIPT_HIRAGANA\0\u{1}LANGUAGE_SCRIPT_KATAKANA\0\u{1}LANGUAGE_SCRIPT_HANGUL\0\u{1}LANGUAGE_SCRIPT_OTHER\0")
+}
+
 nonisolated extension AuraAgentNativeSafetyCaseLifecycleStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SAFETY_CASE_LIFECYCLE_STATUS_UNSPECIFIED\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_OBSERVING\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_OPEN\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_ESCALATED\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_URGENT\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_RESOLVED\0\u{1}SAFETY_CASE_LIFECYCLE_STATUS_DISMISSED\0")
 }
@@ -7039,9 +7225,144 @@ nonisolated extension AuraAgentNativeAuraExecutionPolicyApplicationReceipt: Swif
   }
 }
 
+nonisolated extension AuraAgentNativeLanguageCandidateV1: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LanguageCandidateV1"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}language_tag\0\u{1}confidence\0\u{1}source\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.languageTag) }()
+      case 2: try { try decoder.decodeSingularFloatField(value: &self.confidence) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.source) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.languageTag.isEmpty {
+      try visitor.visitSingularStringField(value: self.languageTag, fieldNumber: 1)
+    }
+    if self.confidence.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.confidence, fieldNumber: 2)
+    }
+    if self.source != .unspecified {
+      try visitor.visitSingularEnumField(value: self.source, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: AuraAgentNativeLanguageCandidateV1, rhs: AuraAgentNativeLanguageCandidateV1) -> Bool {
+    if lhs.languageTag != rhs.languageTag {return false}
+    if lhs.confidence != rhs.confidence {return false}
+    if lhs.source != rhs.source {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension AuraAgentNativeLanguageSpanV1: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LanguageSpanV1"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}language_tag\0\u{1}script\0\u{1}confidence\0\u{1}source\0\u{3}start_utf8\0\u{3}end_utf8\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.languageTag) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.script) }()
+      case 3: try { try decoder.decodeSingularFloatField(value: &self.confidence) }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.source) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.startUtf8) }()
+      case 6: try { try decoder.decodeSingularUInt32Field(value: &self.endUtf8) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.languageTag.isEmpty {
+      try visitor.visitSingularStringField(value: self.languageTag, fieldNumber: 1)
+    }
+    if self.script != .unspecified {
+      try visitor.visitSingularEnumField(value: self.script, fieldNumber: 2)
+    }
+    if self.confidence.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.confidence, fieldNumber: 3)
+    }
+    if self.source != .unspecified {
+      try visitor.visitSingularEnumField(value: self.source, fieldNumber: 4)
+    }
+    if self.startUtf8 != 0 {
+      try visitor.visitSingularUInt32Field(value: self.startUtf8, fieldNumber: 5)
+    }
+    if self.endUtf8 != 0 {
+      try visitor.visitSingularUInt32Field(value: self.endUtf8, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: AuraAgentNativeLanguageSpanV1, rhs: AuraAgentNativeLanguageSpanV1) -> Bool {
+    if lhs.languageTag != rhs.languageTag {return false}
+    if lhs.script != rhs.script {return false}
+    if lhs.confidence != rhs.confidence {return false}
+    if lhs.source != rhs.source {return false}
+    if lhs.startUtf8 != rhs.startUtf8 {return false}
+    if lhs.endUtf8 != rhs.endUtf8 {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension AuraAgentNativeLanguageEvidenceV1: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LanguageEvidenceV1"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{1}candidates\0\u{1}spans\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.schemaVersion) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.candidates) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.spans) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.schemaVersion != 0 {
+      try visitor.visitSingularUInt32Field(value: self.schemaVersion, fieldNumber: 1)
+    }
+    if !self.candidates.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.candidates, fieldNumber: 2)
+    }
+    if !self.spans.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.spans, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: AuraAgentNativeLanguageEvidenceV1, rhs: AuraAgentNativeLanguageEvidenceV1) -> Bool {
+    if lhs.schemaVersion != rhs.schemaVersion {return false}
+    if lhs.candidates != rhs.candidates {return false}
+    if lhs.spans != rhs.spans {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension AuraAgentNativeMessageInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageInput"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}content_type\0\u{1}text\0\u{3}image_data\0\u{3}sender_id\0\u{3}conversation_id\0\u{1}language\0\u{3}conversation_type\0\u{3}member_count\0\u{4}\u{2}sender_relationship\0\u{3}relationship_trust_source\0\u{b}server_sender_risk_hint\0\u{c}\u{9}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}content_type\0\u{1}text\0\u{3}image_data\0\u{3}sender_id\0\u{3}conversation_id\0\u{1}language\0\u{3}conversation_type\0\u{3}member_count\0\u{4}\u{2}sender_relationship\0\u{3}relationship_trust_source\0\u{3}language_evidence\0\u{b}server_sender_risk_hint\0\u{c}\u{9}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7059,6 +7380,7 @@ nonisolated extension AuraAgentNativeMessageInput: SwiftProtobuf.Message, SwiftP
       case 8: try { try decoder.decodeSingularUInt32Field(value: &self._memberCount) }()
       case 10: try { try decoder.decodeSingularEnumField(value: &self.senderRelationship) }()
       case 11: try { try decoder.decodeSingularEnumField(value: &self.relationshipTrustSource) }()
+      case 12: try { try decoder.decodeSingularMessageField(value: &self._languageEvidence) }()
       default: break
       }
     }
@@ -7099,6 +7421,9 @@ nonisolated extension AuraAgentNativeMessageInput: SwiftProtobuf.Message, SwiftP
     if self.relationshipTrustSource != .unspecified {
       try visitor.visitSingularEnumField(value: self.relationshipTrustSource, fieldNumber: 11)
     }
+    try { if let v = self._languageEvidence {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7113,6 +7438,7 @@ nonisolated extension AuraAgentNativeMessageInput: SwiftProtobuf.Message, SwiftP
     if lhs._memberCount != rhs._memberCount {return false}
     if lhs.senderRelationship != rhs.senderRelationship {return false}
     if lhs.relationshipTrustSource != rhs.relationshipTrustSource {return false}
+    if lhs._languageEvidence != rhs._languageEvidence {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

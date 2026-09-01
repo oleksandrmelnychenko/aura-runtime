@@ -3,6 +3,7 @@ import SwiftProtobuf
 
 public final class AuraAgentRuntime: @unchecked Sendable {
     private let handle: UnsafeMutableRawPointer
+    private let languageEvidenceProducer = AuraLanguageEvidenceProducer()
 
     public init(configBytes: Data) throws {
         guard !configBytes.isEmpty else {
@@ -45,9 +46,10 @@ public final class AuraAgentRuntime: @unchecked Sendable {
     public func analyzeLocalDecision(
         _ request: AuraAgentNativeLocalDecisionAnalyzeRequest
     ) throws -> AuraAgentNativeLocalDecisionAnalyzeResponse {
+        let enrichedRequest = languageEvidenceProducer.enriching(request)
         let requestBytes: Data
         do {
-            requestBytes = try request.serializedData()
+            requestBytes = try enrichedRequest.serializedData()
         } catch {
             throw AuraAgentError.invalidInput("failed to encode local decision request: \(error)")
         }

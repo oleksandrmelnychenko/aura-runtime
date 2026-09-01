@@ -1,8 +1,10 @@
 //! Versioned, product-neutral safety case domain.
 //!
-//! A message-level detector result becomes a content-free [`SafetyObservation`].
-//! The deterministic [`SafetyCaseReducer`] folds observations and explicit
-//! lifecycle commands into a bounded [`SafetyCase`]. Guardian reports are
+//! A message-level detector result becomes a content-free
+//! [`SafetyObservation`](crate::safety_case::SafetyObservation). The
+//! deterministic [`SafetyCaseReducer`](crate::safety_case::SafetyCaseReducer)
+//! folds observations and explicit lifecycle commands into a bounded
+//! [`SafetyCase`](crate::safety_case::SafetyCase). Guardian reports are
 //! created only for configured case transitions and carry opaque evidence
 //! references instead of raw message content or free-form verdicts.
 

@@ -1,8 +1,8 @@
 use std::sync::OnceLock;
 
 use aura_domain::{
-    validate_lexical_rules, validate_schema_version, DomainPolicyPackEvidence,
-    DomainPolicyThresholds, LexicalRuleRecord,
+    validate_lexical_rules_for_schema, validate_lexicon_schema_version, CompiledLexicalRules,
+    DomainPolicyPackEvidence, DomainPolicyThresholds, LexicalRuleRecord,
 };
 use serde::Deserialize;
 
@@ -54,17 +54,29 @@ fn default_guardian_escalation_priority() -> u8 {
 }
 
 static KIDS_LEXICON: OnceLock<KidsLexicon> = OnceLock::new();
+static KIDS_COMPILED_LEXICON: OnceLock<KidsCompiledLexicon> = OnceLock::new();
+
+struct KidsCompiledLexicon {
+    grooming: CompiledLexicalRules,
+    bullying: CompiledLexicalRules,
+    selfharm: CompiledLexicalRules,
+    manipulation: CompiledLexicalRules,
+}
 
 fn kids_lexicon() -> &'static KidsLexicon {
     KIDS_LEXICON.get_or_init(|| {
         let lexicon: KidsLexicon =
             serde_json::from_str(KIDS_LEXICON_JSON).expect("invalid kids lexical rule pack");
-        validate_schema_version(lexicon.schema_version, "kids lexicon")
+        validate_lexicon_schema_version(lexicon.schema_version, "kids lexicon")
             .expect("unsupported kids lexicon schema version");
-        validate_lexical_rules(&lexicon.grooming).expect("invalid kids.grooming rules");
-        validate_lexical_rules(&lexicon.bullying).expect("invalid kids.bullying rules");
-        validate_lexical_rules(&lexicon.selfharm).expect("invalid kids.selfharm rules");
-        validate_lexical_rules(&lexicon.manipulation).expect("invalid kids.manipulation rules");
+        validate_lexical_rules_for_schema(lexicon.schema_version, &lexicon.grooming)
+            .expect("invalid kids.grooming rules");
+        validate_lexical_rules_for_schema(lexicon.schema_version, &lexicon.bullying)
+            .expect("invalid kids.bullying rules");
+        validate_lexical_rules_for_schema(lexicon.schema_version, &lexicon.selfharm)
+            .expect("invalid kids.selfharm rules");
+        validate_lexical_rules_for_schema(lexicon.schema_version, &lexicon.manipulation)
+            .expect("invalid kids.manipulation rules");
         validate_policy(&lexicon.policy).expect("invalid kids.policy");
         lexicon
     })
@@ -100,20 +112,52 @@ fn validate_policy(policy: &KidsPolicy) -> Result<(), String> {
     Ok(())
 }
 
-pub fn grooming_rules() -> &'static [LexicalRuleRecord] {
+fn kids_compiled_lexicon() -> &'static KidsCompiledLexicon {
+    KIDS_COMPILED_LEXICON.get_or_init(|| {
+        let lexicon = kids_lexicon();
+        KidsCompiledLexicon {
+            grooming: CompiledLexicalRules::new(&lexicon.grooming),
+            bullying: CompiledLexicalRules::new(&lexicon.bullying),
+            selfharm: CompiledLexicalRules::new(&lexicon.selfharm),
+            manipulation: CompiledLexicalRules::new(&lexicon.manipulation),
+        }
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn grooming_rules() -> &'static [LexicalRuleRecord] {
     &kids_lexicon().grooming
 }
 
-pub fn bullying_rules() -> &'static [LexicalRuleRecord] {
+#[cfg(test)]
+pub(crate) fn bullying_rules() -> &'static [LexicalRuleRecord] {
     &kids_lexicon().bullying
 }
 
-pub fn selfharm_rules() -> &'static [LexicalRuleRecord] {
+#[cfg(test)]
+pub(crate) fn selfharm_rules() -> &'static [LexicalRuleRecord] {
     &kids_lexicon().selfharm
 }
 
-pub fn manipulation_rules() -> &'static [LexicalRuleRecord] {
+#[cfg(test)]
+pub(crate) fn manipulation_rules() -> &'static [LexicalRuleRecord] {
     &kids_lexicon().manipulation
+}
+
+pub(crate) fn grooming_matcher() -> &'static CompiledLexicalRules {
+    &kids_compiled_lexicon().grooming
+}
+
+pub(crate) fn bullying_matcher() -> &'static CompiledLexicalRules {
+    &kids_compiled_lexicon().bullying
+}
+
+pub(crate) fn selfharm_matcher() -> &'static CompiledLexicalRules {
+    &kids_compiled_lexicon().selfharm
+}
+
+pub(crate) fn manipulation_matcher() -> &'static CompiledLexicalRules {
+    &kids_compiled_lexicon().manipulation
 }
 
 pub fn policy_thresholds() -> DomainPolicyThresholds {
@@ -145,7 +189,7 @@ mod tests {
         assert_eq!(evidence.rule_count, 23);
         assert_eq!(
             evidence.sha256,
-            "9ceeacde143a5bb1449530a92227acf8e9538cc364af92511bcb7364d105f841"
+            "24a7971a4018e9768923c3f174f62fe4fb41ab1fa2bc9bb1357bb1067530b2de"
         );
     }
 }

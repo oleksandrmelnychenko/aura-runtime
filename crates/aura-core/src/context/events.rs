@@ -191,6 +191,16 @@ impl ContextEvent {
             return false;
         }
 
+        // Credential collection is represented by the nearest stable event
+        // shape at the domain boundary, but it is phishing evidence rather
+        // than a grooming probe. Keep the typed subtype available without
+        // contaminating grooming memory or relationship trajectories.
+        if self.kind == EventKind::PersonalInfoRequest
+            && self.subtype.as_deref() == Some("semantic_phishing_request_composition_v1")
+        {
+            return false;
+        }
+
         if !self.context.is_meaningful() {
             return true;
         }
@@ -1069,6 +1079,22 @@ mod tests {
             );
             assert!(!kind.is_hostile(), "{kind:?} should NOT be hostile");
         }
+    }
+
+    #[test]
+    fn semantic_phishing_request_does_not_feed_grooming_inference() {
+        let event = ContextEvent::with_subtype(
+            1_000,
+            "sender",
+            "conversation",
+            EventKind::PersonalInfoRequest,
+            0.91,
+            "semantic_phishing_request_composition_v1",
+        );
+
+        assert!(!event.supports_grooming_inference());
+        assert_eq!(event.effective_severity(), 0.0);
+        assert_eq!(event.effective_rating_delta(), 0.0);
     }
 
     #[test]

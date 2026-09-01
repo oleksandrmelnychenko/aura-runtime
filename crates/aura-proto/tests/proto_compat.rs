@@ -129,6 +129,7 @@ fn message_input_relationship_metadata_round_trip() {
         sender_id: "sender_1".to_string(),
         conversation_id: "conv_1".to_string(),
         language: Some("en".to_string()),
+        language_evidence: None,
         conversation_type: proto::ConversationType::Direct as i32,
         member_count: None,
         sender_relationship: proto::SenderRelationship::Teacher as i32,
@@ -147,6 +148,43 @@ fn message_input_relationship_metadata_round_trip() {
         decoded.relationship_trust_source,
         proto::RelationshipTrustSource::SchoolDirectory as i32
     );
+}
+
+#[test]
+fn message_input_language_evidence_v1_round_trip() {
+    let original = proto::MessageInput {
+        content_type: proto::ContentType::Text as i32,
+        text: Some("hello привіт".to_string()),
+        image_data: None,
+        sender_id: "sender_1".to_string(),
+        conversation_id: "conv_1".to_string(),
+        language: Some("en".to_string()),
+        language_evidence: Some(proto::LanguageEvidenceV1 {
+            schema_version: 1,
+            candidates: vec![proto::LanguageCandidateV1 {
+                language_tag: "uk".to_string(),
+                confidence: 0.91,
+                source: proto::LanguageEvidenceSource::OnDeviceClassifier as i32,
+            }],
+            spans: vec![proto::LanguageSpanV1 {
+                language_tag: "uk".to_string(),
+                script: proto::LanguageScript::Cyrillic as i32,
+                confidence: 0.91,
+                source: proto::LanguageEvidenceSource::OnDeviceClassifier as i32,
+                start_utf8: 6,
+                end_utf8: 18,
+            }],
+        }),
+        conversation_type: proto::ConversationType::Direct as i32,
+        member_count: None,
+        sender_relationship: proto::SenderRelationship::Teacher as i32,
+        relationship_trust_source: proto::RelationshipTrustSource::SchoolDirectory as i32,
+    };
+
+    let bytes = original.encode_to_vec();
+    let decoded = proto::MessageInput::decode(bytes.as_slice()).expect("decode message input");
+
+    assert_eq!(decoded, original);
 }
 
 #[test]

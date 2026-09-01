@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "environment": {
+    "device": "iPhone 17 Pro simulator",
+    "ios": "26.2",
+    "xcode": "26.2",
+    "compute_units": "cpuOnly for deterministic tests"
+  },
+  "artifact": {
+    "identifier": "aura-language-id-shadow-maxent-ngram-v1",
+    "manifest_sha256": "7bfb27d993fda7591a2414722cefcc8d3c5372638164122bede0bb5450236d5f",
+    "source_coreml_model_sha256": "2bc122ae9cce6c8ea8b20db85bf5a4ea6132ae7efa99f10debf478f6b25fbd14",
+    "ngram_model_sha256": "23366df9a2b500e0c2551d6664dd0c87df541d23bc1ee30f2eae12285aceba0f",
+    "bundled_bytes_including_manifest": 1382911,
+    "release_state": "shadow_only"
+  },
+  "development_corpus": {
+    "training_rows": 13616,
+    "calibration_rows": 2814,
+    "test_rows": 2990,
+    "labels": ["en", "ru", "tt", "uk"],
+    "independent_release_holdout": false,
+    "native_speaker_adjudicated": false
+  },
+  "coreml": {
+    "calibration_classification_error": 0.015636105188344018,
+    "test_classification_error": 0.016053511705685586
+  },
+  "ngram_at_margin_0_20": {
+    "calibration_supported_coverage": 0.9088372093023256,
+    "calibration_precision_when_emitted": 0.9994882292732856,
+    "calibration_unsupported_as_supported_count": 0,
+    "test_supported_coverage": 0.9139072847682119,
+    "test_precision_when_emitted": 0.9990342829550941,
+    "test_unsupported_as_supported_count": 1
+  },
+  "frozen_span_corpus": {
+    "samples": 24,
+    "tokens": 308,
+    "variants": {
+      "shadow_window_5": {
+        "coverage": 0.33766233766233766,
+        "precision_when_emitted": 1.0,
+        "supported_switch_sample_recall": 0.5454545454545454,
+        "exact_switch_boundary_recall": 0.0,
+        "unsupported_as_supported_emission_rate": 0.0
+      },
+      "shadow_conservative_run_3": {
+        "coverage": 0.2792207792207792,
+        "precision_when_emitted": 1.0,
+        "supported_switch_sample_recall": 0.45454545454545453,
+        "exact_switch_boundary_recall": 0.0,
+        "unsupported_as_supported_emission_rate": 0.0
+      }
+    }
+  },
+  "decision": {
+    "production_candidate_emission_enabled": false,
+    "production_span_emission_enabled": false,
+    "reason": "The shadow ensemble rejects all frozen confusion controls but coverage and exact boundary recall are insufficient, and the development corpus is not release-grade."
+  }
+}

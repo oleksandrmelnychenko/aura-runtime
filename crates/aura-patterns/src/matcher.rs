@@ -49,6 +49,142 @@ pub enum PatternMatcherBuildError {
     InvalidRegex(String, String),
 }
 
+/// Immutable normalization channels shared across language-specific matchers.
+///
+/// Multilingual routing may deliberately evaluate several governed language
+/// packs for one message. Preparing the attacker-controlled text once avoids
+/// repeating the same Unicode, typo, leetspeak, and mixed-script transforms
+/// for every pack while retaining matcher-local rule de-duplication.
+#[derive(Debug)]
+pub struct PreparedPatternText {
+    channels: Vec<String>,
+    cyrillic_leet_groups: Vec<Vec<String>>,
+}
+
+impl PreparedPatternText {
+    /// Builds the ordered, de-duplicated normalization channels for `text`.
+    #[must_use]
+    pub fn new(text: &str) -> Self {
+        let normalizer = TextNormalizer::new();
+        let mut channels = Vec::with_capacity(16);
+        let mut seen = HashSet::with_capacity(16);
+
+        let lower = text.to_lowercase();
+        push_unique_channel(&mut channels, &mut seen, lower.clone());
+
+        let light = normalizer.normalize_light_obfuscation(text);
+        if light != lower {
+            push_unique_channel(&mut channels, &mut seen, light.clone());
+            push_unique_channel(
+                &mut channels,
+                &mut seen,
+                normalizer.normalize_known_typos(&light),
+            );
+            push_unique_channel(
+                &mut channels,
+                &mut seen,
+                normalizer.normalize_known_leet_words(&light),
+            );
+        }
+
+        let mixed_script_latin = normalizer.normalize_mixed_script_latin_tokens(text);
+        if mixed_script_latin != lower && mixed_script_latin != light {
+            push_unique_channel(&mut channels, &mut seen, mixed_script_latin.clone());
+            push_unique_channel(
+                &mut channels,
+                &mut seen,
+                normalizer.normalize_known_typos(&mixed_script_latin),
+            );
+            push_unique_channel(
+                &mut channels,
+                &mut seen,
+                normalizer.normalize_known_leet_words(&mixed_script_latin),
+            );
+        }
+
+        let lower_typo_repaired = normalizer.normalize_known_typos(&lower);
+        if lower_typo_repaired != lower {
+            push_unique_channel(&mut channels, &mut seen, lower_typo_repaired.clone());
+            push_unique_channel(
+                &mut channels,
+                &mut seen,
+                normalizer.normalize_known_leet_words(&lower_typo_repaired),
+            );
+        }
+
+        let lower_leet_words = normalizer.normalize_known_leet_words(&lower);
+        if lower_leet_words != lower {
+            push_unique_channel(&mut channels, &mut seen, lower_leet_words.clone());
+            push_unique_channel(
+                &mut channels,
+                &mut seen,
+                normalizer.normalize_known_typos(&lower_leet_words),
+            );
+        }
+
+        let normalized = normalizer.normalize(text);
+        if normalized != lower {
+            push_unique_channel(&mut channels, &mut seen, normalized.clone());
+        }
+        push_unique_channel(
+            &mut channels,
+            &mut seen,
+            normalizer.normalize_known_leet_words(&normalized),
+        );
+        let typo_repaired = normalizer.normalize_known_typos(&normalized);
+        push_unique_channel(&mut channels, &mut seen, typo_repaired.clone());
+        push_unique_channel(
+            &mut channels,
+            &mut seen,
+            normalizer.normalize_known_leet_words(&typo_repaired),
+        );
+
+        let mut cyrillic_leet_groups = Vec::new();
+        if contains_cyrillic(text) {
+            let cyrillic_light = normalizer.normalize_light_preserving_cyrillic(text);
+            push_unique_channel(&mut channels, &mut seen, cyrillic_light.clone());
+            push_unique_channel(
+                &mut channels,
+                &mut seen,
+                normalizer.normalize_known_typos(&cyrillic_light),
+            );
+
+            let cyrillic_normalized = normalizer.normalize_preserving_cyrillic(text);
+            push_unique_channel(&mut channels, &mut seen, cyrillic_normalized.clone());
+            push_unique_channel(
+                &mut channels,
+                &mut seen,
+                normalizer.normalize_known_typos(&cyrillic_normalized),
+            );
+
+            let mut all_seen = seen.clone();
+            for cyrillic_leet in normalizer.normalize_cyrillic_leet_variants(text, "uk") {
+                let mut group = Vec::with_capacity(2);
+                push_unique_channel(&mut group, &mut all_seen, cyrillic_leet.clone());
+                push_unique_channel(
+                    &mut group,
+                    &mut all_seen,
+                    normalizer.normalize_known_typos(&cyrillic_leet),
+                );
+                if !group.is_empty() {
+                    cyrillic_leet_groups.push(group);
+                }
+            }
+        }
+
+        Self {
+            channels,
+            cyrillic_leet_groups,
+        }
+    }
+}
+
+fn push_unique_channel(channels: &mut Vec<String>, seen: &mut HashSet<String>, channel: String) {
+    if seen.insert(channel.clone()) {
+        channels.push(channel);
+    }
+}
+
 impl PatternMatcher {
     pub fn from_database(db: &PatternDatabase, language: &str) -> Self {
         Self::try_from_database(db, language)
@@ -272,6 +408,36 @@ impl PatternMatcher {
             }
         }
 
+        results
+    }
+
+    /// Scans text whose normalization channels were prepared once by the caller.
+    ///
+    /// Rule matching and per-matcher rule de-duplication are identical to
+    /// [`Self::scan`]. Russian routes consume the two conservative Cyrillic
+    /// leetspeak variants in the same language-specific order as the raw-text
+    /// path; all other routes retain the Ukrainian/default order.
+    #[must_use]
+    pub fn scan_prepared(&self, text: &PreparedPatternText) -> Vec<MatchResult> {
+        let mut results = Vec::new();
+        let mut matched_rules = HashSet::new();
+        for channel in &text.channels {
+            self.scan_text(channel, &mut results, &mut matched_rules);
+        }
+
+        if self.language.eq_ignore_ascii_case("ru") {
+            for group in text.cyrillic_leet_groups.iter().rev() {
+                for channel in group {
+                    self.scan_text(channel, &mut results, &mut matched_rules);
+                }
+            }
+        } else {
+            for group in &text.cyrillic_leet_groups {
+                for channel in group {
+                    self.scan_text(channel, &mut results, &mut matched_rules);
+                }
+            }
+        }
         results
     }
 
@@ -592,6 +758,45 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].threat_type, "threat");
         assert!(results[0].score >= 0.9);
+    }
+
+    #[test]
+    fn prepared_scan_matches_raw_scan_across_governed_languages_and_evasions() {
+        let db = PatternDatabase::default_mvp();
+        let cases = [
+            "Don't tell your parents about our little secret.",
+            "dоnt tеll yоur pаrents about our chat",
+            "н3 к4ж1 б47ьк4м пр0 ц3й с3кр37",
+            "н1к70 н3 х0ч37 73бя",
+            "ordinary supportive conversation",
+        ];
+
+        for language in ["en", "uk", "ru"] {
+            let matcher = PatternMatcher::from_database(&db, language);
+            for case in cases {
+                let raw = matcher.scan(case);
+                let prepared = matcher.scan_prepared(&PreparedPatternText::new(case));
+                let summarize = |results: Vec<MatchResult>| {
+                    results
+                        .into_iter()
+                        .map(|result| {
+                            (
+                                result.rule_id,
+                                result.threat_type,
+                                result.score.to_bits(),
+                                result.explanation,
+                                result.matched_text,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(
+                    summarize(prepared),
+                    summarize(raw),
+                    "prepared scan drifted for language={language} text={case}"
+                );
+            }
+        }
     }
 
     #[test]

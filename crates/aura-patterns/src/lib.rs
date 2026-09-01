@@ -14,7 +14,7 @@ pub mod url_checker;
 pub use coordinates::{validate_ukraine_coordinates, CoordinateFormat, CoordinateMatch};
 pub use database::{PatternDatabase, PatternLoadError};
 pub use emoji::{EmojiAnalyzer, EmojiMatchResult};
-pub use matcher::{MatchResult, PatternMatcher, PatternMatcherBuildError};
+pub use matcher::{MatchResult, PatternMatcher, PatternMatcherBuildError, PreparedPatternText};
 pub use normalizer::TextNormalizer;
 pub use routing::{
     event_kind_for_rule, is_shadowed_generic_coordinate_rule, military_threat_subtype,

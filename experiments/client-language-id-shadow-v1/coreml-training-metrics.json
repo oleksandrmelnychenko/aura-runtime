@@ -1,0 +1,19 @@
+{
+  "algorithm" : "Create ML MLTextClassifier maxEnt revision 1",
+  "calibration_classification_error" : 0.015636105188344018,
+  "calibration_rows" : 2814,
+  "labels" : [
+    "en",
+    "ru",
+    "tt",
+    "uk"
+  ],
+  "model_sha256" : "2bc122ae9cce6c8ea8b20db85bf5a4ea6132ae7efa99f10debf478f6b25fbd14",
+  "release_eligible" : false,
+  "schema_version" : 1,
+  "test_classification_error" : 0.016053511705685586,
+  "test_rows" : 2990,
+  "training_classification_error" : 7.3443008225648754e-05,
+  "training_csv_sha256" : "aa5d5b33594a4cd82b0fe0316709a56ad313fe5b898abae9836a09fd7a0173c3",
+  "training_rows" : 13616
+}

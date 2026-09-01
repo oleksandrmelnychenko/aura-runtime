@@ -220,6 +220,7 @@ fn run_scenario(analyzer: &mut Analyzer, num: usize, scenario: &Scenario, stats:
             sender_id: msg.sender.into(),
             conversation_id: msg.conv.into(),
             language: Some(msg.lang.to_string()),
+            language_evidence: None,
             conversation_type: msg.conv_type,
             member_count: msg.members,
             sender_relationship: Default::default(),

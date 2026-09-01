@@ -77,19 +77,39 @@ pub(super) fn decoded_config_from_proto(
 pub(super) fn message_input_from_proto(
     message: proto::MessageInput,
 ) -> Result<MessageInput, String> {
+    if let Some(text) = message.text.as_deref() {
+        if text.len() > aura_runtime::MAX_DOMAIN_TEXT_BYTES {
+            return Err(format!(
+                "message text exceeds {} UTF-8 bytes",
+                aura_runtime::MAX_DOMAIN_TEXT_BYTES
+            ));
+        }
+    }
+    let language_evidence = message
+        .language_evidence
+        .as_ref()
+        .map(|evidence| {
+            language_evidence_from_proto(
+                evidence,
+                message.text.as_deref(),
+                message.language.as_deref(),
+            )
+        })
+        .transpose()?;
     Ok(MessageInput {
         content_type: content_type_from_proto(message.content_type),
         text: message.text,
         image_data: message.image_data,
-        sender_id: aura_agent_core::SenderId::from(validate_ffi_identifier(
+        sender_id: aura_runtime::SenderId::from(validate_ffi_identifier(
             "message sender id",
             message.sender_id,
         )?),
-        conversation_id: aura_agent_core::ConversationId::from(validate_ffi_identifier(
+        conversation_id: aura_runtime::ConversationId::from(validate_ffi_identifier(
             "message conversation id",
             message.conversation_id,
         )?),
         language: message.language,
+        language_evidence,
         conversation_type: conversation_type_from_proto(message.conversation_type),
         member_count: message.member_count,
         sender_relationship: sender_relationship_from_proto(message.sender_relationship),
@@ -99,9 +119,156 @@ pub(super) fn message_input_from_proto(
     })
 }
 
+fn language_evidence_from_proto(
+    evidence: &proto::LanguageEvidenceV1,
+    text: Option<&str>,
+    legacy_language: Option<&str>,
+) -> Result<LanguageEvidence, String> {
+    if evidence.schema_version != 1 {
+        return Err(format!(
+            "language evidence schema_version must be 1, got {}",
+            evidence.schema_version
+        ));
+    }
+    if evidence.candidates.is_empty() && evidence.spans.is_empty() {
+        return Err("language evidence must not be empty".to_string());
+    }
+    if evidence.candidates.len() > MAX_LANGUAGE_CANDIDATES {
+        return Err(format!(
+            "language evidence exceeds {MAX_LANGUAGE_CANDIDATES} candidates"
+        ));
+    }
+    if evidence.spans.len() > MAX_LANGUAGE_SPANS {
+        return Err(format!(
+            "language evidence exceeds {MAX_LANGUAGE_SPANS} spans"
+        ));
+    }
+
+    let candidates = evidence
+        .candidates
+        .iter()
+        .map(language_candidate_from_proto)
+        .collect::<Result<Vec<_>, _>>()?;
+    let client_declared = candidates
+        .iter()
+        .filter(|candidate| candidate.source() == LanguageEvidenceSource::MessageHint)
+        .collect::<Vec<_>>();
+    if client_declared.len() > 1 {
+        return Err("language evidence permits at most one client-declared candidate".to_string());
+    }
+    if let Some(candidate) = client_declared.first() {
+        if (candidate.confidence() - 1.0).abs() > f32::EPSILON {
+            return Err("client-declared language confidence must be 1".to_string());
+        }
+        if let Some(legacy_language) = legacy_language {
+            let legacy_tag = LanguageTag::try_from(legacy_language).map_err(|error| {
+                format!("legacy language conflicts with typed evidence: {error}")
+            })?;
+            if legacy_tag != *candidate.tag() {
+                return Err(
+                    "legacy language conflicts with client-declared language evidence".to_string(),
+                );
+            }
+        }
+    }
+
+    let span_text = if evidence.spans.is_empty() {
+        ""
+    } else {
+        text.ok_or_else(|| "language spans require message text".to_string())?
+    };
+    let spans = evidence
+        .spans
+        .iter()
+        .map(|span| language_span_from_proto(span, span_text, &candidates))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    LanguageEvidence::try_new(candidates, spans, text.unwrap_or_default())
+        .map_err(|error| format!("invalid language evidence: {error}"))
+}
+
+fn language_candidate_from_proto(
+    candidate: &proto::LanguageCandidateV1,
+) -> Result<LanguageCandidate, String> {
+    let source = language_evidence_source_from_proto(candidate.source)?;
+    let typed = LanguageCandidate::try_new(&candidate.language_tag, candidate.confidence, source)
+        .map_err(|error| format!("invalid language candidate: {error}"))?;
+    if typed.tag().as_str() != candidate.language_tag {
+        return Err("language candidate tag must use canonical lowercase form".to_string());
+    }
+    Ok(typed)
+}
+
+fn language_span_from_proto(
+    span: &proto::LanguageSpanV1,
+    text: &str,
+    candidates: &[LanguageCandidate],
+) -> Result<LanguageSpan, String> {
+    let source = language_evidence_source_from_proto(span.source)?;
+    if source != LanguageEvidenceSource::OnDeviceClassifier {
+        return Err("language span source must be on-device classifier".to_string());
+    }
+    let script = language_script_from_proto(span.script)?;
+    let typed = LanguageSpan::try_new(
+        &span.language_tag,
+        script,
+        span.confidence,
+        source,
+        span.start_utf8,
+        span.end_utf8,
+        text,
+    )
+    .map_err(|error| format!("invalid language span: {error}"))?;
+    if typed.tag().as_str() != span.language_tag {
+        return Err("language span tag must use canonical lowercase form".to_string());
+    }
+    if !candidates.iter().any(|candidate| {
+        candidate.tag() == typed.tag()
+            && candidate.source() == LanguageEvidenceSource::OnDeviceClassifier
+    }) {
+        return Err("language span tag must have an on-device-classifier candidate".to_string());
+    }
+    Ok(typed)
+}
+
+fn language_evidence_source_from_proto(value: i32) -> Result<LanguageEvidenceSource, String> {
+    match proto::LanguageEvidenceSource::try_from(value) {
+        Ok(proto::LanguageEvidenceSource::ClientDeclared) => {
+            Ok(LanguageEvidenceSource::MessageHint)
+        }
+        Ok(proto::LanguageEvidenceSource::OnDeviceClassifier) => {
+            Ok(LanguageEvidenceSource::OnDeviceClassifier)
+        }
+        Ok(proto::LanguageEvidenceSource::Unspecified) => {
+            Err("language evidence source must not be unspecified".to_string())
+        }
+        Err(_) => Err(format!("unknown language evidence source {value}")),
+    }
+}
+
+fn language_script_from_proto(value: i32) -> Result<LanguageScript, String> {
+    match proto::LanguageScript::try_from(value) {
+        Ok(proto::LanguageScript::Latin) => Ok(LanguageScript::Latin),
+        Ok(proto::LanguageScript::Cyrillic) => Ok(LanguageScript::Cyrillic),
+        Ok(proto::LanguageScript::Greek) => Ok(LanguageScript::Greek),
+        Ok(proto::LanguageScript::Arabic) => Ok(LanguageScript::Arabic),
+        Ok(proto::LanguageScript::Hebrew) => Ok(LanguageScript::Hebrew),
+        Ok(proto::LanguageScript::Devanagari) => Ok(LanguageScript::Devanagari),
+        Ok(proto::LanguageScript::Han) => Ok(LanguageScript::Han),
+        Ok(proto::LanguageScript::Hiragana) => Ok(LanguageScript::Hiragana),
+        Ok(proto::LanguageScript::Katakana) => Ok(LanguageScript::Katakana),
+        Ok(proto::LanguageScript::Hangul) => Ok(LanguageScript::Hangul),
+        Ok(proto::LanguageScript::Other) => Ok(LanguageScript::Other),
+        Ok(proto::LanguageScript::Unspecified) => {
+            Err("language script must not be unspecified".to_string())
+        }
+        Err(_) => Err(format!("unknown language script {value}")),
+    }
+}
+
 pub(super) fn tracker_state_to_proto(
     state: &CoreTrackerWireState,
-    kids: &aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState,
+    kids: &aura_runtime::aura_kids::pipeline::ExportedKidsMemoryState,
 ) -> proto::TrackerState {
     proto::TrackerState {
         schema_version: state.schema_version,
@@ -121,7 +288,7 @@ pub(super) fn tracker_state_to_proto(
 
 pub(super) struct ImportTrackerState {
     pub(super) core_state: CoreTrackerWireState,
-    pub(super) kids_state: Option<aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState>,
+    pub(super) kids_state: Option<aura_runtime::aura_kids::pipeline::ExportedKidsMemoryState>,
 }
 
 pub(super) fn tracker_state_from_proto(
@@ -152,7 +319,7 @@ pub(super) fn tracker_state_from_proto(
 }
 
 pub(super) fn kids_memory_state_to_proto(
-    state: &aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState,
+    state: &aura_runtime::aura_kids::pipeline::ExportedKidsMemoryState,
 ) -> proto::KidsMemoryState {
     proto::KidsMemoryState {
         schema_version: state.schema_version,
@@ -213,8 +380,8 @@ pub(super) fn kids_memory_state_to_proto(
 
 pub(super) fn kids_memory_state_from_proto(
     state: &proto::KidsMemoryState,
-) -> Result<aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState, String> {
-    use aura_agent_core::aura_kids::pipeline::{
+) -> Result<aura_runtime::aura_kids::pipeline::ExportedKidsMemoryState, String> {
+    use aura_runtime::aura_kids::pipeline::{
         is_supported_kids_memory_state_version, ExportedConversationMemory,
         ExportedEmissionCheckpoint, ExportedKidsMemoryState, ExportedMessageSnapshot,
         ExportedSenderMemory, KIDS_MEMORY_STATE_VERSION,
@@ -332,7 +499,7 @@ pub(super) fn conversation_timeline_state_from_proto(
     state: proto::ConversationTimelineState,
 ) -> Result<CoreConversationTimelineState, String> {
     Ok(CoreConversationTimelineState {
-        conversation_id: aura_agent_core::ConversationId::from(validate_ffi_identifier(
+        conversation_id: aura_runtime::ConversationId::from(validate_ffi_identifier(
             "timeline conversation id",
             state.conversation_id,
         )?),
@@ -365,11 +532,11 @@ pub(super) fn context_event_from_proto(
     Ok(CoreContextEvent {
         event_id: event.event_id,
         timestamp_ms: event.timestamp_ms,
-        sender_id: aura_agent_core::SenderId::from(validate_ffi_identifier(
+        sender_id: aura_runtime::SenderId::from(validate_ffi_identifier(
             "context event sender id",
             event.sender_id,
         )?),
-        conversation_id: aura_agent_core::ConversationId::from(validate_ffi_identifier(
+        conversation_id: aura_runtime::ConversationId::from(validate_ffi_identifier(
             "context event conversation id",
             event.conversation_id,
         )?),
@@ -654,22 +821,24 @@ pub(super) fn contact_profile_state_from_proto(
 
     let mut conversations = Vec::with_capacity(state.conversations.len());
     for conversation_id in state.conversations {
-        conversations.push(aura_agent_core::ConversationId::from(
-            validate_ffi_identifier("contact conversation id", conversation_id)?,
-        ));
+        conversations.push(aura_runtime::ConversationId::from(validate_ffi_identifier(
+            "contact conversation id",
+            conversation_id,
+        )?));
     }
 
     let mut propaganda_conversations = Vec::with_capacity(state.propaganda_conversations.len());
     for conversation_id in state.propaganda_conversations {
-        propaganda_conversations.push(aura_agent_core::ConversationId::from(
-            validate_ffi_identifier("propaganda conversation id", conversation_id)?,
-        ));
+        propaganda_conversations.push(aura_runtime::ConversationId::from(validate_ffi_identifier(
+            "propaganda conversation id",
+            conversation_id,
+        )?));
     }
 
     let child_safety = child_safety_trajectory_from_proto(state.child_safety)?;
 
     Ok(CoreContactProfileState {
-        sender_id: aura_agent_core::SenderId::from(sender_id),
+        sender_id: aura_runtime::SenderId::from(sender_id),
         first_seen_ms: state.first_seen_ms,
         last_seen_ms: state.last_seen_ms,
         total_messages: state.total_messages,
@@ -797,12 +966,12 @@ pub(super) fn behavioral_snapshot_state_from_proto(
 
 pub(super) fn protection_level_from_proto(
     value: i32,
-) -> Result<aura_agent_core::ProtectionLevel, String> {
+) -> Result<aura_runtime::ProtectionLevel, String> {
     match proto::ProtectionLevel::try_from(value) {
-        Ok(proto::ProtectionLevel::Off) => Ok(aura_agent_core::ProtectionLevel::Off),
-        Ok(proto::ProtectionLevel::Low) => Ok(aura_agent_core::ProtectionLevel::Low),
-        Ok(proto::ProtectionLevel::Medium) => Ok(aura_agent_core::ProtectionLevel::Medium),
-        Ok(proto::ProtectionLevel::High) => Ok(aura_agent_core::ProtectionLevel::High),
+        Ok(proto::ProtectionLevel::Off) => Ok(aura_runtime::ProtectionLevel::Off),
+        Ok(proto::ProtectionLevel::Low) => Ok(aura_runtime::ProtectionLevel::Low),
+        Ok(proto::ProtectionLevel::Medium) => Ok(aura_runtime::ProtectionLevel::Medium),
+        Ok(proto::ProtectionLevel::High) => Ok(aura_runtime::ProtectionLevel::High),
         Ok(proto::ProtectionLevel::Unspecified) => {
             Err("protection_level must be explicit".to_string())
         }
@@ -810,21 +979,21 @@ pub(super) fn protection_level_from_proto(
     }
 }
 
-pub(super) fn account_type_from_proto(value: i32) -> Result<aura_agent_core::AccountType, String> {
+pub(super) fn account_type_from_proto(value: i32) -> Result<aura_runtime::AccountType, String> {
     match proto::AccountType::try_from(value) {
-        Ok(proto::AccountType::Adult) => Ok(aura_agent_core::AccountType::Adult),
-        Ok(proto::AccountType::Teen) => Ok(aura_agent_core::AccountType::Teen),
-        Ok(proto::AccountType::Child) => Ok(aura_agent_core::AccountType::Child),
+        Ok(proto::AccountType::Adult) => Ok(aura_runtime::AccountType::Adult),
+        Ok(proto::AccountType::Teen) => Ok(aura_runtime::AccountType::Teen),
+        Ok(proto::AccountType::Child) => Ok(aura_runtime::AccountType::Child),
         Ok(proto::AccountType::Unspecified) => Err("account_type must be explicit".to_string()),
         Err(_) => Err(format!("unsupported account_type value {value}")),
     }
 }
 
-pub(super) fn domain_mode_from_proto(value: i32) -> Result<aura_agent_core::DomainMode, String> {
+pub(super) fn domain_mode_from_proto(value: i32) -> Result<aura_runtime::DomainMode, String> {
     match proto::DomainMode::try_from(value) {
-        Ok(proto::DomainMode::None) => Ok(aura_agent_core::DomainMode::None),
-        Ok(proto::DomainMode::Kids) => Ok(aura_agent_core::DomainMode::Kids),
-        Ok(proto::DomainMode::Military) => Ok(aura_agent_core::DomainMode::Military),
+        Ok(proto::DomainMode::None) => Ok(aura_runtime::DomainMode::None),
+        Ok(proto::DomainMode::Kids) => Ok(aura_runtime::DomainMode::Kids),
+        Ok(proto::DomainMode::Military) => Ok(aura_runtime::DomainMode::Military),
         Ok(proto::DomainMode::Unspecified) => Err("domain_mode must be explicit".to_string()),
         Err(_) => Err(format!("unsupported domain_mode value {value}")),
     }
@@ -858,29 +1027,29 @@ pub(super) fn cultural_context_from_proto(
     }
 }
 
-pub(super) fn content_type_from_proto(value: i32) -> aura_agent_core::ContentType {
+pub(super) fn content_type_from_proto(value: i32) -> aura_runtime::ContentType {
     match proto::ContentType::try_from(value).unwrap_or(proto::ContentType::Text) {
-        proto::ContentType::Image => aura_agent_core::ContentType::Image,
-        proto::ContentType::Voice => aura_agent_core::ContentType::Voice,
-        proto::ContentType::Video => aura_agent_core::ContentType::Video,
-        proto::ContentType::Url => aura_agent_core::ContentType::Url,
-        _ => aura_agent_core::ContentType::Text,
+        proto::ContentType::Image => aura_runtime::ContentType::Image,
+        proto::ContentType::Voice => aura_runtime::ContentType::Voice,
+        proto::ContentType::Video => aura_runtime::ContentType::Video,
+        proto::ContentType::Url => aura_runtime::ContentType::Url,
+        _ => aura_runtime::ContentType::Text,
     }
 }
 
-pub(super) fn conversation_type_from_proto(value: i32) -> aura_agent_core::ConversationType {
+pub(super) fn conversation_type_from_proto(value: i32) -> aura_runtime::ConversationType {
     match proto::ConversationType::try_from(value).unwrap_or(proto::ConversationType::Direct) {
-        proto::ConversationType::Group => aura_agent_core::ConversationType::Group,
-        _ => aura_agent_core::ConversationType::Direct,
+        proto::ConversationType::Group => aura_runtime::ConversationType::Group,
+        _ => aura_runtime::ConversationType::Direct,
     }
 }
 
 pub(super) fn proto_conversation_type(
-    value: aura_agent_core::ConversationType,
+    value: aura_runtime::ConversationType,
 ) -> proto::ConversationType {
     match value {
-        aura_agent_core::ConversationType::Direct => proto::ConversationType::Direct,
-        aura_agent_core::ConversationType::Group => proto::ConversationType::Group,
+        aura_runtime::ConversationType::Direct => proto::ConversationType::Direct,
+        aura_runtime::ConversationType::Group => proto::ConversationType::Group,
     }
 }
 
@@ -931,14 +1100,14 @@ pub(super) fn relationship_trust_source_from_proto(value: i32) -> RelationshipTr
 
 pub(super) fn product_rollout_mode_from_proto(
     value: i32,
-) -> Result<aura_agent_core::ProductRolloutMode, String> {
+) -> Result<aura_runtime::ProductRolloutMode, String> {
     match proto::ProductRolloutMode::try_from(value) {
-        Ok(proto::ProductRolloutMode::Shadow) => Ok(aura_agent_core::ProductRolloutMode::Shadow),
+        Ok(proto::ProductRolloutMode::Shadow) => Ok(aura_runtime::ProductRolloutMode::Shadow),
         Ok(proto::ProductRolloutMode::StagingPilot) => {
-            Ok(aura_agent_core::ProductRolloutMode::StagingPilot)
+            Ok(aura_runtime::ProductRolloutMode::StagingPilot)
         }
         Ok(proto::ProductRolloutMode::GuardianEnabled) => {
-            Ok(aura_agent_core::ProductRolloutMode::GuardianEnabled)
+            Ok(aura_runtime::ProductRolloutMode::GuardianEnabled)
         }
         Ok(proto::ProductRolloutMode::Unspecified) => {
             Err("product_rollout_mode must be explicit".to_string())
@@ -947,47 +1116,43 @@ pub(super) fn product_rollout_mode_from_proto(
     }
 }
 
-pub(super) fn circle_tier_from_proto(value: i32) -> aura_agent_core::CircleTier {
+pub(super) fn circle_tier_from_proto(value: i32) -> aura_runtime::CircleTier {
     match proto::CircleTier::try_from(value).unwrap_or(proto::CircleTier::New) {
-        proto::CircleTier::Inner => aura_agent_core::CircleTier::Inner,
-        proto::CircleTier::Regular => aura_agent_core::CircleTier::Regular,
-        proto::CircleTier::Occasional => aura_agent_core::CircleTier::Occasional,
-        _ => aura_agent_core::CircleTier::New,
+        proto::CircleTier::Inner => aura_runtime::CircleTier::Inner,
+        proto::CircleTier::Regular => aura_runtime::CircleTier::Regular,
+        proto::CircleTier::Occasional => aura_runtime::CircleTier::Occasional,
+        _ => aura_runtime::CircleTier::New,
     }
 }
 
-pub(super) fn proto_circle_tier(value: aura_agent_core::CircleTier) -> proto::CircleTier {
+pub(super) fn proto_circle_tier(value: aura_runtime::CircleTier) -> proto::CircleTier {
     match value {
-        aura_agent_core::CircleTier::Inner => proto::CircleTier::Inner,
-        aura_agent_core::CircleTier::Regular => proto::CircleTier::Regular,
-        aura_agent_core::CircleTier::Occasional => proto::CircleTier::Occasional,
-        aura_agent_core::CircleTier::New => proto::CircleTier::New,
+        aura_runtime::CircleTier::Inner => proto::CircleTier::Inner,
+        aura_runtime::CircleTier::Regular => proto::CircleTier::Regular,
+        aura_runtime::CircleTier::Occasional => proto::CircleTier::Occasional,
+        aura_runtime::CircleTier::New => proto::CircleTier::New,
     }
 }
 
-pub(super) fn behavioral_trend_from_proto(value: i32) -> aura_agent_core::BehavioralTrend {
+pub(super) fn behavioral_trend_from_proto(value: i32) -> aura_runtime::BehavioralTrend {
     match proto::BehavioralTrend::try_from(value).unwrap_or(proto::BehavioralTrend::Stable) {
-        proto::BehavioralTrend::Improving => aura_agent_core::BehavioralTrend::Improving,
-        proto::BehavioralTrend::GradualWorsening => {
-            aura_agent_core::BehavioralTrend::GradualWorsening
-        }
-        proto::BehavioralTrend::RapidWorsening => aura_agent_core::BehavioralTrend::RapidWorsening,
-        proto::BehavioralTrend::RoleReversal => aura_agent_core::BehavioralTrend::RoleReversal,
-        _ => aura_agent_core::BehavioralTrend::Stable,
+        proto::BehavioralTrend::Improving => aura_runtime::BehavioralTrend::Improving,
+        proto::BehavioralTrend::GradualWorsening => aura_runtime::BehavioralTrend::GradualWorsening,
+        proto::BehavioralTrend::RapidWorsening => aura_runtime::BehavioralTrend::RapidWorsening,
+        proto::BehavioralTrend::RoleReversal => aura_runtime::BehavioralTrend::RoleReversal,
+        _ => aura_runtime::BehavioralTrend::Stable,
     }
 }
 
 pub(super) fn proto_behavioral_trend(
-    value: aura_agent_core::BehavioralTrend,
+    value: aura_runtime::BehavioralTrend,
 ) -> proto::BehavioralTrend {
     match value {
-        aura_agent_core::BehavioralTrend::Stable => proto::BehavioralTrend::Stable,
-        aura_agent_core::BehavioralTrend::Improving => proto::BehavioralTrend::Improving,
-        aura_agent_core::BehavioralTrend::GradualWorsening => {
-            proto::BehavioralTrend::GradualWorsening
-        }
-        aura_agent_core::BehavioralTrend::RapidWorsening => proto::BehavioralTrend::RapidWorsening,
-        aura_agent_core::BehavioralTrend::RoleReversal => proto::BehavioralTrend::RoleReversal,
+        aura_runtime::BehavioralTrend::Stable => proto::BehavioralTrend::Stable,
+        aura_runtime::BehavioralTrend::Improving => proto::BehavioralTrend::Improving,
+        aura_runtime::BehavioralTrend::GradualWorsening => proto::BehavioralTrend::GradualWorsening,
+        aura_runtime::BehavioralTrend::RapidWorsening => proto::BehavioralTrend::RapidWorsening,
+        aura_runtime::BehavioralTrend::RoleReversal => proto::BehavioralTrend::RoleReversal,
     }
 }
 

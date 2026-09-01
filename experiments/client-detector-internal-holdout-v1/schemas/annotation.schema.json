@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auramessenger.ai/schemas/internal-holdout-annotation-v1.json",
+  "title": "AURA internal blind holdout annotation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case_id", "reviewer_id", "included", "primary_threat", "onset_turn", "minimum_action", "naturalness", "confidence", "contains_pii"],
+  "properties": {
+    "case_id": {"type": "string", "pattern": "^ihv1-case-[a-f0-9]{24}$"},
+    "reviewer_id": {"type": "string", "pattern": "^[a-z0-9_-]{3,32}$"},
+    "included": {"type": "boolean"},
+    "primary_threat": {
+      "enum": ["none", "grooming", "manipulation", "bullying", "self_harm", "threat", "explicit", "nsfw", "phishing"]
+    },
+    "onset_turn": {"type": ["integer", "null"], "minimum": 0, "maximum": 5},
+    "minimum_action": {"enum": ["allow", "warn", "block"]},
+    "naturalness": {"type": "integer", "minimum": 1, "maximum": 5},
+    "confidence": {"type": "integer", "minimum": 1, "maximum": 5},
+    "contains_pii": {"type": "boolean"},
+    "exclusion_reason": {"type": ["string", "null"], "maxLength": 240},
+    "notes": {"type": ["string", "null"], "maxLength": 500}
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schema_version": "aura.developer_challenge_protocol.v1",
+  "dataset_id": "aura_client_detector_developer_challenge_v1",
+  "evidence_class": "developer_authored_challenge",
+  "release_eligible": false,
+  "languages": [
+    "en",
+    "uk",
+    "ru"
+  ],
+  "threat_families": [
+    "grooming",
+    "manipulation",
+    "bullying",
+    "self_harm",
+    "threat",
+    "explicit",
+    "nsfw",
+    "phishing"
+  ],
+  "pairs_per_language_family": 10,
+  "messages_per_conversation": 2,
+  "maximum_message_bytes": 1000,
+  "paired_design": {
+    "risky_member": "The target phrase is used as an active first-person intent or direct request.",
+    "safe_member": "The exact target phrase appears inside a closed quotation followed by an explicit report, refusal, education, or support stance.",
+    "controlled_fields": [
+      "language",
+      "target_phrase",
+      "account_type",
+      "age",
+      "conversation_type",
+      "relationship",
+      "trust_source"
+    ]
+  },
+  "thresholds": {
+    "grooming": 0.55,
+    "manipulation": 0.55,
+    "bullying": 0.55,
+    "self_harm": 0.70,
+    "threat": 0.60,
+    "explicit": 0.55,
+    "nsfw": 0.55,
+    "phishing": 0.55,
+    "default_other_family": 0.55
+  },
+  "diagnostic_targets": {
+    "minimum_cases_per_language_family_polarity": 10,
+    "minimum_overall_expected_family_recall": 0.90,
+    "minimum_slice_expected_family_recall": 0.80,
+    "minimum_overall_safe_specificity": 0.95,
+    "minimum_slice_safe_specificity": 0.90,
+    "minimum_detected_family_accuracy": 0.85,
+    "maximum_risky_allow_errors": 0,
+    "maximum_safe_block_errors": 0,
+    "minimum_pair_accuracy": 0.90
+  },
+  "privacy": {
+    "synthetic_only": true,
+    "real_child_conversations_allowed": false,
+    "direct_identifiers_allowed": false,
+    "links_use_placeholder": "[LINK]",
+    "codes_use_placeholder": "[CODE]"
+  },
+  "execution_policy": {
+    "freeze_before_first_detector_run": true,
+    "do_not_edit_v1_after_results": true,
+    "changed_corpus_requires_new_dataset_version": true,
+    "report_plaintext_failures": false
+  },
+  "claim_boundary": [
+    "This is a developer-authored diagnostic challenge, not blinded or independent evidence.",
+    "A diagnostic pass cannot close the internal blinded release holdout or any external validation gate.",
+    "The corpus is frozen before its first detector execution and must not be tuned in place after results are observed.",
+    "The safe counterfactuals intentionally test quotation and counter-speech handling; a policy owner must separately decide whether conservative alerts are desirable for specific families."
+  ]
+}

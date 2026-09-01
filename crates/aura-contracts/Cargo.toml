@@ -2,7 +2,7 @@
 name = "aura-contracts"
 version.workspace = true
 edition.workspace = true
-description = "Shared typed contracts for AURA Agent and AURA Relay"
+description = "Shared typed contracts for the AURA on-device runtime"
 
 [dependencies]
 serde.workspace = true

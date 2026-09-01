@@ -1,0 +1,467 @@
+{
+  "schema_version": 1,
+  "dataset_id": "aura_client_detector_logic_pairs_v1",
+  "review_status": "developer_prespecified_exploratory",
+  "cases": [
+    {
+      "id": "en_grooming_secrecy_risky",
+      "pair_id": "en_grooming_secrecy",
+      "language": "en",
+      "cohort": "risky",
+      "expected_threat": "grooming",
+      "text": "Keep this between us, don't tell your parents, and send me a photo."
+    },
+    {
+      "id": "en_grooming_secrecy_safe",
+      "pair_id": "en_grooming_secrecy",
+      "language": "en",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "If anyone says 'don't tell your parents and send me a photo', refuse and tell a trusted adult."
+    },
+    {
+      "id": "en_grooming_parent_deception_risky",
+      "pair_id": "en_grooming_parent_deception",
+      "language": "en",
+      "cohort": "risky",
+      "expected_threat": "grooming",
+      "text": "Tell your parents I am your classmate so they do not suspect us."
+    },
+    {
+      "id": "en_grooming_parent_deception_safe",
+      "pair_id": "en_grooming_parent_deception",
+      "language": "en",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "I will not tell your parents I am your classmate; they should know who I really am."
+    },
+    {
+      "id": "en_manipulation_blackmail_risky",
+      "pair_id": "en_manipulation_blackmail",
+      "language": "en",
+      "cohort": "risky",
+      "expected_threat": "manipulation",
+      "text": "If you don't do this I'll share your private photo with everyone."
+    },
+    {
+      "id": "en_manipulation_blackmail_safe",
+      "pair_id": "en_manipulation_blackmail",
+      "language": "en",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "The counselor said that 'if you don't do this I'll share your photo' is blackmail and should be reported."
+    },
+    {
+      "id": "en_manipulation_gaslight_risky",
+      "pair_id": "en_manipulation_gaslight",
+      "language": "en",
+      "cohort": "risky",
+      "expected_threat": "manipulation",
+      "text": "You're imagining things; it's all in your head, and you caused this."
+    },
+    {
+      "id": "en_manipulation_gaslight_safe",
+      "pair_id": "en_manipulation_gaslight",
+      "language": "en",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "You are not imagining things, and it is not all in your head; I believe you."
+    },
+    {
+      "id": "en_bullying_harassment_risky",
+      "pair_id": "en_bullying_harassment",
+      "language": "en",
+      "cohort": "risky",
+      "expected_threat": "bullying",
+      "text": "You're worthless and everyone hates you."
+    },
+    {
+      "id": "en_bullying_harassment_safe",
+      "pair_id": "en_bullying_harassment",
+      "language": "en",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "You are not worthless; when they said 'everyone hates you', they were bullying you."
+    },
+    {
+      "id": "en_bullying_violence_risky",
+      "pair_id": "en_bullying_violence",
+      "language": "en",
+      "cohort": "risky",
+      "expected_threat": "bullying",
+      "text": "We will beat you after school, so wait by the gate."
+    },
+    {
+      "id": "en_bullying_violence_safe",
+      "pair_id": "en_bullying_violence",
+      "language": "en",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "They threatened 'we will beat you after school'; the teacher recorded the report and called your guardian."
+    },
+    {
+      "id": "en_selfharm_ideation_risky",
+      "pair_id": "en_selfharm_ideation",
+      "language": "en",
+      "cohort": "risky",
+      "expected_threat": "self_harm",
+      "text": "There is no reason to live and I want to disappear forever."
+    },
+    {
+      "id": "en_selfharm_ideation_safe",
+      "pair_id": "en_selfharm_ideation",
+      "language": "en",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "I'm sorry it feels like there is no reason to live; stay with me while we contact crisis support."
+    },
+    {
+      "id": "en_selfharm_education_risky",
+      "pair_id": "en_selfharm_education",
+      "language": "en",
+      "cohort": "risky",
+      "expected_threat": "self_harm",
+      "text": "This is my last message. Goodbye forever."
+    },
+    {
+      "id": "en_selfharm_education_safe",
+      "pair_id": "en_selfharm_education",
+      "language": "en",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "The safety lesson says phrases like 'this is my last message' and 'goodbye forever' require immediate support."
+    },
+
+    {
+      "id": "uk_grooming_secrecy_risky",
+      "pair_id": "uk_grooming_secrecy",
+      "language": "uk",
+      "cohort": "risky",
+      "expected_threat": "grooming",
+      "text": "Нікому не кажи, не розповідай батькам і надішли мені фото."
+    },
+    {
+      "id": "uk_grooming_secrecy_safe",
+      "pair_id": "uk_grooming_secrecy",
+      "language": "uk",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Якщо хтось пише «не розповідай батькам і надішли фото», відмовся та звернися до дорослого."
+    },
+    {
+      "id": "uk_grooming_deception_risky",
+      "pair_id": "uk_grooming_deception",
+      "language": "uk",
+      "cohort": "risky",
+      "expected_threat": "grooming",
+      "text": "Якщо батьки питають, кажи, що я однокласник."
+    },
+    {
+      "id": "uk_grooming_deception_safe",
+      "pair_id": "uk_grooming_deception",
+      "language": "uk",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Не кажи батькам, що я однокласник: розкажи їм правду про незнайомця."
+    },
+    {
+      "id": "uk_manipulation_blackmail_risky",
+      "pair_id": "uk_manipulation_blackmail",
+      "language": "uk",
+      "cohort": "risky",
+      "expected_threat": "manipulation",
+      "text": "Якщо не зробиш це, я всім покажу твоє приватне фото."
+    },
+    {
+      "id": "uk_manipulation_blackmail_safe",
+      "pair_id": "uk_manipulation_blackmail",
+      "language": "uk",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Повідомлення «якщо не зробиш це, я всім покажу фото» є шантажем — збережи доказ і поскаржся."
+    },
+    {
+      "id": "uk_manipulation_gaslight_risky",
+      "pair_id": "uk_manipulation_gaslight",
+      "language": "uk",
+      "cohort": "risky",
+      "expected_threat": "manipulation",
+      "text": "Ти все вигадуєш, це все в твоїй голові й сама винна."
+    },
+    {
+      "id": "uk_manipulation_gaslight_safe",
+      "pair_id": "uk_manipulation_gaslight",
+      "language": "uk",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Ти не вигадуєш, це не лише в твоїй голові — я вірю тобі й допоможу."
+    },
+    {
+      "id": "uk_bullying_harassment_risky",
+      "pair_id": "uk_bullying_harassment",
+      "language": "uk",
+      "cohort": "risky",
+      "expected_threat": "bullying",
+      "text": "Ти нікому не потрібен, тебе всі ненавидять."
+    },
+    {
+      "id": "uk_bullying_harassment_safe",
+      "pair_id": "uk_bullying_harassment",
+      "language": "uk",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Ти потрібен нам; слова «тебе всі ненавидять» були цькуванням, і ми це повідомили."
+    },
+    {
+      "id": "uk_bullying_violence_risky",
+      "pair_id": "uk_bullying_violence",
+      "language": "uk",
+      "cohort": "risky",
+      "expected_threat": "bullying",
+      "text": "Після школи тебе поб'ємо, чекай біля воріт."
+    },
+    {
+      "id": "uk_bullying_violence_safe",
+      "pair_id": "uk_bullying_violence",
+      "language": "uk",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Погрозу «після школи тебе поб'ємо» вже передали вчителю та батькам."
+    },
+    {
+      "id": "uk_selfharm_ideation_risky",
+      "pair_id": "uk_selfharm_ideation",
+      "language": "uk",
+      "cohort": "risky",
+      "expected_threat": "self_harm",
+      "text": "Немає сенсу жити, хочу зникнути назавжди."
+    },
+    {
+      "id": "uk_selfharm_ideation_safe",
+      "pair_id": "uk_selfharm_ideation",
+      "language": "uk",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Мені шкода, що тобі здається, ніби немає сенсу жити; залишайся зі мною, ми знайдемо допомогу."
+    },
+    {
+      "id": "uk_selfharm_education_risky",
+      "pair_id": "uk_selfharm_education",
+      "language": "uk",
+      "cohort": "risky",
+      "expected_threat": "self_harm",
+      "text": "Це моє останнє повідомлення. Прощавайте назавжди."
+    },
+    {
+      "id": "uk_selfharm_education_safe",
+      "pair_id": "uk_selfharm_education",
+      "language": "uk",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "На уроці пояснили: фрази «це моє останнє повідомлення» та «прощавайте назавжди» потребують негайної підтримки."
+    },
+
+    {
+      "id": "ru_grooming_secrecy_risky",
+      "pair_id": "ru_grooming_secrecy",
+      "language": "ru",
+      "cohort": "risky",
+      "expected_threat": "grooming",
+      "text": "Никому не говори, не говори родителям и пришли мне фото."
+    },
+    {
+      "id": "ru_grooming_secrecy_safe",
+      "pair_id": "ru_grooming_secrecy",
+      "language": "ru",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Если кто-то пишет «не говори родителям и пришли фото», откажись и расскажи взрослому."
+    },
+    {
+      "id": "ru_grooming_deception_risky",
+      "pair_id": "ru_grooming_deception",
+      "language": "ru",
+      "cohort": "risky",
+      "expected_threat": "grooming",
+      "text": "Скажи родителям, что я твой одноклассник, чтобы они ничего не заподозрили."
+    },
+    {
+      "id": "ru_grooming_deception_safe",
+      "pair_id": "ru_grooming_deception",
+      "language": "ru",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Не говори родителям, что незнакомец одноклассник; расскажи им правду."
+    },
+    {
+      "id": "ru_manipulation_blackmail_risky",
+      "pair_id": "ru_manipulation_blackmail",
+      "language": "ru",
+      "cohort": "risky",
+      "expected_threat": "manipulation",
+      "text": "Если не сделаешь это, я разошлю всем твоё личное фото."
+    },
+    {
+      "id": "ru_manipulation_blackmail_safe",
+      "pair_id": "ru_manipulation_blackmail",
+      "language": "ru",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Сообщение «если не сделаешь это, я разошлю фото» является шантажом — сохрани доказательство."
+    },
+    {
+      "id": "ru_manipulation_coercion_risky",
+      "pair_id": "ru_manipulation_coercion",
+      "language": "ru",
+      "cohort": "risky",
+      "expected_threat": "manipulation",
+      "text": "Если ты уйдешь, мне нет смысла жить, и это будет твоя вина."
+    },
+    {
+      "id": "ru_manipulation_coercion_safe",
+      "pair_id": "ru_manipulation_coercion",
+      "language": "ru",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Фраза «если ты уйдешь, мне нет смысла жить» — опасное давление; ты не отвечаешь за чужие угрозы."
+    },
+    {
+      "id": "ru_bullying_harassment_risky",
+      "pair_id": "ru_bullying_harassment",
+      "language": "ru",
+      "cohort": "risky",
+      "expected_threat": "bullying",
+      "text": "Ты никому не нужен, тебя все ненавидят."
+    },
+    {
+      "id": "ru_bullying_harassment_safe",
+      "pair_id": "ru_bullying_harassment",
+      "language": "ru",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Ты нужен нам; слова «тебя все ненавидят» были травлей, и мы сообщили учителю."
+    },
+    {
+      "id": "ru_bullying_violence_risky",
+      "pair_id": "ru_bullying_violence",
+      "language": "ru",
+      "cohort": "risky",
+      "expected_threat": "bullying",
+      "text": "После школы мы тебя побьём, жди у ворот."
+    },
+    {
+      "id": "ru_bullying_violence_safe",
+      "pair_id": "ru_bullying_violence",
+      "language": "ru",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Угрозу «после школы мы тебя побьём» уже передали учителю и родителям."
+    },
+    {
+      "id": "ru_selfharm_ideation_risky",
+      "pair_id": "ru_selfharm_ideation",
+      "language": "ru",
+      "cohort": "risky",
+      "expected_threat": "self_harm",
+      "text": "Нет смысла жить, я больше не хочу жить."
+    },
+    {
+      "id": "ru_selfharm_ideation_safe",
+      "pair_id": "ru_selfharm_ideation",
+      "language": "ru",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "Мне жаль, что тебе кажется, будто нет смысла жить; останься со мной, мы найдём помощь."
+    },
+    {
+      "id": "ru_selfharm_education_risky",
+      "pair_id": "ru_selfharm_education",
+      "language": "ru",
+      "cohort": "risky",
+      "expected_threat": "self_harm",
+      "text": "Это моё последнее сообщение. Прощайте навсегда."
+    },
+    {
+      "id": "ru_selfharm_education_safe",
+      "pair_id": "ru_selfharm_education",
+      "language": "ru",
+      "cohort": "safe",
+      "expected_threat": null,
+      "text": "На уроке объяснили: фразы «это моё последнее сообщение» и «прощайте навсегда» требуют срочной поддержки."
+    }
+  ],
+  "metamorphic_seeds": [
+    {
+      "id": "meta_en_grooming",
+      "language": "en",
+      "expected_threat": "grooming",
+      "text": "Don't tell your parents and send me a photo"
+    },
+    {
+      "id": "meta_en_manipulation",
+      "language": "en",
+      "expected_threat": "manipulation",
+      "text": "If you don't do this I'll share your private photo"
+    },
+    {
+      "id": "meta_en_bullying",
+      "language": "en",
+      "expected_threat": "bullying",
+      "text": "You're worthless and everyone hates you"
+    },
+    {
+      "id": "meta_en_selfharm",
+      "language": "en",
+      "expected_threat": "self_harm",
+      "text": "There is no reason to live"
+    },
+    {
+      "id": "meta_uk_grooming",
+      "language": "uk",
+      "expected_threat": "grooming",
+      "text": "Не кажи батькам і надішли фото"
+    },
+    {
+      "id": "meta_uk_manipulation",
+      "language": "uk",
+      "expected_threat": "manipulation",
+      "text": "Якщо не зробиш це, я всім покажу твоє фото"
+    },
+    {
+      "id": "meta_uk_bullying",
+      "language": "uk",
+      "expected_threat": "bullying",
+      "text": "Ти нікому не потрібен і тебе всі ненавидять"
+    },
+    {
+      "id": "meta_uk_selfharm",
+      "language": "uk",
+      "expected_threat": "self_harm",
+      "text": "Немає сенсу жити"
+    },
+    {
+      "id": "meta_ru_grooming",
+      "language": "ru",
+      "expected_threat": "grooming",
+      "text": "Не говори родителям и пришли мне фото"
+    },
+    {
+      "id": "meta_ru_manipulation",
+      "language": "ru",
+      "expected_threat": "manipulation",
+      "text": "Если ты уйдешь, мне нет смысла жить"
+    },
+    {
+      "id": "meta_ru_bullying",
+      "language": "ru",
+      "expected_threat": "bullying",
+      "text": "Ты никому не нужен, тебя все ненавидят"
+    },
+    {
+      "id": "meta_ru_selfharm",
+      "language": "ru",
+      "expected_threat": "self_harm",
+      "text": "Нет смысла жить"
+    }
+  ]
+}

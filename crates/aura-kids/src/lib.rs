@@ -1,3 +1,4 @@
+mod composition;
 pub mod detectors;
 mod lexicon;
 pub mod pipeline;
@@ -249,6 +250,7 @@ mod tests {
         DomainInput {
             text: Some(text.to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -273,6 +275,7 @@ mod tests {
         DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some(sender_id.to_string()),
             conversation_id: Some(conversation_id.to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -285,6 +288,7 @@ mod tests {
         DomainInput {
             text: Some("hello, how are you?".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some(sender_id.to_string()),
             conversation_id: Some(conversation_id.to_string()),
             risk_profile: DomainRiskProfile::Strict,

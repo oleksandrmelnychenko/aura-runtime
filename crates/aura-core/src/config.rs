@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use aura_domain::LanguageTag;
+
 use crate::product::ProductRolloutMode;
 use crate::types::{AccountType, AuraDomainModule, DomainMode, ProtectionLevel};
 
@@ -172,6 +174,17 @@ impl AuraConfig {
 
     /// Validates the configuration and returns an error if any field is out of range.
     pub fn validate(&self) -> Result<(), crate::error::AuraError> {
+        let normalized_language =
+            LanguageTag::try_from(self.language.as_str()).map_err(|error| {
+                crate::error::AuraError::InvalidConfig(format!(
+                    "language must be a bounded BCP-47-style tag: {error}"
+                ))
+            })?;
+        if normalized_language.as_str() != self.language {
+            return Err(crate::error::AuraError::InvalidConfig(
+                "language must use canonical lowercase BCP-47-style form".to_string(),
+            ));
+        }
         if !self.can_disable() && !self.enabled {
             return Err(crate::error::AuraError::InvalidConfig(
                 "minor protection cannot be disabled".to_string(),
@@ -246,6 +259,16 @@ mod tests {
             AuraConfig::default().product_rollout_mode,
             ProductRolloutMode::Shadow
         );
+    }
+
+    #[test]
+    fn config_rejects_noncanonical_language_tag() {
+        let config = AuraConfig {
+            language: "en_US".to_string(),
+            ..AuraConfig::default()
+        };
+
+        assert!(config.validate().is_err());
     }
 
     #[test]

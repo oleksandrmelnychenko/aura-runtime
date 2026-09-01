@@ -3547,6 +3547,25 @@ fn merge_import_preserves_most_cautious_average_severity() {
 }
 
 #[test]
+fn wire_export_canonicalizes_equivalent_severity_accumulation() {
+    let mut first = ContactProfiler::new();
+    let mut second = ContactProfiler::new();
+    let event = make_event("alice", "conv_1", EventKind::NormalConversation, 1_000);
+    first.record_event(&event);
+    second.record_event(&event);
+
+    first.profiles.get_mut("alice").unwrap().severity_sum = 19.8;
+    second.profiles.get_mut("alice").unwrap().severity_sum = 19.799_997;
+
+    let first_wire = first.export_wire_state();
+    let second_wire = second.export_wire_state();
+    assert_eq!(
+        first_wire.profiles[0].severity_sum.to_bits(),
+        second_wire.profiles[0].severity_sum.to_bits()
+    );
+}
+
+#[test]
 fn merge_import_never_decreases_cautious_counters() {
     let mut local = ContactProfiler::new();
     let mut local_event = make_event("alice", "conv_1", EventKind::PropagandaNarrative, 1_000);

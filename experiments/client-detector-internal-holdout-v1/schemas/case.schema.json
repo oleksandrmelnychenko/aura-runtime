@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auramessenger.ai/schemas/internal-holdout-case-v1.json",
+  "title": "AURA internal blind holdout case v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "assignment_id",
+    "language",
+    "account_type",
+    "account_holder_age",
+    "conversation_type",
+    "sender_relationship",
+    "relationship_trust_source",
+    "messages",
+    "author_certification"
+  ],
+  "properties": {
+    "case_id": {"type": "string", "pattern": "^ihv1-case-[a-f0-9]{24}$"},
+    "assignment_id": {"type": "string", "pattern": "^ihv1-[a-z0-9_-]+-(risky|safe)$"},
+    "language": {"enum": ["en", "uk", "ru"]},
+    "account_type": {"enum": ["child", "teen"]},
+    "account_holder_age": {"type": "integer", "minimum": 9, "maximum": 17},
+    "conversation_type": {"enum": ["direct", "group"]},
+    "sender_relationship": {
+      "enum": ["unknown_adult", "unknown_peer", "peer", "teacher", "coach", "service"]
+    },
+    "relationship_trust_source": {
+      "enum": ["unknown", "self_declared", "local_heuristic", "server_reputation", "school_directory"]
+    },
+    "messages": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["speaker", "text"],
+        "properties": {
+          "speaker": {"enum": ["protected", "other"]},
+          "text": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "language": {"enum": ["en", "uk", "ru"]}
+        }
+      }
+    },
+    "author_certification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["original_synthetic_text", "no_real_child_data", "no_direct_identifiers", "no_detector_access"],
+      "properties": {
+        "original_synthetic_text": {"const": true},
+        "no_real_child_data": {"const": true},
+        "no_direct_identifiers": {"const": true},
+        "no_detector_access": {"const": true}
+      }
+    }
+  }
+}

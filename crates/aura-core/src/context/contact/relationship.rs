@@ -16,8 +16,17 @@ const MAX_SNAPSHOTS: usize = 26;
 const MAX_NARRATIVE_TIMELINE: usize = 100;
 const MAX_MESSAGE_FINGERPRINTS: usize = 200;
 const MAX_WEEKLY_PROPAGANDA_BUCKETS: usize = 52;
+const WIRE_METRIC_SCALE: f64 = 100_000.0;
 /// Default upper bound for the number of contact profiles stored.
 pub const DEFAULT_MAX_CONTACT_PROFILES: usize = 1_000;
+
+fn canonical_wire_metric(value: f32) -> f32 {
+    if value.is_finite() {
+        ((f64::from(value) * WIRE_METRIC_SCALE).round() / WIRE_METRIC_SCALE) as f32
+    } else {
+        value
+    }
+}
 
 mod model;
 
@@ -135,7 +144,11 @@ impl From<&ContactProfile> for ContactProfileState {
             narrative_timeline: profile.narrative_timeline.clone(),
             weekly_propaganda_counts: profile.weekly_propaganda_counts.clone(),
             is_trusted: profile.is_trusted,
-            severity_sum: profile.severity_sum,
+            // Equivalent event histories can accumulate a few f32 ULPs in a
+            // different order after merge-based device handoff. Canonicalize
+            // only at the persistence boundary so equal histories have an
+            // exact, stable wire representation.
+            severity_sum: canonical_wire_metric(profile.severity_sum),
             severity_count: profile.severity_count,
             inferred_age: profile.inferred_age,
             age_source: profile.age_source,

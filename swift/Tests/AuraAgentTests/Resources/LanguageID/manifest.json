@@ -1,0 +1,58 @@
+{
+  "artifacts": [
+    {
+      "path": "AuraAbstainingLanguageID.mlmodelc/analytics/coremldata.bin",
+      "sha256": "09fb83f93d5788a726680c2d2314528f81889c54df6340fc939fe2d7b5ab49ba"
+    },
+    {
+      "path": "AuraAbstainingLanguageID.mlmodelc/coremldata.bin",
+      "sha256": "612756d603053735f9c45dde1a26782add6ad761f3eb0193bb4e6e297ed65ea6"
+    },
+    {
+      "path": "AuraAbstainingLanguageID.mlmodelc/metadata.json",
+      "sha256": "da7866f44761e30abfca02a53fb8f743f56111e725df9df48d7f9929cfabec01"
+    },
+    {
+      "path": "AuraLanguageIDNGramV1.bin",
+      "sha256": "23366df9a2b500e0c2551d6664dd0c87df541d23bc1ee30f2eae12285aceba0f"
+    }
+  ],
+  "governed_labels": [
+    "en",
+    "ru",
+    "uk"
+  ],
+  "identifier": "aura-language-id-shadow-maxent-ngram-v1",
+  "labels": [
+    "en",
+    "ru",
+    "tt",
+    "uk"
+  ],
+  "model_directory": "AuraAbstainingLanguageID.mlmodelc",
+  "ngram_filename": "AuraLanguageIDNGramV1.bin",
+  "policy": {
+    "allowed_cyrillic_scalars": "абвгґдеёєжзиіїйклмнопрстуфхцчшщъыьэюя",
+    "maximum_utf8_bytes": 10000,
+    "minimum_alphabetic_scalars": 20,
+    "minimum_coreml_margin": 0.2,
+    "minimum_coreml_probability": 0.5,
+    "minimum_ngram_margin": 0.2,
+    "require_apple_language_agreement": true
+  },
+  "production_span_emission_enabled": false,
+  "provenance": {
+    "coreml_training_metrics_sha256": "740e87d2f95ef3989f3ce51ab8ca04adbac97ba837ce02e70e7e21e292f77e6e",
+    "ngram_training_metrics_sha256": "31a74792a770b8f411603747c97893d6735489cb0817429d3f9629061cb8589c",
+    "release_eligible": false,
+    "source_dataset": "textdetox/multilingual_toxicity_dataset-local-snapshot",
+    "source_model_sha256": "2bc122ae9cce6c8ea8b20db85bf5a4ea6132ae7efa99f10debf478f6b25fbd14",
+    "source_summary_sha256": "d548bedad49d82c962ff17cce898652b465ccb3bbdddb220731407e84a07b8aa",
+    "xcode": "Xcode 26.2 / Build version 17C52"
+  },
+  "release_state": "shadow_only",
+  "schema_version": 1,
+  "unsupported_labels": [
+    "tt"
+  ]
+}

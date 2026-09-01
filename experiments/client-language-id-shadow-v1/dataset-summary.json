@@ -1,0 +1,88 @@
+{
+  "counts": {
+    "calibration": {
+      "en": 712,
+      "ru": 760,
+      "tt": 664,
+      "uk": 678
+    },
+    "test": {
+      "en": 720,
+      "ru": 773,
+      "tt": 725,
+      "uk": 772
+    },
+    "train": {
+      "en": 3388,
+      "ru": 3420,
+      "tt": 3394,
+      "uk": 3414
+    }
+  },
+  "discarded_or_duplicate_rows": {
+    "en": 180,
+    "ru": 47,
+    "tt": 217,
+    "uk": 136
+  },
+  "filter": {
+    "maximum_alphabetic_scalars": 500,
+    "minimum_alphabetic_scalars": 20
+  },
+  "governed_labels": [
+    "en",
+    "ru",
+    "uk"
+  ],
+  "labels": [
+    "en",
+    "uk",
+    "ru",
+    "tt"
+  ],
+  "normalization": "NFKC plus collapsed Unicode whitespace",
+  "release_blockers": [
+    "not an independently collected holdout",
+    "no native-speaker adjudication",
+    "source-label noise has not been independently reviewed",
+    "source-license chain has not been approved for redistribution"
+  ],
+  "release_eligible": false,
+  "schema_version": 1,
+  "source_artifacts": [
+    {
+      "label": "en",
+      "path": "data/raw/hf/textdetox_multilingual/en/data-00000-of-00001.arrow",
+      "rows": 5000,
+      "sha256": "26844862a3a9e5545cd601115d2a4d00785228cf8a70647560dee44756ab8fe6"
+    },
+    {
+      "label": "uk",
+      "path": "data/raw/hf/textdetox_multilingual/uk/data-00000-of-00001.arrow",
+      "rows": 5000,
+      "sha256": "9d70e0a3bd359426b6951d98cc5b9c0beaeb1870aa1c7218118bfbe7e490df12"
+    },
+    {
+      "label": "ru",
+      "path": "data/raw/hf/textdetox_multilingual/ru/data-00000-of-00001.arrow",
+      "rows": 5000,
+      "sha256": "47f244ef3b4d7caec91192537a68fc207ccd28182961c9c0277ffab57f5a2bf2"
+    },
+    {
+      "label": "tt",
+      "path": "data/raw/hf/textdetox_multilingual/tt/data-00000-of-00001.arrow",
+      "rows": 5000,
+      "sha256": "b2d1a4bfb25017229c3b925006c4f9dfad9d03bd4c00d3738c8aeab430572e36"
+    }
+  ],
+  "source_dataset": "textdetox/multilingual_toxicity_dataset-local-snapshot",
+  "split": {
+    "algorithm": "sha256(label + NUL + normalized_text) first-u64 mod 100",
+    "calibration_buckets": "70..84",
+    "test_buckets": "85..99",
+    "train_buckets": "0..69"
+  },
+  "unsupported_control_labels": [
+    "tt"
+  ]
+}

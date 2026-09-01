@@ -1,6 +1,6 @@
-# AURA Core
+# AURA Runtime
 
-AURA Core is a messenger-native trust and safety runtime for child and teen protection. It combines per-message moderation with stateful conversation analysis, contact profiling, policy actions, and evidence-driven evaluation.
+AURA Runtime is the client-side, messenger-native trust and safety library for child and teen protection. It combines per-message moderation with stateful conversation analysis, contact profiling, policy actions, and evidence-driven evaluation while keeping analysis on device.
 
 Current product direction is narrow on purpose:
 
@@ -40,11 +40,12 @@ Current product direction is narrow on purpose:
 ## Architecture
 
 ```text
+aura-runtime    Public on-device runtime facade and lifecycle orchestration
 aura-core       Analyzer, action engine, context engine, evaluation stack, typed IDs
 aura-patterns   Pattern matching, strict rule validation, normalizer, IDN-aware URL checker, emoji signals
 aura-ml         Toxicity + sentiment (fallback + optional local ONNX runtime)
 aura-proto      Protobuf contracts for messenger runtime and FFI
-aura-ffi        Protobuf-only C ABI for mobile and desktop clients
+aura-agent-ffi  Protobuf-only C ABI for mobile and desktop clients
 ```
 
 ```text

@@ -1,0 +1,59 @@
+{
+  "algorithm": "hashed multinomial character n-gram naive Bayes",
+  "alpha": 0.05,
+  "bucket_count": 16384,
+  "calibration": {
+    "confusion": {
+      "en>en": 712,
+      "ru>ru": 759,
+      "ru>uk": 1,
+      "tt>tt": 664,
+      "uk>ru": 4,
+      "uk>uk": 674
+    },
+    "policy": {
+      "minimum_margin": 0.2,
+      "precision_when_emitted": 0.9994882292732856,
+      "supported_coverage": 0.9088372093023256,
+      "unsupported_as_supported_count": 0
+    },
+    "rows": 2814,
+    "top1_accuracy": 0.998223169864961
+  },
+  "labels": [
+    "en",
+    "uk",
+    "ru",
+    "tt"
+  ],
+  "model_sha256": "23366df9a2b500e0c2551d6664dd0c87df541d23bc1ee30f2eae12285aceba0f",
+  "ngram_widths": [
+    2,
+    5
+  ],
+  "release_eligible": false,
+  "schema_version": 1,
+  "test": {
+    "confusion": {
+      "en>en": 720,
+      "ru>ru": 772,
+      "ru>uk": 1,
+      "tt>ru": 3,
+      "tt>tt": 720,
+      "tt>uk": 2,
+      "uk>en": 2,
+      "uk>ru": 5,
+      "uk>uk": 765
+    },
+    "policy": {
+      "minimum_margin": 0.2,
+      "precision_when_emitted": 0.9990342829550941,
+      "supported_coverage": 0.9139072847682119,
+      "unsupported_as_supported_count": 1
+    },
+    "rows": 2990,
+    "top1_accuracy": 0.9956521739130435
+  },
+  "training_csv_sha256": "aa5d5b33594a4cd82b0fe0316709a56ad313fe5b898abae9836a09fd7a0173c3",
+  "training_rows": 13616
+}

@@ -328,22 +328,29 @@ impl TextNormalizer {
     fn strip_diacritics(&self, text: &str) -> String {
         use unicode_normalization::UnicodeNormalization;
 
-        let nfd: Vec<char> = text.nfd().collect();
-        let mut result = String::with_capacity(nfd.len());
-        let mut last_base_is_cyrillic = false;
+        // Compose first so legitimate Cyrillic letters such as й, ё and ї stay
+        // intact. Any combining mark left after NFC has no canonical precomposed
+        // representation and is removed as adversarial/noise. Latin characters are
+        // decomposed separately so their diacritics continue to fold to the base letter.
+        let canonical: String = text.nfc().collect();
+        let mut result = String::with_capacity(canonical.len());
 
-        for c in nfd {
+        for c in canonical.chars() {
             if is_combining_mark(c) {
-                if last_base_is_cyrillic {
-                    result.push(c);
-                }
-            } else {
-                last_base_is_cyrillic = is_cyrillic(c);
+                continue;
+            }
+            if is_cyrillic(c) {
                 result.push(c);
+                continue;
+            }
+            for decomposed in c.to_string().nfd() {
+                if !is_combining_mark(decomposed) {
+                    result.push(decomposed);
+                }
             }
         }
 
-        result.nfc().collect()
+        result
     }
 
     fn collapse_repeats(&self, text: &str) -> String {
@@ -1222,6 +1229,21 @@ mod tests {
         assert_eq!(n.strip_diacritics("café"), "cafe");
         assert_eq!(n.strip_diacritics("naïve"), "naive");
         assert_eq!(n.strip_diacritics("résumé"), "resume");
+    }
+
+    #[test]
+    fn preserves_canonical_cyrillic_letters_and_strips_injected_marks() {
+        let n = norm();
+
+        assert_eq!(n.strip_diacritics("його їжа ёж"), "його їжа ёж");
+        assert_eq!(
+            n.strip_diacritics("я́ больше́ не́ хочу́ жить"),
+            "я больше не хочу жить"
+        );
+        assert_eq!(
+            n.strip_diacritics("я́ бі́льше́ не́ хочу́ жи́ти"),
+            "я більше не хочу жити"
+        );
     }
 
     #[test]

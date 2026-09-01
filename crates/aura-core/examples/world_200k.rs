@@ -972,6 +972,7 @@ fn main() {
                 sender_id: sender_id.into(),
                 conversation_id: conv_id.into(),
                 language: Some(child.lang.to_string()),
+                language_evidence: None,
                 conversation_type: conv_type,
                 member_count: members,
                 sender_relationship: Default::default(),

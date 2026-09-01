@@ -11,6 +11,8 @@
 pub mod evidence;
 /// Bounded message-level inputs and model hints.
 pub mod input;
+/// Typed language and script evidence for multilingual detector routing.
+pub mod language;
 /// Lexical rule representation, matching, and validation.
 pub mod lexical;
 /// Domain module identity and execution trait.
@@ -31,11 +33,14 @@ pub mod research_recomputation_registry;
 pub mod research_reproduction;
 /// Signed, timestamped result evidence for independent domain evaluation.
 pub mod research_result;
+/// Bounded structural evidence for compositional context interpretation.
+pub mod semantic;
 /// Content-free temporal projection contracts.
 pub mod temporal;
 
 pub use evidence::*;
 pub use input::*;
+pub use language::*;
 pub use lexical::*;
 pub use module::*;
 pub use output::*;
@@ -46,4 +51,5 @@ pub use research_recomputation::*;
 pub use research_recomputation_registry::*;
 pub use research_reproduction::*;
 pub use research_result::*;
+pub use semantic::*;
 pub use temporal::*;

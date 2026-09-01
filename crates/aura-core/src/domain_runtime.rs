@@ -200,8 +200,13 @@ fn build_domain_input(
     ml_safety_hint: Option<MlSafetyHint>,
 ) -> DomainInput {
     DomainInput {
-        text: input.text.clone(),
+        text: input
+            .text
+            .as_deref()
+            .map(aura_domain::truncate_domain_text)
+            .map(str::to_owned),
         language: input.language.clone(),
+        language_evidence: input.language_evidence.clone(),
         sender_id: Some(input.sender_id.0.clone()),
         conversation_id: Some(input.conversation_id.0.clone()),
         risk_profile: domain_risk_profile_for_mode(domain_mode, protection_level),
@@ -1236,8 +1241,8 @@ fn propaganda_source_subtype(rule_id: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_blocked_url_signal, build_domain_memory_observations, build_domain_observations,
-        build_domain_temporal_input, build_domain_temporal_signals,
+        build_blocked_url_signal, build_domain_input, build_domain_memory_observations,
+        build_domain_observations, build_domain_temporal_input, build_domain_temporal_signals,
         context_confirmed_domain_signals, core_action_from_domain_action,
         decide_action_with_domain_overrides, detection_enabled_for_threat,
         domain_action_reason_marker, domain_conversation_type, domain_risk_profile_for_mode,
@@ -1276,6 +1281,7 @@ mod tests {
             sender_id: SenderId::from(sender_id),
             conversation_id: ConversationId::from("temporal-conversation"),
             language: Some("uk".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -1300,6 +1306,21 @@ mod tests {
                 });
         event.content_hash = Some(content_hash);
         event
+    }
+
+    #[test]
+    fn domain_projection_bounds_attacker_controlled_text() {
+        let mut input = temporal_message("external");
+        input.text = Some(format!(
+            "{}🙂suffix",
+            "a".repeat(aura_domain::MAX_DOMAIN_TEXT_BYTES - 1)
+        ));
+
+        let projected = build_domain_input(DomainMode::Kids, ProtectionLevel::High, &input, None);
+        let text = projected.text.expect("text must remain available");
+
+        assert!(text.len() <= aura_domain::MAX_DOMAIN_TEXT_BYTES);
+        assert!(std::str::from_utf8(text.as_bytes()).is_ok());
     }
 
     #[test]
@@ -1727,6 +1748,7 @@ mod tests {
             sender_id: SenderId::from("sender"),
             conversation_id: ConversationId::from("conv"),
             language: Some("en".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),
@@ -1746,6 +1768,7 @@ mod tests {
             sender_id: SenderId::from("sender"),
             conversation_id: ConversationId::from("conv"),
             language: Some("en".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),

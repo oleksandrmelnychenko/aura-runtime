@@ -1,5 +1,5 @@
 use super::*;
-use aura_agent_core::{
+use aura_runtime::{
     GuardianExecutionMode, GuardianExecutionPolicy, NativeExecutionMode, NativeExecutionPolicy,
     NativeExecutionPolicyState,
 };
@@ -181,7 +181,7 @@ fn last_error_does_not_leak_to_another_thread() {
 fn domain_mode_defaults_to_none_for_core_only_config() {
     let config = aura_config_from_proto(proto_config(proto::AccountType::Adult, true))
         .expect("config must decode");
-    assert_eq!(config.domain_mode, aura_agent_core::DomainMode::None);
+    assert_eq!(config.domain_mode, aura_runtime::DomainMode::None);
 }
 
 #[test]
@@ -189,7 +189,7 @@ fn military_domain_mode_is_applied() {
     let mut proto = proto_config(proto::AccountType::Adult, true);
     proto.domain_mode = proto::DomainMode::Military as i32;
     let config = aura_config_from_proto(proto).expect("config must decode");
-    assert_eq!(config.domain_mode, aura_agent_core::DomainMode::Military);
+    assert_eq!(config.domain_mode, aura_runtime::DomainMode::Military);
 }
 
 #[test]
@@ -260,6 +260,7 @@ fn proto_message(text: &str, sender_id: &str, conversation_id: &str) -> proto::M
         sender_id: sender_id.to_string(),
         conversation_id: conversation_id.to_string(),
         language: Some("en".to_string()),
+        language_evidence: None,
         conversation_type: proto::ConversationType::Direct as i32,
         member_count: None,
         sender_relationship: proto::SenderRelationship::Unspecified as i32,
@@ -285,6 +286,347 @@ fn message_input_rejects_empty_whitespace_and_oversized_ids() {
     assert!(empty_conversation.contains("message conversation id must not be empty"));
     assert!(whitespace_sender.contains("whitespace or control"));
     assert!(oversized.contains("exceeds 256 bytes"));
+}
+
+#[test]
+fn message_input_rejects_text_beyond_analyzed_prefix() {
+    let exact_text = "a".repeat(aura_runtime::MAX_DOMAIN_TEXT_BYTES);
+    let oversized_text = "a".repeat(aura_runtime::MAX_DOMAIN_TEXT_BYTES + 1);
+
+    assert!(message_input_from_proto(proto_message(&exact_text, "sender", "conversation")).is_ok());
+
+    let error = message_input_from_proto(proto_message(&oversized_text, "sender", "conversation"))
+        .expect_err("text outside the analysis bound must fail closed");
+
+    assert!(error.contains("message text exceeds 10000 UTF-8 bytes"));
+}
+
+fn language_candidate(
+    language_tag: &str,
+    confidence: f32,
+    source: proto::LanguageEvidenceSource,
+) -> proto::LanguageCandidateV1 {
+    proto::LanguageCandidateV1 {
+        language_tag: language_tag.to_string(),
+        confidence,
+        source: source as i32,
+    }
+}
+
+fn typed_language_evidence(
+    candidates: Vec<proto::LanguageCandidateV1>,
+    spans: Vec<proto::LanguageSpanV1>,
+) -> proto::LanguageEvidenceV1 {
+    proto::LanguageEvidenceV1 {
+        schema_version: 1,
+        candidates,
+        spans,
+    }
+}
+
+#[test]
+fn message_input_accepts_legacy_language_without_typed_evidence() {
+    let input = message_input_from_proto(proto_message("hello", "sender", "conversation"))
+        .expect("legacy message must remain accepted");
+
+    assert!(input.language_evidence.is_none());
+}
+
+#[test]
+fn message_input_accepts_bounded_classifier_evidence() {
+    let text = "hello привіт";
+    let mut message = proto_message(text, "sender", "conversation");
+    message.language_evidence = Some(typed_language_evidence(
+        vec![
+            language_candidate("en", 1.0, proto::LanguageEvidenceSource::ClientDeclared),
+            language_candidate(
+                "uk",
+                0.91,
+                proto::LanguageEvidenceSource::OnDeviceClassifier,
+            ),
+        ],
+        vec![proto::LanguageSpanV1 {
+            language_tag: "uk".to_string(),
+            script: proto::LanguageScript::Cyrillic as i32,
+            confidence: 0.91,
+            source: proto::LanguageEvidenceSource::OnDeviceClassifier as i32,
+            start_utf8: 6,
+            end_utf8: text.len() as u32,
+        }],
+    ));
+
+    let input = message_input_from_proto(message).expect("typed evidence must be accepted");
+    let evidence = input.language_evidence.expect("typed evidence");
+
+    assert_eq!(evidence.candidates().len(), 2);
+    assert_eq!(evidence.spans().len(), 1);
+}
+
+#[test]
+fn message_input_rejects_noncanonical_typed_language_tag() {
+    let mut message = proto_message("hello", "sender", "conversation");
+    message.language_evidence = Some(typed_language_evidence(
+        vec![language_candidate(
+            "EN",
+            1.0,
+            proto::LanguageEvidenceSource::ClientDeclared,
+        )],
+        Vec::new(),
+    ));
+
+    let error = message_input_from_proto(message).expect_err("uppercase tag must fail");
+
+    assert!(error.contains("canonical lowercase"));
+}
+
+#[test]
+fn message_input_rejects_nonfinite_classifier_confidence() {
+    let mut message = proto_message("hello", "sender", "conversation");
+    message.language_evidence = Some(typed_language_evidence(
+        vec![language_candidate(
+            "en",
+            f32::NAN,
+            proto::LanguageEvidenceSource::OnDeviceClassifier,
+        )],
+        Vec::new(),
+    ));
+
+    let error = message_input_from_proto(message).expect_err("NaN must fail");
+
+    assert!(error.contains("confidence must be finite"));
+}
+
+#[test]
+fn message_input_rejects_unknown_language_source() {
+    let mut message = proto_message("hello", "sender", "conversation");
+    let mut candidate =
+        language_candidate("en", 0.9, proto::LanguageEvidenceSource::OnDeviceClassifier);
+    candidate.source = 999;
+    message.language_evidence = Some(typed_language_evidence(vec![candidate], Vec::new()));
+
+    let error = message_input_from_proto(message).expect_err("unknown enum must fail");
+
+    assert!(error.contains("unknown language evidence source 999"));
+}
+
+#[test]
+fn message_input_rejects_excessive_language_candidates() {
+    let mut message = proto_message("hello", "sender", "conversation");
+    let candidate =
+        language_candidate("en", 0.9, proto::LanguageEvidenceSource::OnDeviceClassifier);
+    message.language_evidence = Some(typed_language_evidence(
+        vec![candidate; MAX_LANGUAGE_CANDIDATES + 1],
+        Vec::new(),
+    ));
+
+    let error = message_input_from_proto(message).expect_err("candidate overflow must fail");
+
+    assert!(error.contains("exceeds 4 candidates"));
+}
+
+#[test]
+fn message_input_rejects_excessive_language_spans_before_mapping() {
+    let mut message = proto_message("hello", "sender", "conversation");
+    let span = proto::LanguageSpanV1 {
+        language_tag: "en".to_string(),
+        script: proto::LanguageScript::Latin as i32,
+        confidence: 0.9,
+        source: proto::LanguageEvidenceSource::OnDeviceClassifier as i32,
+        start_utf8: 0,
+        end_utf8: 5,
+    };
+    message.language_evidence = Some(typed_language_evidence(
+        vec![language_candidate(
+            "en",
+            0.9,
+            proto::LanguageEvidenceSource::OnDeviceClassifier,
+        )],
+        vec![span; MAX_LANGUAGE_SPANS + 1],
+    ));
+
+    let error = message_input_from_proto(message).expect_err("span overflow must fail");
+
+    assert!(error.contains("exceeds 32 spans"));
+}
+
+#[test]
+fn message_input_rejects_unknown_language_evidence_schema() {
+    let mut message = proto_message("hello", "sender", "conversation");
+    let mut evidence = typed_language_evidence(
+        vec![language_candidate(
+            "en",
+            1.0,
+            proto::LanguageEvidenceSource::ClientDeclared,
+        )],
+        Vec::new(),
+    );
+    evidence.schema_version = 2;
+    message.language_evidence = Some(evidence);
+
+    let error = message_input_from_proto(message).expect_err("unknown schema must fail");
+
+    assert!(error.contains("schema_version must be 1"));
+}
+
+#[test]
+fn message_input_rejects_legacy_typed_language_conflict() {
+    let mut message = proto_message("bonjour", "sender", "conversation");
+    message.language_evidence = Some(typed_language_evidence(
+        vec![language_candidate(
+            "fr",
+            1.0,
+            proto::LanguageEvidenceSource::ClientDeclared,
+        )],
+        Vec::new(),
+    ));
+
+    let error = message_input_from_proto(message).expect_err("conflict must fail closed");
+
+    assert!(error.contains("legacy language conflicts"));
+}
+
+#[test]
+fn message_input_rejects_span_at_non_utf8_boundary() {
+    let mut message = proto_message("é", "sender", "conversation");
+    message.language_evidence = Some(typed_language_evidence(
+        vec![language_candidate(
+            "fr",
+            0.9,
+            proto::LanguageEvidenceSource::OnDeviceClassifier,
+        )],
+        vec![proto::LanguageSpanV1 {
+            language_tag: "fr".to_string(),
+            script: proto::LanguageScript::Latin as i32,
+            confidence: 0.9,
+            source: proto::LanguageEvidenceSource::OnDeviceClassifier as i32,
+            start_utf8: 1,
+            end_utf8: 2,
+        }],
+    ));
+
+    let error = message_input_from_proto(message).expect_err("invalid UTF-8 boundary must fail");
+
+    assert!(error.contains("invalid UTF-8 boundaries"));
+}
+
+#[test]
+fn message_input_rejects_span_with_false_script_claim() {
+    let mut message = proto_message("hello", "sender", "conversation");
+    message.language_evidence = Some(typed_language_evidence(
+        vec![language_candidate(
+            "en",
+            0.9,
+            proto::LanguageEvidenceSource::OnDeviceClassifier,
+        )],
+        vec![proto::LanguageSpanV1 {
+            language_tag: "en".to_string(),
+            script: proto::LanguageScript::Cyrillic as i32,
+            confidence: 0.9,
+            source: proto::LanguageEvidenceSource::OnDeviceClassifier as i32,
+            start_utf8: 0,
+            end_utf8: 5,
+        }],
+    ));
+
+    let error = message_input_from_proto(message).expect_err("false script must fail");
+
+    assert!(error.contains("script does not match"));
+}
+
+#[test]
+fn message_input_rejects_overlapping_language_spans() {
+    let text = "hello world";
+    let mut message = proto_message(text, "sender", "conversation");
+    let span = |start_utf8, end_utf8| proto::LanguageSpanV1 {
+        language_tag: "en".to_string(),
+        script: proto::LanguageScript::Latin as i32,
+        confidence: 0.9,
+        source: proto::LanguageEvidenceSource::OnDeviceClassifier as i32,
+        start_utf8,
+        end_utf8,
+    };
+    message.language_evidence = Some(typed_language_evidence(
+        vec![language_candidate(
+            "en",
+            0.9,
+            proto::LanguageEvidenceSource::OnDeviceClassifier,
+        )],
+        vec![span(0, 5), span(4, 11)],
+    ));
+
+    let error = message_input_from_proto(message).expect_err("overlap must fail");
+
+    assert!(error.contains("sorted and non-overlapping"));
+}
+
+#[test]
+fn classifier_candidate_routes_same_script_language_pack_through_ffi() {
+    // SAFETY: the test creates one valid FFI handle, keeps all encoded input
+    // buffers alive for each call, and frees the handle exactly once below.
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let mut message = proto_message(
+            "никому не рассказывай, это наш секрет",
+            "sender",
+            "language-routing-conversation",
+        );
+        message.language = Some("uk".to_string());
+        message.language_evidence = Some(typed_language_evidence(
+            vec![language_candidate(
+                "ru",
+                0.96,
+                proto::LanguageEvidenceSource::OnDeviceClassifier,
+            )],
+            Vec::new(),
+        ));
+
+        let response = analyze_local_decision(handle, message, "language-routing-event", 1, 1_000);
+        let decision = response.decision.expect("first attempt decision");
+
+        assert!(decision
+            .reason_codes
+            .iter()
+            .any(|code| code == "pattern.grooming_secrecy_ru"));
+        aura_free(handle);
+    }
+}
+
+#[test]
+fn declared_language_cannot_suppress_governed_release_pack_through_ffi() {
+    // SAFETY: the test creates one valid FFI handle, keeps all encoded input
+    // buffers alive for each call, and frees the handle exactly once below.
+    unsafe {
+        let handle = init_canonical_handle(proto_config(proto::AccountType::Child, true));
+        let mut message = proto_message(
+            "никому не рассказывай, это наш секрет",
+            "sender",
+            "language-declaration-safety-conversation",
+        );
+        message.language = Some("uk".to_string());
+        message.language_evidence = Some(typed_language_evidence(
+            vec![language_candidate(
+                "uk",
+                1.0,
+                proto::LanguageEvidenceSource::ClientDeclared,
+            )],
+            Vec::new(),
+        ));
+
+        let response = analyze_local_decision(
+            handle,
+            message,
+            "language-declaration-safety-event",
+            1,
+            1_000,
+        );
+        let decision = response.decision.expect("first attempt decision");
+
+        assert!(decision
+            .reason_codes
+            .iter()
+            .any(|code| code == "pattern.grooming_secrecy_ru"));
+        aura_free(handle);
+    }
 }
 
 #[test]
@@ -563,7 +905,7 @@ unsafe fn last_error_string() -> String {
 
 #[test]
 fn kids_memory_proto_conversion_preserves_exact_persistence_fields() {
-    use aura_agent_core::aura_kids::pipeline::{
+    use aura_runtime::aura_kids::pipeline::{
         ExportedConversationMemory, ExportedEmissionCheckpoint, ExportedKidsMemoryState,
         ExportedSenderMemory, KIDS_MEMORY_STATE_VERSION,
     };
@@ -645,13 +987,13 @@ fn legacy_kids_guardian_block_state_migrates_through_proto_boundary() {
     };
 
     let converted = kids_memory_state_from_proto(&legacy).expect("legacy kids state conversion");
-    let module = aura_agent_core::aura_kids::KidsModule::new();
+    let module = aura_runtime::aura_kids::KidsModule::new();
     assert!(module.import_memory(&converted));
     let migrated = module.export_memory();
 
     assert_eq!(
         migrated.schema_version,
-        aura_agent_core::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION
+        aura_runtime::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION
     );
     assert!(migrated.senders[0].guardian_blocked);
     assert_eq!(
@@ -685,7 +1027,7 @@ fn kids_memory_rejects_noncurrent_schema_and_missing_activity_indices() {
 
     let mut missing_conversation_index = noncurrent.clone();
     missing_conversation_index.schema_version =
-        aura_agent_core::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION;
+        aura_runtime::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION;
     missing_conversation_index.senders[0].last_activity_index = Some(42);
     assert!(kids_memory_state_from_proto(&missing_conversation_index).is_err());
 
@@ -894,7 +1236,7 @@ fn persisted_kids_memory_rejects_invalid_nested_ids() {
     let valid_state = proto::KidsMemoryState {
         conversations: vec![valid_conversation],
         senders: vec![valid_sender],
-        schema_version: aura_agent_core::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION,
+        schema_version: aura_runtime::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION,
     };
 
     let mut empty_conversation = valid_state.clone();
@@ -1682,7 +2024,15 @@ fn repeated_export_import_roundtrips_preserve_growth() {
             std::mem::swap(&mut active, &mut standby);
         }
 
-        assert_eq!(export_context(first).state, export_context(second).state);
+        let first_state = export_context(first)
+            .state
+            .expect("first runtime must export tracker state");
+        let second_state = export_context(second)
+            .state
+            .expect("second runtime must export tracker state");
+        assert_eq!(first_state.timelines, second_state.timelines);
+        assert_eq!(first_state.contact_profiler, second_state.contact_profiler);
+        assert_eq!(first_state.kids_memory, second_state.kids_memory);
         aura_free(first);
         aura_free(second);
     }

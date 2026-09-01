@@ -8,37 +8,39 @@ use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
 use std::sync::Mutex;
 
-use aura_agent_core::context::contact::{
+use aura_patterns::PatternDatabase;
+use aura_proto::messenger::v1 as proto;
+use aura_runtime::context::contact::{
     AgeSource as CoreAgeSource, BehavioralSnapshotState as CoreBehavioralSnapshotState,
     ChildSafetyTrajectory as CoreChildSafetyTrajectory,
     ContactProfileState as CoreContactProfileState,
     ContactProfilerWireState as CoreContactProfilerWireState,
 };
-use aura_agent_core::context::events::{
+use aura_runtime::context::events::{
     ContextEvent as CoreContextEvent, EventContextFrame as CoreEventContextFrame,
     EventDirectionality as CoreEventDirectionality, EventKind as CoreEventKind,
     EventSpeechAct as CoreEventSpeechAct, EventStance as CoreEventStance,
 };
-use aura_agent_core::context::tracker::{
+use aura_runtime::context::tracker::{
     ConversationTimelineState as CoreConversationTimelineState,
     TrackerWireState as CoreTrackerWireState,
 };
-use aura_agent_core::AgentRuntime;
-use aura_agent_core::{
+use aura_runtime::AgentRuntime;
+use aura_runtime::{
     build_product_decision_surface, config::CulturalContext, AuraConfig,
     CanonicalLocalDecisionAnalysisOutcome, CanonicalSafetyAnalysisOutcome, Confidence,
     ConversationEventKey, ExportedSafetyCaseRuntimeState, GuardianDeliveryClass, GuardianReport,
-    GuardianReportKey, GuardianReportObservationVolumeBand, GuardianReportTrigger, MessageInput,
-    RelationshipTrustSource, RuntimeBackend, SafetyAccountKey, SafetyCase, SafetyCaseCommand,
-    SafetyCaseDecision, SafetyCaseEvent, SafetyCaseGeneration, SafetyCaseId,
-    SafetyCaseIgnoredReason, SafetyCaseIngestIdentity, SafetyCaseIngestOutcome,
+    GuardianReportKey, GuardianReportObservationVolumeBand, GuardianReportTrigger,
+    LanguageCandidate, LanguageEvidence, LanguageEvidenceSource, LanguageScript, LanguageSpan,
+    LanguageTag, MessageInput, RelationshipTrustSource, RuntimeBackend, SafetyAccountKey,
+    SafetyCase, SafetyCaseCommand, SafetyCaseDecision, SafetyCaseEvent, SafetyCaseGeneration,
+    SafetyCaseId, SafetyCaseIgnoredReason, SafetyCaseIngestIdentity, SafetyCaseIngestOutcome,
     SafetyCaseRuntimeError, SafetyCaseSeverity, SafetyCaseSourcePreflight, SafetyCaseSourceReceipt,
     SafetyCaseStatus, SafetyCaseSubjectKey, SafetyCaseSuccessorActivationDisposition,
     SafetyCaseSuccessorActivationOutcome, SafetyReasonCode, SenderRelationship, SourceEventId,
-    ThreatType, SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES, SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
+    ThreatType, MAX_LANGUAGE_CANDIDATES, MAX_LANGUAGE_SPANS, SAFETY_CASE_ACCOUNT_STATE_MAX_BYTES,
+    SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
 };
-use aura_patterns::PatternDatabase;
-use aura_proto::messenger::v1 as proto;
 use prost::Message as ProstMessage;
 use sha2::{Digest, Sha256};
 

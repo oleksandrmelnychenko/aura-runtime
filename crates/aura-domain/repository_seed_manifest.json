@@ -37,7 +37,7 @@
     { "path": "crates/aura-core/data/world_sim_2k.json", "sha256": "5762322c9e8a80bb18c28e8d7d9a791466b363e91b687975b247b97b57b61d1a" },
     { "path": "crates/aura-core/data/world_sim_demo.json", "sha256": "b92df9b98fc13815a72f8129fc35b382869231c86ee0e93d3b15ab728d644fef" },
     { "path": "crates/aura-core/data/world_sim_kids_memory_stress.json", "sha256": "8fa24d71baf90edd6adeccb977a2a9052fe10cc562e146f109eff9fbc53a19c1" },
-    { "path": "crates/aura-kids/data/lexicon.json", "sha256": "9ceeacde143a5bb1449530a92227acf8e9538cc364af92511bcb7364d105f841" },
+    { "path": "crates/aura-kids/data/lexicon.json", "sha256": "24a7971a4018e9768923c3f174f62fe4fb41ab1fa2bc9bb1357bb1067530b2de" },
     { "path": "crates/aura-military/data/lexicon.json", "sha256": "43b5713c8b139b55a21c2bba4c0757fd639f5b0973c81b3bc5e912aef047d4f7" },
     { "path": "crates/aura-military/data/temporal_fusion_rules.json", "sha256": "664830faa36ec2cf9846d612c02cb14d159a4a75ee925a3664f6147da0cc7348" },
     { "path": "crates/aura-military/data/temporal_shadow_corpus.json", "sha256": "ca502f671dccaa6d712751c71d6b77a12e7b8c1ad88613a4e9f4fc83afba3d2d" },

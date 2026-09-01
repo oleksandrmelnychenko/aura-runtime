@@ -208,7 +208,7 @@ pub(super) fn local_decision_response_to_proto(
 }
 
 pub(super) fn local_decision_to_proto(
-    result: &aura_agent_core::AnalysisResult,
+    result: &aura_runtime::AnalysisResult,
     runtime: &AgentRuntime,
 ) -> proto::LocalDecision {
     let capabilities = runtime.runtime_capabilities();
@@ -301,7 +301,7 @@ fn local_decision_temporal_context_to_proto(
 }
 
 fn product_decision_surface_to_proto(
-    surface: &aura_agent_core::ProductDecisionSurface,
+    surface: &aura_runtime::ProductDecisionSurface,
 ) -> proto::ProductDecisionSurface {
     proto::ProductDecisionSurface {
         schema_version: surface.schema_version.clone(),
@@ -319,7 +319,7 @@ fn product_decision_surface_to_proto(
 }
 
 fn product_child_surface_to_proto(
-    surface: &aura_agent_core::ProductChildSurface,
+    surface: &aura_runtime::ProductChildSurface,
 ) -> proto::ProductChildSurface {
     proto::ProductChildSurface {
         delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
@@ -335,7 +335,7 @@ fn product_child_surface_to_proto(
 }
 
 fn product_guardian_surface_to_proto(
-    surface: &aura_agent_core::ProductGuardianSurface,
+    surface: &aura_runtime::ProductGuardianSurface,
 ) -> proto::ProductGuardianSurface {
     proto::ProductGuardianSurface {
         delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
@@ -351,7 +351,7 @@ fn product_guardian_surface_to_proto(
 }
 
 fn product_review_surface_to_proto(
-    surface: &aura_agent_core::ProductReviewSurface,
+    surface: &aura_runtime::ProductReviewSurface,
 ) -> proto::ProductReviewSurface {
     proto::ProductReviewSurface {
         delivery_mode: proto_product_delivery_mode(surface.delivery_mode) as i32,
@@ -367,7 +367,7 @@ fn product_review_surface_to_proto(
 }
 
 fn action_recommendation_to_proto(
-    recommendation: &aura_agent_core::ActionRecommendation,
+    recommendation: &aura_runtime::ActionRecommendation,
 ) -> proto::ActionRecommendation {
     proto::ActionRecommendation {
         parent_alert: proto_alert_priority(recommendation.parent_alert) as i32,
@@ -386,9 +386,7 @@ fn action_recommendation_to_proto(
     }
 }
 
-fn inference_summary_to_proto(
-    summary: &aura_agent_core::InferenceSummary,
-) -> proto::InferenceSummary {
+fn inference_summary_to_proto(summary: &aura_runtime::InferenceSummary) -> proto::InferenceSummary {
     proto::InferenceSummary {
         uncertainty: proto_uncertainty_level(summary.uncertainty) as i32,
         risk_horizon: proto_risk_horizon(summary.risk_horizon) as i32,
@@ -403,7 +401,7 @@ fn inference_summary_to_proto(
 }
 
 fn latent_state_evidence_to_proto(
-    evidence: &aura_agent_core::LatentStateEvidence,
+    evidence: &aura_runtime::LatentStateEvidence,
 ) -> proto::LatentStateEvidence {
     proto::LatentStateEvidence {
         kind: proto_latent_state_kind(evidence.kind) as i32,
@@ -419,186 +417,178 @@ fn proto_runtime_backend(value: RuntimeBackend) -> proto::RuntimeBackend {
     }
 }
 
-fn proto_threat_type(value: aura_agent_core::ThreatType) -> proto::ThreatType {
+fn proto_threat_type(value: aura_runtime::ThreatType) -> proto::ThreatType {
     match value {
-        aura_agent_core::ThreatType::None => proto::ThreatType::None,
-        aura_agent_core::ThreatType::Bullying => proto::ThreatType::Bullying,
-        aura_agent_core::ThreatType::Grooming => proto::ThreatType::Grooming,
-        aura_agent_core::ThreatType::Explicit => proto::ThreatType::Explicit,
-        aura_agent_core::ThreatType::Threat => proto::ThreatType::Threat,
-        aura_agent_core::ThreatType::SelfHarm => proto::ThreatType::SelfHarm,
-        aura_agent_core::ThreatType::Spam => proto::ThreatType::Spam,
-        aura_agent_core::ThreatType::Scam => proto::ThreatType::Scam,
-        aura_agent_core::ThreatType::Phishing => proto::ThreatType::Phishing,
-        aura_agent_core::ThreatType::Manipulation => proto::ThreatType::Manipulation,
-        aura_agent_core::ThreatType::Nsfw => proto::ThreatType::Nsfw,
-        aura_agent_core::ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
-        aura_agent_core::ThreatType::Doxxing => proto::ThreatType::Doxxing,
-        aura_agent_core::ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
-        aura_agent_core::ThreatType::Propaganda => proto::ThreatType::Propaganda,
-        aura_agent_core::ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
-        aura_agent_core::ThreatType::Psyops => proto::ThreatType::Psyops,
-        aura_agent_core::ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
-        aura_agent_core::ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
+        aura_runtime::ThreatType::None => proto::ThreatType::None,
+        aura_runtime::ThreatType::Bullying => proto::ThreatType::Bullying,
+        aura_runtime::ThreatType::Grooming => proto::ThreatType::Grooming,
+        aura_runtime::ThreatType::Explicit => proto::ThreatType::Explicit,
+        aura_runtime::ThreatType::Threat => proto::ThreatType::Threat,
+        aura_runtime::ThreatType::SelfHarm => proto::ThreatType::SelfHarm,
+        aura_runtime::ThreatType::Spam => proto::ThreatType::Spam,
+        aura_runtime::ThreatType::Scam => proto::ThreatType::Scam,
+        aura_runtime::ThreatType::Phishing => proto::ThreatType::Phishing,
+        aura_runtime::ThreatType::Manipulation => proto::ThreatType::Manipulation,
+        aura_runtime::ThreatType::Nsfw => proto::ThreatType::Nsfw,
+        aura_runtime::ThreatType::HateSpeech => proto::ThreatType::HateSpeech,
+        aura_runtime::ThreatType::Doxxing => proto::ThreatType::Doxxing,
+        aura_runtime::ThreatType::PiiLeakage => proto::ThreatType::PiiLeakage,
+        aura_runtime::ThreatType::Propaganda => proto::ThreatType::Propaganda,
+        aura_runtime::ThreatType::OpsecViolation => proto::ThreatType::OpsecViolation,
+        aura_runtime::ThreatType::Psyops => proto::ThreatType::Psyops,
+        aura_runtime::ThreatType::MilitarySocialEng => proto::ThreatType::MilitarySocialEng,
+        aura_runtime::ThreatType::CoordinateLeak => proto::ThreatType::CoordinateLeak,
     }
 }
 
-fn proto_action(value: aura_agent_core::Action) -> proto::Action {
+fn proto_action(value: aura_runtime::Action) -> proto::Action {
     match value {
-        aura_agent_core::Action::Allow => proto::Action::Allow,
-        aura_agent_core::Action::Mark => proto::Action::Mark,
-        aura_agent_core::Action::Blur => proto::Action::Blur,
-        aura_agent_core::Action::Warn => proto::Action::Warn,
-        aura_agent_core::Action::Block => proto::Action::Block,
+        aura_runtime::Action::Allow => proto::Action::Allow,
+        aura_runtime::Action::Mark => proto::Action::Mark,
+        aura_runtime::Action::Blur => proto::Action::Blur,
+        aura_runtime::Action::Warn => proto::Action::Warn,
+        aura_runtime::Action::Block => proto::Action::Block,
     }
 }
 
-fn proto_alert_priority(value: aura_agent_core::AlertPriority) -> proto::AlertPriority {
+fn proto_alert_priority(value: aura_runtime::AlertPriority) -> proto::AlertPriority {
     match value {
-        aura_agent_core::AlertPriority::None => proto::AlertPriority::None,
-        aura_agent_core::AlertPriority::Low => proto::AlertPriority::Low,
-        aura_agent_core::AlertPriority::Medium => proto::AlertPriority::Medium,
-        aura_agent_core::AlertPriority::High => proto::AlertPriority::High,
-        aura_agent_core::AlertPriority::Urgent => proto::AlertPriority::Urgent,
+        aura_runtime::AlertPriority::None => proto::AlertPriority::None,
+        aura_runtime::AlertPriority::Low => proto::AlertPriority::Low,
+        aura_runtime::AlertPriority::Medium => proto::AlertPriority::Medium,
+        aura_runtime::AlertPriority::High => proto::AlertPriority::High,
+        aura_runtime::AlertPriority::Urgent => proto::AlertPriority::Urgent,
     }
 }
 
-fn proto_follow_up_action(value: aura_agent_core::FollowUpAction) -> proto::FollowUpAction {
+fn proto_follow_up_action(value: aura_runtime::FollowUpAction) -> proto::FollowUpAction {
     match value {
-        aura_agent_core::FollowUpAction::MonitorConversation => {
+        aura_runtime::FollowUpAction::MonitorConversation => {
             proto::FollowUpAction::MonitorConversation
         }
-        aura_agent_core::FollowUpAction::BlockSuggested => proto::FollowUpAction::BlockSuggested,
-        aura_agent_core::FollowUpAction::ReviewContactProfile => {
+        aura_runtime::FollowUpAction::BlockSuggested => proto::FollowUpAction::BlockSuggested,
+        aura_runtime::FollowUpAction::ReviewContactProfile => {
             proto::FollowUpAction::ReviewContactProfile
         }
-        aura_agent_core::FollowUpAction::ReportToAuthorities => {
+        aura_runtime::FollowUpAction::ReportToAuthorities => {
             proto::FollowUpAction::ReportToAuthorities
         }
     }
 }
 
 fn proto_product_rollout_mode(
-    value: aura_agent_core::ProductRolloutMode,
+    value: aura_runtime::ProductRolloutMode,
 ) -> proto::ProductRolloutMode {
     match value {
-        aura_agent_core::ProductRolloutMode::Shadow => proto::ProductRolloutMode::Shadow,
-        aura_agent_core::ProductRolloutMode::StagingPilot => {
-            proto::ProductRolloutMode::StagingPilot
-        }
-        aura_agent_core::ProductRolloutMode::GuardianEnabled => {
+        aura_runtime::ProductRolloutMode::Shadow => proto::ProductRolloutMode::Shadow,
+        aura_runtime::ProductRolloutMode::StagingPilot => proto::ProductRolloutMode::StagingPilot,
+        aura_runtime::ProductRolloutMode::GuardianEnabled => {
             proto::ProductRolloutMode::GuardianEnabled
         }
     }
 }
 
 fn proto_product_delivery_mode(
-    value: aura_agent_core::ProductDeliveryMode,
+    value: aura_runtime::ProductDeliveryMode,
 ) -> proto::ProductDeliveryMode {
     match value {
-        aura_agent_core::ProductDeliveryMode::Suppress => proto::ProductDeliveryMode::Suppress,
-        aura_agent_core::ProductDeliveryMode::MirrorOnly => proto::ProductDeliveryMode::MirrorOnly,
-        aura_agent_core::ProductDeliveryMode::Apply => proto::ProductDeliveryMode::Apply,
+        aura_runtime::ProductDeliveryMode::Suppress => proto::ProductDeliveryMode::Suppress,
+        aura_runtime::ProductDeliveryMode::MirrorOnly => proto::ProductDeliveryMode::MirrorOnly,
+        aura_runtime::ProductDeliveryMode::Apply => proto::ProductDeliveryMode::Apply,
     }
 }
 
 fn proto_product_child_intervention(
-    value: aura_agent_core::ProductChildIntervention,
+    value: aura_runtime::ProductChildIntervention,
 ) -> proto::ProductChildIntervention {
     match value {
-        aura_agent_core::ProductChildIntervention::None => proto::ProductChildIntervention::None,
-        aura_agent_core::ProductChildIntervention::Mark => proto::ProductChildIntervention::Mark,
-        aura_agent_core::ProductChildIntervention::Blur => proto::ProductChildIntervention::Blur,
-        aura_agent_core::ProductChildIntervention::Warn => proto::ProductChildIntervention::Warn,
-        aura_agent_core::ProductChildIntervention::Block => proto::ProductChildIntervention::Block,
+        aura_runtime::ProductChildIntervention::None => proto::ProductChildIntervention::None,
+        aura_runtime::ProductChildIntervention::Mark => proto::ProductChildIntervention::Mark,
+        aura_runtime::ProductChildIntervention::Blur => proto::ProductChildIntervention::Blur,
+        aura_runtime::ProductChildIntervention::Warn => proto::ProductChildIntervention::Warn,
+        aura_runtime::ProductChildIntervention::Block => proto::ProductChildIntervention::Block,
     }
 }
 
 fn proto_product_review_urgency(
-    value: aura_agent_core::ProductReviewUrgency,
+    value: aura_runtime::ProductReviewUrgency,
 ) -> proto::ProductReviewUrgency {
     match value {
-        aura_agent_core::ProductReviewUrgency::None => proto::ProductReviewUrgency::None,
-        aura_agent_core::ProductReviewUrgency::Standard => proto::ProductReviewUrgency::Standard,
-        aura_agent_core::ProductReviewUrgency::High => proto::ProductReviewUrgency::High,
-        aura_agent_core::ProductReviewUrgency::Urgent => proto::ProductReviewUrgency::Urgent,
+        aura_runtime::ProductReviewUrgency::None => proto::ProductReviewUrgency::None,
+        aura_runtime::ProductReviewUrgency::Standard => proto::ProductReviewUrgency::Standard,
+        aura_runtime::ProductReviewUrgency::High => proto::ProductReviewUrgency::High,
+        aura_runtime::ProductReviewUrgency::Urgent => proto::ProductReviewUrgency::Urgent,
     }
 }
 
 fn proto_product_uncertainty_disposition(
-    value: aura_agent_core::ProductUncertaintyDisposition,
+    value: aura_runtime::ProductUncertaintyDisposition,
 ) -> proto::ProductUncertaintyDisposition {
     match value {
-        aura_agent_core::ProductUncertaintyDisposition::Normal => {
+        aura_runtime::ProductUncertaintyDisposition::Normal => {
             proto::ProductUncertaintyDisposition::Normal
         }
-        aura_agent_core::ProductUncertaintyDisposition::MirrorOnly => {
+        aura_runtime::ProductUncertaintyDisposition::MirrorOnly => {
             proto::ProductUncertaintyDisposition::MirrorOnly
         }
-        aura_agent_core::ProductUncertaintyDisposition::RequireReview => {
+        aura_runtime::ProductUncertaintyDisposition::RequireReview => {
             proto::ProductUncertaintyDisposition::RequireReview
         }
-        aura_agent_core::ProductUncertaintyDisposition::GuardianPriority => {
+        aura_runtime::ProductUncertaintyDisposition::GuardianPriority => {
             proto::ProductUncertaintyDisposition::GuardianPriority
         }
     }
 }
 
-fn proto_ui_action(value: aura_agent_core::UiAction) -> proto::UiAction {
+fn proto_ui_action(value: aura_runtime::UiAction) -> proto::UiAction {
     match value {
-        aura_agent_core::UiAction::WarnBeforeSend => proto::UiAction::WarnBeforeSend,
-        aura_agent_core::UiAction::WarnBeforeDisplay => proto::UiAction::WarnBeforeDisplay,
-        aura_agent_core::UiAction::BlurUntilTap => proto::UiAction::BlurUntilTap,
-        aura_agent_core::UiAction::ConfirmBeforeOpenLink => proto::UiAction::ConfirmBeforeOpenLink,
-        aura_agent_core::UiAction::SuggestBlockContact => proto::UiAction::SuggestBlockContact,
-        aura_agent_core::UiAction::SuggestReport => proto::UiAction::SuggestReport,
-        aura_agent_core::UiAction::RestrictUnknownContact => {
-            proto::UiAction::RestrictUnknownContact
-        }
-        aura_agent_core::UiAction::SlowDownConversation => proto::UiAction::SlowDownConversation,
-        aura_agent_core::UiAction::ShowCrisisSupport => proto::UiAction::ShowCrisisSupport,
-        aura_agent_core::UiAction::EscalateToGuardian => proto::UiAction::EscalateToGuardian,
+        aura_runtime::UiAction::WarnBeforeSend => proto::UiAction::WarnBeforeSend,
+        aura_runtime::UiAction::WarnBeforeDisplay => proto::UiAction::WarnBeforeDisplay,
+        aura_runtime::UiAction::BlurUntilTap => proto::UiAction::BlurUntilTap,
+        aura_runtime::UiAction::ConfirmBeforeOpenLink => proto::UiAction::ConfirmBeforeOpenLink,
+        aura_runtime::UiAction::SuggestBlockContact => proto::UiAction::SuggestBlockContact,
+        aura_runtime::UiAction::SuggestReport => proto::UiAction::SuggestReport,
+        aura_runtime::UiAction::RestrictUnknownContact => proto::UiAction::RestrictUnknownContact,
+        aura_runtime::UiAction::SlowDownConversation => proto::UiAction::SlowDownConversation,
+        aura_runtime::UiAction::ShowCrisisSupport => proto::UiAction::ShowCrisisSupport,
+        aura_runtime::UiAction::EscalateToGuardian => proto::UiAction::EscalateToGuardian,
     }
 }
 
-fn proto_uncertainty_level(value: aura_agent_core::UncertaintyLevel) -> proto::UncertaintyLevel {
+fn proto_uncertainty_level(value: aura_runtime::UncertaintyLevel) -> proto::UncertaintyLevel {
     match value {
-        aura_agent_core::UncertaintyLevel::Low => proto::UncertaintyLevel::Low,
-        aura_agent_core::UncertaintyLevel::Medium => proto::UncertaintyLevel::Medium,
-        aura_agent_core::UncertaintyLevel::High => proto::UncertaintyLevel::High,
+        aura_runtime::UncertaintyLevel::Low => proto::UncertaintyLevel::Low,
+        aura_runtime::UncertaintyLevel::Medium => proto::UncertaintyLevel::Medium,
+        aura_runtime::UncertaintyLevel::High => proto::UncertaintyLevel::High,
     }
 }
 
-fn proto_risk_horizon(value: aura_agent_core::RiskHorizon) -> proto::RiskHorizon {
+fn proto_risk_horizon(value: aura_runtime::RiskHorizon) -> proto::RiskHorizon {
     match value {
-        aura_agent_core::RiskHorizon::Unknown => proto::RiskHorizon::Unknown,
-        aura_agent_core::RiskHorizon::Immediate => proto::RiskHorizon::Immediate,
-        aura_agent_core::RiskHorizon::ShortTerm => proto::RiskHorizon::ShortTerm,
-        aura_agent_core::RiskHorizon::Sustained => proto::RiskHorizon::Sustained,
+        aura_runtime::RiskHorizon::Unknown => proto::RiskHorizon::Unknown,
+        aura_runtime::RiskHorizon::Immediate => proto::RiskHorizon::Immediate,
+        aura_runtime::RiskHorizon::ShortTerm => proto::RiskHorizon::ShortTerm,
+        aura_runtime::RiskHorizon::Sustained => proto::RiskHorizon::Sustained,
     }
 }
 
-fn proto_latent_state_kind(value: aura_agent_core::LatentStateKind) -> proto::LatentStateKind {
+fn proto_latent_state_kind(value: aura_runtime::LatentStateKind) -> proto::LatentStateKind {
     match value {
-        aura_agent_core::LatentStateKind::DependencyBuilding => {
+        aura_runtime::LatentStateKind::DependencyBuilding => {
             proto::LatentStateKind::DependencyBuilding
         }
-        aura_agent_core::LatentStateKind::IsolationPressure => {
+        aura_runtime::LatentStateKind::IsolationPressure => {
             proto::LatentStateKind::IsolationPressure
         }
-        aura_agent_core::LatentStateKind::CoerciveControl => {
-            proto::LatentStateKind::CoerciveControl
-        }
-        aura_agent_core::LatentStateKind::Humiliation => proto::LatentStateKind::Humiliation,
-        aura_agent_core::LatentStateKind::CrisisVulnerability => {
+        aura_runtime::LatentStateKind::CoerciveControl => proto::LatentStateKind::CoerciveControl,
+        aura_runtime::LatentStateKind::Humiliation => proto::LatentStateKind::Humiliation,
+        aura_runtime::LatentStateKind::CrisisVulnerability => {
             proto::LatentStateKind::CrisisVulnerability
         }
-        aura_agent_core::LatentStateKind::ProtectiveSupport => {
+        aura_runtime::LatentStateKind::ProtectiveSupport => {
             proto::LatentStateKind::ProtectiveSupport
         }
-        aura_agent_core::LatentStateKind::GroupEscalation => {
-            proto::LatentStateKind::GroupEscalation
-        }
+        aura_runtime::LatentStateKind::GroupEscalation => proto::LatentStateKind::GroupEscalation,
     }
 }
 
@@ -1217,43 +1207,43 @@ mod local_decision_mapping_tests {
     fn every_product_ui_action_has_an_exact_wire_value() {
         let mappings = [
             (
-                aura_agent_core::UiAction::WarnBeforeSend,
+                aura_runtime::UiAction::WarnBeforeSend,
                 proto::UiAction::WarnBeforeSend,
             ),
             (
-                aura_agent_core::UiAction::WarnBeforeDisplay,
+                aura_runtime::UiAction::WarnBeforeDisplay,
                 proto::UiAction::WarnBeforeDisplay,
             ),
             (
-                aura_agent_core::UiAction::BlurUntilTap,
+                aura_runtime::UiAction::BlurUntilTap,
                 proto::UiAction::BlurUntilTap,
             ),
             (
-                aura_agent_core::UiAction::ConfirmBeforeOpenLink,
+                aura_runtime::UiAction::ConfirmBeforeOpenLink,
                 proto::UiAction::ConfirmBeforeOpenLink,
             ),
             (
-                aura_agent_core::UiAction::SuggestBlockContact,
+                aura_runtime::UiAction::SuggestBlockContact,
                 proto::UiAction::SuggestBlockContact,
             ),
             (
-                aura_agent_core::UiAction::SuggestReport,
+                aura_runtime::UiAction::SuggestReport,
                 proto::UiAction::SuggestReport,
             ),
             (
-                aura_agent_core::UiAction::RestrictUnknownContact,
+                aura_runtime::UiAction::RestrictUnknownContact,
                 proto::UiAction::RestrictUnknownContact,
             ),
             (
-                aura_agent_core::UiAction::SlowDownConversation,
+                aura_runtime::UiAction::SlowDownConversation,
                 proto::UiAction::SlowDownConversation,
             ),
             (
-                aura_agent_core::UiAction::ShowCrisisSupport,
+                aura_runtime::UiAction::ShowCrisisSupport,
                 proto::UiAction::ShowCrisisSupport,
             ),
             (
-                aura_agent_core::UiAction::EscalateToGuardian,
+                aura_runtime::UiAction::EscalateToGuardian,
                 proto::UiAction::EscalateToGuardian,
             ),
         ];
@@ -1267,15 +1257,15 @@ mod local_decision_mapping_tests {
     fn every_product_policy_enum_has_an_exact_wire_value() {
         for (core, wire) in [
             (
-                aura_agent_core::ProductDeliveryMode::Suppress,
+                aura_runtime::ProductDeliveryMode::Suppress,
                 proto::ProductDeliveryMode::Suppress,
             ),
             (
-                aura_agent_core::ProductDeliveryMode::MirrorOnly,
+                aura_runtime::ProductDeliveryMode::MirrorOnly,
                 proto::ProductDeliveryMode::MirrorOnly,
             ),
             (
-                aura_agent_core::ProductDeliveryMode::Apply,
+                aura_runtime::ProductDeliveryMode::Apply,
                 proto::ProductDeliveryMode::Apply,
             ),
         ] {
@@ -1283,23 +1273,23 @@ mod local_decision_mapping_tests {
         }
         for (core, wire) in [
             (
-                aura_agent_core::ProductChildIntervention::None,
+                aura_runtime::ProductChildIntervention::None,
                 proto::ProductChildIntervention::None,
             ),
             (
-                aura_agent_core::ProductChildIntervention::Mark,
+                aura_runtime::ProductChildIntervention::Mark,
                 proto::ProductChildIntervention::Mark,
             ),
             (
-                aura_agent_core::ProductChildIntervention::Blur,
+                aura_runtime::ProductChildIntervention::Blur,
                 proto::ProductChildIntervention::Blur,
             ),
             (
-                aura_agent_core::ProductChildIntervention::Warn,
+                aura_runtime::ProductChildIntervention::Warn,
                 proto::ProductChildIntervention::Warn,
             ),
             (
-                aura_agent_core::ProductChildIntervention::Block,
+                aura_runtime::ProductChildIntervention::Block,
                 proto::ProductChildIntervention::Block,
             ),
         ] {
@@ -1307,19 +1297,19 @@ mod local_decision_mapping_tests {
         }
         for (core, wire) in [
             (
-                aura_agent_core::FollowUpAction::MonitorConversation,
+                aura_runtime::FollowUpAction::MonitorConversation,
                 proto::FollowUpAction::MonitorConversation,
             ),
             (
-                aura_agent_core::FollowUpAction::BlockSuggested,
+                aura_runtime::FollowUpAction::BlockSuggested,
                 proto::FollowUpAction::BlockSuggested,
             ),
             (
-                aura_agent_core::FollowUpAction::ReviewContactProfile,
+                aura_runtime::FollowUpAction::ReviewContactProfile,
                 proto::FollowUpAction::ReviewContactProfile,
             ),
             (
-                aura_agent_core::FollowUpAction::ReportToAuthorities,
+                aura_runtime::FollowUpAction::ReportToAuthorities,
                 proto::FollowUpAction::ReportToAuthorities,
             ),
         ] {

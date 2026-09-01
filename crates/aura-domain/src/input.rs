@@ -1,5 +1,21 @@
 use serde::{Deserialize, Serialize};
 
+/// Maximum UTF-8 byte length exposed to on-device domain detectors.
+pub const MAX_DOMAIN_TEXT_BYTES: usize = 10_000;
+
+/// Returns a UTF-8-safe prefix within [`MAX_DOMAIN_TEXT_BYTES`].
+#[must_use]
+pub fn truncate_domain_text(text: &str) -> &str {
+    if text.len() <= MAX_DOMAIN_TEXT_BYTES {
+        return text;
+    }
+    let mut end = MAX_DOMAIN_TEXT_BYTES;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
 /// Sensitivity profile selected by the owning account policy.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -101,6 +117,9 @@ pub struct DomainInput {
     pub text: Option<String>,
     /// Optional language hint; detectors must tolerate its absence.
     pub language: Option<String>,
+    /// Validated language evidence from the local protobuf boundary.
+    #[serde(skip)]
+    pub language_evidence: Option<crate::LanguageEvidence>,
     /// Sender identity scoped to the local runtime.
     pub sender_id: Option<String>,
     /// Conversation identity scoped to the local runtime.
@@ -120,7 +139,17 @@ pub struct DomainInput {
 
 #[cfg(test)]
 mod tests {
-    use super::MlSafetyHint;
+    use super::{truncate_domain_text, MlSafetyHint, MAX_DOMAIN_TEXT_BYTES};
+
+    #[test]
+    fn domain_text_bound_preserves_utf8_boundary() {
+        let text = format!("{}🙂suffix", "a".repeat(MAX_DOMAIN_TEXT_BYTES - 1));
+        let truncated = truncate_domain_text(&text);
+
+        assert!(truncated.len() <= MAX_DOMAIN_TEXT_BYTES);
+        assert!(text.starts_with(truncated));
+        assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
 
     #[test]
     fn non_finite_ml_channel_is_zeroed_without_losing_valid_channels() {

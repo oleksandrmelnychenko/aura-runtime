@@ -586,6 +586,48 @@ message AuraExecutionPolicyApplicationReceipt {
   bytes execution_policy_trust_keyring_digest = 16;
 }
 
+enum LanguageEvidenceSource {
+  LANGUAGE_EVIDENCE_SOURCE_UNSPECIFIED = 0;
+  LANGUAGE_EVIDENCE_SOURCE_CLIENT_DECLARED = 1;
+  LANGUAGE_EVIDENCE_SOURCE_ON_DEVICE_CLASSIFIER = 2;
+}
+
+enum LanguageScript {
+  LANGUAGE_SCRIPT_UNSPECIFIED = 0;
+  LANGUAGE_SCRIPT_LATIN = 1;
+  LANGUAGE_SCRIPT_CYRILLIC = 2;
+  LANGUAGE_SCRIPT_GREEK = 3;
+  LANGUAGE_SCRIPT_ARABIC = 4;
+  LANGUAGE_SCRIPT_HEBREW = 5;
+  LANGUAGE_SCRIPT_DEVANAGARI = 6;
+  LANGUAGE_SCRIPT_HAN = 7;
+  LANGUAGE_SCRIPT_HIRAGANA = 8;
+  LANGUAGE_SCRIPT_KATAKANA = 9;
+  LANGUAGE_SCRIPT_HANGUL = 10;
+  LANGUAGE_SCRIPT_OTHER = 11;
+}
+
+message LanguageCandidateV1 {
+  string language_tag = 1;
+  float confidence = 2;
+  LanguageEvidenceSource source = 3;
+}
+
+message LanguageSpanV1 {
+  string language_tag = 1;
+  LanguageScript script = 2;
+  float confidence = 3;
+  LanguageEvidenceSource source = 4;
+  uint32 start_utf8 = 5;
+  uint32 end_utf8 = 6;
+}
+
+message LanguageEvidenceV1 {
+  uint32 schema_version = 1;
+  repeated LanguageCandidateV1 candidates = 2;
+  repeated LanguageSpanV1 spans = 3;
+}
+
 message MessageInput {
   ContentType content_type = 1;
   optional string text = 2;
@@ -601,6 +643,9 @@ message MessageInput {
   SenderRelationship sender_relationship = 10;
   // Source used to derive sender_relationship. Self-declared data is not trust.
   RelationshipTrustSource relationship_trust_source = 11;
+  // Bounded, content-free evidence produced locally by the client.
+  // Legacy senders may continue to populate only `language`.
+  optional LanguageEvidenceV1 language_evidence = 12;
 }
 
 message AnalyzeContextRequest {

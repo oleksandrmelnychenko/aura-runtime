@@ -153,6 +153,28 @@ pub struct DomainSignal {
     pub action: Option<DomainAction>,
 }
 
+/// One detector candidate paired with its domain-owned semantic event route.
+///
+/// New detectors should construct this type directly instead of asking a later
+/// layer to recover event semantics from `reason_code` or `threat_key` text.
+/// The pair is in-process only; the stable serialized [`DomainOutput`] shape
+/// remains unchanged.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DomainCandidate {
+    /// Normalized detector evidence.
+    pub signal: DomainSignal,
+    /// Typed event meaning assigned by the domain that produced the signal.
+    pub event_kind: DomainEventKind,
+}
+
+impl DomainCandidate {
+    /// Creates a candidate with an explicit typed event route.
+    #[must_use]
+    pub const fn new(signal: DomainSignal, event_kind: DomainEventKind) -> Self {
+        Self { signal, event_kind }
+    }
+}
+
 /// Typed routing metadata for a signal in [`DomainOutput::signals`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DomainSignalRoute {
@@ -191,6 +213,30 @@ pub struct DomainConfirmedOutput {
 }
 
 impl DomainOutput {
+    /// Builds an output from candidates that already carry domain-owned routes.
+    ///
+    /// This is the preferred constructor for new detector implementations. It
+    /// makes every signal route complete by construction and avoids string-based
+    /// semantic recovery in the runtime.
+    #[must_use]
+    pub fn from_candidates(candidates: Vec<DomainCandidate>, action: Option<DomainAction>) -> Self {
+        let mut signals = Vec::with_capacity(candidates.len());
+        let mut routes = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            let signal_index = signals.len();
+            signals.push(candidate.signal);
+            routes.push(DomainSignalRoute {
+                signal_index,
+                event_kind: candidate.event_kind,
+            });
+        }
+        Self {
+            signals,
+            action,
+            routes,
+        }
+    }
+
     /// Builds an output and asks the owning domain to classify each signal.
     #[must_use]
     pub fn routed(
@@ -238,7 +284,35 @@ impl DomainOutput {
 
 #[cfg(test)]
 mod tests {
-    use super::{DomainEventKind, DomainOutput, DomainSignal};
+    use super::{DomainCandidate, DomainEventKind, DomainOutput, DomainSignal};
+
+    #[test]
+    fn candidate_output_preserves_explicit_domain_routes() {
+        let candidates = vec![
+            DomainCandidate::new(
+                DomainSignal {
+                    threat_key: "semantic_self_harm_intent".to_string(),
+                    ..DomainSignal::default()
+                },
+                DomainEventKind::SuicidalIdeation,
+            ),
+            DomainCandidate::new(
+                DomainSignal {
+                    threat_key: "semantic_direct_threat".to_string(),
+                    ..DomainSignal::default()
+                },
+                DomainEventKind::PhysicalThreat,
+            ),
+        ];
+
+        let output = DomainOutput::from_candidates(candidates, None);
+
+        assert!(output.has_complete_routing());
+        assert_eq!(
+            output.event_kind_for_signal(1),
+            Some(DomainEventKind::PhysicalThreat)
+        );
+    }
 
     #[test]
     fn routed_output_keeps_signal_indices_stable() {

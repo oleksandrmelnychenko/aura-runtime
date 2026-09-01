@@ -1,5 +1,5 @@
 [package]
-name = "aura-agent-core"
+name = "aura-runtime"
 version.workspace = true
 edition.workspace = true
 description = "On-device Agent runtime for AURA"

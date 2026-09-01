@@ -2539,6 +2539,7 @@ pub(crate) fn direct_msg(text: &str, sender: &str, conversation_id: &str) -> Mes
         sender_id: sender.into(),
         conversation_id: conversation_id.into(),
         language: Some("en".to_string()),
+        language_evidence: None,
         conversation_type: ConversationType::Direct,
         member_count: None,
         sender_relationship: Default::default(),
@@ -2554,6 +2555,7 @@ pub(crate) fn direct_msg_lang(
 ) -> MessageInput {
     MessageInput {
         language: Some(language.to_string()),
+        language_evidence: None,
         ..direct_msg(text, sender, conversation_id)
     }
 }
@@ -2574,6 +2576,7 @@ pub(crate) fn group_msg_lang(
 ) -> MessageInput {
     MessageInput {
         language: Some(language.to_string()),
+        language_evidence: None,
         ..group_msg(text, sender, conversation_id)
     }
 }

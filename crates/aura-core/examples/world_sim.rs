@@ -782,6 +782,7 @@ fn run_world_simulation(
             sender_id: event.sender_id.as_str().into(),
             conversation_id: event.conversation_id.as_str().into(),
             language: Some(event.language.clone()),
+            language_evidence: None,
             conversation_type: event.conversation_type,
             member_count: event.member_count,
             sender_relationship: event.sender_relationship,

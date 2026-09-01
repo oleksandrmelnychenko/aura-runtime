@@ -884,6 +884,8 @@ pub struct MessageInput {
     pub sender_id: SenderId,
     pub conversation_id: ConversationId,
     pub language: Option<String>,
+    /// Validated, bounded language evidence supplied by the local client.
+    pub language_evidence: Option<aura_domain::LanguageEvidence>,
     pub conversation_type: ConversationType,
     pub member_count: Option<u32>,
     /// Coarse sender relationship metadata supplied by the host application.

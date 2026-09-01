@@ -6,10 +6,12 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use aura_domain::{
-    promote_action_to_warn, DomainAction, DomainConfirmedOutput, DomainConversationType,
-    DomainInput, DomainOutput, DomainRiskProfile, DomainSignal,
+    promote_action_to_warn, DomainAction, DomainCandidate, DomainConfirmedOutput,
+    DomainConversationType, DomainEventKind, DomainInput, DomainOutput, DomainRiskProfile,
+    DomainSignal, LanguageEvidence, PreparedLexicalText,
 };
 
+use crate::composition;
 use crate::detectors::{bullying, grooming, manipulation, selfharm};
 use crate::lexicon;
 use crate::policy::{guardian, intervention};
@@ -25,31 +27,103 @@ pub fn run_kids_pipeline_with_memory(
 ) -> DomainOutput {
     let detected = detect_kids_pipeline(input);
     let committed = commit_confirmed_kids_pipeline(input, &detected.signals, memory);
-    let mut signals = committed.confirmed_signals;
-    signals.extend(committed.derived_signals);
-    sort_signals(&mut signals);
+    let mut candidates = detected
+        .signals
+        .iter()
+        .enumerate()
+        .filter_map(|(signal_index, signal)| {
+            detected
+                .event_kind_for_signal(signal_index)
+                .map(|kind| DomainCandidate::new(signal.clone(), kind))
+        })
+        .collect::<Vec<_>>();
+    let mut unrouted_signals = Vec::new();
+    for signal in committed.derived_signals {
+        match legacy_candidate(signal.clone()) {
+            Some(candidate) => candidates.push(candidate),
+            None => unrouted_signals.push(signal),
+        }
+    }
+    sort_candidates(&mut candidates);
 
-    DomainOutput::routed(
-        signals,
-        committed.action,
-        crate::routing::event_kind_for_signal,
-    )
+    let mut output = DomainOutput::from_candidates(candidates, committed.action);
+    output.signals.extend(unrouted_signals);
+    output
 }
 
 /// Detects Kids-domain candidates without changing conversation or sender memory.
 pub fn detect_kids_pipeline(input: &DomainInput) -> DomainOutput {
-    let mut signals: Vec<DomainSignal> = Vec::new();
+    let mut legacy_signals: Vec<DomainSignal> = Vec::new();
+    let mut semantic_candidates = Vec::new();
 
-    signals.extend(grooming::detect_all(input));
-    signals.extend(bullying::detect_all(input));
-    signals.extend(selfharm::detect_all(input));
-    signals.extend(manipulation::detect_all(input));
+    if let Some(text) = input.text.as_deref() {
+        let prepared = PreparedLexicalText::new(text);
+        let evidence = LanguageEvidence::for_analysis(
+            text,
+            input.language.as_deref(),
+            None,
+            input.language_evidence.as_ref(),
+        );
+        legacy_signals.extend(grooming::detect_all_prepared(&prepared, &evidence));
+        legacy_signals.extend(bullying::detect_all_prepared(&prepared, &evidence));
+        legacy_signals.extend(selfharm::detect_all_prepared(&prepared, &evidence));
+        legacy_signals.extend(manipulation::detect_all_prepared(&prepared, &evidence));
+        semantic_candidates = match composition::detect(text) {
+            Ok(candidates) => candidates,
+            Err(_) => vec![semantic_unavailable_candidate()],
+        };
+    }
 
-    apply_kids_risk_amplifiers(&mut signals);
-    sort_signals(&mut signals);
-    let action = decide_kids_action(&signals);
+    let legacy_count = legacy_signals.len();
+    let semantic_count = semantic_candidates.len();
+    let mut all_signals = legacy_signals.clone();
+    all_signals.extend(
+        semantic_candidates
+            .iter()
+            .map(|candidate| candidate.signal.clone()),
+    );
+    apply_kids_risk_amplifiers(&mut all_signals);
+    let action = decide_kids_action(&all_signals);
 
-    DomainOutput::routed(signals, action, crate::routing::event_kind_for_signal)
+    let mut candidates = Vec::with_capacity(all_signals.len());
+    candidates.extend(legacy_signals.into_iter().filter_map(legacy_candidate));
+    candidates.extend(semantic_candidates);
+    candidates.extend(
+        all_signals
+            .into_iter()
+            .skip(legacy_count + semantic_count)
+            .filter_map(legacy_candidate),
+    );
+    sort_candidates(&mut candidates);
+
+    DomainOutput::from_candidates(candidates, action)
+}
+
+fn legacy_candidate(signal: DomainSignal) -> Option<DomainCandidate> {
+    crate::routing::event_kind_for_signal(&signal).map(|kind| DomainCandidate::new(signal, kind))
+}
+
+fn semantic_unavailable_candidate() -> DomainCandidate {
+    DomainCandidate::new(
+        DomainSignal {
+            threat_key: "semantic_composition_unavailable_v1".to_string(),
+            score: 1.0,
+            reason_code: "kids.composition.unavailable.guardian_review".to_string(),
+            threat_type: Some("manipulation".to_string()),
+            severity: Some("high".to_string()),
+            priority: Some(100),
+            action: Some(DomainAction::Warn),
+        },
+        DomainEventKind::SuspiciousSource,
+    )
+}
+
+fn sort_candidates(candidates: &mut [DomainCandidate]) {
+    candidates.sort_by(|left, right| {
+        let left_priority = left.signal.priority.unwrap_or(0);
+        let right_priority = right.signal.priority.unwrap_or(0);
+        right_priority.cmp(&left_priority)
+    });
 }
 
 /// Updates Kids memory from context-confirmed signals and returns only post-boundary derivatives.
@@ -69,14 +143,6 @@ pub fn commit_confirmed_kids_pipeline(
         derived_signals,
         action,
     }
-}
-
-fn sort_signals(signals: &mut [DomainSignal]) {
-    signals.sort_by(|left, right| {
-        let left_priority = left.priority.unwrap_or(0);
-        let right_priority = right.priority.unwrap_or(0);
-        right_priority.cmp(&left_priority)
-    });
 }
 
 fn decide_kids_action(signals: &[DomainSignal]) -> Option<DomainAction> {
@@ -340,11 +406,14 @@ fn apply_kids_conversation_memory_amplifiers(
         memory.entries.pop_front();
     }
 
-    for (entry_sender, snapshot) in &memory.entries {
+    for (entry_index, (entry_sender, snapshot)) in memory.entries.iter().enumerate() {
+        let is_current_entry = entry_index + 1 == memory.entries.len();
         if sender_present && *entry_sender == sender {
             sender_message_count += 1;
-            if snapshot.has_grooming {
+            if snapshot.has_grooming && !is_current_entry {
                 repeated_sender_grooming += 1;
+            }
+            if snapshot.has_grooming {
                 sender_risk_score += 1.0;
             }
             if snapshot.has_blackmail_or_sextortion {
@@ -1358,6 +1427,7 @@ mod tests {
         DomainInput {
             text: Some(text.to_string()),
             language: None,
+            language_evidence: None,
             sender_id: None,
             conversation_id: Some("conv_test".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1404,6 +1474,7 @@ mod tests {
         let first = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: None,
             conversation_id: Some("conv_no_sender".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1413,6 +1484,7 @@ mod tests {
         let second = DomainInput {
             text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: None,
             conversation_id: Some("conv_no_sender".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1441,6 +1513,7 @@ mod tests {
         let first = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: None,
             risk_profile: DomainRiskProfile::Strict,
@@ -1450,6 +1523,7 @@ mod tests {
         let second = DomainInput {
             text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: None,
             risk_profile: DomainRiskProfile::Strict,
@@ -1491,6 +1565,7 @@ mod tests {
         let seed = DomainInput {
             text: Some("our little secret. don't tell your parents.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1500,6 +1575,7 @@ mod tests {
         let followup = DomainInput {
             text: Some("you can only trust me. do it now or i post everything.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1525,6 +1601,7 @@ mod tests {
         let first = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("sx1".to_string()),
             conversation_id: Some("conv_mem_sx".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1534,6 +1611,7 @@ mod tests {
         let second = DomainInput {
             text: Some("dont tell anyone. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("sx1".to_string()),
             conversation_id: Some("conv_mem_sx".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1559,6 +1637,7 @@ mod tests {
         let seed = DomainInput {
             text: Some("our little secret. don't tell your parents.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp_normal".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1568,6 +1647,7 @@ mod tests {
         let followup = DomainInput {
             text: Some("you can only trust me. do it now or i post everything.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_mem_gp_normal".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1592,6 +1672,7 @@ mod tests {
         let message_a = DomainInput {
             text: Some("you're worthless. nobody likes you.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("b1".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1601,6 +1682,7 @@ mod tests {
         let message_b = DomainInput {
             text: Some("everyone hates you. all of us hate you.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("b2".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1610,6 +1692,7 @@ mod tests {
         let message_c = DomainInput {
             text: Some("we will beat you after school.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("b3".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1619,6 +1702,7 @@ mod tests {
         let message_d = DomainInput {
             text: Some("there is no reason to live anymore.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("victim".to_string()),
             conversation_id: Some("conv_mem_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1646,6 +1730,7 @@ mod tests {
         let msg1 = DomainInput {
             text: Some("our little secret. don't tell your parents.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1655,6 +1740,7 @@ mod tests {
         let msg2 = DomainInput {
             text: Some("i have your photo. do what i say or i post it.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1664,6 +1750,7 @@ mod tests {
         let msg3 = DomainInput {
             text: Some("you can only trust me.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1673,6 +1760,7 @@ mod tests {
         let msg4 = DomainInput {
             text: Some("move to private chat.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("sx".to_string()),
             conversation_id: Some("conv_mem_cool".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1714,6 +1802,7 @@ mod tests {
         let bullying_a = DomainInput {
             text: Some("you're worthless. nobody likes you.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("g1".to_string()),
             conversation_id: Some("conv_group_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1723,6 +1812,7 @@ mod tests {
         let bullying_b = DomainInput {
             text: Some("everyone hates you. all of us hate you.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("g2".to_string()),
             conversation_id: Some("conv_group_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1732,6 +1822,7 @@ mod tests {
         let selfharm = DomainInput {
             text: Some("there is no reason to live anymore.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("victim".to_string()),
             conversation_id: Some("conv_group_bc".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -1757,6 +1848,7 @@ mod tests {
         let input = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("new_sender".to_string()),
             conversation_id: Some("conv_new_sender".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1798,6 +1890,7 @@ mod tests {
         let first = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("repeat_sender".to_string()),
             conversation_id: Some("conv_repeat_1".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1807,6 +1900,7 @@ mod tests {
         let second = DomainInput {
             text: Some("don't tell your parents. i have your photo.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("repeat_sender".to_string()),
             conversation_id: Some("conv_repeat_2".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1832,6 +1926,7 @@ mod tests {
         let vulnerable = DomainInput {
             text: Some("there is no reason to live anymore.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("victim".to_string()),
             conversation_id: Some("conv_victim_target".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1841,6 +1936,7 @@ mod tests {
         let attacker = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("attacker".to_string()),
             conversation_id: Some("conv_victim_target".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1904,6 +2000,7 @@ mod tests {
         let msg1 = DomainInput {
             text: Some("hey how are you doing today".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("ml_sender".to_string()),
             conversation_id: Some("conv_ml_hint".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1932,6 +2029,7 @@ mod tests {
         let msg = DomainInput {
             text: Some("hey how are you doing today".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("ml_low".to_string()),
             conversation_id: Some("conv_ml_low".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1964,6 +2062,7 @@ mod tests {
         let msg = DomainInput {
             text: Some("ordinary conversation".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("ml_invalid".to_string()),
             conversation_id: Some("conv_ml_invalid".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -1990,6 +2089,7 @@ mod tests {
             let msg = DomainInput {
                 text: Some(format!("message number {idx}")),
                 language: None,
+                language_evidence: None,
                 sender_id: Some("ml_accum".to_string()),
                 conversation_id: Some("conv_ml_accum".to_string()),
                 risk_profile: DomainRiskProfile::Strict,
@@ -2021,6 +2121,7 @@ mod tests {
             let msg = DomainInput {
                 text: Some("our little secret".to_string()),
                 language: None,
+                language_evidence: None,
                 sender_id: Some("s1".to_string()),
                 conversation_id: Some(format!("conv_lru_{idx}")),
                 risk_profile: DomainRiskProfile::Normal,
@@ -2033,6 +2134,7 @@ mod tests {
         let overflow = DomainInput {
             text: Some("our little secret".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("conv_lru_overflow".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -2074,6 +2176,7 @@ mod tests {
         let msg = DomainInput {
             text: Some("our little secret. if u dont do this ill share.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("guardian_trusted".to_string()),
             conversation_id: Some("conv_guardian_trusted".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -2119,6 +2222,7 @@ mod tests {
         let msg = DomainInput {
             text: Some("our little secret".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("fp_sender".to_string()),
             conversation_id: Some("conv_fp".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -2149,6 +2253,7 @@ mod tests {
         let msg = DomainInput {
             text: Some("our little secret".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("monitor_sender".to_string()),
             conversation_id: Some("conv_monitor".to_string()),
             risk_profile: DomainRiskProfile::Strict,
@@ -2177,6 +2282,7 @@ mod tests {
         let msg = DomainInput {
             text: Some("our little secret. don't tell your parents.".to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("export_sender".to_string()),
             conversation_id: Some("conv_export".to_string()),
             risk_profile: DomainRiskProfile::Strict,

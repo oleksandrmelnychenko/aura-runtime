@@ -135,7 +135,7 @@ This is the target end-state, not the first migration step.
 
 ### Agent-side crates
 
-- `aura-agent-core`
+- `aura-runtime`
   - on-device orchestration
   - pattern + local context + local memory + local inference
   - remote escalation decision
@@ -149,7 +149,7 @@ This is the target end-state, not the first migration step.
 
 - `aura-agent-ffi`
   - mobile FFI surface
-  - wraps `aura-agent-core`
+  - wraps `aura-runtime`
   - current `aura-ffi` should converge here
 
 - `aura-agent-net`
@@ -217,7 +217,7 @@ Current `aura-core` mixes:
 
 Target split:
 
-- local runtime parts -> `aura-agent-core`
+- local runtime parts -> `aura-runtime`
 - policy/product parts -> `aura-agent-policy`
 - shared typed contracts -> `aura-contracts`
 - any remote-only intelligence -> `aura-relay-core`, `aura-relay-context`, `aura-relay-risk`
@@ -392,7 +392,7 @@ Success criteria:
 
 - `aura-core` stops being the owner of shared public contracts
 
-### Phase 2. Create `aura-agent-core`
+### Phase 2. Create `aura-runtime`
 
 - extract local runtime orchestration from `aura-core`
 - keep pattern layer, interpreter, tracker, local inference, and local policy inputs on device
@@ -400,11 +400,11 @@ Success criteria:
 
 Success criteria:
 
-- `aura-agent-core` can run fully without any Relay
+- `aura-runtime` can run fully without any Relay
 
 ### Phase 3. Convert `aura-ffi` into `aura-agent-ffi`
 
-- rebind FFI to `aura-agent-core`
+- rebind FFI to `aura-runtime`
 - keep existing mobile API stable where possible
 - add optional remote-analysis entrypoints later, not first
 
@@ -478,6 +478,6 @@ The next practical step should be:
 1. create `aura-contracts`
 2. create `aura-wire-relay`
 3. define the first `AgentAnalyzeRequest` / `RelayAnalyzeResponse`
-4. extract `aura-agent-core` from current `aura-core`
+4. extract `aura-runtime` from current `aura-core`
 
 That is the smallest migration slice that changes architecture without stalling delivery.

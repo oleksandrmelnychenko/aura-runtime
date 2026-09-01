@@ -960,6 +960,7 @@ fn build_external_curated_scenario(spec: &ExternalCuratedCaseSpec) -> ExternalCu
                         .clone()
                         .unwrap_or_else(|| spec.default_language.clone()),
                 ),
+                language_evidence: None,
                 conversation_type: spec.conversation_type,
                 member_count: match spec.conversation_type {
                     ConversationType::Direct => false,

@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use aura_domain::{
-    validate_lexical_rules, validate_schema_version, DomainPolicyPackEvidence,
+    validate_lexical_rules_for_schema, validate_lexicon_schema_version, DomainPolicyPackEvidence,
     DomainPolicyThresholds, LexicalRuleRecord,
 };
 use serde::Deserialize;
@@ -59,13 +59,16 @@ fn military_lexicon() -> &'static MilitaryLexicon {
     MILITARY_LEXICON.get_or_init(|| {
         let lexicon: MilitaryLexicon = serde_json::from_str(MILITARY_LEXICON_JSON)
             .expect("invalid military lexical rule pack");
-        validate_schema_version(lexicon.schema_version, "military lexicon")
+        validate_lexicon_schema_version(lexicon.schema_version, "military lexicon")
             .expect("unsupported military lexicon schema version");
-        validate_lexical_rules(&lexicon.opsec).expect("invalid military.opsec rules");
-        validate_lexical_rules(&lexicon.coordinate_leak)
+        validate_lexical_rules_for_schema(lexicon.schema_version, &lexicon.opsec)
+            .expect("invalid military.opsec rules");
+        validate_lexical_rules_for_schema(lexicon.schema_version, &lexicon.coordinate_leak)
             .expect("invalid military.coordinate_leak rules");
-        validate_lexical_rules(&lexicon.psyops).expect("invalid military.psyops rules");
-        validate_lexical_rules(&lexicon.social_eng).expect("invalid military.social_eng rules");
+        validate_lexical_rules_for_schema(lexicon.schema_version, &lexicon.psyops)
+            .expect("invalid military.psyops rules");
+        validate_lexical_rules_for_schema(lexicon.schema_version, &lexicon.social_eng)
+            .expect("invalid military.social_eng rules");
         validate_policy(&lexicon.policy).expect("invalid military.policy");
         lexicon
     })

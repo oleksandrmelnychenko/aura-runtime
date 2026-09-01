@@ -123,6 +123,7 @@ mod tests {
         DomainInput {
             text: Some(text.to_string()),
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("c1".to_string()),
             risk_profile: DomainRiskProfile::Normal,
@@ -255,6 +256,7 @@ mod tests {
         let inp = DomainInput {
             text: None,
             language: None,
+            language_evidence: None,
             sender_id: Some("s1".to_string()),
             conversation_id: Some("c1".to_string()),
             risk_profile: DomainRiskProfile::Normal,

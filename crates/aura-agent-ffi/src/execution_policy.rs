@@ -1,11 +1,11 @@
-use aura_agent_core::{
+use aura_proto::messenger::v1 as proto;
+use aura_runtime::{
     AccountType, AgentRuntime, Confidence, DomainMode, GuardianDeliveryClass,
     GuardianExecutionMode, GuardianExecutionPolicy, GuardianExecutionRule, GuardianReportTrigger,
     NativeExecutionMode, NativeExecutionPolicy, NativeExecutionPolicyState, ProductRolloutMode,
     RuntimeBackend, RuntimeCapabilities, RuntimeModality, SafetyCaseSeverity, SafetyCaseStatus,
     SafetyReasonCode, ThreatType, SAFETY_CASE_RUNTIME_STATE_SCHEMA_VERSION,
 };
-use aura_proto::messenger::v1 as proto;
 use ed25519_dalek::{Signature, VerifyingKey};
 use prost::Message;
 use serde::Deserialize;
@@ -246,14 +246,14 @@ pub fn policy_from_apply_request(
 
 pub fn application_receipt_to_proto(
     account_key: &str,
-    receipt: &aura_agent_core::NativeExecutionPolicyApplicationReceipt,
+    receipt: &aura_runtime::NativeExecutionPolicyApplicationReceipt,
 ) -> proto::AuraExecutionPolicyApplicationReceipt {
     let policy = &receipt.policy;
     let disposition = match receipt.disposition {
-        aura_agent_core::NativeExecutionPolicyApplyDisposition::Applied => {
+        aura_runtime::NativeExecutionPolicyApplyDisposition::Applied => {
             proto::AuraExecutionPolicyApplyDisposition::Applied
         }
-        aura_agent_core::NativeExecutionPolicyApplyDisposition::Unchanged => {
+        aura_runtime::NativeExecutionPolicyApplyDisposition::Unchanged => {
             proto::AuraExecutionPolicyApplyDisposition::Unchanged
         }
     };

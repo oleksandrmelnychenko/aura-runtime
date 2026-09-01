@@ -3,7 +3,7 @@
 //! The current implementation is split across:
 //!
 //! - `aura-contracts` — canonical shared types (ThreatType, Confidence, etc.)
-//! - `aura-agent-core` — on-device runtime orchestration
+//! - `aura-runtime` — on-device runtime orchestration
 //! - `aura-agent-policy` — action decisions, product surfacing, shadow/pilot
 //! - `aura-relay-*` — server-side inference and intelligence
 //!
@@ -17,9 +17,9 @@
 //! |---|---|
 //! | `types` (shared enums) | `aura-contracts` |
 //! | `action`, `product`, `pilot`, `pilot_gate` | `aura-agent-policy` |
-//! | `analyzer`, `context`, `domain_runtime` | `aura-agent-core` |
+//! | `analyzer`, `context`, `domain_runtime` | `aura-runtime` |
 //! | `audit` | shared or agent-policy |
-//! | `config`, `ids`, `error` | `aura-contracts` or `aura-agent-core` |
+//! | `config`, `ids`, `error` | `aura-contracts` or `aura-runtime` |
 //! | `eval*`, `dataset_manifest` | `aura-core` |
 
 pub mod action;
@@ -50,6 +50,11 @@ pub mod types;
 
 pub use analyzer::Analyzer;
 pub use audit::*;
+pub use aura_domain::{
+    truncate_domain_text, LanguageCandidate, LanguageEvidence, LanguageEvidenceError,
+    LanguageEvidenceSource, LanguageScript, LanguageSpan, LanguageTag, MAX_DOMAIN_TEXT_BYTES,
+    MAX_LANGUAGE_CANDIDATES, MAX_LANGUAGE_SPANS,
+};
 pub use config::AuraConfig;
 pub use context::ConversationTracker;
 pub use dataset_manifest::*;

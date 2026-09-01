@@ -1131,6 +1131,7 @@ fn run_simulation(args: &Args) -> CommunitySimReport {
                 sender_id: event.sender_id.as_str().into(),
                 conversation_id: event.conversation_id.as_str().into(),
                 language: Some(event.child_language.to_string()),
+                language_evidence: None,
                 conversation_type: event.conversation_type,
                 member_count: event.member_count,
                 sender_relationship: Default::default(),

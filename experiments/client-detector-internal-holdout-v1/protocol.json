@@ -1,0 +1,113 @@
+{
+  "schema_version": "aura.internal_blind_holdout_protocol.v1",
+  "dataset_id": "aura_client_detector_internal_holdout_v1",
+  "evidence_class": "internal_blinded_holdout",
+  "languages": [
+    "en",
+    "uk",
+    "ru"
+  ],
+  "threat_families": [
+    "grooming",
+    "manipulation",
+    "bullying",
+    "self_harm",
+    "threat",
+    "explicit",
+    "nsfw",
+    "phishing"
+  ],
+  "pairs_per_language_family": 10,
+  "messages_per_conversation": {
+    "minimum": 2,
+    "maximum": 6
+  },
+  "maximum_message_bytes": 1000,
+  "maximum_conversation_bytes": 4096,
+  "allowed_account_types": [
+    "child",
+    "teen"
+  ],
+  "allowed_relationships": [
+    "unknown_adult",
+    "unknown_peer",
+    "peer",
+    "teacher",
+    "coach",
+    "service"
+  ],
+  "allowed_trust_sources": [
+    "unknown",
+    "self_declared",
+    "local_heuristic",
+    "server_reputation",
+    "school_directory"
+  ],
+  "risky_context_roles": [
+    "direct_request",
+    "escalation",
+    "coercion",
+    "deception",
+    "blackmail",
+    "self_referential_crisis",
+    "disguised_request",
+    "quote_then_direct_request"
+  ],
+  "safe_context_roles": [
+    "support",
+    "refusal",
+    "report",
+    "education",
+    "quoted_speech",
+    "third_party_discussion",
+    "protective_negation",
+    "crisis_support"
+  ],
+  "obfuscation_modes": [
+    "plain",
+    "punctuation",
+    "spacing",
+    "combining_marks",
+    "mixed_script",
+    "euphemism",
+    "slang",
+    "code_switch"
+  ],
+  "thresholds": {
+    "grooming": 0.55,
+    "manipulation": 0.55,
+    "bullying": 0.55,
+    "self_harm": 0.70,
+    "threat": 0.60,
+    "explicit": 0.55,
+    "nsfw": 0.55,
+    "phishing": 0.55,
+    "default_other_family": 0.55
+  },
+  "release_gates": {
+    "minimum_cases_per_language_family_polarity": 10,
+    "minimum_overall_expected_family_recall": 0.90,
+    "minimum_slice_expected_family_recall": 0.80,
+    "minimum_overall_safe_specificity": 0.95,
+    "minimum_slice_safe_specificity": 0.90,
+    "minimum_detected_family_accuracy": 0.85,
+    "maximum_risky_allow_errors": 0,
+    "maximum_safe_block_errors": 0,
+    "minimum_pair_accuracy": 0.90,
+    "minimum_primary_label_agreement": 0.80
+  },
+  "privacy": {
+    "real_child_conversations_allowed": false,
+    "direct_identifiers_allowed": false,
+    "links_must_use_placeholder": "[LINK]",
+    "phone_numbers_must_use_placeholder": "[PHONE]",
+    "handles_must_use_placeholder": "[HANDLE]",
+    "locations_must_use_placeholder": "[LOCATION]"
+  },
+  "claim_boundary": [
+    "This protocol produces internal blinded evidence, not external independent certification.",
+    "Authors and annotators must not inspect detector outputs, source rules, or prior failed case IDs before the corpus is frozen.",
+    "The detector team may receive only the frozen manifest and aggregate report until the release decision is recorded.",
+    "Public datasets are auxiliary challenge material and do not count toward the 480 original conversations."
+  ]
+}

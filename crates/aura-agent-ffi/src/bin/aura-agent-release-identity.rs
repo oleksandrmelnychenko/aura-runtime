@@ -1,8 +1,6 @@
-use aura_agent_core::{
-    AgentRuntime, AuraConfig, ProductRolloutMode, RuntimeBackend, RuntimeModality,
-};
 use aura_agent_ffi::release_runtime_artifact_digests;
 use aura_patterns::PatternDatabase;
+use aura_runtime::{AgentRuntime, AuraConfig, ProductRolloutMode, RuntimeBackend, RuntimeModality};
 
 fn main() {
     let config = AuraConfig::default();

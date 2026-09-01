@@ -32,5 +32,18 @@ let package = Package(
             ],
             path: "swift/Sources/AuraAgent"
         ),
+        .target(
+            name: "AuraAgentFFITestStubs",
+            path: "swift/Tests/AuraAgentFFITestStubs"
+        ),
+        .testTarget(
+            name: "AuraAgentTests",
+            dependencies: ["AuraAgent", "AuraAgentFFITestStubs"],
+            path: "swift/Tests/AuraAgentTests",
+            resources: [
+                .process("Fixtures"),
+                .copy("Resources/LanguageID"),
+            ]
+        ),
     ]
 )

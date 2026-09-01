@@ -1,12 +1,16 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
-use aura_domain::MlSafetyHint;
+#[cfg(test)]
+use aura_domain::LanguageCandidate;
+use aura_domain::{LanguageEvidence, LanguageEvidenceSource, LanguageScript, MlSafetyHint};
 use aura_ml::{
     IntentLabel, MlConfig, MlPipeline, MlRuntimeBackend, MlUncertaintyLevel, SafetyLabel,
     ToxicityLabel,
 };
-use aura_patterns::{PatternDatabase, PatternMatcher, TextNormalizer, UrlChecker};
+use aura_patterns::{
+    PatternDatabase, PatternMatcher, PreparedPatternText, TextNormalizer, UrlChecker,
+};
 use sha2::{Digest, Sha256};
 use tracing::debug;
 
@@ -112,17 +116,11 @@ impl EscalationTracker {
     }
 }
 
-const MAX_TEXT_LENGTH: usize = 10_000;
+#[cfg(test)]
+const MAX_TEXT_LENGTH: usize = aura_domain::MAX_DOMAIN_TEXT_BYTES;
 
 fn truncate_text(text: &str) -> &str {
-    if text.len() <= MAX_TEXT_LENGTH {
-        return text;
-    }
-    let mut end = MAX_TEXT_LENGTH;
-    while end > 0 && !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    &text[..end]
+    aura_domain::truncate_domain_text(text)
 }
 
 fn content_fingerprint_u64(text: &str) -> u64 {
@@ -142,6 +140,131 @@ fn collect_supported_pattern_languages(pattern_db: &PatternDatabase) -> HashSet<
         }
     }
     languages
+}
+
+fn routed_pattern_languages(
+    evidence: &LanguageEvidence,
+    supported: &HashSet<String>,
+) -> Vec<String> {
+    let mut routed = Vec::with_capacity(4);
+    let mut seen = HashSet::with_capacity(4);
+    let has_explicit_candidates = evidence
+        .candidates()
+        .iter()
+        .any(|candidate| candidate.source() != LanguageEvidenceSource::RuntimeDefault);
+
+    if has_explicit_candidates {
+        for candidate in evidence
+            .candidates()
+            .iter()
+            .filter(|candidate| candidate.source() != LanguageEvidenceSource::RuntimeDefault)
+        {
+            push_language_route(
+                &mut routed,
+                &mut seen,
+                supported,
+                candidate.tag().as_str(),
+                true,
+            );
+        }
+        // Explicit hints and classifiers are routing additions, never safety
+        // suppressors. Keep the already-governed release packs active even
+        // when a caller declaration or future classifier is wrong.
+        for route in ["en", "uk", "ru"] {
+            push_language_route(&mut routed, &mut seen, supported, route, false);
+        }
+        for script in evidence.scripts().iter().map(|item| item.script()) {
+            if evidence
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.source() != LanguageEvidenceSource::RuntimeDefault)
+                .any(|candidate| language_uses_script(candidate.tag().primary(), script))
+            {
+                continue;
+            }
+            for route in script.conservative_language_routes() {
+                push_language_route(&mut routed, &mut seen, supported, route, false);
+            }
+        }
+    } else {
+        if let Some(runtime_default) = evidence
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.source() == LanguageEvidenceSource::RuntimeDefault)
+        {
+            push_language_route(
+                &mut routed,
+                &mut seen,
+                supported,
+                runtime_default.tag().as_str(),
+                true,
+            );
+        }
+
+        // Preserve the previous no-hint safety behavior while new language
+        // packs are introduced behind explicit supported-language metadata.
+        for route in ["en", "uk", "ru"] {
+            push_language_route(&mut routed, &mut seen, supported, route, false);
+        }
+        for script in evidence.scripts().iter().map(|item| item.script()) {
+            for route in script.conservative_language_routes() {
+                push_language_route(&mut routed, &mut seen, supported, route, false);
+            }
+        }
+    }
+
+    if routed.is_empty() {
+        routed.push("und".to_string());
+    }
+    routed
+}
+
+fn push_language_route(
+    routed: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+    supported: &HashSet<String>,
+    raw_tag: &str,
+    allow_unsupported_for_universal_rules: bool,
+) {
+    let normalized = raw_tag.to_ascii_lowercase();
+    let primary = normalized.split('-').next().unwrap_or(normalized.as_str());
+    let mut matched_supported = false;
+    for candidate in [normalized.as_str(), primary] {
+        if supported.contains(candidate) {
+            matched_supported = true;
+            let candidate = candidate.to_string();
+            if seen.insert(candidate.clone()) {
+                routed.push(candidate);
+            }
+        }
+    }
+    if !matched_supported
+        && allow_unsupported_for_universal_rules
+        && seen.insert(normalized.clone())
+    {
+        routed.push(normalized);
+    }
+}
+
+fn language_uses_script(language: &str, script: LanguageScript) -> bool {
+    match language {
+        "en" | "fr" | "de" | "es" | "it" | "pl" | "pt" | "ro" | "tr" | "vi" => {
+            script == LanguageScript::Latin
+        }
+        "uk" | "ru" | "be" | "bg" | "mk" => script == LanguageScript::Cyrillic,
+        "sr" => matches!(script, LanguageScript::Cyrillic | LanguageScript::Latin),
+        "el" => script == LanguageScript::Greek,
+        "ar" | "fa" | "ur" => script == LanguageScript::Arabic,
+        "he" => script == LanguageScript::Hebrew,
+        "hi" | "mr" | "ne" => script == LanguageScript::Devanagari,
+        "zh" => script == LanguageScript::Han,
+        "ja" => matches!(
+            script,
+            LanguageScript::Han | LanguageScript::Hiragana | LanguageScript::Katakana
+        ),
+        "ko" => matches!(script, LanguageScript::Han | LanguageScript::Hangul),
+        _ => false,
+    }
 }
 
 /// Performs message analysis combining pattern matching, ML inference, and context tracking.
@@ -282,35 +405,24 @@ impl Analyzer {
         text: &str,
         content_hash: Option<u64>,
     ) -> PatternScanResult {
-        let matches = match input.language.as_deref() {
-            Some(message_language) => {
-                let matcher = self.pattern_matcher_for(Some(message_language));
-                matcher.scan(text)
-            }
-            None => {
-                let mut combined = Vec::new();
-                let mut seen_rules: HashSet<String> = HashSet::new();
-                let mut languages = vec![
-                    self.config.language.clone(),
-                    "en".to_string(),
-                    "uk".to_string(),
-                    "ru".to_string(),
-                ];
-                languages.sort();
-                languages.dedup();
-
-                for language in languages {
-                    let matcher = self.pattern_matcher_for(Some(language.as_str()));
-                    let results = matcher.scan(text);
-                    for result in results {
-                        if seen_rules.insert(result.rule_id.clone()) {
-                            combined.push(result);
-                        }
-                    }
+        let evidence = LanguageEvidence::for_analysis(
+            text,
+            input.language.as_deref(),
+            Some(self.config.language.as_str()),
+            input.language_evidence.as_ref(),
+        );
+        let languages = routed_pattern_languages(&evidence, &self.supported_pattern_languages);
+        let prepared_text = PreparedPatternText::new(text);
+        let mut matches = Vec::new();
+        let mut seen_rules: HashSet<String> = HashSet::new();
+        for language in languages {
+            let matcher = self.pattern_matcher_for(Some(language.as_str()));
+            for result in matcher.scan_prepared(&prepared_text) {
+                if seen_rules.insert(result.rule_id.clone()) {
+                    matches.push(result);
                 }
-                combined
             }
-        };
+        }
 
         let mut matched_rule_ids: HashSet<String> = HashSet::new();
         for match_item in &matches {
@@ -530,7 +642,27 @@ impl Analyzer {
             (Some(anchored), Some(any)) => {
                 let anchored_p = threat_priority_for_sort(anchored.threat_type);
                 let any_p = threat_priority_for_sort(any.threat_type);
-                if any_p + 4 <= anchored_p {
+                let has_direct_coercive_manipulation = signals.iter().any(|signal| {
+                    signal.layer == DetectionLayer::PatternMatching
+                        && signal.threat_type == ThreatType::Manipulation
+                        && [
+                            "debt",
+                            "blackmail",
+                            "sextortion",
+                            "screenshot",
+                            "suicide_coercion",
+                            "deadline_compliance",
+                            "reputation_threat",
+                        ]
+                        .iter()
+                        .any(|fragment| signal.reason_code.contains(fragment))
+                });
+                let memory_may_override = !any.reason_code.starts_with("domain.kids.memory.")
+                    || any.threat_type == ThreatType::SelfHarm
+                    || !(any.threat_type == ThreatType::Grooming
+                        && anchored.threat_type == ThreatType::Manipulation
+                        && has_direct_coercive_manipulation);
+                if memory_may_override && any_p + 4 <= anchored_p {
                     any
                 } else {
                     anchored

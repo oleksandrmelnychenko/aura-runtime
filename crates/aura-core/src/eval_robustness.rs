@@ -430,6 +430,7 @@ mod tests {
                     sender_id: "stranger".into(),
                     conversation_id: "dm".into(),
                     language: Some("en".to_string()),
+                    language_evidence: None,
                     conversation_type: ConversationType::Direct,
                     member_count: None,
                     sender_relationship: Default::default(),

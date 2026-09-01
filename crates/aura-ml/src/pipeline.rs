@@ -367,7 +367,7 @@ impl MlPipeline {
     /// come from the inference cache: repeated or similar normalised
     /// texts hit the cache and skip model evaluation entirely.
     ///
-    /// Texts are processed in chunks of [`ANALYZE_BATCH_CHUNK_SIZE`] to
+    /// Texts are processed in bounded chunks to
     /// bound peak memory from intermediate allocations.
     pub fn analyze_batch(&mut self, texts: &[&str]) -> Vec<MlResult> {
         let mut results = Vec::with_capacity(texts.len());

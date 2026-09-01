@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "crates/aura-contracts",
-    "crates/aura-agent-core",
+    "crates/aura-runtime",
     "crates/aura-agent-policy",
     "crates/aura-core",
     "crates/aura-domain",
@@ -12,16 +12,6 @@ members = [
     "crates/aura-ml",
     "crates/aura-proto",
     "crates/aura-agent-ffi",
-    "crates/aura-relay-api",
-    "crates/aura-relay-context",
-    "crates/aura-relay-inference",
-    "crates/aura-relay-intake",
-    "crates/aura-relay-ml",
-    "crates/aura-relay-observability",
-    "crates/aura-relay-policy",
-    "crates/aura-relay-risk",
-    "crates/aura-relay-store",
-    "crates/aura-wire-relay",
 ]
 
 [workspace.package]
@@ -29,7 +19,7 @@ version = "0.2.0"
 edition = "2021"
 authors = ["Ecliptix"]
 license = "Proprietary"
-description = "AURA - Intelligent Protection System for Ecliptix Messenger"
+description = "AURA on-device safety runtime"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -77,15 +67,6 @@ debug = true
 strip = "none"
 opt-level = 2
 
-# Relay server build: speed-optimized, not size-optimized.
-# Use: cargo build --profile relay -p aura-relay-api
-[profile.relay]
-inherits = "release"
-opt-level = 3
-strip = "none"
-debug = 1
-panic = "unwind"
-
 # ── Per-crate build overrides ────────────────────────────────────────
 
 # Dependencies get full optimisation even in dev builds for faster test runs.
@@ -104,14 +85,4 @@ opt-level = 3
 opt-level = 3
 
 [profile.release.package.aho-corasick]
-opt-level = 3
-
-# Relay crates: speed over size.
-[profile.relay.package.aura-relay-inference]
-opt-level = 3
-
-[profile.relay.package.aura-relay-risk]
-opt-level = 3
-
-[profile.relay.package.aura-relay-ml]
 opt-level = 3

@@ -1,0 +1,211 @@
+{
+  "schema_version": 2,
+  "description": "Additive developer-only boundary and open-set controls. Not independently adjudicated.",
+  "samples": [
+    {
+      "id": "v2-mono-uk-chat",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "uk", "text": "Привіт, я вже повернулася додому, приготувала вечерю й тепер спокійно читаю повідомлення від друзів." }
+      ]
+    },
+    {
+      "id": "v2-mono-ru-chat",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "ru", "text": "Привет, я уже вернулась домой, приготовила ужин и теперь спокойно читаю сообщения от друзей." }
+      ]
+    },
+    {
+      "id": "v2-mono-en-chat",
+      "category": "monolingual_supported",
+      "segments": [
+        { "language": "en", "text": "Hi, I am already back home, dinner is ready, and now I am quietly reading messages from friends." }
+      ]
+    },
+    {
+      "id": "v2-switch-uk-ru-inline-long",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "uk", "text": "Ми уважно перевірили всі записи та погодили остаточний план, " },
+        { "language": "ru", "text": "а потом спокойно обсудили расписание и договорились созвониться вечером." }
+      ]
+    },
+    {
+      "id": "v2-switch-ru-uk-inline-long",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "ru", "text": "Мы внимательно проверили все записи и согласовали окончательный план, " },
+        { "language": "uk", "text": "а потім спокійно обговорили розклад і домовилися зателефонувати ввечері." }
+      ]
+    },
+    {
+      "id": "v2-switch-uk-en-inline-long",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "uk", "text": "Ми завершили перевірку документа та записали всі зауваження, " },
+        { "language": "en", "text": "so tomorrow we can review the final version and send a clear summary." }
+      ]
+    },
+    {
+      "id": "v2-switch-en-ru-inline-long",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "en", "text": "We finished checking the document and recorded every important comment, " },
+        { "language": "ru", "text": "поэтому завтра спокойно просмотрим итоговую версию и отправим краткое резюме." }
+      ]
+    },
+    {
+      "id": "v2-switch-uk-en-ru-inline",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "uk", "text": "Спочатку ми погодили порядок роботи, " },
+        { "language": "en", "text": "then we reviewed every open question, " },
+        { "language": "ru", "text": "а после этого спокойно подвели итоги встречи." }
+      ]
+    },
+    {
+      "id": "v2-switch-ru-uk-ru-quoted",
+      "category": "switch_supported_inline",
+      "segments": [
+        { "language": "ru", "text": "Она открыла сообщение и прочитала: «" },
+        { "language": "uk", "text": "ми завтра спокійно перевіримо всі записи" },
+        { "language": "ru", "text": "», а затем сохранила заметку в телефоне." }
+      ]
+    },
+    {
+      "id": "v2-switch-en-uk-en-sentence",
+      "category": "switch_supported_sentence",
+      "segments": [
+        { "language": "en", "text": "We reviewed the agenda and recorded the first decision. " },
+        { "language": "uk", "text": "Потім ми спокійно обговорили всі відкриті питання. " },
+        { "language": "en", "text": "After that, we prepared a short summary for everyone." }
+      ]
+    },
+    {
+      "id": "v2-mono-bg-shared-01",
+      "category": "monolingual_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "bg", "text": "Утре ще отидем заедно до града, после спокойно ще обсъдим плановете и ще се приберем вкъщи." }
+      ]
+    },
+    {
+      "id": "v2-mono-bg-shared-02",
+      "category": "monolingual_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "bg", "text": "Получих съобщението сутринта, прочетох всички бележки и подготвих кратък отговор за срещата." }
+      ]
+    },
+    {
+      "id": "v2-mono-be-shared",
+      "category": "monolingual_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "be", "text": "Завтра мы разам будзем дома, пасля паедзем у горад ды спакойна абмяркуем нашы планы." }
+      ]
+    },
+    {
+      "id": "v2-mono-sr-shared",
+      "category": "monolingual_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "sr", "text": "Сутра идемо у град са другом, мирно разговарамо о плановима и после идемо дома." }
+      ]
+    },
+    {
+      "id": "v2-mono-kk-shared",
+      "category": "monolingual_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "kk", "text": "Бала далада ойнап, анасына барып, мектеп туралы жоспарын баяу айтып берді." }
+      ]
+    },
+    {
+      "id": "v2-mono-tt-shared",
+      "category": "monolingual_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "tt", "text": "Бу кеше авылга бара, анда дуслары була, алар озак итеп план турында уйлый." }
+      ]
+    },
+    {
+      "id": "v2-mono-mk-shared",
+      "category": "monolingual_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "mk", "text": "Утре одиме во град со другарите, мирно разговараме за плановите и потоа одиме дома." }
+      ]
+    },
+    {
+      "id": "v2-mono-pl-latin",
+      "category": "monolingual_unsupported_latin",
+      "segments": [
+        { "language": "pl", "text": "Jutro pojedziemy razem do miasta, spokojnie omówimy wszystkie plany i wrócimy do domu wieczorem." }
+      ]
+    },
+    {
+      "id": "v2-mono-de-latin",
+      "category": "monolingual_unsupported_latin",
+      "segments": [
+        { "language": "de", "text": "Morgen fahren wir gemeinsam in die Stadt, besprechen dort in Ruhe alle Pläne und kommen abends zurück." }
+      ]
+    },
+    {
+      "id": "v2-mono-es-latin",
+      "category": "monolingual_unsupported_latin",
+      "segments": [
+        { "language": "es", "text": "Mañana iremos juntos a la ciudad, revisaremos con calma todos los planes y volveremos a casa por la tarde." }
+      ]
+    },
+    {
+      "id": "v2-mono-cs-latin",
+      "category": "monolingual_unsupported_latin",
+      "segments": [
+        { "language": "cs", "text": "Zítra pojedeme společně do města, v klidu probereme všechny plány a večer se vrátíme domů." }
+      ]
+    },
+    {
+      "id": "v2-switch-uk-bg-shared",
+      "category": "switch_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "uk", "text": "Ми вже завершили перевірку та записали всі зауваження, " },
+        { "language": "bg", "text": "а после спокойно ще обсъдим плана и ще подготвим отговор." }
+      ]
+    },
+    {
+      "id": "v2-switch-ru-be-shared",
+      "category": "switch_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "ru", "text": "Мы уже закончили проверку и записали все замечания, " },
+        { "language": "be", "text": "а пасля разам абмяркуем план ды падрыхтуем кароткі адказ." }
+      ]
+    },
+    {
+      "id": "v2-switch-en-pl-latin",
+      "category": "switch_unsupported_latin",
+      "segments": [
+        { "language": "en", "text": "We finished reviewing every note from the meeting, " },
+        { "language": "pl", "text": "a jutro spokojnie omówimy plan i przygotujemy krótką odpowiedź." }
+      ]
+    },
+    {
+      "id": "v2-switch-ru-tt-shared",
+      "category": "switch_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "ru", "text": "Мы спокойно обсудили расписание и сохранили все записи, " },
+        { "language": "tt", "text": "аннан алар озак итеп план турында уйлый, кыска хат яза." }
+      ]
+    },
+    {
+      "id": "v2-switch-uk-sr-shared",
+      "category": "switch_unsupported_shared_alphabet",
+      "segments": [
+        { "language": "uk", "text": "Ми домовилися зустрітися після роботи та перевірити нотатки, " },
+        { "language": "sr", "text": "а после мирно разговарамо о плановима и идемо дома." }
+      ]
+    },
+    {
+      "id": "v2-switch-en-de-latin",
+      "category": "switch_unsupported_latin",
+      "segments": [
+        { "language": "en", "text": "We completed the first review and saved every comment. " },
+        { "language": "de", "text": "Danach besprechen wir gemeinsam den Plan und schreiben eine kurze Antwort." }
+      ]
+    }
+  ]
+}

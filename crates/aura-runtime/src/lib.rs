@@ -33,9 +33,11 @@ pub use aura_core::{
     BehavioralTrend, CircleTier, Confidence, ContactSnapshot, ContentType, ContextDirectionality,
     ContextReciprocity, ContextSpeechAct, ContextStance, ConversationId, ConversationTracker,
     ConversationType, DetectionLayer, DetectionSignal, DomainMode, FollowUpAction,
-    InferenceSummary, LatentStateEvidence, LatentStateKind, MessageInput, ProtectionLevel,
-    ReasonCode, RelationshipTrustSource, RiskBreakdown, RiskHorizon, SenderId, SenderRelationship,
-    SignalFamily, ThreatType, UiAction, UncertaintyLevel,
+    InferenceSummary, LanguageCandidate, LanguageEvidence, LanguageEvidenceError,
+    LanguageEvidenceSource, LanguageScript, LanguageSpan, LanguageTag, LatentStateEvidence,
+    LatentStateKind, MessageInput, ProtectionLevel, ReasonCode, RelationshipTrustSource,
+    RiskBreakdown, RiskHorizon, SenderId, SenderRelationship, SignalFamily, ThreatType, UiAction,
+    UncertaintyLevel, MAX_DOMAIN_TEXT_BYTES, MAX_LANGUAGE_CANDIDATES, MAX_LANGUAGE_SPANS,
 };
 
 pub use aura_agent_policy::safety_case::{
@@ -547,6 +549,7 @@ mod tests {
             sender_id: sender_id.into(),
             conversation_id: conversation_id.into(),
             language: Some("en".to_string()),
+            language_evidence: None,
             conversation_type: ConversationType::Direct,
             member_count: None,
             sender_relationship: Default::default(),

@@ -10,11 +10,11 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use aura_agent_core::{
+use aura_patterns::PatternDatabase;
+use aura_runtime::{
     AccountType, AgentRuntime, AuraConfig, ContentType, ConversationType, DomainMode, MessageInput,
     ProtectionLevel, SenderId, ThreatType,
 };
-use aura_patterns::PatternDatabase;
 use serde::Serialize;
 
 const BASE_TS_MS: u64 = 1_778_652_000_000;
@@ -431,6 +431,7 @@ fn message_input(event: &SyntheticEvent) -> MessageInput {
         sender_id: SenderId::from(event.sender_id.as_str()),
         conversation_id: event.conversation_id.as_str().into(),
         language: Some("en".to_string()),
+        language_evidence: None,
         conversation_type: event.conversation_type,
         member_count: matches!(event.conversation_type, ConversationType::Group).then_some(8),
         sender_relationship: Default::default(),
@@ -450,7 +451,7 @@ fn child_config() -> AuraConfig {
 }
 
 fn detected_expected_threat(
-    result: &aura_agent_core::AnalysisResult,
+    result: &aura_runtime::AnalysisResult,
     expected: Option<ThreatType>,
 ) -> bool {
     let Some(expected) = expected else {
@@ -465,7 +466,7 @@ fn detected_expected_threat(
         .any(|(threat, score)| *threat == expected && *score >= 0.35)
 }
 
-fn is_safe_false_positive(result: &aura_agent_core::AnalysisResult) -> bool {
+fn is_safe_false_positive(result: &aura_runtime::AnalysisResult) -> bool {
     result.threat_type != ThreatType::None && result.score >= 0.50
 }
 
@@ -478,8 +479,8 @@ fn has_kids_memory_reason(reason_codes: &[String]) -> bool {
 }
 
 fn state_footprint(
-    core_state: &aura_agent_core::context::tracker::TrackerWireState,
-    kids_state: &aura_agent_core::aura_kids::pipeline::ExportedKidsMemoryState,
+    core_state: &aura_runtime::context::tracker::TrackerWireState,
+    kids_state: &aura_runtime::aura_kids::pipeline::ExportedKidsMemoryState,
 ) -> StateFootprint {
     let core_events = core_state
         .timelines
@@ -755,7 +756,7 @@ fn parse_next<T: std::str::FromStr>(
 }
 
 fn print_usage() {
-    println!("Usage: cargo run -p aura-agent-core --example runtime_hardening -- [options]");
+    println!("Usage: cargo run -p aura-runtime --example runtime_hardening -- [options]");
     println!("  --profile <quick|standard|stress>");
     println!("  --sessions <n>");
     println!("  --events-per-session <n>");

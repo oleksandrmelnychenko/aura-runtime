@@ -634,6 +634,7 @@ fn build_curated_scenario_case(case: &CuratedCorpusCase) -> ScenarioCase {
                 ),
                 conversation_id: ConversationId::from(case.id.clone()),
                 language: Some(case.language.clone()),
+                language_evidence: None,
                 conversation_type: case.conversation_type,
                 member_count: match case.conversation_type {
                     ConversationType::Direct => true,

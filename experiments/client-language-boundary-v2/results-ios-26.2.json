@@ -1,0 +1,96 @@
+{
+  "schema_version": 2,
+  "status": "developer_shadow_only",
+  "environment": {
+    "device": "iPhone 17 Pro simulator",
+    "ios": "26.2",
+    "xcode": "26.2",
+    "compute_units": "cpuOnly"
+  },
+  "corpus": {
+    "original_samples": 24,
+    "additive_samples": 27,
+    "total_samples": 51,
+    "total_tokens": 757,
+    "governed_tokens": 468,
+    "unsupported_tokens": 289,
+    "supported_switch_samples": 18,
+    "governed_to_governed_boundaries": 24,
+    "unsupported_switch_samples": 9,
+    "unsupported_mixed_tokens": 76,
+    "unsupported_monolingual_samples": 15,
+    "languages": ["be", "bg", "cs", "de", "en", "es", "kk", "mk", "pl", "ru", "sr", "tt", "uk"],
+    "original_fixture_sha256": "9cb40f06a068ea568476b635b690faca2b70ff182c0aaf866516df27e91709a3",
+    "additive_fixture_sha256": "92b87ceadd5a77e50e7f342a04523ecb2ab418f104345340b17958f0156ac386",
+    "independent_release_holdout": false,
+    "native_speaker_adjudicated": false
+  },
+  "metric_semantics": {
+    "exact_governed_boundary_recall": "Counts only transitions where both expected sides are governed labels.",
+    "unsupported_boundary_side_emission_rate": "Measures emission on the unsupported-side token of a governed-to-unsupported transition.",
+    "unsupported_as_supported_emission_rate": "Measures any governed-label emission over all unsupported tokens."
+  },
+  "variants": {
+    "centered_5_baseline": {
+      "emitted_labels": 313,
+      "governed_coverage": 0.6452991452991453,
+      "precision_when_emitted": 0.9648562300319489,
+      "supported_switch_sample_recall": 0.6666666666666666,
+      "exact_governed_boundaries": 6,
+      "governed_boundary_count": 24,
+      "exact_governed_boundary_recall": 0.25,
+      "unsupported_emitted_labels": 11,
+      "unsupported_as_supported_emission_rate": 0.03806228373702422,
+      "mixed_unsupported_token_emission_rate": 0.07894736842105263,
+      "unsupported_boundary_side_emission_rate": 0.1111111111111111,
+      "unsupported_monolingual_sample_activation_rate": 0.06666666666666667
+    },
+    "center_anchored_5_plus_directional_pairs": {
+      "emitted_labels": 278,
+      "governed_coverage": 0.5811965811965812,
+      "precision_when_emitted": 0.9784172661870504,
+      "supported_switch_sample_recall": 0.6111111111111112,
+      "exact_governed_boundaries": 11,
+      "governed_boundary_count": 24,
+      "exact_governed_boundary_recall": 0.4583333333333333,
+      "unsupported_emitted_labels": 6,
+      "unsupported_as_supported_emission_rate": 0.020761245674740483,
+      "mixed_unsupported_token_emission_rate": 0.02631578947368421,
+      "unsupported_boundary_side_emission_rate": 0.0,
+      "unsupported_monolingual_sample_activation_rate": 0.06666666666666667,
+      "decision": "rejected_unsafe"
+    },
+    "strict_consensus_5": {
+      "emitted_labels": 50,
+      "governed_coverage": 0.10683760683760683,
+      "precision_when_emitted": 1.0,
+      "supported_switch_sample_recall": 0.2222222222222222,
+      "exact_governed_boundaries": 0,
+      "governed_boundary_count": 24,
+      "exact_governed_boundary_recall": 0.0,
+      "unsupported_emitted_labels": 0,
+      "unsupported_as_supported_emission_rate": 0.0
+    },
+    "strict_5_plus_confirmed_directional_pairs_script_aligned": {
+      "emitted_labels": 72,
+      "governed_coverage": 0.15384615384615385,
+      "precision_when_emitted": 1.0,
+      "supported_switch_sample_recall": 0.5555555555555556,
+      "exact_governed_boundaries": 11,
+      "governed_boundary_count": 24,
+      "exact_governed_boundary_recall": 0.4583333333333333,
+      "unsupported_emitted_labels": 0,
+      "unsupported_as_supported_emission_rate": 0.0,
+      "mixed_unsupported_token_emission_rate": 0.0,
+      "unsupported_boundary_side_emission_rate": 0.0,
+      "unsupported_monolingual_sample_activation_rate": 0.0,
+      "decision": "best_safety_preserving_shadow_variant"
+    }
+  },
+  "decision": {
+    "production_candidate_emission_enabled": false,
+    "production_span_emission_enabled": false,
+    "release_eligible": false,
+    "reason": "The best safety-preserving variant improves governed boundary recall but emits only 72 of 468 governed tokens on a developer-authored corpus."
+  }
+}

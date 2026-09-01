@@ -87,15 +87,74 @@ Relay повинен бути технічно вимкнений у профі�
 | Код | Стан | Проблема | Необхідний результат |
 | --- | --- | --- | --- |
 | `REL-001` | закрито | після rate limit повертався чистий `Allow` | Analyzer більше не має внутрішнього пропуску; кожне прийняте повідомлення проходить повний pipeline |
-| `REL-002` | source реалізовано; приймання відкрито | Apple API не повертав негайний product decision | типізований локальний decision API реалізовано; потрібні artifact pin та фактичний iOS/UI gate |
+| `REL-002` | source та ізольований simulator contract прийняті; product gate відкритий | Apple API не повертав негайний product decision | типізований локальний decision API реалізовано і перевірено з локальним XCFramework; потрібні exact release-artifact pin та фактичний iOS/UI product gate |
 | `REL-003` | закрито | помилка заданого pattern pack приховано вмикала вбудовані правила | заданий шлях завантажується повністю або блокує init зі стабільною причиною; відсутній шлях явно обирає built-in pack |
 | `REL-004` | закрито | persisted state v2 відхилявся, а v3 wire втрачав контекстну рамку події | детермінована v2 -> v3 міграція, повний v3 context wire і byte-pinned v2/v3 golden fixtures |
 | `REL-005` | закрито | guardian feedback очищав неправильний обсяг пам'яті й кодував `Block` вигаданими діалогами | точна ізольована семантика account/sender/conversation та версійований стан блокування |
 | `REL-006` | закрито | порожні FFI IDs ставали спільним `unknown` | неправильні live та persisted sender/conversation IDs відхиляються до зміни стану |
 | `REL-007` | закрито | `aura_last_error` міг повертати помилку іншого потоку | суто thread-local канал із багатопотоковим regression test |
 | `REL-008` | закрито | `enabled=false` суперечив недозволеному вимкненню для minor | child/teen завжди мають активний захист і Kids domain; суперечливий init/update відхиляється до мутації |
-| `REL-009` | artifact готовий; iOS приймання відкрито | iOS ще не приймає manifest v5/descriptor v3 | чистий XCFramework перевірено; потрібні зовнішній exact pin і Swift contract tests |
+| `REL-009` | локальна інтеграція готова; release artifact відкритий | попередній чистий XCFramework не представляє поточне дерево | локальний `shippable=false` XCFramework прийнято Swift contract tests; потрібні нові clean `H`/`A`/`R`, independent reproducibility і зовнішній exact pin |
 | `REL-010` | відкрито | чотири людські signoff залишаються pending | реальні підписані рішення |
+| `REL-011` | compositional developer regression і повний Rust workspace зелені; internal blind та незалежний gates відкриті | незмінний developer-authored challenge тепер має 100% recall/specificity/pair accuracy, 95% primary-family accuracy, 0 risky `Allow`, 0 safe `Block`; це не blind evidence | виконати internal blind holdout, подвійний native-speaker review/adjudication, exact-device profiling і незалежно перевірений held-out conversation gate |
+
+Локальна перевірка 31 серпня 2026 року зв'язала Swift package саме з новим
+`artifacts/apple-local/AuraAgentFFI.xcframework`: iOS 26.2 Simulator виконав
+17/17 contract tests без failures. Локальний manifest прив'язаний до
+`4580e602639970fb936b46d43a6c366985ea3b39`, має
+`source_tree_dirty=true`, `shippable=false` та descriptor digest
+`4ZtnLt6upMG4CmDPMQR+mpoSJnezLgaNMtvMuQK44do=`
+(`e19b672edeaea4c1b80a60cf31047e9a9a122677b32e068d32dbccb902b8e1da`). Це закриває локальну
+сумісність source/binary/Swift, але не є дозволом оновити production pin і не
+закриває physical-device, UI product acceptance або clean release identity.
+
+Окремо frozen client-detector experiment є release-blocking safety evidence,
+навіть якщо legacy release suites зелені. Поточний rules fallback не можна
+просувати з shadow у product enforcement, доки не закрито `REL-011`; tuning на
+цьому самому v1 fixture не вважається незалежним доказом.
+
+Post-diagnostic structured-semantics regression від 31 серпня 2026 року
+отримала 24/24 expected-family positives, 0/24 safe false positives, 24/24
+counterfactual pairs і 64/64 metamorphic variants. Це закриває відомі
+механістичні дефекти v1, але не замінює незалежний held-out/native-speaker gate;
+деталі та межі доказу зафіксовані в
+`docs/client-detector-semantic-hardening-v1-results.md`.
+
+Для самостійного наступного етапу зафіксовано
+`experiments/client-detector-internal-holdout-v1/protocol.json`: 240 нових
+risky/safe пар, 480 діалогів, `en`/`uk`/`ru`, вісім threat families, два
+незалежні native-speaker reviewers та третій adjudicator для розбіжностей.
+Tooling розділяє authoring, blind packets, adjudication, SHA-256 freeze і
+одноразовий conversation-level probe; detector output до freeze заборонений.
+Згенерований authoring matrix має SHA-256
+`ba2cd21420b38674e9bacf35bad9d16a8c1af72a669f30ea899433233bcdb79a`.
+Це може закрити внутрішню confirmatory частину `REL-011`, але не перейменовується
+на зовнішню незалежну сертифікацію і не прибирає physical-device та human
+safety signoff.
+
+Окремий developer-authored challenge v1 від 1 вересня 2026 року вже заморожено
+до першого запуску: 240 пар / 480 діалогів, ті самі 3 мови та 8 families.
+Поточний `rules_fallback` отримав 38/240 expected-family recall, 206/240 safe
+specificity, лише 5/240 повністю правильних пар, 194 risky `Allow` і 6 safe
+`Block`. Це сильний діагностичний сигнал вузького phrase coverage та неповної
+quote/counter-stance семантики, але не blind release evidence. Exact hashes,
+slice metrics і межі висновку зафіксовані в
+`docs/client-detector-developer-challenge-v1-results.md`; v1 після результату
+не редагується.
+
+Post-diagnostic compositional rerun на тому самому незмінному v1 тепер проходить
+усі задані developer gates: 240/240 recall, 240/240 safe specificity, 240/240
+правильних пар, 228/240 primary-family accuracy, 0 risky `Allow`, 0 safe
+`Block`. Цей результат доводить виправлення відомого механізму, але через
+видимий команді corpus не закриває `REL-011`. Exact identity, content-free
+timings і відкриті gates зафіксовані в
+`docs/client-compositional-intent-context-v1-results.md`.
+
+Фінальний локальний Rust gate після compositional hardening пройдено для
+`--workspace --all-targets --all-features --locked`, включно з FFI state
+handoff, 102 realistic simulations і 13 `world_sim` tests; Clippy з
+`-D warnings` також чистий. Це не підмінює Swift/XCFramework, exact-device,
+artifact-pin або людські release signoff.
 
 ### Окремі блокувальники Relay
 
@@ -548,6 +607,17 @@ account. Kill switch не повинен переводити явний риз�
 криптографічно автентифікованих pilot signoff для exact `R` поточний кандидат
 зобов'язаний залишатися `no-go`; автоматизація не підміняє ці зовнішні рішення.
 
+Локальний `target=release` rehearsal у
+`artifacts/promotion-release-local-20260831-semantic` від 31 серпня 2026 року
+після semantic hardening підтвердив
+`release_report=pass`, `evidence_manifest=pass`, 5/5 FFI soak iterations,
+16 lifecycle worlds / 20 347 events / 0 findings, pilot regression/shadow і
+реальний Clang FFI header smoke. Його верхньорівневий статус коректно залишився
+`blocked`: відсутні
+зовнішні Ed25519 evidence-signing credentials. Цей технічний manifest не
+містить pilot gate, Apple release artifact, product acceptance або human
+signoffs і тому сам по собі не підтримує `GO`.
+
 Фіксований terminal bundle реалізовано в `ci/release_dossier.py`. Він збирає
 лише allowlisted evidence, decision та detached attestations, повторно
 перевіряє їх через `ci.release_decision` і публікує unsigned index
@@ -680,16 +750,24 @@ evidence є інфраструктурою докторського дослід
 6. ✅ `REL-008` minor configuration invariant — єдина fail-closed семантика
    для config, Analyzer, AgentRuntime і FFI.
 7. ◐ ADR і source-реалізація `REL-002` local product decision API завершені;
-   artifact pin та фактичний iOS/UI gate залишаються відкритими.
-8. ◐ Чистий `REL-009` XCFramework і незалежна artifact verification готові;
-   iOS integration harness та зовнішній exact pin залишаються відкритими.
-9. Повний RC gate і реальні `REL-010` signoffs.
-10. Controlled local-only KIDS pilot.
-11. Окремий Military допуск.
-12. `RLY-001`–`RLY-006` і лише потім Relay shadow/advisory rollout.
-13. `ML-001`–`ML-005` перед будь-якою заявою про model-backed profile.
+   ізольований simulator contract пройшов 17/17, але exact release pin та
+   фактичний iOS/UI product gate залишаються відкритими.
+8. ◐ `REL-009`: локальний п'яти-target XCFramework перевірено і прийнято
+   Swift harness, але він навмисно `shippable=false`; потрібні clean `H`/`A`/`R`,
+   independent reproducibility та зовнішній exact pin.
+9. ◐ Compositional regression для `REL-011`, повний Rust workspace і Clippy
+   проходять; developer challenge не є blind evidence. Далі виконати вже окремо
+   підготовлені internal-blind діалоги, подвійне native-speaker
+   review/adjudication і confirmatory run без tuning; після цього окремо
+   закрити independent held-out review та exact-device performance. Rules
+   fallback до цього залишається лише local engineering evidence.
+10. Повний RC gate і реальні `REL-010` signoffs.
+11. Controlled local-only KIDS pilot.
+12. Окремий Military допуск.
+13. `RLY-001`–`RLY-006` і лише потім Relay shadow/advisory rollout.
+14. `ML-001`–`ML-005` перед будь-якою заявою про model-backed profile.
 
-Нові фічі не додаються між пунктами 1–10, крім тих, що безпосередньо потрібні
+Нові фічі не додаються між пунктами 1–11, крім тих, що безпосередньо потрібні
 для закриття release blocker або створення доказу.
 
 ## 15. Definition of Done першого надійного випуску
@@ -705,6 +783,8 @@ evidence є інфраструктурою докторського дослід
 - v2 state має перевірену міграцію до v3;
 - guardian feedback не очищає чужу пам'ять;
 - Rust, protobuf, C ABI, Swift wrapper і UI scenario tests узгоджені;
+- structured quote/report/support/negation semantics проходить незалежний
+  held-out conversation gate з окремими supported-language slices;
 - artifact integrity відокремлена від product readiness;
 - Apple binary точно прикріплений до iOS release;
 - full workspace, lifecycle, FFI replay, client restart, performance, privacy,

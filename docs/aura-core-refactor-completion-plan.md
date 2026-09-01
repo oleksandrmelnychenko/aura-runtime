@@ -788,6 +788,18 @@ binary hashes і точний export allowlist пройшли незалежну
 довготривало збереженого terminal inbox state. Ця міграція не змішується з
 незавершеним BLE/offline worktree.
 
+Після наступних source-змін попередній clean artifact не можна переносити на
+новий кандидат. Локальна репетиція 31 серпня 2026 року зібрала всі п'ять target
+triples для поточного dirty tree та пройшла artifact verification; ізольований
+iOS 26.2 Simulator Swift harness пройшов 17/17 contract tests проти цього exact
+XCFramework. Його descriptor digest —
+`4ZtnLt6upMG4CmDPMQR+mpoSJnezLgaNMtvMuQK44do=`
+(`e19b672edeaea4c1b80a60cf31047e9a9a122677b32e068d32dbccb902b8e1da`), а
+manifest коректно має `source_tree_dirty=true`, `shippable=false`, тому evidence
+підтверджує інтеграційну сумісність, але не закриває clean `H`/`A`/`R`,
+production pin, independent reproducibility, physical-device або external
+product-acceptance gates.
+
 ### Завдання
 
 - Перевірити protobuf fixtures, C header і exported symbol allowlist.
