@@ -1,5 +1,5 @@
 {
-  "baseline_id": "local-982f1f1c000c",
+  "baseline_id": "rust-ci-77a6961c65a7173979293b0c460e017f5c21a832",
   "behavior": {
     "pilot_regression": {
       "by_case_class": [
@@ -9638,7 +9638,7 @@
       "warn_events": 93
     }
   },
-  "captured_at_utc": "2026-09-01T22:01:40.604156+00:00",
+  "captured_at_utc": "2026-09-01T23:09:27.721263+00:00",
   "contracts": {
     "apple_artifact": {
       "manifest_file": {
@@ -10118,10 +10118,10 @@
         "threat_events": 27,
         "tier": "10k",
         "timing": {
-          "elapsed_seconds": 25.41,
-          "max_rss_mb": 382.875,
+          "elapsed_seconds": 32.5,
+          "max_rss_mb": 219.0,
           "system_seconds": 0.09,
-          "user_seconds": 24.83
+          "user_seconds": 32.4
         },
         "total_events": 13647,
         "warn_events": 17
@@ -10130,7 +10130,7 @@
   },
   "schema_version": "aura.refactor_baseline.v1",
   "source": {
-    "revision": "982f1f1c000c956aa1a6ac7ebdb81c5015d0d861",
+    "revision": "77a6961c65a7173979293b0c460e017f5c21a832",
     "tree_dirty": false
   },
   "workspace": {
