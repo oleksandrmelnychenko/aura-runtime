@@ -1,4 +1,145 @@
 {
   "schema_version": "aura.refactor_diff_approvals.v1",
-  "approvals": []
+  "approvals": [
+    {
+      "path": "/behavior/release/drift_checks/0/gates/checks/0/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.047623023,
+      "candidate": 0.04763823,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/drift_checks/0/gates/checks/1/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.02621828,
+      "candidate": 0.027245194,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/drift_checks/0/metrics/brier_delta",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.047623023,
+      "candidate": 0.04763823,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/drift_checks/0/metrics/expected_calibration_error_delta",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.02621828,
+      "candidate": 0.027245194,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/drift_checks/2/gates/checks/0/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.038074948,
+      "candidate": 0.038090155,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/drift_checks/2/gates/checks/1/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.03636828,
+      "candidate": 0.037395194,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/drift_checks/2/metrics/brier_delta",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.038074948,
+      "candidate": 0.038090155,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/drift_checks/2/metrics/expected_calibration_error_delta",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.03636828,
+      "candidate": 0.037395194,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/evaluation/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.113175504,
+      "candidate": 0.11319071,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/evaluation/by_threat/4/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.16085349,
+      "candidate": 0.16089495,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/evaluation/by_threat/4/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.17242564,
+      "candidate": 0.16831653,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/evaluation/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.115643874,
+      "candidate": 0.11667079,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/evaluation_gates/checks/0/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.113175504,
+      "candidate": 0.11319071,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/evaluation_gates/checks/1/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.115643874,
+      "candidate": 0.11667079,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/slices/10/evaluation/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.088437155,
+      "candidate": 0.08847696,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/slices/10/evaluation/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.07541229,
+      "candidate": 0.07779351,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/slices/2/evaluation/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.13346691,
+      "candidate": 0.13351244,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/slices/2/evaluation/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.13266264,
+      "candidate": 0.13397317,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/slices/4/evaluation/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.04870874,
+      "candidate": 0.04885089,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    },
+    {
+      "path": "/behavior/release/suites/7/slices/4/evaluation/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.051453263,
+      "candidate": 0.055263706,
+      "reason": "Reviewed bounded calibration tradeoff for multilingual credential-coercion overlap: community recall improved to 3946/3946 with zero false positives or wrong-threat findings; manipulation ECE improved and every release gate remains passing."
+    }
+  ]
 }
