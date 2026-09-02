@@ -196,6 +196,104 @@
       "baseline": "5d78a22aca9023c93bd0e53bad5fba58be80cc7226d3d8a05742e049b0db0a92",
       "candidate": "f9c72f47bf1b33117424de9966428a8964eba3a4e3f89908c6ecd0efe8bab143",
       "reason": "Advances the domain-separated materialized source-tree commitment for reviewed source 8dc23ff. Rust release, lifecycle, performance, FFI and security gates passed, as did strict Apple verification and two same-environment deterministic rebuilds. Independent reproduction and compiler trust are not claimed."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.0749212,
+      "candidate": 0.07559265,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation/by_threat/2/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.10080715,
+      "candidate": 0.10203817,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation/by_threat/2/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.11811818,
+      "candidate": 0.11960706,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.10730414,
+      "candidate": 0.108116254,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation/pre_onset_detection_rate",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.5,
+      "candidate": 0.75,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation_gates/checks/0/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.0749212,
+      "candidate": 0.07559265,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation_gates/checks/1/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.10730414,
+      "candidate": 0.108116254,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation_gates/checks/10/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.11811818,
+      "candidate": 0.11960706,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation_gates/checks/4/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.5,
+      "candidate": 0.75,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/evaluation_gates/checks/9/actual",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.10080715,
+      "candidate": 0.10203817,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/slices/0/evaluation/brier_score",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.048171826,
+      "candidate": 0.0498763,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/slices/0/evaluation/expected_calibration_error",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.13036616,
+      "candidate": 0.091658466,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/slices/0/evaluation/pre_onset_detection_rate",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.5,
+      "candidate": 1.0,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
+    },
+    {
+      "path": "/behavior/release/suites/3/slices/1/evaluation/pre_onset_detection_rate",
+      "classification": "approved_safety_improvement",
+      "baseline": 0.0,
+      "candidate": 0.5,
+      "reason": "Phase 1 normalization hardening: typographic apostrophes (U+2019), Unicode default-ignorable characters and tripled letters are now folded before pattern matching, so noisy-slang evasions are detected at the onset step. The metric moves are earlier detection in canonical_noisy_slang and sub-0.002 calibration shifts; no threshold, rule score or product policy changed. Evidence: local rust workspace, release_report, pilot_regression, world lifecycle, community surface and microbenchmark gates green on commit 608f2a0."
     }
   ]
 }
