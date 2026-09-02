@@ -100,6 +100,44 @@ Non-goal:
 
 - no downstream module should infer its own substitute for these fields from raw text
 
+### 2a. Attribution
+
+Implemented in [`context/attribution.rs`](../crates/aura-core/src/context/attribution.rs).
+Context suppression (reports, lessons, refusals, protective negation, crisis
+support) is not a phrase-list decision over the whole message. Before the
+interpreter may suppress a signal or an event it separates the normalized
+message into:
+
+- **attributed spans**: outermost closed quotations, reported-speech clauses
+  introduced by an explicit cue (`he said`, `мені написали`, `quote:`,
+  `my friend texted`), and protective negations that quote the abusive claim
+  in order to deny it (`you are not worthless`);
+- **stance cues**: the author's own reporting, educational, refusing,
+  protective, counter-speech, supportive or crisis wording, detected on the
+  unattributed text only and blanked before rescanning;
+- **unattributed text**: everything else.
+
+Both fragments are rescanned by the same detectors through an
+`ActiveRiskProbe` (the routed pattern matchers plus the kids composition
+probe) and a small phrase floor. Suppression of a family is permitted only
+when:
+
+1. the family is not active in the unattributed text, and
+2. for pattern and composition signals, the same detector finds the family
+   inside the attributed content; for ML, legacy and memory signals a
+   substantive attributed span (at least three tokens) is enough.
+
+Support and crisis-support suppression use the intent-bearing subset of the
+author's activity (composition and phrase floor) so a supporter may repeat a
+victim's words, while a compliance directive over a quoted request
+(`... so do it now`) makes the quoted request the author's own.
+
+Fail-closed rules: unclosed or mismatched quotes, nested-ambiguous quotes and
+semantic capacity errors produce no spans and mark every family active. A
+bare quotation over live risk without a protective stance keeps the
+`Assert` speech act and the `DirectedAtUser` directionality. Cue-free
+messages skip the probe entirely and pay only for the phrase floor.
+
 ### 3. ConfirmedEvent
 
 In the current codebase this is `ContextEvent + EventContextFrame` in [`context/events.rs`](../crates/aura-core/src/context/events.rs).
@@ -187,6 +225,7 @@ These should remain true even as new threat families are added.
 5. Policy does not reinterpret the message; it consumes typed outcomes.
 6. `context_markers` are explainability, not the source of truth.
 7. Eval and release gates must exercise the same semantics that production policy uses.
+8. Suppression is attribution-gated: a family may only be treated as reported, taught, refused or supported when it is absent from the author's own text and present in an attributed span.
 
 ## Current Drift Hotspots
 

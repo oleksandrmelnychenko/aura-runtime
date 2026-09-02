@@ -12,11 +12,13 @@ impl Analyzer {
         }
 
         let mut raw_observations = Vec::with_capacity(12);
+        let mut probe_languages = Vec::new();
 
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
             let pattern_result = self.collect_pattern_layer(input, text, None);
             raw_observations.extend(pattern_result.observations);
+            probe_languages = pattern_result.languages;
         }
 
         // Run ML first so we can pass safety hints to the domain module.
@@ -41,13 +43,14 @@ impl Analyzer {
             .context_tracker
             .contact_profiler()
             .snapshot(&input.sender_id);
-        let confirmation = self.context_interpreter.interpret_observations(
+        let confirmation = self.context_interpreter.interpret_observations_with_probe(
             input,
             input.text.as_deref().map(truncate_text),
             None,
             None,
             raw_observations.clone(),
             contact_snapshot.as_ref(),
+            &self.risk_probe(&probe_languages),
         );
         let confirmed_domain_signals = context_confirmed_domain_signals(
             domain_output.as_ref(),
@@ -65,13 +68,14 @@ impl Analyzer {
         raw_observations.extend(build_domain_memory_observations(
             confirmed_domain_output.as_ref(),
         ));
-        let interpretation = self.context_interpreter.interpret_observations(
+        let interpretation = self.context_interpreter.interpret_observations_with_probe(
             input,
             input.text.as_deref().map(truncate_text),
             None,
             None,
             raw_observations,
             contact_snapshot.as_ref(),
+            &self.risk_probe(&probe_languages),
         );
         let interpretation_context = interpretation.analysis_context_summary();
         let interpretation_reason_codes = interpretation.diagnostic_reason_codes();
@@ -138,10 +142,12 @@ impl Analyzer {
             .as_ref()
             .map(|text| content_fingerprint_u64(text));
 
+        let mut probe_languages = Vec::new();
         if let Some(ref raw_text) = input.text {
             let text = truncate_text(raw_text);
             let pattern_result = self.collect_pattern_layer(input, text, content_hash);
             raw_observations.extend(pattern_result.observations);
+            probe_languages = pattern_result.languages;
         }
 
         if let Some(ref raw_text) = input.text {
@@ -202,13 +208,14 @@ impl Analyzer {
             .snapshot(&input.sender_id);
         let confirmation = {
             let timeline = self.context_tracker.timeline(&input.conversation_id);
-            self.context_interpreter.interpret_observations(
+            self.context_interpreter.interpret_observations_with_probe(
                 input,
                 input.text.as_deref().map(truncate_text),
                 Some(timestamp_ms),
                 timeline,
                 raw_observations.clone(),
                 contact_snapshot.as_ref(),
+                &self.risk_probe(&probe_languages),
             )
         };
         let confirmed_domain_signals = context_confirmed_domain_signals(
@@ -230,13 +237,14 @@ impl Analyzer {
         let interpretation_reason_codes;
         let interpretation = {
             let timeline = self.context_tracker.timeline(&input.conversation_id);
-            let interpretation = self.context_interpreter.interpret_observations(
+            let interpretation = self.context_interpreter.interpret_observations_with_probe(
                 input,
                 input.text.as_deref().map(truncate_text),
                 Some(timestamp_ms),
                 timeline,
                 raw_observations,
                 contact_snapshot.as_ref(),
+                &self.risk_probe(&probe_languages),
             );
             interpretation_reason_codes = interpretation.diagnostic_reason_codes();
             interpretation
@@ -282,14 +290,16 @@ impl Analyzer {
                 .contact_profiler()
                 .snapshot(&input.sender_id);
             let timeline = self.context_tracker.timeline(&input.conversation_id);
-            self.context_interpreter.apply_downstream_signal_semantics(
-                input,
-                truncate_text(raw_text),
-                timestamp_ms,
-                timeline,
-                contact_snapshot.as_ref(),
-                &mut signals,
-            );
+            self.context_interpreter
+                .apply_downstream_signal_semantics_with_probe(
+                    input,
+                    truncate_text(raw_text),
+                    timestamp_ms,
+                    timeline,
+                    contact_snapshot.as_ref(),
+                    &mut signals,
+                    &self.risk_probe(&probe_languages),
+                );
         }
 
         let mut escalation_match_found = false;

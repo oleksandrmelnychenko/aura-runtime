@@ -1,3 +1,4 @@
+pub(crate) mod attribution;
 pub mod coercion;
 pub mod contact;
 pub mod enricher;

@@ -189,6 +189,67 @@ pub(crate) fn is_ambiguous_self_harm_followup(text: &str) -> Result<bool, Semant
     Ok(farewell_finality || self_directed_finality)
 }
 
+/// Per-clause view of the composition layer for the context interpreter's
+/// attribution probe. It reuses the exact family predicates of [`detect`] but
+/// never emits candidates, so it cannot change memory or policy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClauseProbe {
+    pub clause_index: usize,
+    /// Composition families matched by this clause window, as threat labels.
+    pub families: Vec<&'static str>,
+    pub first_person: bool,
+    pub second_person: bool,
+    /// The clause orders the reader to carry out an anaphoric action
+    /// ("do it now", "send it"), which turns a quoted request into the
+    /// author's own request.
+    pub compliance_directive: bool,
+}
+
+/// Runs the composition predicates per clause window without emitting
+/// candidates.
+///
+/// # Errors
+///
+/// Returns the semantic preparation error when bounded preparation fails; the
+/// caller must fail closed.
+pub fn probe_clauses(text: &str) -> Result<Vec<ClauseProbe>, SemanticPrepareError> {
+    let (semantic, clauses) = prepare_concepts(text)?;
+    let mut probes = Vec::with_capacity(clauses.len());
+    for index in 0..clauses.len() {
+        let window = clause_window(&semantic, &clauses, index);
+        let clause = clauses[index];
+        // Actor flags follow the same window as the families so a first-person
+        // neighbour clause cannot claim a second-person clause's self-harm.
+        probes.push(ClauseProbe {
+            clause_index: index,
+            families: families_for(window).into_iter().flatten().collect(),
+            first_person: window.contains(FIRST_PERSON),
+            second_person: window.contains(SECOND_PERSON),
+            // Urgency or a request verb alone ("reporting it to the teacher
+            // now", "not agreeing with it") is not a directive; the clause must
+            // compel the action ("do it now").
+            compliance_directive: clause.contains(ANAPHORIC_ACTION)
+                && clause.contains(COMPEL)
+                && !clause.contains(NEGATION),
+        });
+    }
+    Ok(probes)
+}
+
+/// Families matched by a concept window, in the same order as [`emit_matches`].
+fn families_for(concepts: Concepts) -> [Option<&'static str>; 8] {
+    [
+        matches_self_harm(concepts).then_some("self_harm"),
+        matches_threat(concepts).then_some("threat"),
+        matches_grooming(concepts).then_some("grooming"),
+        matches_manipulation(concepts).then_some("manipulation"),
+        matches_bullying(concepts).then_some("bullying"),
+        matches_explicit(concepts).then_some("explicit"),
+        matches_nsfw(concepts).then_some("nsfw"),
+        matches_phishing(concepts).then_some("phishing"),
+    ]
+}
+
 fn contains_token_sequence(semantic: &PreparedSemanticText<'_>, expected: &[&str]) -> bool {
     if expected.is_empty() {
         return false;
@@ -1182,6 +1243,11 @@ const EXACT_TABLE: &[ConceptTerms] = &[
             "нападет",
             "пострадает",
             "пострадаешь",
+            "поб'ємо",
+            "поб'ють",
+            "побьём",
+            "побьем",
+            "побьют",
         ],
     ),
     (
@@ -1532,7 +1598,7 @@ const EXACT_TABLE: &[ConceptTerms] = &[
             "виноваты",
         ],
     ),
-    (CAUSAL, &["because", "бо", "из"]),
+    (CAUSAL, &["because", "бо", "из", "изза"]),
     (ANGER, &["mad"]),
     (
         ULTIMATUM,
@@ -1752,6 +1818,17 @@ const EXACT_TABLE: &[ConceptTerms] = &[
         ],
     ),
     (SELF_IMAGE, &["selfie", "selfies", "селфі", "селфи"]),
+    (
+        EXPOSURE_THREAT,
+        &[
+            "разошлю",
+            "розішлю",
+            "выложу",
+            "викладу",
+            "разослать",
+            "розіслати",
+        ],
+    ),
 ];
 
 const PREFIX_TABLE: &[ConceptTerms] = &[
@@ -2262,6 +2339,7 @@ const SEQUENCE_TABLE: &[ConceptSequences] = &[
             &["по", "твоей", "вине"],
             &["проблема", "в", "тебе"],
             &["проблема", "именно", "в", "тебе"],
+            &["изза", "тебя"],
         ],
     ),
     (ULTIMATUM, &[&["or", "else"]]),
@@ -2273,6 +2351,7 @@ const SEQUENCE_TABLE: &[ConceptSequences] = &[
             &["з", "тобою", "щось", "не", "так"],
             &["с", "тобой", "что-то", "не", "так"],
             &["с", "тобой", "что", "то", "не", "так"],
+            &["с", "тобой", "чтото", "не", "так"],
         ],
     ),
     (HUMILIATION, &[&["shut", "up"]]),
@@ -2394,6 +2473,18 @@ const SEQUENCE_TABLE: &[ConceptSequences] = &[
             &["show", "everyone"],
             &["покажу", "всім"],
             &["покажу", "всем"],
+            &["всім", "покажу"],
+            &["всем", "покажу"],
+            &["всім", "розкажу"],
+            &["всем", "расскажу"],
+            &["всім", "напишу"],
+            &["всем", "напишу"],
+            &["всім", "розішлю"],
+            &["всем", "разошлю"],
+            &["всім", "скину"],
+            &["всем", "скину"],
+            &["всім", "відправлю"],
+            &["всем", "отправлю"],
         ],
     ),
 ];
@@ -2439,8 +2530,8 @@ fn starts_with_folded(value: &str, prefix_lower: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        detect, is_ambiguous_self_harm_followup, EXACT_TABLE, MIN_PREFIX_STEM_CHARS, PREFIX_TABLE,
-        SAME_PREDICATE_CONFLICTS, SEQUENCE_TABLE, SHORT_STEM_ALLOWLIST,
+        detect, is_ambiguous_self_harm_followup, probe_clauses, EXACT_TABLE, MIN_PREFIX_STEM_CHARS,
+        PREFIX_TABLE, SAME_PREDICATE_CONFLICTS, SEQUENCE_TABLE, SHORT_STEM_ALLOWLIST,
     };
     use aura_domain::{DomainEventKind, QuoteContext};
 
@@ -3164,6 +3255,74 @@ mod tests {
                 "{text:?} -> {:?}",
                 families(text)
             );
+        }
+    }
+
+    #[test]
+    fn probe_clauses_report_families_actors_and_directives() {
+        for text in [
+            "and i'm reporting it to the teacher now",
+            "i am reporting this harmful message, not agreeing with it",
+        ] {
+            let report = probe_clauses(text).expect("probe");
+            assert!(
+                report.iter().all(|clause| !clause.compliance_directive),
+                "{text}: {report:?}"
+            );
+        }
+        let directive = probe_clauses("so just do it now").expect("probe");
+        assert!(
+            directive.iter().any(|clause| clause.compliance_directive),
+            "{directive:?}"
+        );
+        let report = probe_clauses("and i'm reporting it to the teacher now").expect("probe");
+        assert!(
+            report.iter().all(|clause| !clause.compliance_directive),
+            "{report:?}"
+        );
+        let probes = probe_clauses("Don't tell your parents about us. Do it now.").expect("probe");
+        assert!(
+            probes
+                .iter()
+                .any(|clause| clause.families.contains(&"grooming")),
+            "{probes:?}"
+        );
+        assert!(probes.iter().any(|clause| clause.second_person));
+        assert!(
+            probes.iter().any(|clause| clause.compliance_directive),
+            "{probes:?}"
+        );
+
+        let crisis = probe_clauses("я хочу померти").expect("probe");
+        assert!(crisis[0].families.contains(&"self_harm"));
+        assert!(crisis[0].first_person && !crisis[0].second_person);
+
+        for text in ["hi how are you", "did you finish the math homework?"] {
+            let probes = probe_clauses(text).expect("probe");
+            assert!(
+                probes.iter().all(|clause| clause.families.is_empty()),
+                "{text:?}"
+            );
+        }
+
+        // The probe never disagrees with detect on which families fire.
+        for text in [
+            "Тільки я тебе реально розумію, твої батьки тебе не розуміють і злякаються наших тем.",
+            "Завтра після школи тобі кінець, я тебе знайду.",
+            "dont be dramatic, just give me your account login for a minute",
+        ] {
+            let detected = families(text);
+            let probed: std::collections::BTreeSet<&str> = probe_clauses(text)
+                .expect("probe")
+                .into_iter()
+                .flat_map(|clause| clause.families)
+                .collect();
+            for family in &detected {
+                assert!(
+                    probed.contains(family.as_str()),
+                    "{text:?}: {detected:?} vs {probed:?}"
+                );
+            }
         }
     }
 

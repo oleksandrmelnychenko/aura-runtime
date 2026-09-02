@@ -545,3 +545,8 @@ mod tests {
         );
     }
 }
+
+/// Side-effect-free composition probe for the context interpreter.
+pub mod probe {
+    pub use crate::composition::{probe_clauses, ClauseProbe};
+}

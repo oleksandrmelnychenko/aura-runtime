@@ -301,6 +301,9 @@ pub enum QuoteDelimiter {
     Guillemets,
     /// Single angle quotation marks.
     SingleGuillemets,
+    /// Low-9 opener (`„`) closed by `“` or `”`, as in Ukrainian and German
+    /// typography.
+    LowDouble,
 }
 
 /// Structural closure state of a quote span.
@@ -652,6 +655,18 @@ fn scan_quotes(
             continue;
         };
         let delimiter_span = span(source, offset, offset + character.len_utf8())?;
+        // A low-9 quotation is closed by either curly double mark.
+        let mark = match mark {
+            QuoteMark::Open(QuoteDelimiter::CurlyDouble)
+            | QuoteMark::Close(QuoteDelimiter::CurlyDouble)
+                if stack
+                    .last()
+                    .is_some_and(|open| open.delimiter == QuoteDelimiter::LowDouble) =>
+            {
+                QuoteMark::Close(QuoteDelimiter::LowDouble)
+            }
+            other => other,
+        };
         match mark {
             QuoteMark::Open(delimiter) | QuoteMark::Symmetric(delimiter) => {
                 if matches!(mark, QuoteMark::Symmetric(_))
@@ -786,7 +801,8 @@ fn quote_mark(character: char, previous: Option<char>, next: Option<char>) -> Op
     match character {
         '"' => Some(QuoteMark::Symmetric(QuoteDelimiter::AsciiDouble)),
         '\'' if !in_word => Some(QuoteMark::Symmetric(QuoteDelimiter::AsciiSingle)),
-        '“' | '„' => Some(QuoteMark::Open(QuoteDelimiter::CurlyDouble)),
+        '“' => Some(QuoteMark::Open(QuoteDelimiter::CurlyDouble)),
+        '„' => Some(QuoteMark::Open(QuoteDelimiter::LowDouble)),
         '”' => Some(QuoteMark::Close(QuoteDelimiter::CurlyDouble)),
         '‘' if !in_word => Some(QuoteMark::Open(QuoteDelimiter::CurlySingle)),
         '’' if !in_word => Some(QuoteMark::Close(QuoteDelimiter::CurlySingle)),
@@ -1362,6 +1378,24 @@ mod tests {
         let debug = format!("{prepared:?}");
 
         assert!(!debug.contains("private message"));
+    }
+
+    #[test]
+    fn low_nine_quotation_closes_with_either_curly_mark() {
+        for text in ["„Надішли фото“ — це шантаж", "„Надішли фото” — це шантаж"]
+        {
+            let prepared = PreparedSemanticText::new(text).expect("prepare");
+            assert!(!prepared.has_ambiguous_quote_structure(), "{text}");
+            let quote = prepared.quotes().first().expect("one quote");
+            assert_eq!(quote.closure(), QuoteClosure::Closed);
+            assert_eq!(quote.delimiter(), QuoteDelimiter::LowDouble);
+            assert_eq!(
+                prepared.slice(quote.content_span()).unwrap(),
+                "Надішли фото"
+            );
+        }
+        let nested = PreparedSemanticText::new("“outer “inner” text”").expect("prepare");
+        assert!(!nested.has_ambiguous_quote_structure());
     }
 
     #[test]

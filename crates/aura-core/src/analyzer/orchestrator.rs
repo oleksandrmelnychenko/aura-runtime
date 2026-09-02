@@ -18,6 +18,7 @@ use crate::action::{
     augment_recommendation_for_inference, augment_recommendation_for_reason_codes,
 };
 use crate::config::AuraConfig;
+use crate::context::attribution::PatternRiskProbe;
 use crate::context::enricher::{EnricherConfig, SignalEnricher};
 use crate::context::events::EventKind;
 use crate::context::interpretation::ContextInterpreter;
@@ -58,6 +59,8 @@ struct EscalationTracker {
 
 struct PatternScanResult {
     observations: Vec<RawObservation>,
+    /// Pattern languages routed for this message, for the attribution probe.
+    languages: Vec<String>,
 }
 
 impl EscalationTracker {
@@ -443,7 +446,7 @@ impl Analyzer {
         let prepared_text = PreparedPatternText::new(text);
         let mut matches = Vec::new();
         let mut seen_rules: HashSet<String> = HashSet::new();
-        for language in languages {
+        for language in &languages {
             let matcher = self.pattern_matcher_for(Some(language.as_str()));
             for result in matcher.scan_prepared(&prepared_text) {
                 if seen_rules.insert(result.rule_id.clone()) {
@@ -544,7 +547,10 @@ impl Analyzer {
             observations.push(RawObservation::signal(signal));
         }
 
-        PatternScanResult { observations }
+        PatternScanResult {
+            observations,
+            languages,
+        }
     }
 
     /// Analyzes a single message for threats without updating conversation context.
@@ -1029,6 +1035,21 @@ impl Analyzer {
             PatternMatcher::from_database(pattern_db, &self.config.language),
         )]);
         self.url_checker = UrlChecker::from_database(pattern_db);
+    }
+
+    /// Attribution probe over the routed pattern matchers. Falls back to the
+    /// configured default language when nothing was routed.
+    fn risk_probe(&self, languages: &[String]) -> PatternRiskProbe<'_> {
+        let mut matchers: Vec<&PatternMatcher> = languages
+            .iter()
+            .filter_map(|language| self.pattern_matchers.get(language))
+            .collect();
+        if matchers.is_empty() {
+            if let Some(matcher) = self.pattern_matchers.get(&self.config.language) {
+                matchers.push(matcher);
+            }
+        }
+        PatternRiskProbe::new(matchers)
     }
 
     fn pattern_matcher_for(&mut self, message_language: Option<&str>) -> &PatternMatcher {

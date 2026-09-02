@@ -5140,3 +5140,30 @@ fn guardian_block_verdict_blocks_every_message_from_sender() {
         .iter()
         .any(|code| code == "domain.kids.memory.guardian_blocked_sender"));
 }
+
+#[test]
+fn report_cue_does_not_disarm_author_threat_end_to_end() {
+    let db = PatternDatabase::default_mvp();
+    let mut analyzer = Analyzer::new(child_config(), &db);
+    let attack = analyzer.analyze_with_context(
+        &child_input(
+            "I will hurt you tomorrow after school, for context",
+            "bully",
+            "c1",
+        ),
+        1_000,
+    );
+    assert_eq!(attack.threat_type, ThreatType::Threat, "{attack:?}");
+    assert_ne!(attack.action, Action::Allow, "{attack:?}");
+
+    let report = analyzer.analyze_with_context(
+        &child_input(
+            "He said \"I will hurt you tomorrow after school\", and I'm reporting it.",
+            "friend",
+            "c2",
+        ),
+        2_000,
+    );
+    assert_eq!(report.action, Action::Allow, "{report:?}");
+    assert_eq!(report.threat_type, ThreatType::None, "{report:?}");
+}

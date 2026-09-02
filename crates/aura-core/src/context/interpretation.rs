@@ -18,8 +18,12 @@ use crate::types::{
     ContextStance, ContextTrajectorySummary, ConversationType, DetectionLayer, DetectionSignal,
     MessageInput, RelationshipTrustSource, SenderRelationship, ThreatType,
 };
-use aura_domain::{PreparedSemanticText, QuoteClosure, QuoteContext};
-use aura_patterns::TextNormalizer;
+use aura_patterns::{PatternDatabase, PatternMatcher, TextNormalizer};
+
+use super::attribution::{
+    attribution_permits, signal_origin, targeted_families, ActiveRiskProbe, AttributionAnalysis,
+    FamilySet, PatternRiskProbe, SignalOrigin,
+};
 
 /// Interpreter-approved event that may be persisted by the conversation tracker.
 ///
@@ -139,28 +143,47 @@ pub(crate) struct ContextSignalAdjustments {
 struct MessageSemantics {
     lower: String,
     cue_lower: String,
+    attribution: AttributionAnalysis,
+    /// The author reports, teaches, refuses or denies attributed risk.
     protective_report: bool,
+    /// The author responds supportively to someone else's crisis.
     crisis_support: bool,
+    /// The author's own unattributed text carries self-harm risk.
     author_self_distress: bool,
 }
 
 impl MessageSemantics {
-    fn classify(text: &str) -> Self {
+    fn classify(text: &str, probe: &dyn ActiveRiskProbe) -> Self {
         let lower = text.to_lowercase();
         let cue_lower = normalize_context_cues(&lower);
-        let protective_report = looks_like_protective_report_context(&cue_lower);
-        let crisis_support = looks_like_crisis_support_response(&cue_lower)
-            && !looks_like_active_author_risk(&cue_lower);
-        let (outside_quotes, _, _) = text_outside_closed_quotes(&cue_lower);
-        let author_self_distress = is_self_referential_distress(&outside_quotes);
+        let attribution = AttributionAnalysis::analyze(&cue_lower, probe);
+        let stance = attribution.stance;
+        let protective_report = stance.is_protective() && attribution.has_substantive_attribution();
+        let crisis_support = stance.support && stance.crisis;
+        let author_self_distress = attribution.author_self_distress;
         Self {
             lower,
             cue_lower,
+            attribution,
             protective_report,
             crisis_support,
             author_self_distress,
         }
     }
+}
+
+/// Pattern matchers of the bundled MVP database, used by callers that do not
+/// own a routed matcher set (tests, wrappers).
+pub(super) fn default_risk_probe() -> PatternRiskProbe<'static> {
+    static MATCHERS: std::sync::OnceLock<Vec<PatternMatcher>> = std::sync::OnceLock::new();
+    let matchers = MATCHERS.get_or_init(|| {
+        let db = PatternDatabase::default_mvp();
+        ["en", "uk", "ru"]
+            .into_iter()
+            .map(|language| PatternMatcher::from_database(&db, language))
+            .collect()
+    });
+    PatternRiskProbe::new(matchers.iter().collect())
 }
 
 impl ContextSignalAdjustments {
@@ -286,7 +309,31 @@ impl ContextInterpreter {
         })
     }
 
+    /// Interprets observations with the bundled MVP pattern matchers as the
+    /// attribution probe. Analyzer paths must use
+    /// [`Self::interpret_observations_with_probe`] with their routed matchers.
     pub fn interpret_observations(
+        &self,
+        input: &MessageInput,
+        text: Option<&str>,
+        timestamp_ms: Option<u64>,
+        timeline: Option<&ConversationTimeline>,
+        observations: Vec<RawObservation>,
+        snapshot: Option<&ContactSnapshot>,
+    ) -> ContextInterpretation {
+        self.interpret_observations_with_probe(
+            input,
+            text,
+            timestamp_ms,
+            timeline,
+            observations,
+            snapshot,
+            &default_risk_probe(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn interpret_observations_with_probe(
         &self,
         input: &MessageInput,
         text: Option<&str>,
@@ -294,6 +341,7 @@ impl ContextInterpreter {
         timeline: Option<&ConversationTimeline>,
         mut observations: Vec<RawObservation>,
         snapshot: Option<&ContactSnapshot>,
+        probe: &dyn ActiveRiskProbe,
     ) -> ContextInterpretation {
         if let (Some(text), Some(timestamp_ms)) = (text, timestamp_ms) {
             apply_contextual_observation_filters(
@@ -315,9 +363,11 @@ impl ContextInterpreter {
             signals,
             event_hints,
             snapshot,
+            probe,
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn apply_downstream_signal_semantics(
         &self,
         input: &MessageInput,
@@ -327,6 +377,28 @@ impl ContextInterpreter {
         snapshot: Option<&ContactSnapshot>,
         signals: &mut Vec<DetectionSignal>,
     ) {
+        self.apply_downstream_signal_semantics_with_probe(
+            input,
+            text,
+            timestamp_ms,
+            timeline,
+            snapshot,
+            signals,
+            &default_risk_probe(),
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn apply_downstream_signal_semantics_with_probe(
+        &self,
+        input: &MessageInput,
+        text: &str,
+        timestamp_ms: u64,
+        timeline: Option<&ConversationTimeline>,
+        snapshot: Option<&ContactSnapshot>,
+        signals: &mut Vec<DetectionSignal>,
+        probe: &dyn ActiveRiskProbe,
+    ) {
         apply_downstream_context_signal_filters(
             input,
             text,
@@ -335,6 +407,7 @@ impl ContextInterpreter {
             snapshot,
             self.rules.interpretation_rules(),
             signals,
+            probe,
         );
     }
 
@@ -357,8 +430,9 @@ impl ContextInterpreter {
         signals: Vec<DetectionSignal>,
         event_hints: Vec<RawEventHint>,
         snapshot: Option<&ContactSnapshot>,
+        probe: &dyn ActiveRiskProbe,
     ) -> ContextInterpretation {
-        let semantics = text.map(MessageSemantics::classify);
+        let semantics = text.map(|text| MessageSemantics::classify(text, probe));
         let frame = self.derive_frame(
             input,
             semantics.as_ref(),
@@ -432,10 +506,28 @@ impl ContextInterpreter {
     ) -> ThreatContextFrame {
         let lower = semantics.map_or("", |value| value.lower.as_str());
         let cue_lower = semantics.map_or("", |value| value.cue_lower.as_str());
-        let is_support = looks_like_support_context(cue_lower);
+        let attribution = semantics.map(|value| &value.attribution);
+        let active = attribution.map_or(FamilySet::default(), |value| value.active_unattributed);
+        let attribution_ok =
+            attribution.is_some_and(AttributionAnalysis::has_substantive_attribution);
+        let has_risk = !signals.is_empty()
+            || event_hints
+                .iter()
+                .any(|hint| is_harmful_event_kind(&hint.kind));
+        // A quote or report frame is only granted when nothing risky is left
+        // in the author's own text and the risk is attributed under a
+        // protective stance; a bare quotation over live risk stays an
+        // assertion.
+        let protective_stance =
+            semantics.is_some_and(|value| value.attribution.stance.is_protective());
+        let frame_attributed =
+            active.is_empty() && ((attribution_ok && protective_stance) || !has_risk);
+        let is_support =
+            looks_like_support_context(cue_lower) && !active.intersects(targeted_families());
         let is_counter = looks_like_counter_context(cue_lower);
-        let is_quote = looks_like_quote_context(cue_lower);
-        let is_report = looks_like_report_context(cue_lower) || looks_like_opsec_warning(cue_lower);
+        let is_quote = looks_like_quote_context(cue_lower) && frame_attributed;
+        let is_report = (looks_like_report_context(cue_lower) && frame_attributed)
+            || looks_like_opsec_warning(cue_lower);
         let is_solicit = looks_like_distribution_or_coordination(cue_lower);
         let speech_act = if is_support {
             SpeechAct::Support
@@ -463,9 +555,16 @@ impl ContextInterpreter {
             Stance::Ambiguous
         };
 
-        let directionality = if is_self_referential_distress(cue_lower) {
+        let author_self_distress = semantics.is_some_and(|value| value.author_self_distress)
+            || is_self_referential_distress(cue_lower);
+        let directionality = if author_self_distress {
             Directionality::SelfReferential
-        } else if looks_like_third_party_reference(cue_lower) || is_quote || is_report {
+        } else if is_quote || is_report {
+            Directionality::ThirdParty
+        } else if !active.is_empty() && looks_like_directed_at_user(cue_lower) {
+            // A pronoun mention cannot hide a threat the author is making.
+            Directionality::DirectedAtUser
+        } else if looks_like_third_party_reference(cue_lower) {
             Directionality::ThirdParty
         } else if looks_like_directed_at_user(cue_lower) {
             Directionality::DirectedAtUser
@@ -534,7 +633,7 @@ impl ContextInterpreter {
         let lower = semantics.lower.as_str();
         let protective_report = semantics.protective_report;
         let crisis_support = semantics.crisis_support;
-        let author_self_distress = semantics.author_self_distress;
+        let attribution = &semantics.attribution;
         if signal.reason_code == "ml.intent.meeting"
             && is_verified_peer_school_meeting(input, frame, lower)
         {
@@ -576,8 +675,8 @@ impl ContextInterpreter {
         }
 
         if matches!(frame.speech_act, SpeechAct::Support)
-            && !author_self_distress
             && signal.threat_type == ThreatType::SelfHarm
+            && !attribution.active_semantic.contains(ThreatType::SelfHarm)
         {
             return true;
         }
@@ -603,13 +702,12 @@ impl ContextInterpreter {
 
         if protective_report
             && is_protective_report_suppressible_threat(signal.threat_type)
-            && signal.threat_type != ThreatType::SelfHarm
             && !looks_like_direct_military_social_eng_pretext(signal, lower)
-        {
-            return true;
-        }
-
-        if protective_report && signal.threat_type == ThreatType::SelfHarm && !author_self_distress
+            && attribution_permits(
+                attribution,
+                signal.threat_type,
+                signal_origin(&signal.reason_code),
+            )
         {
             return true;
         }
@@ -619,6 +717,7 @@ impl ContextInterpreter {
                 signal.threat_type,
                 ThreatType::SelfHarm | ThreatType::Manipulation
             )
+            && !attribution.active_semantic.contains(signal.threat_type)
         {
             return true;
         }
@@ -734,7 +833,8 @@ impl ContextInterpreter {
         let lower = semantics.lower.as_str();
         let protective_report = semantics.protective_report;
         let crisis_support = semantics.crisis_support;
-        let author_self_distress = semantics.author_self_distress;
+        let attribution = &semantics.attribution;
+        let family = event_kind_family(kind);
         if *kind == EventKind::MeetingRequest
             && is_verified_peer_school_meeting(input, frame, lower)
         {
@@ -773,11 +873,11 @@ impl ContextInterpreter {
         }
 
         if matches!(frame.speech_act, SpeechAct::Support)
-            && !author_self_distress
             && matches!(
                 kind,
                 EventKind::SuicidalIdeation | EventKind::Hopelessness | EventKind::FarewellMessage
             )
+            && !attribution.active_semantic.contains(ThreatType::SelfHarm)
         {
             return true;
         }
@@ -795,63 +895,14 @@ impl ContextInterpreter {
             return true;
         }
 
-        if protective_report
-            && matches!(
-                kind,
-                EventKind::SecrecyRequest
-                    | EventKind::PlatformSwitch
-                    | EventKind::PersonalInfoRequest
-                    | EventKind::PhotoRequest
-                    | EventKind::VideoCallRequest
-                    | EventKind::FinancialGrooming
-                    | EventKind::MeetingRequest
-                    | EventKind::CasualMeetingRequest
-                    | EventKind::SexualContent
-                    | EventKind::AgeInappropriate
-                    | EventKind::LocationRequest
-                    | EventKind::MoneyOffer
-                    | EventKind::GuiltTripping
-                    | EventKind::Gaslighting
-                    | EventKind::EmotionalBlackmail
-                    | EventKind::PeerPressure
-                    | EventKind::Darvo
-                    | EventKind::Devaluation
-                    | EventKind::SuicideCoercion
-                    | EventKind::FalseConsensus
-                    | EventKind::DebtCreation
-                    | EventKind::ReputationThreat
-                    | EventKind::IdentityErosion
-                    | EventKind::NetworkPoisoning
-                    | EventKind::FakeVulnerability
-                    | EventKind::Insult
-                    | EventKind::Denigration
-                    | EventKind::Mockery
-                    | EventKind::HarmEncouragement
-                    | EventKind::PhysicalThreat
-                    | EventKind::HateSpeech
-                    | EventKind::PropagandaNarrative
-                    | EventKind::SuspiciousSource
-                    | EventKind::MilitaryDisinfo
-                    | EventKind::PsyopsPattern
-                    | EventKind::IntelGathering
-                    | EventKind::MilitaryPhishing
-                    | EventKind::CoordinateMention
-                    | EventKind::PositionLeak
-                    | EventKind::UnitInfoLeak
-                    | EventKind::EquipmentLeak
-            )
-        {
-            return true;
-        }
-
-        if protective_report
-            && !author_self_distress
-            && matches!(
-                kind,
-                EventKind::SuicidalIdeation | EventKind::Hopelessness | EventKind::FarewellMessage
-            )
-        {
-            return true;
+        if protective_report {
+            if let Some(family) = family {
+                if is_protective_report_suppressible_threat(family)
+                    && attribution_permits(attribution, family, SignalOrigin::Other)
+                {
+                    return true;
+                }
+            }
         }
 
         if crisis_support
@@ -865,12 +916,66 @@ impl ContextInterpreter {
                     | EventKind::EmotionalBlackmail
                     | EventKind::SuicideCoercion
             )
+            && family.is_some_and(|family| !attribution.active_semantic.contains(family))
         {
             return true;
         }
 
         false
     }
+}
+
+/// Threat family an event kind belongs to for attribution decisions.
+fn event_kind_family(kind: &EventKind) -> Option<ThreatType> {
+    Some(match kind {
+        EventKind::Flattery
+        | EventKind::GiftOffer
+        | EventKind::SecrecyRequest
+        | EventKind::PlatformSwitch
+        | EventKind::PersonalInfoRequest
+        | EventKind::PhotoRequest
+        | EventKind::VideoCallRequest
+        | EventKind::FinancialGrooming
+        | EventKind::MeetingRequest
+        | EventKind::CasualMeetingRequest
+        | EventKind::AgeInappropriate
+        | EventKind::LocationRequest
+        | EventKind::MoneyOffer => ThreatType::Grooming,
+        EventKind::SexualContent => ThreatType::Explicit,
+        EventKind::GuiltTripping
+        | EventKind::Gaslighting
+        | EventKind::EmotionalBlackmail
+        | EventKind::PeerPressure
+        | EventKind::LoveBombing
+        | EventKind::Darvo
+        | EventKind::Devaluation
+        | EventKind::SuicideCoercion
+        | EventKind::FalseConsensus
+        | EventKind::DebtCreation
+        | EventKind::ReputationThreat
+        | EventKind::IdentityErosion
+        | EventKind::NetworkPoisoning
+        | EventKind::FakeVulnerability => ThreatType::Manipulation,
+        EventKind::Insult
+        | EventKind::Denigration
+        | EventKind::Mockery
+        | EventKind::HarmEncouragement
+        | EventKind::Exclusion
+        | EventKind::RumorSpreading => ThreatType::Bullying,
+        EventKind::PhysicalThreat => ThreatType::Threat,
+        EventKind::SuicidalIdeation | EventKind::Hopelessness | EventKind::FarewellMessage => {
+            ThreatType::SelfHarm
+        }
+        EventKind::HateSpeech => ThreatType::HateSpeech,
+        EventKind::PropagandaNarrative
+        | EventKind::SuspiciousSource
+        | EventKind::MilitaryDisinfo => ThreatType::Propaganda,
+        EventKind::PsyopsPattern => ThreatType::Psyops,
+        EventKind::IntelGathering | EventKind::MilitaryPhishing => ThreatType::MilitarySocialEng,
+        EventKind::CoordinateMention | EventKind::PositionLeak => ThreatType::CoordinateLeak,
+        EventKind::UnitInfoLeak | EventKind::EquipmentLeak => ThreatType::OpsecViolation,
+        _ => return None,
+    })
 }
 
 impl ContextInterpretation {
@@ -1122,6 +1227,7 @@ fn policy_condition_matches(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_downstream_context_signal_filters(
     input: &MessageInput,
     text: &str,
@@ -1130,17 +1236,28 @@ fn apply_downstream_context_signal_filters(
     snapshot: Option<&ContactSnapshot>,
     rules: &[InterpretationRule],
     signals: &mut Vec<DetectionSignal>,
+    probe: &dyn ActiveRiskProbe,
 ) {
-    let semantics = MessageSemantics::classify(text);
+    let semantics = MessageSemantics::classify(text, probe);
     if semantics.protective_report {
-        signals.retain(|signal| !is_protective_report_suppressible_threat(signal.threat_type));
+        signals.retain(|signal| {
+            !(is_protective_report_suppressible_threat(signal.threat_type)
+                && attribution_permits(
+                    &semantics.attribution,
+                    signal.threat_type,
+                    signal_origin(&signal.reason_code),
+                ))
+        });
     }
     if semantics.crisis_support {
         signals.retain(|signal| {
             !matches!(
                 signal.threat_type,
                 ThreatType::SelfHarm | ThreatType::Manipulation
-            )
+            ) || semantics
+                .attribution
+                .active_semantic
+                .contains(signal.threat_type)
         });
     }
 
@@ -1205,7 +1322,7 @@ fn is_protective_report_suppressible_threat(threat_type: ThreatType) -> bool {
     )
 }
 
-fn looks_like_crisis_support_response(lower: &str) -> bool {
+pub(super) fn looks_like_crisis_support_response(lower: &str) -> bool {
     looks_like_support_context(lower)
         && contains_any(
             lower,
@@ -2080,11 +2197,11 @@ fn confidence_from_score(score: f32) -> Confidence {
     }
 }
 
-fn contains_any(text: &str, needles: &[&str]) -> bool {
+pub(super) fn contains_any(text: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| text.contains(needle))
 }
 
-fn contains_any_token(text: &str, tokens: &[&str]) -> bool {
+pub(super) fn contains_any_token(text: &str, tokens: &[&str]) -> bool {
     tokens.iter().any(|token| contains_token(text, token))
 }
 
@@ -2109,7 +2226,7 @@ fn is_token_boundary(c: char) -> bool {
     !c.is_alphanumeric() && c != '_'
 }
 
-fn normalize_context_cues(lower: &str) -> String {
+pub(super) fn normalize_context_cues(lower: &str) -> String {
     let chars: Vec<char> = lower.chars().map(fold_fullwidth_context_char).collect();
     let mut result = String::with_capacity(lower.len());
     let mut last_was_space = false;
@@ -2272,7 +2389,7 @@ fn looks_like_quote_context(lower: &str) -> bool {
     ) || contains_any(lower, &["\"", "«", "»", "“", "”"])
 }
 
-fn looks_like_report_context(lower: &str) -> bool {
+pub(super) fn looks_like_report_context(lower: &str) -> bool {
     contains_any(
         lower,
         &[
@@ -2292,6 +2409,9 @@ fn looks_like_report_context(lower: &str) -> bool {
             "recorded the report",
             "called your guardian",
             "saved the evidence",
+            "report it",
+            "report this",
+            "will report",
             "court read",
             "defendant's text",
             "defendants text",
@@ -2317,227 +2437,7 @@ fn looks_like_report_context(lower: &str) -> bool {
     )
 }
 
-fn looks_like_protective_report_context(lower: &str) -> bool {
-    let (outside, has_quoted_span, has_unclosed_quote) = text_outside_closed_quotes(lower);
-    if has_unclosed_quote {
-        return false;
-    }
-    let structured_protective_quote = looks_like_structured_protective_quote_context(lower);
-    let protective_stance = looks_like_report_context(lower)
-        || looks_like_educational_safety_context(lower)
-        || looks_like_protective_action_context(lower)
-        || looks_like_protective_negation_context(lower)
-        || structured_protective_quote;
-    let attributed_risk = has_quoted_span
-        || looks_like_quote_context(lower)
-        || looks_like_report_context(lower)
-        || looks_like_educational_safety_context(lower)
-        || structured_protective_quote;
-
-    protective_stance
-        && (attributed_risk || looks_like_protective_negation_context(lower))
-        && !looks_like_active_author_risk(&outside)
-}
-
-fn looks_like_structured_protective_quote_context(text: &str) -> bool {
-    let Ok(semantic) = PreparedSemanticText::new(text) else {
-        return false;
-    };
-    if semantic.has_ambiguous_quote_structure()
-        || !semantic
-            .quotes()
-            .iter()
-            .any(|quote| quote.closure() == QuoteClosure::Closed)
-    {
-        return false;
-    }
-
-    let mut report = false;
-    let mut opposition = false;
-    let mut protection = false;
-    let mut education = false;
-    for token in semantic.tokens() {
-        if !matches!(token.quote_context(), QuoteContext::Outside) {
-            continue;
-        }
-        let Ok(lexeme) = semantic.slice(token.span()) else {
-            return false;
-        };
-        report |= starts_with_any(
-            lexeme,
-            &[
-                "report",
-                "message",
-                "request",
-                "copied",
-                "sentence",
-                "quote",
-                "quotation",
-                "evidence",
-                "document",
-                "received",
-                "sharing",
-                "instruction",
-                "повідом",
-                "вимог",
-                "скопію",
-                "речен",
-                "цитат",
-                "доказ",
-                "скарг",
-                "документ",
-                "отрим",
-                "переда",
-                "вказів",
-                "сообщ",
-                "требован",
-                "скопир",
-                "предлож",
-                "цитат",
-                "доказ",
-                "жалоб",
-                "документ",
-                "получ",
-                "переда",
-                "указан",
-            ],
-        );
-        opposition |= starts_with_any(
-            lexeme,
-            &[
-                "not",
-                "never",
-                "refus",
-                "reject",
-                "unaccept",
-                "unsafe",
-                "harmful",
-                "dangerous",
-                "cannot",
-                "intent",
-                "не",
-                "ніколи",
-                "відмов",
-                "відкид",
-                "неприйнят",
-                "небезпеч",
-                "шкідлив",
-                "намір",
-                "никогда",
-                "отказ",
-                "отверг",
-                "неприемл",
-                "опасн",
-                "вредн",
-                "нельзя",
-                "намер",
-            ],
-        );
-        protection |= starts_with_any(
-            lexeme,
-            &[
-                "help",
-                "adult",
-                "support",
-                "protect",
-                "safety",
-                "warning",
-                "trusted",
-                "safe",
-                "допомог",
-                "доросл",
-                "підтрим",
-                "захист",
-                "безпек",
-                "озна",
-                "довір",
-                "помощ",
-                "взросл",
-                "поддерж",
-                "защит",
-                "безопас",
-                "призна",
-                "довер",
-            ],
-        );
-        education |= starts_with_any(
-            lexeme,
-            &[
-                "example",
-                "lesson",
-                "language",
-                "warning",
-                "приклад",
-                "урок",
-                "слов",
-                "озна",
-                "пример",
-                "урок",
-                "слов",
-                "призна",
-            ],
-        );
-    }
-
-    (report && (opposition || protection))
-        || (opposition && protection)
-        || (education && (opposition || protection))
-}
-
-fn starts_with_any(value: &str, prefixes: &[&str]) -> bool {
-    prefixes.iter().any(|prefix| value.starts_with(prefix))
-}
-
-fn text_outside_closed_quotes(text: &str) -> (String, bool, bool) {
-    let chars: Vec<char> = text.chars().collect();
-    let mut masked = vec![false; chars.len()];
-    let mut open_quote: Option<(usize, char)> = None;
-    let mut has_quoted_span = false;
-
-    for (index, current) in chars.iter().copied().enumerate() {
-        if let Some((start, closer)) = open_quote {
-            if current == closer && (current != '\'' || is_standalone_single_quote(&chars, index)) {
-                masked[start..=index].fill(true);
-                open_quote = None;
-                has_quoted_span = true;
-            }
-            continue;
-        }
-
-        let closer = match current {
-            '"' => Some('"'),
-            '«' => Some('»'),
-            '“' => Some('”'),
-            '„' => Some('“'),
-            '\'' if is_standalone_single_quote(&chars, index) => Some('\''),
-            _ => None,
-        };
-        if let Some(closer) = closer {
-            open_quote = Some((index, closer));
-        }
-    }
-
-    let has_unclosed_quote = open_quote.is_some();
-    if !has_quoted_span {
-        return (text.to_string(), false, has_unclosed_quote);
-    }
-
-    let outside = chars
-        .into_iter()
-        .zip(masked)
-        .map(|(character, is_masked)| if is_masked { ' ' } else { character })
-        .collect();
-    (outside, true, has_unclosed_quote)
-}
-
-fn is_standalone_single_quote(chars: &[char], index: usize) -> bool {
-    let before = index.checked_sub(1).and_then(|value| chars.get(value));
-    let after = chars.get(index + 1);
-    before.is_none_or(|character| !character.is_alphanumeric())
-        || after.is_none_or(|character| !character.is_alphanumeric())
-}
-
-fn looks_like_educational_safety_context(lower: &str) -> bool {
+pub(super) fn looks_like_educational_safety_context(lower: &str) -> bool {
     contains_any(
         lower,
         &[
@@ -2546,6 +2446,9 @@ fn looks_like_educational_safety_context(lower: &str) -> bool {
             "requires immediate support",
             "warning sign",
             "protective guidance",
+            "dangerous example",
+            "небезпечний приклад",
+            "опасный пример",
             "на уроці пояснили",
             "урок безпеки",
             "потребують негайної підтримки",
@@ -2558,7 +2461,7 @@ fn looks_like_educational_safety_context(lower: &str) -> bool {
     )
 }
 
-fn looks_like_protective_action_context(lower: &str) -> bool {
+pub(super) fn looks_like_protective_action_context(lower: &str) -> bool {
     contains_any(
         lower,
         &[
@@ -2574,6 +2477,22 @@ fn looks_like_protective_action_context(lower: &str) -> bool {
             "not responsible for their threats",
             "teacher recorded",
             "contact crisis support",
+            "asking an adult for help",
+            "asking for help",
+            "ask an adult for help",
+            "ask a trusted adult",
+            "show a trusted adult",
+            "show it to a trusted adult",
+            "звертаємося по допомогу",
+            "звертаюся по допомогу",
+            "звернутися по допомогу",
+            "обращаемся за помощью",
+            "обращаюсь за помощью",
+            "обратиться за помощью",
+            "показати дорослому",
+            "показать взрослому",
+            "звернуся по допомогу",
+            "обращусь за помощью",
             "відмовся та звернися",
             "звернися до дорослого",
             "розкажи їм правду",
@@ -2597,110 +2516,6 @@ fn looks_like_protective_action_context(lower: &str) -> bool {
             "найдем помощь",
         ],
     )
-}
-
-fn looks_like_protective_negation_context(lower: &str) -> bool {
-    contains_any(
-        lower,
-        &[
-            "you are not imagining things",
-            "it is not all in your head",
-            "you are not worthless",
-            "i will not tell your parents i am your classmate",
-            "ти не вигадуєш",
-            "це не лише в твоїй голові",
-            "ти потрібен нам",
-            "ти потрібна нам",
-            "не кажи батькам, що я однокласник: розкажи їм правду",
-            "ты не выдумываешь",
-            "это не только в твоей голове",
-            "ты нужен нам",
-            "ты нужна нам",
-            "не говори родителям, что незнакомец одноклассник",
-        ],
-    )
-}
-
-fn looks_like_active_author_risk(outside: &str) -> bool {
-    let truth_correction = contains_any(
-        outside,
-        &[
-            "know who i really am",
-            "tell them the truth",
-            "розкажи їм правду",
-            "правду про незнайомця",
-            "расскажи им правду",
-            "правду о незнакомце",
-        ],
-    );
-    let active_secrecy = contains_any(
-        outside,
-        &[
-            "don't tell your parents",
-            "dont tell your parents",
-            "keep this between us",
-            "нікому не кажи",
-            "не розповідай батькам",
-            "не кажи батькам",
-            "никому не говори",
-            "не говори родителям",
-        ],
-    ) && !truth_correction;
-    let active_media_request = contains_any(
-        outside,
-        &[
-            "send me a photo",
-            "send me your photo",
-            "send your photo",
-            "надішли мені фото",
-            "надішли фото",
-            "пришли мне фото",
-            "пришли фото",
-        ],
-    );
-    let active_deception = contains_any(
-        outside,
-        &[
-            "tell your parents i am your classmate",
-            "кажи, що я однокласник",
-            "скажи родителям, что я твой одноклассник",
-        ],
-    ) && !truth_correction;
-    let active_blackmail = contains_any(
-        outside,
-        &[
-            "i'll share your private photo",
-            "ill share your private photo",
-            "i will share your private photo",
-            "я всім покажу твоє приватне фото",
-            "я разошлю всем твоё личное фото",
-            "я разошлю всем твое личное фото",
-        ],
-    );
-    let active_abuse = contains_any(
-        outside,
-        &[
-            "you're worthless",
-            "you are worthless",
-            "everyone hates you",
-            "we will beat you",
-            "ти нікому не потрібен",
-            "ти нікому не потрібна",
-            "тебе всі ненавидять",
-            "тебе все ненавидят",
-            "після школи тебе поб'ємо",
-            "после школы мы тебя побьём",
-            "после школы мы тебя побьем",
-        ],
-    );
-    let active_self_harm = is_self_referential_distress(outside);
-
-    active_secrecy
-        || active_media_request
-        || active_deception
-        || active_blackmail
-        || active_abuse
-        || active_self_harm
 }
 
 fn looks_like_direct_military_social_eng_pretext(signal: &DetectionSignal, lower: &str) -> bool {
@@ -2746,7 +2561,7 @@ fn looks_like_direct_military_social_eng_pretext(signal: &DetectionSignal, lower
     has_pretext_role && has_sensitive_request
 }
 
-fn looks_like_counter_context(lower: &str) -> bool {
+pub(super) fn looks_like_counter_context(lower: &str) -> bool {
     contains_any(
         lower,
         &[
@@ -2821,68 +2636,110 @@ fn looks_like_counter_context(lower: &str) -> bool {
     )
 }
 
-fn looks_like_support_context(lower: &str) -> bool {
-    contains_any(
-        lower,
-        &[
-            "i'm here with you",
-            "im here with you",
-            "i'm here with u",
-            "im here with u",
-            "i'm here for you",
-            "im here for you",
-            "i care about you",
-            "thank you for telling me",
-            "you don't have to handle this alone",
-            "you dont have to handle this alone",
-            "you dont have to do this alone",
-            "you don't have to do this alone",
-            "lets tell your parents",
-            "let's tell your parents",
-            "lets tell your counselor",
-            "let's tell your counselor",
-            "we can get help",
-            "we can find help",
-            "you're not alone",
-            "youre not alone",
-            "i'm calling the counselor",
-            "im calling the counselor",
-            "staying with you",
-            "let's leave this chat",
-            "lets leave this chat",
-            "get help from adults",
-            "help from adults",
-            "we're with you",
-            "were with you",
-            "stay with me",
-            "contact crisis support",
-            "requires immediate support",
-            "я поруч",
-            "я з тобою",
-            "ми з тобою",
-            "дякую що сказала",
-            "дякую що сказав",
-            "дякую що розказала",
-            "дякую що розказав",
-            "не треба це ховати",
-            "давай скажемо батькам",
-            "давай скажемо психологу",
-            "можемо знайти допомогу",
-            "залишайся зі мною",
-            "потребують негайної підтримки",
-            "ти не один",
-            "ты не один",
-            "мы с тобой",
-            "я рядом",
-            "спасибо что сказал",
-            "спасибо что сказала",
-            "давай скажем родителям",
-            "давай скажем психологу",
-            "можем найти помощь",
-            "останься со мной",
-            "требуют срочной поддержки",
-        ],
-    )
+/// Support wording that stands on its own.
+const STRONG_SUPPORT_PHRASES: &[&str] = &[
+    "i'm here with you",
+    "im here with you",
+    "i'm here with u",
+    "im here with u",
+    "i'm here for you",
+    "im here for you",
+    "thank you for telling me",
+    "you don't have to handle this alone",
+    "you dont have to handle this alone",
+    "you dont have to do this alone",
+    "you don't have to do this alone",
+    "lets tell your parents",
+    "let's tell your parents",
+    "lets tell your counselor",
+    "let's tell your counselor",
+    "we can get help",
+    "we can find help",
+    "you're not alone",
+    "youre not alone",
+    "i'm calling the counselor",
+    "im calling the counselor",
+    "let's leave this chat",
+    "lets leave this chat",
+    "get help from adults",
+    "help from adults",
+    "contact crisis support",
+    "requires immediate support",
+    "я з тобою",
+    "ми з тобою",
+    "дякую що сказала",
+    "дякую що сказав",
+    "дякую що розказала",
+    "дякую що розказав",
+    "не треба це ховати",
+    "давай скажемо батькам",
+    "давай скажемо психологу",
+    "можемо знайти допомогу",
+    "потребують негайної підтримки",
+    "ти не один",
+    "ты не один",
+    "мы с тобой",
+    "спасибо что сказал",
+    "спасибо что сказала",
+    "давай скажем родителям",
+    "давай скажем психологу",
+    "можем найти помощь",
+    "требуют срочной поддержки",
+    "не оставлю тебя",
+    "не залишу тебе",
+    "якщо що пиши",
+    "если что пиши",
+];
+
+/// Support wording that is only credible next to a help path or a strong
+/// phrase; on its own it is also common attacker wording ("stay with me").
+const WEAK_SUPPORT_PHRASES: &[&str] = &[
+    "i care about you",
+    "stay with me",
+    "staying with you",
+    "залишайся зі мною",
+    "останься со мной",
+    "я поруч",
+    "я рядом",
+    "we're with you",
+    "were with you",
+];
+
+const SUPPORT_ANCHOR_TOKENS: &[&str] = &[
+    "parent",
+    "parents",
+    "mom",
+    "mum",
+    "dad",
+    "counselor",
+    "counsellor",
+    "teacher",
+    "adult",
+    "adults",
+    "help",
+    "hotline",
+    "психолог",
+    "мам",
+    "батьк",
+    "вчител",
+    "допомог",
+    "родител",
+    "учител",
+    "помощ",
+    "дорослому",
+    "взрослому",
+];
+
+pub(super) fn looks_like_support_context(lower: &str) -> bool {
+    if contains_any(lower, STRONG_SUPPORT_PHRASES) {
+        return true;
+    }
+    let gratitude_for_disclosure = contains_any(lower, &["дякую", "спасибо", "thank"])
+        && contains_any(lower, &["сказа", "розказ", "рассказ", "told", "telling me"]);
+    if gratitude_for_disclosure {
+        return true;
+    }
+    contains_any(lower, WEAK_SUPPORT_PHRASES) && contains_any(lower, SUPPORT_ANCHOR_TOKENS)
 }
 
 fn looks_like_distribution_or_coordination(lower: &str) -> bool {
@@ -2962,7 +2819,7 @@ fn looks_like_third_party_reference(lower: &str) -> bool {
     )
 }
 
-fn is_self_referential_distress(lower: &str) -> bool {
+pub(super) fn is_self_referential_distress(lower: &str) -> bool {
     contains_any(
         lower,
         &[
@@ -3882,6 +3739,17 @@ mod tests {
 
         assert_eq!(result.adjusted_signals.len(), 1, "{result:?}");
         assert_eq!(result.confirmed_events.len(), 1, "{result:?}");
+        assert_eq!(result.frame.speech_act, SpeechAct::Assert, "{result:?}");
+        assert_eq!(
+            result.frame.directionality,
+            Directionality::DirectedAtUser,
+            "{result:?}"
+        );
+        assert_eq!(
+            result.confirmed_events[0].context.speech_act,
+            EventSpeechAct::Assert,
+            "{result:?}"
+        );
     }
 
     #[test]
@@ -4375,22 +4243,338 @@ mod tests {
         );
     }
 
+    fn observe(threat_type: ThreatType, reason_code: &str, kind: EventKind) -> Vec<RawObservation> {
+        vec![RawObservation::signal_with_event(
+            signal(threat_type, reason_code, 0.90),
+            kind,
+            0.8,
+            None,
+            None,
+        )]
+    }
+
+    fn interpret(text: &str, observations: Vec<RawObservation>) -> ContextInterpretation {
+        let interpreter = ContextInterpreter::new();
+        interpreter.interpret_observations(
+            &input(text),
+            Some(text),
+            Some(1_000),
+            None,
+            observations,
+            None,
+        )
+    }
+
+    fn assert_active(result: &ContextInterpretation, text: &str) {
+        assert_eq!(result.adjusted_signals.len(), 1, "{text}: {result:?}");
+        assert_eq!(result.confirmed_events.len(), 1, "{text}: {result:?}");
+        assert!(
+            !matches!(
+                result.frame.speech_act,
+                SpeechAct::Quote | SpeechAct::Report
+            ),
+            "{text}: {result:?}"
+        );
+    }
+
+    fn assert_suppressed(result: &ContextInterpretation, text: &str) {
+        assert!(result.adjusted_signals.is_empty(), "{text}: {result:?}");
+        assert!(result.confirmed_events.is_empty(), "{text}: {result:?}");
+    }
+
+    #[test]
+    fn report_cue_cannot_attribute_author_threat() {
+        for text in [
+            "I will hurt you tomorrow after school, for context",
+            "I will hurt you tomorrow after school. I'm reporting this.",
+            "for the report: I will kill you tomorrow",
+        ] {
+            let result = interpret(
+                text,
+                observe(
+                    ThreatType::Threat,
+                    "pattern.threat_test",
+                    EventKind::PhysicalThreat,
+                ),
+            );
+            assert_active(&result, text);
+            assert_eq!(
+                result.frame.directionality,
+                Directionality::DirectedAtUser,
+                "{text}: {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn report_cue_cannot_attribute_author_sextortion() {
+        let text =
+            "send me a nude photo tonight or i will share your private photo, i'm reporting this";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::Manipulation,
+                "pattern.manipulation_test",
+                EventKind::EmotionalBlackmail,
+            ),
+        );
+        assert_active(&result, text);
+    }
+
+    #[test]
+    fn ukrainian_report_cue_cannot_attribute_author_threat() {
+        let text = "Після школи тебе поб'ємо, це для контексту";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::Threat,
+                "pattern.threat_test",
+                EventKind::PhysicalThreat,
+            ),
+        );
+        assert_active(&result, text);
+    }
+
+    #[test]
+    fn closed_quote_without_stance_keeps_blackmail_active() {
+        for text in [
+            "\"send the photos or everyone sees them\" this is not a joke, i got your message",
+            "«скинь фото, иначе все увидят» это не шутка, я получил твоё сообщение",
+        ] {
+            let result = interpret(
+                text,
+                observe(
+                    ThreatType::Manipulation,
+                    "pattern.manipulation_test",
+                    EventKind::EmotionalBlackmail,
+                ),
+            );
+            assert_active(&result, text);
+            assert_eq!(
+                result.frame.speech_act,
+                SpeechAct::Assert,
+                "{text}: {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn support_words_cannot_suppress_author_farewell() {
+        let text = "goodbye everyone, this is the end. i want to die. i care about you all, tell my mom i'm sorry";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::SelfHarm,
+                "ml.safety.selfharm",
+                EventKind::FarewellMessage,
+            ),
+        );
+        assert_active(&result, text);
+        assert_eq!(
+            result.frame.directionality,
+            Directionality::SelfReferential,
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn strong_support_phrase_cannot_suppress_author_farewell_note() {
+        let text = "This is my last message. Goodbye forever. I care about you, you're not alone";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::SelfHarm,
+                "pattern.selfharm_farewell_test",
+                EventKind::FarewellMessage,
+            ),
+        );
+        assert_active(&result, text);
+        assert_eq!(
+            result.frame.directionality,
+            Directionality::SelfReferential,
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn russian_support_phrase_cannot_suppress_author_crisis() {
+        let text = "я рядом с мостом и хочу умереть, останься со мной";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::SelfHarm,
+                "ml.safety.selfharm",
+                EventKind::SuicidalIdeation,
+            ),
+        );
+        assert_active(&result, text);
+    }
+
+    #[test]
+    fn crisis_support_cannot_suppress_author_suicide_coercion() {
+        let text = "you should just kill yourself already, stay with me and contact crisis support";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::SelfHarm,
+                "pattern.selfharm_coercion_test",
+                EventKind::SuicideCoercion,
+            ),
+        );
+        assert_active(&result, text);
+    }
+
+    #[test]
+    fn compliance_directive_reactivates_quoted_request() {
+        let text = "he said \"send me a photo of you in the shower\" so just send it, do it now";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::Grooming,
+                "pattern.grooming_test",
+                EventKind::PhotoRequest,
+            ),
+        );
+        assert_active(&result, text);
+    }
+
+    #[test]
+    fn ambiguous_quote_disables_reported_speech_path() {
+        let text = "he said 'send me a photo tonight and i mean it, i'm reporting this";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::Grooming,
+                "pattern.grooming_test",
+                EventKind::PhotoRequest,
+            ),
+        );
+        assert_active(&result, text);
+    }
+
+    #[test]
+    fn weak_support_phrase_requires_anchor() {
+        let bare = "stay with me tonight, don't go home";
+        let result = interpret(bare, Vec::new());
+        assert_ne!(result.frame.speech_act, SpeechAct::Support, "{result:?}");
+        let anchored = "stay with me, we can call the counselor together";
+        let result = interpret(anchored, Vec::new());
+        assert_eq!(result.frame.speech_act, SpeechAct::Support, "{result:?}");
+    }
+
+    #[test]
+    fn unquoted_reported_speech_with_report_cue_suppresses_threat() {
+        let text = "he texted i will hurt you tomorrow after school, i'm reporting this";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::Threat,
+                "pattern.threat_test",
+                EventKind::PhysicalThreat,
+            ),
+        );
+        assert_suppressed(&result, text);
+        assert_eq!(
+            result.frame.directionality,
+            Directionality::ThirdParty,
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn unquoted_reported_speech_dash_separator_suppresses_bullying() {
+        let text = "she wrote you are worthless and everyone hates you - this is bullying and i saved the evidence";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::Bullying,
+                "pattern.bullying_test",
+                EventKind::Denigration,
+            ),
+        );
+        assert_suppressed(&result, text);
+    }
+
+    #[test]
+    fn ukrainian_reported_speech_suppresses_threat() {
+        for text in [
+            "він написав «після школи тебе поб'ємо», це мені скинули для звіту",
+            "він написав після школи тебе поб'ємо, це мені скинули для звіту",
+        ] {
+            let result = interpret(
+                text,
+                observe(
+                    ThreatType::Threat,
+                    "pattern.threat_test",
+                    EventKind::PhysicalThreat,
+                ),
+            );
+            assert_suppressed(&result, text);
+        }
+    }
+
+    #[test]
+    fn russian_reported_speech_suppresses_blackmail() {
+        let text = "он написал если не пришлёшь фото, я разошлю всем - это является шантажом, сохрани доказательство";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::Manipulation,
+                "pattern.manipulation_test",
+                EventKind::EmotionalBlackmail,
+            ),
+        );
+        assert_suppressed(&result, text);
+    }
+
+    #[test]
+    fn support_with_reported_crisis_stays_suppressed_multilingual() {
+        for text in [
+            "my friend said there is no reason to live. i'm here with you and we can get help tonight",
+            "моя подруга написала що не хоче жити. я поруч, давай скажемо психологу",
+            "мой друг написал что не хочет жить. я рядом, давай скажем родителям",
+        ] {
+            let result = interpret(text, observe(ThreatType::SelfHarm, "ml.safety.selfharm", EventKind::Hopelessness));
+            assert_suppressed(&result, text);
+            assert_eq!(result.frame.speech_act, SpeechAct::Support, "{text}: {result:?}");
+        }
+    }
+
+    #[test]
+    fn colon_reported_speech_suppresses_next_clause_threat() {
+        let text = "quote: i will hurt you tomorrow. i'm reporting this";
+        let result = interpret(
+            text,
+            observe(
+                ThreatType::Threat,
+                "pattern.threat_test",
+                EventKind::PhysicalThreat,
+            ),
+        );
+        assert_suppressed(&result, text);
+    }
+
     #[test]
     fn structured_closed_quote_requires_independent_protective_stance() {
+        let probe = default_risk_probe();
         for text in [
             "“Send me a password.” I reject this quoted request and will report it.",
             "«Надішли мені пароль». Я відмовляюся від цієї вимоги й звернуся по допомогу.",
             "«Пришли мне пароль». Это опасный пример, который нужно показать взрослому.",
         ] {
-            assert!(looks_like_protective_report_context(text), "{text}");
+            let semantics = MessageSemantics::classify(text, &probe);
+            assert!(semantics.protective_report, "{text}: {semantics:?}");
         }
 
-        assert!(!looks_like_protective_report_context(
-            "She repeated: “send me a password.”"
-        ));
-        assert!(!looks_like_protective_report_context(
-            "“Send me a password. I will report it."
-        ));
+        for text in [
+            "She repeated: “send me a password.”",
+            "“Send me a password. I will report it.",
+            "“Send me a password.” This is not a joke, I got your message.",
+            "«Пришли мне пароль». Это не шутка, я получил твоё сообщение.",
+        ] {
+            let semantics = MessageSemantics::classify(text, &probe);
+            assert!(!semantics.protective_report, "{text}: {semantics:?}");
+        }
     }
 
     #[test]
