@@ -71,34 +71,104 @@ pub struct LexicalRuleRecord {
 #[derive(Debug)]
 pub struct PreparedLexicalText {
     visible: String,
+    visible_chars: Vec<char>,
     compact: String,
     confusable_skeleton: String,
+    /// Index into `visible_chars` for every char of the compact channels.
+    compact_origin: Vec<usize>,
     mixed_script: bool,
 }
+
+/// Compact needles at least this long are distinctive enough to match even
+/// when glued into surrounding noise; shorter needles must align with word
+/// boundaries of the visible text so `spend it all` cannot hit `end it all`.
+const LONG_COMPACT_NEEDLE_CHARS: usize = 12;
 
 impl PreparedLexicalText {
     /// Normalizes attacker-controlled text into reusable matching channels.
     #[must_use]
     pub fn new(text: &str) -> Self {
         let visible = normalize_visible(text);
-        let (compact, confusable_skeleton, mixed_script) = compact_channels(&visible);
+        let visible_chars = visible.chars().collect();
+        let (compact, confusable_skeleton, mixed_script, compact_origin) =
+            compact_channels(&visible);
         Self {
             visible,
+            visible_chars,
             compact,
             confusable_skeleton,
+            compact_origin,
             mixed_script,
         }
     }
 
     fn contains(&self, needle: &PreparedNeedle) -> bool {
-        self.visible.contains(&needle.visible)
-            || (!needle.compact.is_empty()
-                && (self.compact.contains(&needle.compact)
-                    || (self.mixed_script
-                        && self
-                            .confusable_skeleton
-                            .contains(&needle.confusable_skeleton))))
+        if contains_at_word_boundary(&self.visible, &needle.visible) {
+            return true;
+        }
+        if needle.compact.is_empty() {
+            return false;
+        }
+        let long_needle = needle.compact.chars().count() >= LONG_COMPACT_NEEDLE_CHARS;
+        self.compact_contains_aligned(&self.compact, &needle.compact, long_needle)
+            || (self.mixed_script
+                && self.compact_contains_aligned(
+                    &self.confusable_skeleton,
+                    &needle.confusable_skeleton,
+                    long_needle,
+                ))
     }
+
+    /// Finds `needle` in a compact channel and, unless the needle is long
+    /// enough to be distinctive on its own, requires the match to start and
+    /// end at word boundaries of the visible text it was derived from.
+    fn compact_contains_aligned(&self, haystack: &str, needle: &str, long_needle: bool) -> bool {
+        if needle.is_empty() {
+            return false;
+        }
+        let needle_chars = needle.chars().count();
+        for (byte_offset, _) in haystack.match_indices(needle) {
+            if long_needle {
+                return true;
+            }
+            let start_char = haystack[..byte_offset].chars().count();
+            let end_char = start_char + needle_chars;
+            let Some(&first_origin) = self.compact_origin.get(start_char) else {
+                continue;
+            };
+            let Some(&last_origin) = self.compact_origin.get(end_char.saturating_sub(1)) else {
+                continue;
+            };
+            let before_ok =
+                first_origin == 0 || !self.visible_chars[first_origin - 1].is_alphanumeric();
+            let after_ok = last_origin + 1 >= self.visible_chars.len()
+                || !self.visible_chars[last_origin + 1].is_alphanumeric();
+            if before_ok && after_ok {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+/// Substring search that only accepts matches delimited by non-alphanumeric
+/// characters (or the ends of the text) on both sides.
+fn contains_at_word_boundary(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    haystack.match_indices(needle).any(|(start, matched)| {
+        let end = start + matched.len();
+        let before_ok = haystack[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !c.is_alphanumeric());
+        let after_ok = haystack[end..]
+            .chars()
+            .next()
+            .is_none_or(|c| !c.is_alphanumeric());
+        before_ok && after_ok
+    })
 }
 
 #[derive(Debug)]
@@ -111,7 +181,7 @@ struct PreparedNeedle {
 impl PreparedNeedle {
     fn new(needle: &str) -> Self {
         let visible = normalize_visible(needle);
-        let (compact, confusable_skeleton, _) = compact_channels(&visible);
+        let (compact, confusable_skeleton, _, _) = compact_channels(&visible);
         Self {
             visible,
             compact,
@@ -421,11 +491,12 @@ fn normalize_visible(text: &str) -> String {
     normalized
 }
 
-fn compact_channels(text: &str) -> (String, String, bool) {
+fn compact_channels(text: &str) -> (String, String, bool, Vec<usize>) {
     let mut compact = String::new();
     let mut confusable_skeleton = String::new();
+    let mut origin = Vec::new();
     let mut scripts = 0u8;
-    for ch in text.chars() {
+    for (index, ch) in text.chars().enumerate() {
         let leet = match ch {
             '0' => 'o',
             '1' => 'i',
@@ -439,10 +510,16 @@ fn compact_channels(text: &str) -> (String, String, bool) {
         if leet.is_alphanumeric() {
             compact.push(leet);
             confusable_skeleton.push(confusable_to_latin(leet).unwrap_or(leet));
+            origin.push(index);
             scripts |= script_mask(leet);
         }
     }
-    (compact, confusable_skeleton, scripts.count_ones() > 1)
+    (
+        compact,
+        confusable_skeleton,
+        scripts.count_ones() > 1,
+        origin,
+    )
 }
 
 fn script_mask(ch: char) -> u8 {
@@ -851,6 +928,61 @@ mod tests {
         }];
 
         assert!(match_lexical_rules("расе", &rules).is_none());
+    }
+
+    fn any_of_rule(phrase: &str) -> LexicalRuleRecord {
+        LexicalRuleRecord {
+            threat_key: "x".to_string(),
+            reason_code: "x.reason".to_string(),
+            score: 0.8,
+            threat_type: Some("self_harm".to_string()),
+            severity: Some("high".to_string()),
+            priority: Some(90),
+            action: None,
+            languages: vec![],
+            scripts: vec![],
+            all_of: vec![],
+            any_of: vec![phrase.to_string()],
+            any_groups: vec![],
+        }
+    }
+
+    #[test]
+    fn end_it_all_requires_word_boundary() {
+        let rules = vec![any_of_rule("end it all")];
+
+        for text in [
+            "I'll spend it all tomorrow",
+            "friend it all the way",
+            "we attend it all the time",
+        ] {
+            assert!(
+                match_lexical_rules(text, &rules).is_none(),
+                "{text} must not match a phrase embedded in a longer word"
+            );
+        }
+
+        for text in [
+            "i want to end it all",
+            "END IT ALL!!",
+            "e n d i t a l l",
+            "end.it.all",
+            "3nd it @ll",
+        ] {
+            assert!(
+                match_lexical_rules(text, &rules).is_some(),
+                "{text} must still match at word boundaries"
+            );
+        }
+    }
+
+    #[test]
+    fn long_compact_needles_tolerate_glued_noise() {
+        let long = vec![any_of_rule("dont tell your parents")];
+        assert!(match_lexical_rules("xxdonttellyourparentsxx", &long).is_some());
+
+        let short = vec![any_of_rule("end it all")];
+        assert!(match_lexical_rules("xxenditallxx", &short).is_none());
     }
 
     #[test]
