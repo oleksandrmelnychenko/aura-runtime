@@ -839,25 +839,6 @@ pub(crate) fn context_confirmed_domain_signals(
         .collect()
 }
 
-pub fn push_domain_reason_codes(reason_codes: &mut Vec<String>, domain_output: &DomainOutput) {
-    for signal in &domain_output.signals {
-        let reason_code = &signal.reason_code;
-        if !reason_code.is_empty() {
-            let reason_code = format!("domain.{reason_code}");
-            if !reason_codes.contains(&reason_code) {
-                reason_codes.push(reason_code);
-            }
-        }
-        let threat_key = &signal.threat_key;
-        if !threat_key.is_empty() {
-            let marker = format!("domain.threat.{threat_key}");
-            if !reason_codes.contains(&marker) {
-                reason_codes.push(marker);
-            }
-        }
-    }
-}
-
 fn push_active_domain_signal_reason_codes(
     reason_codes: &mut Vec<String>,
     domain_signals: &[aura_domain::DomainSignal],
@@ -891,17 +872,22 @@ fn push_active_domain_signal_reason_codes(
     found_active_signal
 }
 
-pub fn merge_domain_output_effects(
+/// Carries in-process domain diagnostics (for example a semantic-capacity
+/// fallback) into the result reason codes. Diagnostics never change the
+/// action and never create a detection signal.
+pub(crate) fn push_domain_diagnostics(
     reason_codes: &mut Vec<String>,
-    current_action: Action,
     domain_output: Option<&DomainOutput>,
-) -> Action {
+) {
     let Some(domain_output) = domain_output else {
-        return current_action;
+        return;
     };
-
-    push_domain_reason_codes(reason_codes, domain_output);
-    merge_domain_action(reason_codes, current_action, domain_output)
+    for diagnostic in &domain_output.diagnostics {
+        let reason_code = format!("domain.{diagnostic}");
+        if !reason_codes.contains(&reason_code) {
+            reason_codes.push(reason_code);
+        }
+    }
 }
 
 pub(crate) fn merge_active_confirmed_domain_output_effects(
@@ -946,14 +932,6 @@ pub(crate) fn merge_active_domain_temporal_output_effects(
         return current_action;
     }
 
-    merge_domain_action_value(reason_codes, current_action, domain_output.action)
-}
-
-fn merge_domain_action(
-    reason_codes: &mut Vec<String>,
-    current_action: Action,
-    domain_output: &DomainOutput,
-) -> Action {
     merge_domain_action_value(reason_codes, current_action, domain_output.action)
 }
 
@@ -1250,8 +1228,8 @@ mod tests {
         event_kind_from_domain, is_domain_threat, is_link_family_threat, is_propaganda_threat,
         map_domain_threat_to_event_kind, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
         map_rule_or_threat_to_event_kind, map_threat_to_event_kind,
-        merge_active_domain_temporal_output_effects, merge_domain_output_effects,
-        parse_domain_threat_type, parse_threat_type_label, should_skip_pattern_match,
+        merge_active_domain_temporal_output_effects, parse_domain_threat_type,
+        parse_threat_type_label, push_domain_diagnostics, should_skip_pattern_match,
         should_skip_pattern_rule_override, threat_priority_for_sort,
     };
 
@@ -1494,6 +1472,7 @@ mod tests {
             }],
             action: None,
             routes: Vec::new(),
+            diagnostics: Vec::new(),
         };
 
         let observations = build_domain_observations(Some(&output), None);
@@ -1606,13 +1585,6 @@ mod tests {
         assert_eq!(blocked_signal.reason_code, "link.blocked_domain");
         assert_eq!(blocked_signal.threat_type, ThreatType::Phishing);
 
-        let mut reason_codes = Vec::new();
-        let action =
-            merge_domain_output_effects(&mut reason_codes, Action::Allow, Some(&domain_output));
-        assert_eq!(action, Action::Allow);
-        assert!(reason_codes
-            .iter()
-            .any(|code| code == "domain.kids.grooming.secrecy"));
         let (action, _) = decide_action_with_domain_overrides(
             ThreatType::Propaganda,
             0.8,
@@ -1620,6 +1592,27 @@ mod tests {
             "domain.propaganda.dehumanization",
         );
         assert_eq!(action, Action::Warn);
+    }
+
+    #[test]
+    fn domain_diagnostics_reach_reason_codes_without_a_signal() {
+        let mut domain_output = DomainOutput::from_candidates(Vec::new(), None);
+        domain_output
+            .diagnostics
+            .push("kids.composition.unavailable".to_string());
+
+        let mut reason_codes = vec!["context.speech_act.assert".to_string()];
+        push_domain_diagnostics(&mut reason_codes, Some(&domain_output));
+        push_domain_diagnostics(&mut reason_codes, Some(&domain_output));
+
+        assert_eq!(
+            reason_codes,
+            vec![
+                "context.speech_act.assert".to_string(),
+                "domain.kids.composition.unavailable".to_string()
+            ]
+        );
+        assert!(build_domain_observations(Some(&domain_output), None).is_empty());
     }
 
     #[test]

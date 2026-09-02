@@ -32,7 +32,7 @@ use crate::domain_runtime::{
     context_confirmed_domain_signals, decide_action_with_domain_overrides,
     detection_enabled_for_threat, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
     map_rule_or_threat_to_event_kind, merge_active_confirmed_domain_output_effects,
-    merge_active_domain_temporal_output_effects, parse_threat_type_label,
+    merge_active_domain_temporal_output_effects, parse_threat_type_label, push_domain_diagnostics,
     should_skip_pattern_match, should_skip_pattern_rule_override, threat_priority_for_sort,
     AuraDomainRuntime,
 };

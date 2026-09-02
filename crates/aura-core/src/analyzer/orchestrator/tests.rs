@@ -1,4 +1,5 @@
 use super::*;
+use crate::product::build_product_decision_surface;
 
 fn supported_languages(languages: &[&str]) -> HashSet<String> {
     languages
@@ -5036,3 +5037,29 @@ fn update_config_preserves_kids_memory() {
 
     assert_eq!(analyzer.kids_conversation_risk_score(conv), before);
 }
+
+#[test]
+fn semantic_capacity_overflow_is_a_neutral_diagnostic() {
+    let db = PatternDatabase::default_mvp();
+    let mut analyzer = Analyzer::new(child_config(), &db);
+
+    for (index, text) in ["«".repeat(17) + " hi", "!".repeat(520)].iter().enumerate() {
+        let r = analyzer.analyze_with_context(
+            &child_input(text, "noisy_peer", "cap_conv"),
+            1_000 + index as u64 * 60_000,
+        );
+        assert_eq!(r.threat_type, ThreatType::None, "{text:?}");
+        assert_eq!(r.action, Action::Allow, "{text:?}");
+        assert!(
+            r.reason_codes
+                .iter()
+                .any(|code| code == "domain.kids.composition.unavailable"),
+            "{text:?}: {:?}",
+            r.reason_codes
+        );
+        let surface = build_product_decision_surface(&r, ProductRolloutMode::GuardianEnabled);
+        assert!(!surface.review.open_review, "{text:?}");
+        assert!(!surface.guardian.notify, "{text:?}");
+    }
+}
+

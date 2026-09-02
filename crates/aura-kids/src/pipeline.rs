@@ -7,14 +7,17 @@ use std::sync::OnceLock;
 
 use aura_domain::{
     promote_action_to_warn, DomainAction, DomainCandidate, DomainConfirmedOutput,
-    DomainConversationType, DomainEventKind, DomainInput, DomainOutput, DomainRiskProfile,
-    DomainSignal, LanguageEvidence, PreparedLexicalText,
+    DomainConversationType, DomainInput, DomainOutput, DomainRiskProfile, DomainSignal,
+    LanguageEvidence, PreparedLexicalText,
 };
 
 use crate::composition;
 use crate::detectors::{bullying, grooming, manipulation, selfharm};
 use crate::lexicon;
 use crate::policy::{guardian, intervention};
+
+/// Reason-code suffix recorded when bounded semantic preparation could not run.
+pub const SEMANTIC_UNAVAILABLE_DIAGNOSTIC: &str = "kids.composition.unavailable";
 
 #[cfg(test)]
 pub fn run_kids_pipeline(input: &DomainInput) -> DomainOutput {
@@ -48,6 +51,7 @@ pub fn run_kids_pipeline_with_memory(
 
     let mut output = DomainOutput::from_candidates(candidates, committed.action);
     output.signals.extend(unrouted_signals);
+    output.diagnostics.clone_from(&detected.diagnostics);
     output
 }
 
@@ -55,6 +59,7 @@ pub fn run_kids_pipeline_with_memory(
 pub fn detect_kids_pipeline(input: &DomainInput) -> DomainOutput {
     let mut legacy_signals: Vec<DomainSignal> = Vec::new();
     let mut semantic_candidates = Vec::new();
+    let mut semantic_unavailable = false;
 
     if let Some(text) = input.text.as_deref() {
         let prepared = PreparedLexicalText::new(text);
@@ -68,10 +73,10 @@ pub fn detect_kids_pipeline(input: &DomainInput) -> DomainOutput {
         legacy_signals.extend(bullying::detect_all_prepared(&prepared, &evidence));
         legacy_signals.extend(selfharm::detect_all_prepared(&prepared, &evidence));
         legacy_signals.extend(manipulation::detect_all_prepared(&prepared, &evidence));
-        semantic_candidates = match composition::detect(text) {
-            Ok(candidates) => candidates,
-            Err(_) => vec![semantic_unavailable_candidate()],
-        };
+        match composition::detect(text) {
+            Ok(candidates) => semantic_candidates = candidates,
+            Err(_) => semantic_unavailable = true,
+        }
     }
 
     let legacy_count = legacy_signals.len();
@@ -96,26 +101,21 @@ pub fn detect_kids_pipeline(input: &DomainInput) -> DomainOutput {
     );
     sort_candidates(&mut candidates);
 
-    DomainOutput::from_candidates(candidates, action)
+    let mut output = DomainOutput::from_candidates(candidates, action);
+    if semantic_unavailable {
+        // Bounded semantic preparation failed (for example quote nesting or
+        // token capacity). The legacy detectors still ran on this message, so
+        // this is recorded as a neutral diagnostic instead of a fabricated
+        // threat family that would warn the child and poison sender memory.
+        output
+            .diagnostics
+            .push(SEMANTIC_UNAVAILABLE_DIAGNOSTIC.to_string());
+    }
+    output
 }
 
 fn legacy_candidate(signal: DomainSignal) -> Option<DomainCandidate> {
     crate::routing::event_kind_for_signal(&signal).map(|kind| DomainCandidate::new(signal, kind))
-}
-
-fn semantic_unavailable_candidate() -> DomainCandidate {
-    DomainCandidate::new(
-        DomainSignal {
-            threat_key: "semantic_composition_unavailable_v1".to_string(),
-            score: 1.0,
-            reason_code: "kids.composition.unavailable.guardian_review".to_string(),
-            threat_type: Some("manipulation".to_string()),
-            severity: Some("high".to_string()),
-            priority: Some(100),
-            action: Some(DomainAction::Warn),
-        },
-        DomainEventKind::SuspiciousSource,
-    )
 }
 
 fn sort_candidates(candidates: &mut [DomainCandidate]) {
@@ -2643,4 +2643,28 @@ mod tests {
             (true, "conv_existing")
         );
     }
+
+    #[test]
+    fn semantic_capacity_error_yields_neutral_diagnostic_only() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let text = "«".repeat(17) + " hi";
+
+        let detected = crate::pipeline::detect_kids_pipeline(&input(&text));
+        assert!(detected.signals.is_empty(), "{:?}", detected.signals);
+        assert_eq!(detected.action, None);
+        assert_eq!(
+            detected.diagnostics,
+            vec![crate::pipeline::SEMANTIC_UNAVAILABLE_DIAGNOSTIC.to_string()]
+        );
+
+        let committed = run_kids_pipeline(&input(&text));
+        assert!(committed.signals.is_empty(), "{:?}", committed.signals);
+        assert_eq!(committed.action, None);
+        assert_eq!(
+            committed.diagnostics,
+            vec![crate::pipeline::SEMANTIC_UNAVAILABLE_DIAGNOSTIC.to_string()]
+        );
+    }
+
 }

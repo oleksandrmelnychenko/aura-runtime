@@ -195,6 +195,11 @@ pub struct DomainOutput {
     /// pre-existing serialized `DomainOutput` shape.
     #[serde(skip)]
     pub routes: Vec<DomainSignalRoute>,
+    /// In-process, content-free diagnostics such as a semantic-capacity
+    /// fallback. They surface as reason codes only and never carry a threat
+    /// family, a score, or an action.
+    #[serde(skip)]
+    pub diagnostics: Vec<String>,
 }
 
 /// Domain response produced only after core interpretation confirms source signals.
@@ -234,6 +239,7 @@ impl DomainOutput {
             signals,
             action,
             routes,
+            diagnostics: Vec::new(),
         }
     }
 
@@ -258,6 +264,7 @@ impl DomainOutput {
             signals,
             action,
             routes,
+            diagnostics: Vec::new(),
         }
     }
 

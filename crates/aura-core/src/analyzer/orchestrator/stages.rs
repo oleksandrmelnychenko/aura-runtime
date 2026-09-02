@@ -103,6 +103,7 @@ impl Analyzer {
             confirmed_domain_output.as_ref(),
             &result.signals,
         );
+        push_domain_diagnostics(&mut result.reason_codes, domain_output.as_ref());
         append_reason_codes(&mut result.reason_codes, &interpretation_reason_codes);
         append_reason_codes(
             &mut result.reason_codes,
@@ -367,6 +368,7 @@ impl Analyzer {
             confirmed_domain_output.as_ref(),
             &result.signals,
         );
+        push_domain_diagnostics(&mut result.reason_codes, domain_output.as_ref());
         result.action = merge_active_domain_temporal_output_effects(
             &mut result.reason_codes,
             result.action,
