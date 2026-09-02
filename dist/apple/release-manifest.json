@@ -1,8 +1,8 @@
 {
   "schema_version": 5,
-  "source_revision": "3b6b62ae1d363f6c7c9063569ce92df0d3001d12",
+  "source_revision": "8dc23ff771d0041e7db410ab6b6bdd788d4e9bfe",
   "source_tree_dirty": false,
-  "source_tree_sha256": "5d78a22aca9023c93bd0e53bad5fba58be80cc7226d3d8a05742e049b0db0a92",
+  "source_tree_sha256": "f9c72f47bf1b33117424de9966428a8964eba3a4e3f89908c6ecd0efe8bab143",
   "shippable": true,
   "cargo_profile": "release",
   "cargo_locked": true,
@@ -22,15 +22,15 @@
   ],
   "aura_ffi_header_sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
   "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
-  "runtime_artifact_descriptor_sha256": "676d52aecd3c2d340030d21d8051809c93f2d3a4d2115d7d70a69a9c1fda2892",
-  "runtime_artifact_identities_env_sha256": "b56de4a00e9ba52f7abcf66af5604186971bbabbaaa245c15924fefbb34d5940",
+  "runtime_artifact_descriptor_sha256": "a016281441e6d5dfda0b9afe6e4548bbd8da9e907abcdb4d097f2c8e3bff9b1a",
+  "runtime_artifact_identities_env_sha256": "ba0dabfdd2c06735d2938339e479e27917e665546445c5e0e26ea75412eeee46",
   "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
   "execution_policy_trust_keyring_sha256": "883f5f6b9024e0faa1a7cae7998497d33bb18aa6054ddd06f2af1322e6e048d2",
   "xcframework_info_plist_sha256": "1e336683b41580c0e5addcf8d7f2683ce19278a7e3791794fbed872992edccb3",
   "binary_sha256": {
-    "ios-arm64": "49ebc119b3e4f2a5c34195998807a3b8b7b1164a168d3f923a32aabadccff9f7",
-    "ios-arm64_x86_64-simulator": "455feff7e9c3a9f842aa48c05dfd7b524ae6095cf1542623d871f7437c4ada00",
-    "ios-arm64_x86_64-maccatalyst": "81ea6e38f1a67d1d1bf2193939221b2cab646782f8db9a1dbf48fc865d98b780"
+    "ios-arm64": "341b62c825d751160bb94d6634de6ef732cf09cbdb0e88e7ba8a8628455ac342",
+    "ios-arm64_x86_64-simulator": "767ae379a90dfbf854b761db06d326774f3294c968dbd6996961437c6e3cf392",
+    "ios-arm64_x86_64-maccatalyst": "0d826e9153e16096c1cc25c8bda4da580f1137cd7fb165c64315c6a437d3dcab"
   },
   "model_bundle_included": false
 }
