@@ -138,6 +138,11 @@ impl PreparedPatternText {
             &mut seen,
             normalizer.normalize_known_leet_words(&typo_repaired),
         );
+        push_unique_channel(
+            &mut channels,
+            &mut seen,
+            normalizer.normalize_repeat_collapse_two(text),
+        );
 
         let mut cyrillic_leet_groups = Vec::new();
         if contains_cyrillic(text) {
@@ -212,6 +217,13 @@ impl PatternMatcher {
                         let lower = word.to_lowercase();
                         if seen_words.insert(lower.clone()) {
                             lower_words.push(lower.clone());
+                        }
+
+                        let apostrophes_unified = normalizer.unify_apostrophes(&lower);
+                        if apostrophes_unified != lower
+                            && seen_words.insert(apostrophes_unified.clone())
+                        {
+                            lower_words.push(apostrophes_unified);
                         }
 
                         let normalized = normalizer.normalize(word);
@@ -346,6 +358,11 @@ impl PatternMatcher {
             && typo_repaired_leet_words != lower_text
         {
             self.scan_text(&typo_repaired_leet_words, &mut results, &mut matched_rules);
+        }
+
+        let doubled = self.normalizer.normalize_repeat_collapse_two(text);
+        if doubled != normalized && doubled != lower_text {
+            self.scan_text(&doubled, &mut results, &mut matched_rules);
         }
 
         if contains_cyrillic(text) {
@@ -769,6 +786,10 @@ mod tests {
             "н3 к4ж1 б47ьк4м пр0 ц3й с3кр37",
             "н1к70 н3 х0ч37 73бя",
             "ordinary supportive conversation",
+            "уб’ю тебе після школи",
+            "send nu\u{FE0F}des now",
+            "i will k\u{3164}ill you",
+            "i will killl you tomorrow",
         ];
 
         for language in ["en", "uk", "ru"] {
@@ -1055,6 +1076,60 @@ mod tests {
                 .iter()
                 .any(|result| result.rule_id == "pii_routing_account_001"),
             "expected typo-repaired bank routing/account pattern, got {results:?}"
+        );
+    }
+
+    #[test]
+    fn mvp_patterns_scan_curly_apostrophe_threat_uk() {
+        let db = PatternDatabase::default_mvp();
+        let matcher = PatternMatcher::from_database(&db, "uk");
+
+        let results = matcher.scan("уб’ю тебе");
+
+        assert!(
+            results.iter().any(|result| result.threat_type == "threat"),
+            "typographic apostrophe must not hide a direct threat, got {results:?}"
+        );
+    }
+
+    #[test]
+    fn mvp_patterns_scan_variation_selector_split_word() {
+        let db = PatternDatabase::default_mvp();
+        let matcher = PatternMatcher::from_database(&db, "en");
+
+        let results = matcher.scan("send nu\u{FE0F}des now");
+
+        assert!(
+            results
+                .iter()
+                .any(|result| matches!(result.threat_type.as_str(), "explicit" | "nsfw")),
+            "variation selector inside a word must not split the keyword, got {results:?}"
+        );
+    }
+
+    #[test]
+    fn mvp_patterns_scan_hangul_filler_threat() {
+        let db = PatternDatabase::default_mvp();
+        let matcher = PatternMatcher::from_database(&db, "en");
+
+        let results = matcher.scan("i will k\u{3164}ill you");
+
+        assert!(
+            results.iter().any(|result| result.threat_type == "threat"),
+            "invisible Hangul filler must not split the keyword, got {results:?}"
+        );
+    }
+
+    #[test]
+    fn mvp_patterns_scan_tripled_letter_threat() {
+        let db = PatternDatabase::default_mvp();
+        let matcher = PatternMatcher::from_database(&db, "en");
+
+        let results = matcher.scan("i will killl you tomorrow");
+
+        assert!(
+            results.iter().any(|result| result.threat_type == "threat"),
+            "tripled letters must still match doubled-letter keywords, got {results:?}"
         );
     }
 

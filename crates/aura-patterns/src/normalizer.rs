@@ -102,15 +102,30 @@ impl TextNormalizer {
     }
 
     pub fn normalize(&self, text: &str) -> String {
+        self.normalize_with_repeat_len(text, 1)
+    }
+
+    /// Full normalization that keeps doubled letters intact.
+    ///
+    /// The default channel collapses every run of three or more identical
+    /// characters to one, which also destroys legitimate doubles inside a
+    /// keyword (`killl you` becomes `kil you`). This channel collapses such
+    /// runs to two so elongated spellings of doubled-letter keywords match.
+    pub(crate) fn normalize_repeat_collapse_two(&self, text: &str) -> String {
+        self.normalize_with_repeat_len(text, 2)
+    }
+
+    fn normalize_with_repeat_len(&self, text: &str, collapsed_len: usize) -> String {
         let mut s = text.to_string();
 
         s = self.fold_fullwidth(&s);
+        s = self.unify_apostrophes(&s);
 
         s = self.strip_zero_width(&s);
 
         s = self.strip_diacritics(&s);
 
-        s = self.collapse_repeats(&s);
+        s = self.collapse_repeats_to_len(&s, collapsed_len);
 
         s = self.strip_emoji_noise(&s);
 
@@ -126,7 +141,7 @@ impl TextNormalizer {
 
         s = self.decode_leet(&s);
 
-        s = self.collapse_repeated_alphabetics(&s);
+        s = self.collapse_repeated_alphabetics_to_len(&s, collapsed_len);
 
         s = self.transliterate_mat(&s);
 
@@ -139,6 +154,7 @@ impl TextNormalizer {
         let mut s = text.to_string();
 
         s = self.fold_fullwidth(&s);
+        s = self.unify_apostrophes(&s);
 
         s = self.strip_zero_width(&s);
 
@@ -207,6 +223,7 @@ impl TextNormalizer {
         let mut s = text.to_string();
 
         s = self.fold_fullwidth(&s);
+        s = self.unify_apostrophes(&s);
         s = self.strip_zero_width(&s);
         s = self.strip_diacritics(&s);
         s = self.collapse_whitespace(&s);
@@ -220,6 +237,7 @@ impl TextNormalizer {
         let mut s = text.to_string();
 
         s = self.fold_fullwidth(&s);
+        s = self.unify_apostrophes(&s);
         s = self.strip_zero_width(&s);
         s = self.strip_diacritics(&s);
         s = self.collapse_whitespace(&s);
@@ -232,6 +250,7 @@ impl TextNormalizer {
         let mut s = text.to_string();
 
         s = self.fold_fullwidth(&s);
+        s = self.unify_apostrophes(&s);
         s = self.strip_zero_width(&s);
         s = self.strip_diacritics(&s);
         s = self.collapse_whitespace(&s);
@@ -270,6 +289,7 @@ impl TextNormalizer {
         let mut s = text.to_string();
 
         s = self.fold_fullwidth(&s);
+        s = self.unify_apostrophes(&s);
         s = self.strip_zero_width(&s);
         s = self.strip_diacritics(&s);
         s = self.strip_emoji_noise(&s);
@@ -293,24 +313,19 @@ impl TextNormalizer {
     }
 
     fn strip_zero_width(&self, text: &str) -> String {
+        text.chars().filter(|c| !is_default_ignorable(*c)).collect()
+    }
+
+    /// Folds typographic apostrophes and primes to the ASCII apostrophe.
+    ///
+    /// iOS Smart Punctuation and the Ukrainian keyboard emit U+2019, while
+    /// every keyword and regex in the pattern packs is written with `'`.
+    pub(crate) fn unify_apostrophes(&self, text: &str) -> String {
         text.chars()
-            .filter(|c| {
-                !matches!(
-                    c,
-                    '\u{200B}'
-                        | '\u{200C}'
-                        | '\u{200D}'
-                        | '\u{FEFF}'
-                        | '\u{00AD}'
-                        | '\u{200E}'
-                        | '\u{200F}'
-                        | '\u{2060}'
-                        | '\u{2061}'
-                        | '\u{2062}'
-                        | '\u{2063}'
-                        | '\u{2064}'
-                        | '\u{034F}'
-                )
+            .map(|c| match c {
+                '\u{2018}' | '\u{2019}' | '\u{201B}' | '\u{2032}' | '\u{02BC}' | '\u{02B9}'
+                | '\u{00B4}' => '\'',
+                other => other,
             })
             .collect()
     }
@@ -529,6 +544,7 @@ impl TextNormalizer {
         let mut s = text.to_string();
 
         s = self.fold_fullwidth(&s);
+        s = self.unify_apostrophes(&s);
         s = self.strip_zero_width(&s);
         s = self.strip_diacritics(&s);
         s = self.strip_emoji_noise(&s);
@@ -1135,6 +1151,31 @@ fn is_combining_mark(c: char) -> bool {
         || (0xFE20..=0xFE2F).contains(&cp)
 }
 
+/// Unicode default-ignorable and format characters that must never split a
+/// token. Mirrors the table used by the kids lexical layer in `aura-domain`;
+/// the two crates deliberately do not depend on each other.
+fn is_default_ignorable(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x00AD
+            | 0x034F
+            | 0x061C
+            | 0x115F..=0x1160
+            | 0x17B4..=0x17B5
+            | 0x180B..=0x180F
+            | 0x200B..=0x200F
+            | 0x202A..=0x202E
+            | 0x2060..=0x206F
+            | 0x3164
+            | 0xFE00..=0xFE0F
+            | 0xFEFF
+            | 0xFFA0
+            | 0x1BCA0..=0x1BCA3
+            | 0x1D173..=0x1D17A
+            | 0xE0000..=0xE0FFF
+    )
+}
+
 fn is_cyrillic(c: char) -> bool {
     let cp = c as u32;
 
@@ -1259,6 +1300,42 @@ mod tests {
         let n = norm();
         assert_eq!(n.collapse_repeats("hello"), "hello");
         assert_eq!(n.collapse_repeats("good"), "good");
+    }
+
+    #[test]
+    fn unifies_typographic_apostrophes() {
+        let n = norm();
+        assert_eq!(
+            n.normalize_light_obfuscation("Don’t tell your parents"),
+            "don't tell your parents"
+        );
+        assert_eq!(n.normalize("уб’ю тебе"), n.normalize("уб'ю тебе"));
+        assert_eq!(
+            n.normalize_semantic("I‘ll find you"),
+            n.normalize_semantic("I'll find you")
+        );
+    }
+
+    #[test]
+    fn strips_variation_selectors_and_hangul_fillers() {
+        let n = norm();
+        assert_eq!(
+            n.strip_zero_width("nu\u{FE0F}des k\u{3164}ill\u{202E} you\u{E0041}"),
+            "nudes kill you"
+        );
+        assert_eq!(
+            n.normalize_light_obfuscation("k\u{3164}ill you"),
+            "kill you"
+        );
+    }
+
+    #[test]
+    fn repeat_collapse_two_channel_keeps_doubles() {
+        let n = norm();
+        assert_eq!(n.normalize("killl you"), "kil you");
+        assert_eq!(n.normalize_repeat_collapse_two("killl you"), "kill you");
+        assert_eq!(n.normalize_repeat_collapse_two("kiiill you"), "kiill you");
+        assert_eq!(n.normalize_repeat_collapse_two("hello good"), "hello good");
     }
 
     #[test]
