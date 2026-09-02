@@ -4989,3 +4989,50 @@ fn integration_repeat_offender_selfharm_stays_warn_with_crisis() {
     assert_eq!(rec.parent_alert, AlertPriority::Urgent);
 }
 
+#[test]
+fn escalation_tracker_bounds_memory_per_conversation_and_overall() {
+    let mut tracker = EscalationTracker::new();
+    for i in 0..1_000u64 {
+        tracker.record("conv", "sender", 1_000 + i);
+    }
+    let entries = tracker
+        .recent_events
+        .get("conv")
+        .expect("conversation is tracked");
+    assert!(entries.len() <= MAX_ESCALATION_ENTRIES_PER_CONVERSATION);
+
+    for i in 0..2_000u64 {
+        tracker.record(&format!("conv_{i}"), "sender", 1_000 + i);
+    }
+    assert!(tracker.recent_events.len() <= MAX_ESCALATION_CONVERSATIONS);
+
+    let mut pile_on = EscalationTracker::new();
+    for (i, sender) in ["a", "b", "a", "b", "a"].iter().enumerate() {
+        pile_on.record("c", sender, 1_000 + i as u64);
+    }
+    assert!(pile_on.check_bonus("c", 1_010) > 0.0);
+}
+
+#[test]
+fn update_config_preserves_kids_memory() {
+    let db = PatternDatabase::default_mvp();
+    let mut analyzer = Analyzer::new(child_config(), &db);
+    let conv = "cfg_kids_mem";
+
+    analyzer.analyze_with_context(
+        &child_input(
+            "don't tell your parents about our little secret",
+            "groomer",
+            conv,
+        ),
+        1_000,
+    );
+    let before = analyzer.kids_conversation_risk_score(conv);
+    assert!(before > 0.0, "grooming must leave kids memory");
+
+    analyzer
+        .update_config(child_config(), &db)
+        .expect("config update succeeds");
+
+    assert_eq!(analyzer.kids_conversation_risk_score(conv), before);
+}

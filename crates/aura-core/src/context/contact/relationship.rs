@@ -295,7 +295,7 @@ impl ContactProfile {
 
     /// Returns the duration in milliseconds between first and last seen timestamps.
     pub fn relationship_age_ms(&self) -> u64 {
-        self.last_seen_ms - self.first_seen_ms
+        self.last_seen_ms.saturating_sub(self.first_seen_ms)
     }
 
     fn record_narrative_hit(&mut self, subtype: &str, timestamp_ms: u64) {

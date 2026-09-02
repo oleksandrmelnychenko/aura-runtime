@@ -280,7 +280,7 @@ impl TimingAnalyzer {
         }
 
         let first_msg = all_from_sender[0].timestamp_ms;
-        let elapsed_hours = (now_ms - first_msg) as f32 / (1000.0 * 3600.0);
+        let elapsed_hours = now_ms.saturating_sub(first_msg) as f32 / (1000.0 * 3600.0);
 
         if elapsed_hours <= 2.0 && all_from_sender.len() >= 15 {
             Some(DetectionSignal::context(

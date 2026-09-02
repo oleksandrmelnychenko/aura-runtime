@@ -48,6 +48,10 @@ use crate::types::*;
 
 mod stages;
 
+const ESCALATION_WINDOW_MS: u64 = 3600 * 1000;
+const MAX_ESCALATION_ENTRIES_PER_CONVERSATION: usize = 256;
+const MAX_ESCALATION_CONVERSATIONS: usize = 512;
+
 struct EscalationTracker {
     recent_events: HashMap<ConversationId, Vec<(u64, SenderId)>>,
 }
@@ -64,11 +68,37 @@ impl EscalationTracker {
     }
 
     fn record(&mut self, conversation_id: &str, sender_id: &str, timestamp_ms: u64) {
+        if self.recent_events.len() >= MAX_ESCALATION_CONVERSATIONS
+            && !self.recent_events.contains_key(conversation_id)
+        {
+            self.cleanup(timestamp_ms);
+            if self.recent_events.len() >= MAX_ESCALATION_CONVERSATIONS {
+                self.evict_stalest_conversation();
+            }
+        }
+
+        let cutoff = timestamp_ms.saturating_sub(ESCALATION_WINDOW_MS);
         let entries = self
             .recent_events
             .entry(ConversationId::from(conversation_id))
             .or_default();
+        entries.retain(|(ts, _)| *ts >= cutoff);
         entries.push((timestamp_ms, SenderId::from(sender_id)));
+        if entries.len() > MAX_ESCALATION_ENTRIES_PER_CONVERSATION {
+            let overflow = entries.len() - MAX_ESCALATION_ENTRIES_PER_CONVERSATION;
+            entries.drain(0..overflow);
+        }
+    }
+
+    fn evict_stalest_conversation(&mut self) {
+        let stalest = self
+            .recent_events
+            .iter()
+            .min_by_key(|(_, entries)| entries.iter().map(|(ts, _)| *ts).max().unwrap_or(0))
+            .map(|(conversation_id, _)| conversation_id.clone());
+        if let Some(conversation_id) = stalest {
+            self.recent_events.remove(&conversation_id);
+        }
     }
 
     /// Returns a proportional escalation factor (0.0 or 0.20).
@@ -78,8 +108,7 @@ impl EscalationTracker {
     /// 20% of their current score. This replaces the previous flat
     /// +0.15 bonus which disproportionately affected low scores.
     fn check_bonus(&self, conversation_id: &str, now_ms: u64) -> f32 {
-        let one_hour = 3600 * 1000;
-        let cutoff = now_ms.saturating_sub(one_hour);
+        let cutoff = now_ms.saturating_sub(ESCALATION_WINDOW_MS);
 
         if let Some(entries) = self.recent_events.get(conversation_id) {
             let mut recent_count = 0usize;
@@ -107,8 +136,7 @@ impl EscalationTracker {
     }
 
     fn cleanup(&mut self, now_ms: u64) {
-        let one_hour = 3600 * 1000;
-        let cutoff = now_ms.saturating_sub(one_hour);
+        let cutoff = now_ms.saturating_sub(ESCALATION_WINDOW_MS);
         self.recent_events.retain(|_, entries| {
             entries.retain(|(ts, _)| *ts >= cutoff);
             !entries.is_empty()
@@ -974,7 +1002,12 @@ impl Analyzer {
         self.context_tracker.update_config(tracker_config);
         self.signal_enricher = signal_enricher;
         self.ml_pipeline = ml_pipeline;
+        // The domain runtime is rebuilt for the new configuration, but kids
+        // memory belongs to the account and must survive a config change the
+        // same way conversation timelines do.
+        let kids_memory = self.domain_runtime.export_kids_memory();
         self.domain_runtime = AuraDomainRuntime::new();
+        self.domain_runtime.import_kids_memory(&kids_memory);
         self.config = config;
         Ok(())
     }
