@@ -97,6 +97,28 @@
           "review_ticket": "bigbang-prod"
         }
       ]
+    },
+    {
+      "dataset_id": "aura_benign_everyday_chat_v1",
+      "entries": [
+        {
+          "change_id": "2026-09-02-benign-everyday-chat-v1",
+          "changed_at_ms": 1788300000000,
+          "author": "aura_core_team",
+          "change_kind": "coverage_expansion",
+          "summary": "Added the negatives-only benign everyday-chat corpus (school, gaming, family logistics, tech support, emotions without crisis) as a release-blocking false-positive gate for the kids composition layer.",
+          "affected_slices": [
+            "tone:benign",
+            "language:en",
+            "language:uk",
+            "language:ru",
+            "age_band:child",
+            "age_band:teen"
+          ],
+          "support_impact": "increase",
+          "review_ticket": "core-hardening-phase2b"
+        }
+      ]
     }
   ]
 }

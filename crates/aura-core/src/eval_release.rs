@@ -8,24 +8,24 @@ use crate::{
     calibration_for_threat, canonical_manipulation_scenarios, canonical_messenger_scenarios,
     canonical_multilingual_scenarios, canonical_noisy_slang_scenarios,
     canonical_social_context_seed_scenarios, default_corpus_style_profiles,
-    default_robustness_profiles, default_social_context_profiles,
+    default_robustness_profiles, default_social_context_profiles, evaluate_benign_chat_suite,
     evaluate_corpus_style_policy_suite, evaluate_corpus_style_suite,
     evaluate_external_curated_policy_suite, evaluate_external_curated_suite,
     evaluate_realistic_chat_policy_suite, evaluate_realistic_chat_suite, evaluate_robustness_suite,
     evaluate_scenario_quality_gates, evaluate_social_context_policy_suite,
-    evaluate_social_context_suite, pre_release_child_safety_gates, pre_release_corpus_policy_gates,
-    pre_release_corpus_style_gates, pre_release_external_curated_gates_for_manifest,
-    pre_release_external_curated_policy_gates, pre_release_manipulation_gates,
-    pre_release_multilingual_gates, pre_release_noisy_slang_gates,
+    evaluate_social_context_suite, pre_release_benign_chat_gates, pre_release_child_safety_gates,
+    pre_release_corpus_policy_gates, pre_release_corpus_style_gates,
+    pre_release_external_curated_gates_for_manifest, pre_release_external_curated_policy_gates,
+    pre_release_manipulation_gates, pre_release_multilingual_gates, pre_release_noisy_slang_gates,
     pre_release_realistic_chat_gates, pre_release_realistic_chat_policy_gates,
     pre_release_robustness_gates, pre_release_social_context_gates,
-    pre_release_social_context_policy_gates, run_corpus_style_suite,
-    run_external_curated_gold_suite, run_external_curated_suite, run_realistic_chat_suite,
-    run_robustness_suite, run_scenario_cases, run_social_context_suite, summarize_scenario_runs,
-    CorpusStyleSuiteSummary, GateComparison, LanguageSliceSummary, PolicyActionSummary,
-    RealisticChatSuiteSummary, RobustnessSuiteSummary, ScenarioEvaluationSummary,
-    ScenarioGateCheck, ScenarioGateReport, ScenarioQualityGates, SocialContextSuiteSummary,
-    ThreatType,
+    pre_release_social_context_policy_gates, run_benign_everyday_chat_suite,
+    run_corpus_style_suite, run_external_curated_gold_suite, run_external_curated_suite,
+    run_realistic_chat_suite, run_robustness_suite, run_scenario_cases, run_social_context_suite,
+    summarize_scenario_runs, BenignChatSuiteSummary, CorpusStyleSuiteSummary, GateComparison,
+    LanguageSliceSummary, PolicyActionSummary, RealisticChatSuiteSummary, RobustnessSuiteSummary,
+    ScenarioEvaluationSummary, ScenarioGateCheck, ScenarioGateReport, ScenarioQualityGates,
+    SocialContextSuiteSummary, ThreatType,
 };
 
 pub const RELEASE_REPORT_SCHEMA_VERSION: u32 = 3;
@@ -358,6 +358,7 @@ const REALISTIC_REQUIRED_SLICES: &[RequiredSlice] = &[
     RequiredSlice::new("relationship", "stranger"),
     RequiredSlice::new("relationship", "trusted_adult"),
 ];
+const BENIGN_REQUIRED_SLICES: &[RequiredSlice] = &[RequiredSlice::new("tone", "benign")];
 const EXTERNAL_REQUIRED_SLICES: &[RequiredSlice] = &[
     RequiredSlice::new("age_band", "child"),
     RequiredSlice::new("language", "ru"),
@@ -427,6 +428,29 @@ fn realistic_slice_policy() -> SuiteSliceSupportPolicy {
     SuiteSliceSupportPolicy {
         default_enforcement: SupportEnforcement::ReportOnly,
         required_slices: REALISTIC_REQUIRED_SLICES,
+    }
+}
+
+fn benign_slice_policy() -> SuiteSliceSupportPolicy {
+    SuiteSliceSupportPolicy {
+        default_enforcement: SupportEnforcement::ReportOnly,
+        required_slices: BENIGN_REQUIRED_SLICES,
+    }
+}
+
+/// Support thresholds for a negatives-only suite: positive scenarios, onset
+/// cases and calibration examples cannot exist there, so only the negative
+/// scenario floor is kept from the release thresholds.
+pub fn negatives_only_release_support_thresholds(
+    thresholds: ReleaseSupportThresholds,
+) -> ReleaseSupportThresholds {
+    ReleaseSupportThresholds {
+        min_reportable_calibration_examples: 0,
+        min_reportable_onset_cases: 0,
+        min_blocking_calibration_examples: 0,
+        min_blocking_positive_scenarios: 0,
+        min_blocking_negative_scenarios: thresholds.min_blocking_negative_scenarios,
+        min_blocking_onset_cases: 0,
     }
 }
 
@@ -747,6 +771,9 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
         support_thresholds,
     );
 
+    let benign_summary = run_benign_everyday_chat_suite(pattern_db, bin_count);
+    let benign_suite = build_benign_suite_report(&benign_summary, support_thresholds);
+
     let suites = vec![
         canonical_suite,
         manipulation_suite,
@@ -758,6 +785,7 @@ pub fn run_pre_release_report(pattern_db: &PatternDatabase, bin_count: usize) ->
         realistic_suite,
         external_mixed_suite,
         external_gold_suite,
+        benign_suite,
     ];
 
     let suite_index: BTreeMap<_, _> = suites
@@ -1424,6 +1452,63 @@ fn build_external_suite_report(
         evaluation: evaluation_metrics_from_summary(&summary.evaluation),
         evaluation_gates: gate_report_snapshot(&overall_eval),
         policy: Some(policy_release_snapshot(&summary.policy, &overall_policy)),
+        social_context_inference: None,
+        slices,
+    }
+}
+
+fn build_benign_suite_report(
+    summary: &BenignChatSuiteSummary,
+    support_thresholds: ReleaseSupportThresholds,
+) -> SuiteReleaseReport {
+    let support_thresholds = negatives_only_release_support_thresholds(support_thresholds);
+    let support_policy = benign_slice_policy();
+    let (overall_eval, by_language_eval) =
+        evaluate_benign_chat_suite(summary, &pre_release_benign_chat_gates());
+    let language_eval = by_language_eval.into_iter().collect::<BTreeMap<_, _>>();
+
+    let mut slices = Vec::new();
+    let mut lookup_failed = false;
+    // The whole corpus is one benign tone slice so the wave1 safe-cohort
+    // false-positive budget can read it directly.
+    slices.push(build_slice_report(
+        "tone",
+        "benign",
+        &summary.evaluation,
+        &overall_eval,
+        None,
+        support_policy.enforcement_for("tone", "benign"),
+        support_thresholds,
+    ));
+    for slice in &summary.by_language {
+        let gate_report = cloned_gate_report(
+            &language_eval,
+            &slice.slice_id,
+            "benign.language",
+            &mut lookup_failed,
+        );
+        slices.push(build_slice_report(
+            "language",
+            &slice.slice_id,
+            &slice.evaluation,
+            &gate_report,
+            None,
+            support_policy.enforcement_for("language", &slice.slice_id),
+            support_thresholds,
+        ));
+    }
+    let missing_required_slices = support_policy.missing_required_slices(&slices);
+
+    SuiteReleaseReport {
+        suite_id: "benign_everyday_chat".to_string(),
+        status: finalize_suite_status(
+            suite_status(&overall_eval, None, &slices, &missing_required_slices),
+            lookup_failed,
+        ),
+        missing_required_slices,
+        evaluation: evaluation_metrics_from_summary(&summary.evaluation),
+        evaluation_gates: gate_report_snapshot(&overall_eval),
+        policy: None,
         social_context_inference: None,
         slices,
     }

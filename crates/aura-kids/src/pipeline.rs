@@ -2723,4 +2723,76 @@ mod tests {
             "kids.memory.guardian_blocked_sender"
         ));
     }
+
+    fn benign_everyday_corpus_messages() -> Vec<(String, String)> {
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../aura-core/data/benign_everyday_chat_cases.json"
+        ))
+        .expect("benign corpus parses");
+        corpus["cases"]
+            .as_array()
+            .expect("cases array")
+            .iter()
+            .flat_map(|case| {
+                let id = case["id"].as_str().expect("case id").to_string();
+                case["messages"]
+                    .as_array()
+                    .expect("messages array")
+                    .iter()
+                    .map(move |message| {
+                        (
+                            id.clone(),
+                            message["text"].as_str().expect("message text").to_string(),
+                        )
+                    })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn benign_everyday_corpus_never_composes() {
+        let messages = benign_everyday_corpus_messages();
+        assert!(
+            messages.len() >= 240,
+            "corpus has {} messages",
+            messages.len()
+        );
+        let composed = messages
+            .iter()
+            .filter_map(|(id, text)| {
+                let candidates = crate::composition::detect(text).expect("semantic prepare");
+                (!candidates.is_empty()).then(|| format!("{id}: {text:?} -> {candidates:?}"))
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            composed.is_empty(),
+            "benign messages composed:\n{}",
+            composed.join("\n")
+        );
+    }
+
+    #[test]
+    fn benign_everyday_corpus_never_warns() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        let flagged = benign_everyday_corpus_messages()
+            .iter()
+            .filter_map(|(id, text)| {
+                let output = crate::pipeline::detect_kids_pipeline(&input(text));
+                let escalates = matches!(
+                    output.action,
+                    Some(DomainAction::Warn) | Some(DomainAction::Block)
+                ) || output
+                    .signals
+                    .iter()
+                    .any(|signal| signal.severity.as_deref() == Some("critical"));
+                escalates.then(|| format!("{id}: {text:?} -> {:?}", output.signals))
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            flagged.is_empty(),
+            "benign messages escalated:\n{}",
+            flagged.join("\n")
+        );
+    }
 }

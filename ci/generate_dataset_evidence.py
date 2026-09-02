@@ -195,6 +195,26 @@ def validate_realistic_dataset(dataset: dict, changelog_entries: list[dict] | No
     }
 
 
+def validate_benign_dataset(dataset: dict, changelog_entries: list[dict] | None, path: Path) -> dict:
+    """Benign corpus shares the realistic schema but must stay negatives-only."""
+    report = validate_realistic_dataset(dataset, changelog_entries, path)
+    errors = report["errors"]
+    for case in dataset.get("cases", []):
+        if not isinstance(case, dict):
+            continue
+        case_id = case.get("id", "<unknown>")
+        ensure(case.get("primary_threat") is None, f"benign case {case_id} must not declare primary_threat", errors)
+        ensure(case.get("onset_step") is None, f"benign case {case_id} must not declare onset_step", errors)
+        ensure(case.get("policy_expectation_case") is None, f"benign case {case_id} must not reference a policy expectation case", errors)
+        ensure(bool(case.get("tracked_threats")), f"benign case {case_id} must list tracked_threats", errors)
+        for message in case.get("messages", []):
+            if isinstance(message, dict) and message.get("observed_threats"):
+                errors.append(f"benign case {case_id} must not declare observed_threats")
+    report["dataset_type"] = "benign_everyday_chat"
+    report["status"] = "pass" if not errors else "fail"
+    return report
+
+
 def validate_external_dataset(dataset: dict, changelog_entries: list[dict] | None, path: Path) -> dict:
     errors: list[str] = []
     ensure(dataset.get("schema_version") == 1, "external dataset schema_version must be 1", errors)
@@ -277,10 +297,12 @@ def main() -> int:
     workspace_root = Path(__file__).resolve().parents[1]
     realistic_path = workspace_root / "crates/aura-core/data/realistic_chat_cases.json"
     external_path = workspace_root / "crates/aura-core/data/external_curated_chat_cases.json"
+    benign_path = workspace_root / "crates/aura-core/data/benign_everyday_chat_cases.json"
     changelog_path = workspace_root / "crates/aura-core/data/dataset_changelog.json"
 
     realistic = load_json(realistic_path)
     external = load_json(external_path)
+    benign = load_json(benign_path)
     changelog = load_json(changelog_path)
 
     changelog_errors: list[str] = []
@@ -296,6 +318,11 @@ def main() -> int:
         changelog_by_dataset.get(external.get("dataset_id", "")),
         external_path,
     )
+    benign_report = validate_benign_dataset(
+        benign,
+        changelog_by_dataset.get(benign.get("dataset_id", "")),
+        benign_path,
+    )
 
     evidence = {
         "schema_version": SCHEMA_VERSION,
@@ -307,7 +334,7 @@ def main() -> int:
             "status": "pass" if not changelog_errors else "fail",
             "errors": changelog_errors,
         },
-        "datasets": [realistic_report, external_report],
+        "datasets": [realistic_report, external_report, benign_report],
     }
 
     if changelog_errors or any(dataset["status"] != "pass" for dataset in evidence["datasets"]):

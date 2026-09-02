@@ -17,6 +17,7 @@ Current data artifacts include:
 - [`crates/aura-core/data/social_context_cohorts.json`](../crates/aura-core/data/social_context_cohorts.json)
 - [`crates/aura-core/data/realistic_chat_cases.json`](../crates/aura-core/data/realistic_chat_cases.json)
 - [`crates/aura-core/data/external_curated_chat_cases.json`](../crates/aura-core/data/external_curated_chat_cases.json)
+- [`crates/aura-core/data/benign_everyday_chat_cases.json`](../crates/aura-core/data/benign_everyday_chat_cases.json)
 - [`crates/aura-core/data/dataset_changelog.json`](../crates/aura-core/data/dataset_changelog.json)
 
 ## Governance Principles
@@ -101,6 +102,25 @@ Snapshot date: March 15, 2026.
   - `research_seed=18`
   - `school_context_seed=17`
   - `support_boundary_seed=20`
+
+### Benign Everyday Chat Corpus
+
+Snapshot date: September 2, 2026. Negatives-only corpus
+(`aura_benign_everyday_chat_v1`) that feeds the `benign_everyday_chat` release
+suite; its `tone:benign` slice is release-blocking and also counts toward the
+wave1 safe-cohort false-positive budget.
+
+- total cases: 240 (one benign message each, no `primary_threat`,
+  `onset_step`, or `observed_threats`)
+- languages: `en=80`, `ru=80`, `uk=80`
+- age bands: `child=120`, `teen=120`
+- relationships:
+  - `group_peer=18`
+  - `peer=216`
+  - `trusted_adult=6`
+- gates: `max_negative_false_positive_rate <= 0.01` (threshold-based) and
+  `max_action_false_positive_rate <= 0.01` (any non-`Allow` action or threat
+  type on any step)
 
 ## Release-Critical Slices Brought To Hard-Gating Support
 
@@ -194,3 +214,5 @@ behavioral realism is valuable; private identifying content is not.
 - make mixed-vs-gold comparison part of corpus promotion review
 - keep a lightweight dataset changelog for external curated updates
 - emit dataset evidence for the exact corpus files used by CI and promotion gates
+- keep the benign everyday-chat corpus negatives-only and fail the release
+  report when its false-positive gates regress

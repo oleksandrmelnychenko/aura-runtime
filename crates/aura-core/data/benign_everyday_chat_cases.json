@@ -1,0 +1,6988 @@
+{
+  "schema_version": 1,
+  "dataset_id": "aura_benign_everyday_chat_v1",
+  "dataset_label": "AURA Benign Everyday Chat Corpus",
+  "maintainer": "aura_core_team",
+  "created_at_ms": 1788300000000,
+  "updated_at_ms": 1788300000000,
+  "cases": [
+    {
+      "id": "benign_en_school_01",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "did you finish the math homework? number 7 is impossible",
+          "sender_id": "friend_en_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_02",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "we have a test on friday, can you send me your notes?",
+          "sender_id": "friend_en_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_03",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the teacher moved our presentation to next week",
+          "sender_id": "friend_en_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_04",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I can't open the file you sent, it says the format is wrong",
+          "sender_id": "friend_en_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_05",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "you must do your homework before we play, my mom said",
+          "sender_id": "friend_en_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_06",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "what page was the reading for tomorrow?",
+          "sender_id": "friend_en_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_07",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "our group project is due monday, who's doing the slides?",
+          "sender_id": "friend_en_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_08",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I forgot my science book at school again",
+          "sender_id": "friend_en_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_09",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "can you explain how fractions work? I'm lost",
+          "sender_id": "friend_en_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_school_10",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the substitute teacher was actually nice today",
+          "sender_id": "friend_en_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_01",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I want to kill this level, the boss is so hard",
+          "sender_id": "friend_en_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_02",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "we won the match today! 3-1 in the final round",
+          "sender_id": "friend_en_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_03",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the server is dead again, can't log in",
+          "sender_id": "classmate_en_3"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_04",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "wanna play minecraft after dinner?",
+          "sender_id": "friend_en_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_05",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I finally got the diamond sword lol",
+          "sender_id": "friend_en_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_06",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "gg, that last round was insane",
+          "sender_id": "classmate_en_6"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_07",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "my controller battery died mid game",
+          "sender_id": "friend_en_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_08",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "let's do the raid at 7, bring your best gear",
+          "sender_id": "friend_en_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_09",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I got a new skin for my character, it's blue",
+          "sender_id": "classmate_en_9"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_gaming_10",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the update broke my game, it keeps crashing",
+          "sender_id": "friend_en_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_01",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "my phone is dead, I will call you later from my mom's",
+          "sender_id": "friend_en_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_02",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "take care! see you at practice tomorrow",
+          "sender_id": "friend_en_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_03",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "no problem, I'll bring the charger",
+          "sender_id": "friend_en_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_04",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "can you come over tomorrow? we could bake cookies",
+          "sender_id": "friend_en_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_05",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "mom says dinner is at six, don't be late",
+          "sender_id": "friend_en_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_06",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I have to go, my dad needs the laptop",
+          "sender_id": "friend_en_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_07",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "grandma is visiting this weekend so I can't come",
+          "sender_id": "friend_en_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_08",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "we're leaving for the trip at 8, pack your jacket",
+          "sender_id": "friend_en_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_09",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "my little brother broke my headphones again",
+          "sender_id": "friend_en_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_family_10",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "can your mom pick us up after the movie?",
+          "sender_id": "friend_en_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_sports_01",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "practice is cancelled, the field is flooded",
+          "sender_id": "friend_en_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_sports_02",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "coach wants us there 15 minutes early on saturday",
+          "sender_id": "friend_en_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_sports_03",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I scored twice today, still can't believe it",
+          "sender_id": "friend_en_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_sports_04",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "trusted_adult",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "don't forget your clothes for PE, we have swimming",
+          "sender_id": "coach_en"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_sports_05",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "my knee still hurts from the game but it's getting better",
+          "sender_id": "friend_en_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_sports_06",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the tournament bracket is out, we play the blue team first",
+          "sender_id": "friend_en_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_sports_07",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "bring water, it's going to be hot at the track meet",
+          "sender_id": "friend_en_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_sports_08",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "trusted_adult",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "did you see the goal in the last minute? unreal",
+          "sender_id": "coach_en"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_01",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "pizza or tacos for the party? vote now",
+          "sender_id": "friend_en_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_02",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "it's raining so hard, the bus was 20 minutes late",
+          "sender_id": "friend_en_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_03",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I'm so tired, I stayed up reading",
+          "sender_id": "classmate_en_3"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_04",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "so annoyed, the wifi keeps dropping during class",
+          "sender_id": "friend_en_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_05",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "happy birthday!! hope you get the bike",
+          "sender_id": "friend_en_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_06",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the new episode comes out tonight, no spoilers please",
+          "sender_id": "classmate_en_6"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_07",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "my cat knocked over my water bottle onto my homework",
+          "sender_id": "friend_en_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_08",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "what time does the library close today?",
+          "sender_id": "friend_en_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_09",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I'm bored, want to go to the park?",
+          "sender_id": "classmate_en_9"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_misc_10",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "can I borrow your pencil case tomorrow? mine broke",
+          "sender_id": "friend_en_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_01",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the login page keeps saying wrong password, I need to reset it",
+          "sender_id": "friend_en_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_02",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "update the app, the old version doesn't work anymore",
+          "sender_id": "friend_en_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_03",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "my laptop won't turn on, I think the battery is dead",
+          "sender_id": "friend_en_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_04",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "how do I share my screen in the class call?",
+          "sender_id": "friend_en_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_05",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the printer is out of ink again",
+          "sender_id": "friend_en_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_06",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "send me the link to the homework portal, I lost it",
+          "sender_id": "friend_en_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_07",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I changed my profile picture, do you like it?",
+          "sender_id": "friend_en_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_08",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the video won't load, maybe it's your connection",
+          "sender_id": "friend_en_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_09",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I got locked out of my account and had to ask my dad for help",
+          "sender_id": "friend_en_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_tech_10",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "can you show me how to make a group chat?",
+          "sender_id": "friend_en_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_01",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I'm nervous about the recital but excited too",
+          "sender_id": "friend_en_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_02",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "that movie made me cry, in a good way",
+          "sender_id": "friend_en_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_03",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I'm better without sugar honestly, I sleep more",
+          "sender_id": "friend_en_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_04",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I don't feel like going to school tomorrow, it's so boring",
+          "sender_id": "friend_en_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_05",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I'm dead tired after the hike, going to sleep early",
+          "sender_id": "friend_en_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_06",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "ugh I failed the quiz, going to study harder next time",
+          "sender_id": "friend_en_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_07",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I miss you, when are you back from camp?",
+          "sender_id": "friend_en_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_08",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I'm proud of you for making the team",
+          "sender_id": "friend_en_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_09",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "thanks for helping me with the project, you're the best",
+          "sender_id": "friend_en_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_emotion_10",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "sorry I didn't reply, I was at my grandma's",
+          "sender_id": "friend_en_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_01",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "meet me by the gym after class, we'll walk together",
+          "sender_id": "friend_en_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_02",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "let's go to the pool on saturday if it's sunny",
+          "sender_id": "friend_en_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_03",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I'll wake you up tomorrow, don't miss the bus again",
+          "sender_id": "friend_en_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_04",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "nobody told you about the test? it's on chapter 4",
+          "sender_id": "friend_en_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_05",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I don't feel safe walking alone at night so my dad will drive me",
+          "sender_id": "friend_en_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_06",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "goodbye, I'm off to school, talk later",
+          "sender_id": "friend_en_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_07",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "where is the field trip permission slip? I lost mine",
+          "sender_id": "friend_en_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_08",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "can we move the study session to thursday?",
+          "sender_id": "friend_en_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_09",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "I'll save you a seat on the bus",
+          "sender_id": "friend_en_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_10",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "bring your card for the library, they check now",
+          "sender_id": "friend_en_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_11",
+      "default_language": "en",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "the code for the classroom door changed, ask the teacher",
+          "sender_id": "friend_en_11"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_en_plans_12",
+      "default_language": "en",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "login with the school email, not your personal one",
+          "sender_id": "friend_en_12"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_01",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "ти зробив домашку з математики? сьомий номер взагалі не виходить",
+          "sender_id": "friend_uk_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_02",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "у нас контрольна в п'ятницю, скинеш свої конспекти?",
+          "sender_id": "friend_uk_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_03",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "вчителька перенесла презентацію на наступний тиждень",
+          "sender_id": "friend_uk_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_04",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "не можу відкрити файл, який ти скинув, пише що формат не той",
+          "sender_id": "friend_uk_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_05",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мама сказала, що я мушу зробити уроки перед грою",
+          "sender_id": "friend_uk_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_06",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "яка сторінка була на завтра з читання?",
+          "sender_id": "friend_uk_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_07",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "проєкт здаємо в понеділок, хто робить слайди?",
+          "sender_id": "friend_uk_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_08",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "знову забув підручник з природознавства в школі",
+          "sender_id": "friend_uk_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_09",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "поясниш мені дроби? я нічого не розумію",
+          "sender_id": "friend_uk_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_school_10",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "у мене зникла мережа, тому не відповідав",
+          "sender_id": "friend_uk_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_01",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "хочу нарешті пройти цей рівень, бос дуже складний",
+          "sender_id": "friend_uk_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_02",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "ми виграли матч! 3:1 у фіналі",
+          "sender_id": "friend_uk_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_03",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "сервер знову лежить, не можу зайти",
+          "sender_id": "classmate_uk_3"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_04",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "пограємо в майнкрафт після вечері?",
+          "sender_id": "friend_uk_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_05",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "нарешті вибив алмазний меч)",
+          "sender_id": "friend_uk_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_06",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "гг, останній раунд був божевільний",
+          "sender_id": "classmate_uk_6"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_07",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "в мене сів джойстик посеред гри",
+          "sender_id": "friend_uk_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_08",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "збираємось на рейд о сьомій, бери найкраще спорядження",
+          "sender_id": "friend_uk_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_09",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "купив новий скін для персонажа, синій",
+          "sender_id": "classmate_uk_9"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_gaming_10",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "оновлення зламало гру, постійно вилітає",
+          "sender_id": "friend_uk_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_01",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "у мене сів телефон, подзвоню пізніше з маминого",
+          "sender_id": "friend_uk_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_02",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "бережи себе! побачимось на тренуванні завтра",
+          "sender_id": "friend_uk_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_03",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "без проблем, я візьму зарядку",
+          "sender_id": "friend_uk_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_04",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я побачу тебе завтра? можемо спекти печиво",
+          "sender_id": "friend_uk_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_05",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мама каже, що вечеря о шостій, не запізнюйся",
+          "sender_id": "friend_uk_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_06",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я мушу йти, татові потрібен ноутбук",
+          "sender_id": "friend_uk_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_07",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "бабуся приїжджає на вихідні, тому я не зможу",
+          "sender_id": "friend_uk_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_08",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "виїжджаємо о восьмій, візьми куртку",
+          "sender_id": "friend_uk_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_09",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "молодший брат знову зламав мої навушники",
+          "sender_id": "friend_uk_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_family_10",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "твоя мама зможе забрати нас після кіно?",
+          "sender_id": "friend_uk_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_sports_01",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "тренування скасували, поле залило",
+          "sender_id": "friend_uk_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_sports_02",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "тренер хоче, щоб ми були на 15 хвилин раніше в суботу",
+          "sender_id": "friend_uk_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_sports_03",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я забив два голи сьогодні, досі не вірю",
+          "sender_id": "friend_uk_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_sports_04",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "trusted_adult",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "не забудь форму на фізкультуру, у нас плавання",
+          "sender_id": "coach_uk"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_sports_05",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "коліно ще болить після гри, але вже краще",
+          "sender_id": "friend_uk_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_sports_06",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "сітку турніру виклали, ми граємо з синіми першими",
+          "sender_id": "friend_uk_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_sports_07",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "візьми воду, на змаганнях буде спекотно",
+          "sender_id": "friend_uk_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_sports_08",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "trusted_adult",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "бачив гол на останній хвилині? нереально",
+          "sender_id": "coach_uk"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_01",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "піца чи тако на вечірку? голосуйте",
+          "sender_id": "friend_uk_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_02",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "такий дощ, автобус запізнився на 20 хвилин",
+          "sender_id": "friend_uk_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_03",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я така втомлена, читала до ночі",
+          "sender_id": "classmate_uk_3"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_04",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "як дратує, вайфай постійно відвалюється на уроці",
+          "sender_id": "friend_uk_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_05",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "з днем народження!! сподіваюся, тобі подарують велосипед",
+          "sender_id": "friend_uk_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_06",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "нова серія виходить сьогодні, без спойлерів будь ласка",
+          "sender_id": "classmate_uk_6"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_07",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "кіт перекинув пляшку з водою на мою домашку",
+          "sender_id": "friend_uk_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_08",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "о котрій сьогодні закривається бібліотека?",
+          "sender_id": "friend_uk_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_09",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мені нудно, підемо в парк?",
+          "sender_id": "classmate_uk_9"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_misc_10",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "можна позичити твій пенал завтра? мій зламався",
+          "sender_id": "friend_uk_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_01",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "сторінка входу пише, що пароль неправильний, треба скинути",
+          "sender_id": "friend_uk_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_02",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "онови застосунок, стара версія більше не працює",
+          "sender_id": "friend_uk_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_03",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "ноутбук не вмикається, здається, батарея сіла",
+          "sender_id": "friend_uk_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_04",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "як показати свій екран на уроці онлайн?",
+          "sender_id": "friend_uk_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_05",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "принтер знову без чорнила",
+          "sender_id": "friend_uk_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_06",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "скинь посилання на портал з домашкою, я загубив",
+          "sender_id": "friend_uk_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_07",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я змінив фото профілю, подобається?",
+          "sender_id": "friend_uk_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_08",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "відео не вантажиться, може, у тебе інтернет",
+          "sender_id": "friend_uk_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_09",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мене викинуло з акаунта, довелося просити тата допомогти",
+          "sender_id": "friend_uk_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_tech_10",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "покажеш, як створити груповий чат?",
+          "sender_id": "friend_uk_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_01",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я хвилююся перед концертом, але й радію",
+          "sender_id": "friend_uk_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_02",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "цей фільм змусив мене плакати, у хорошому сенсі",
+          "sender_id": "friend_uk_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_03",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "відверто кажучи, мені без солодкого краще, я краще сплю",
+          "sender_id": "friend_uk_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_04",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "не хочеться завтра в школу, там так нудно",
+          "sender_id": "friend_uk_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_05",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я помираю з голоду після походу, іду вечеряти",
+          "sender_id": "friend_uk_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_06",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "ех, завалив тест, буду вчити більше наступного разу",
+          "sender_id": "friend_uk_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_07",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "сумую за тобою, коли повертаєшся з табору?",
+          "sender_id": "friend_uk_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_08",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "пишаюся тобою, що потрапив у команду",
+          "sender_id": "friend_uk_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_09",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "дякую за допомогу з проєктом, ти найкращий",
+          "sender_id": "friend_uk_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_emotion_10",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "вибач, що не відповіла, була в бабусі",
+          "sender_id": "friend_uk_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_01",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "зустрінемось біля спортзалу після уроків, підемо разом",
+          "sender_id": "friend_uk_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_02",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "ходімо в басейн у суботу, якщо буде сонце",
+          "sender_id": "friend_uk_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_03",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я тебе розбуджу завтра, не проспи автобус",
+          "sender_id": "friend_uk_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_04",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "тобі ніхто не сказав про тест? він по четвертому розділу",
+          "sender_id": "friend_uk_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_05",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мені не дуже спокійно ходити самій увечері, тому тато відвезе",
+          "sender_id": "friend_uk_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_06",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "бувай, я в школу, потім напишу",
+          "sender_id": "friend_uk_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_07",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "де дозвіл на екскурсію? я свій загубив",
+          "sender_id": "friend_uk_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_08",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "перенесемо підготовку на четвер?",
+          "sender_id": "friend_uk_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_09",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "займу тобі місце в автобусі",
+          "sender_id": "friend_uk_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_10",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "візьми картку в бібліотеку, тепер перевіряють",
+          "sender_id": "friend_uk_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_11",
+      "default_language": "uk",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "код на дверях класу змінили, спитай у вчительки",
+          "sender_id": "friend_uk_11"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_uk_plans_12",
+      "default_language": "uk",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "заходь через шкільну пошту, а не через особисту",
+          "sender_id": "friend_uk_12"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_01",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "ты сделал домашку по математике? седьмой номер вообще не получается",
+          "sender_id": "friend_ru_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_02",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "у нас контрольная в пятницу, скинешь свои конспекты?",
+          "sender_id": "friend_ru_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_03",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "учительница перенесла презентацию на следующую неделю",
+          "sender_id": "friend_ru_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_04",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "не могу открыть файл, который ты скинул, пишет что формат не тот",
+          "sender_id": "friend_ru_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_05",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мама сказала, что я должен сделать уроки перед игрой",
+          "sender_id": "friend_ru_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_06",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "какая страница была на завтра по чтению?",
+          "sender_id": "friend_ru_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_07",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "проект сдаём в понедельник, кто делает слайды?",
+          "sender_id": "friend_ru_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_08",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "опять забыл учебник по природоведению в школе",
+          "sender_id": "friend_ru_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_09",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "объяснишь мне дроби? я ничего не понимаю",
+          "sender_id": "friend_ru_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_school_10",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "у меня пропала сеть, поэтому не отвечал",
+          "sender_id": "friend_ru_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_01",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "хочу наконец пройти этот уровень, босс очень сложный",
+          "sender_id": "friend_ru_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_02",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мы выиграли матч! 3:1 в финале",
+          "sender_id": "friend_ru_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_03",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "сервер опять лежит, не могу зайти",
+          "sender_id": "classmate_ru_3"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_04",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "поиграем в майнкрафт после ужина?",
+          "sender_id": "friend_ru_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_05",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "наконец выбил алмазный меч)",
+          "sender_id": "friend_ru_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_06",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "гг, последний раунд был безумный",
+          "sender_id": "classmate_ru_6"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_07",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "у меня сел джойстик посреди игры",
+          "sender_id": "friend_ru_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_08",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "собираемся на рейд в семь, бери лучшее снаряжение",
+          "sender_id": "friend_ru_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_09",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "купил новый скин для персонажа, синий",
+          "sender_id": "classmate_ru_9"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_gaming_10",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "обновление сломало игру, постоянно вылетает",
+          "sender_id": "friend_ru_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_01",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "у меня сел телефон, позвоню позже с маминого",
+          "sender_id": "friend_ru_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_02",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "береги себя! увидимся на тренировке завтра",
+          "sender_id": "friend_ru_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_03",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "без проблем, я возьму зарядку",
+          "sender_id": "friend_ru_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_04",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я должен идти, папе нужен ноутбук",
+          "sender_id": "friend_ru_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_05",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мама говорит, что ужин в шесть, не опаздывай",
+          "sender_id": "friend_ru_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_06",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "можешь прийти завтра? испечём печенье",
+          "sender_id": "friend_ru_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_07",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "бабушка приезжает на выходные, поэтому я не смогу",
+          "sender_id": "friend_ru_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_08",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "выезжаем в восемь, возьми куртку",
+          "sender_id": "friend_ru_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_09",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "младший брат опять сломал мои наушники",
+          "sender_id": "friend_ru_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_family_10",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "твоя мама сможет забрать нас после кино?",
+          "sender_id": "friend_ru_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_sports_01",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "тренировку отменили, поле залило",
+          "sender_id": "friend_ru_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_sports_02",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "тренер хочет, чтобы мы были на 15 минут раньше в субботу",
+          "sender_id": "friend_ru_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_sports_03",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я забил два гола сегодня, до сих пор не верю",
+          "sender_id": "friend_ru_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_sports_04",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "trusted_adult",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "не забудь форму на физкультуру, у нас плавание",
+          "sender_id": "coach_ru"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_sports_05",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "колено ещё болит после игры, но уже лучше",
+          "sender_id": "friend_ru_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_sports_06",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "сетку турнира выложили, мы играем с синими первыми",
+          "sender_id": "friend_ru_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_sports_07",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "возьми воду, на соревнованиях будет жарко",
+          "sender_id": "friend_ru_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_sports_08",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "trusted_adult",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "видел гол на последней минуте? нереально",
+          "sender_id": "coach_ru"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_01",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "пицца или тако на вечеринку? голосуйте",
+          "sender_id": "friend_ru_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_02",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "такой дождь, автобус опоздал на 20 минут",
+          "sender_id": "friend_ru_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_03",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я так устала, читала до ночи",
+          "sender_id": "classmate_ru_3"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_04",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "как бесит, вайфай постоянно отваливается на уроке",
+          "sender_id": "friend_ru_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_05",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "с днём рождения!! надеюсь, тебе подарят велосипед",
+          "sender_id": "friend_ru_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_06",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "новая серия выходит сегодня, без спойлеров пожалуйста",
+          "sender_id": "classmate_ru_6"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_07",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "кот опрокинул бутылку с водой на мою домашку",
+          "sender_id": "friend_ru_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_08",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "во сколько сегодня закрывается библиотека?",
+          "sender_id": "friend_ru_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_09",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "group_peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мне скучно, пойдём в парк?",
+          "sender_id": "classmate_ru_9"
+        }
+      ],
+      "conversation_type": "group",
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_misc_10",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "можно одолжить твой пенал завтра? мой сломался",
+          "sender_id": "friend_ru_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_01",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "страница входа пишет, что пароль неверный, надо сбросить",
+          "sender_id": "friend_ru_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_02",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "обнови приложение, старая версия больше не работает",
+          "sender_id": "friend_ru_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_03",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "ноутбук не включается, кажется, батарея села",
+          "sender_id": "friend_ru_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_04",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "как показать свой экран на онлайн уроке?",
+          "sender_id": "friend_ru_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_05",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "принтер опять без чернил",
+          "sender_id": "friend_ru_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_06",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "скинь ссылку на портал с домашкой, я потерял",
+          "sender_id": "friend_ru_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_07",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я поменял фото профиля, нравится?",
+          "sender_id": "friend_ru_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_08",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "видео не грузится, может, у тебя интернет",
+          "sender_id": "friend_ru_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_09",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "меня выкинуло из аккаунта, пришлось просить папу помочь",
+          "sender_id": "friend_ru_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_tech_10",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "покажешь, как создать групповой чат?",
+          "sender_id": "friend_ru_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_01",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я волнуюсь перед концертом, но и радуюсь",
+          "sender_id": "friend_ru_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_02",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "этот фильм заставил меня плакать, в хорошем смысле",
+          "sender_id": "friend_ru_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_03",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "откровенно говоря, мне без сладкого лучше, я лучше сплю",
+          "sender_id": "friend_ru_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_04",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "не хочется завтра в школу, там так скучно",
+          "sender_id": "friend_ru_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_05",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "умираю с голоду после похода, иду ужинать",
+          "sender_id": "friend_ru_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_06",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "эх, завалил тест, буду учить больше в следующий раз",
+          "sender_id": "friend_ru_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_07",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "скучаю по тебе, когда возвращаешься из лагеря?",
+          "sender_id": "friend_ru_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_08",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "горжусь тобой, что попал в команду",
+          "sender_id": "friend_ru_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_09",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "спасибо за помощь с проектом, ты лучший",
+          "sender_id": "friend_ru_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_emotion_10",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "извини, что не ответила, была у бабушки",
+          "sender_id": "friend_ru_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_01",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "встретимся у спортзала после уроков, пойдём вместе",
+          "sender_id": "friend_ru_1"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_02",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "пойдём в бассейн в субботу, если будет солнце",
+          "sender_id": "friend_ru_2"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_03",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "я тебя разбужу завтра, не проспи автобус",
+          "sender_id": "friend_ru_3"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_04",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "тебе никто не сказал про тест? он по четвёртой главе",
+          "sender_id": "friend_ru_4"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_05",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "мне не очень спокойно ходить одной вечером, поэтому папа отвезёт",
+          "sender_id": "friend_ru_5"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_06",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "пока, я в школу, потом напишу",
+          "sender_id": "friend_ru_6"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_07",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "где разрешение на экскурсию? я своё потерял",
+          "sender_id": "friend_ru_7"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_08",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "перенесём подготовку на четверг?",
+          "sender_id": "friend_ru_8"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_09",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "займу тебе место в автобусе",
+          "sender_id": "friend_ru_9"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_10",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "возьми карту в библиотеку, теперь проверяют",
+          "sender_id": "friend_ru_10"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_11",
+      "default_language": "ru",
+      "age_band": "child",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "код на двери класса поменяли, спроси у учительницы",
+          "sender_id": "friend_ru_11"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    },
+    {
+      "id": "benign_ru_plans_12",
+      "default_language": "ru",
+      "age_band": "teen",
+      "relationship": "peer",
+      "step_interval_ms": 3600000,
+      "messages": [
+        {
+          "text": "заходи через школьную почту, а не через личную",
+          "sender_id": "friend_ru_12"
+        }
+      ],
+      "tracked_threats": [
+        "grooming",
+        "manipulation",
+        "bullying",
+        "self_harm",
+        "threat",
+        "explicit",
+        "nsfw",
+        "phishing",
+        "hate_speech",
+        "doxxing",
+        "pii_leakage",
+        "scam",
+        "spam"
+      ],
+      "detection_threshold": 0.55
+    }
+  ]
+}
