@@ -737,6 +737,9 @@ pub fn escalate_by_contact_history(
         ThreatType::Manipulation => snapshot.manipulation_event_count,
         _ => snapshot.total_threat_events,
     };
+    // Contact history may raise alerts for self-directed threats, but it must
+    // never turn the affected person's own message into a warn/block.
+    let escalates_action = !is_self_directed_threat(threat_type);
 
     // Tier 1: 3+ events from same contact → suggest block + escalate alert
     if relevant_count >= 3 {
@@ -753,7 +756,9 @@ pub fn escalate_by_contact_history(
 
     // Tier 2: 5+ events → recommend block action + guardian escalation
     if relevant_count >= 5 {
-        *action = (*action).max(Action::Warn);
+        if escalates_action {
+            *action = (*action).max(Action::Warn);
+        }
         recommendation.parent_alert = recommendation.parent_alert.max(AlertPriority::Urgent);
         if !recommendation
             .ui_actions
@@ -773,7 +778,9 @@ pub fn escalate_by_contact_history(
 
     // Tier 3: 10+ events → strong block recommendation
     if relevant_count >= 10 {
-        *action = Action::Block;
+        if escalates_action {
+            *action = Action::Block;
+        }
         if !recommendation.ui_actions.contains(&UiAction::SuggestReport) {
             recommendation.ui_actions.push(UiAction::SuggestReport);
         }
@@ -806,6 +813,13 @@ pub fn escalate_by_contact_history(
 
     recommendation.ui_actions.sort();
     recommendation.ui_actions.dedup();
+}
+
+/// Threat types where the protected account is the subject rather than the
+/// aggressor. A self-harm disclosure or a child's own PII slip must surface
+/// support and guardian attention, never a block of the person's message.
+fn is_self_directed_threat(threat_type: ThreatType) -> bool {
+    matches!(threat_type, ThreatType::SelfHarm | ThreatType::PiiLeakage)
 }
 
 fn is_reportable_reason_code(reason_code: &str) -> bool {
@@ -1032,6 +1046,80 @@ mod tests {
             "PII leakage must NEVER block (child is sharing, not attacking)"
         );
         assert_eq!(action, Action::Warn);
+    }
+
+    fn repeat_offender_snapshot() -> crate::types::ContactSnapshot {
+        crate::types::ContactSnapshot {
+            sender_id: "repeat_offender".into(),
+            rating: 12.0,
+            trust_level: 0.0,
+            circle_tier: crate::types::CircleTier::Occasional,
+            trend: crate::types::BehavioralTrend::Stable,
+            is_trusted: false,
+            is_new_contact: false,
+            first_seen_ms: 0,
+            last_seen_ms: 1_000,
+            conversation_count: 1,
+            grooming_event_count: 0,
+            bullying_event_count: 12,
+            manipulation_event_count: 0,
+            total_threat_events: 12,
+        }
+    }
+
+    #[test]
+    fn selfharm_never_blocked_by_contact_history() {
+        let (mut action, mut rec) =
+            decide_action_v2(ThreatType::SelfHarm, 0.95, ProtectionLevel::High);
+
+        escalate_by_contact_history(
+            &mut action,
+            &mut rec,
+            ThreatType::SelfHarm,
+            &repeat_offender_snapshot(),
+        );
+
+        assert_ne!(
+            action,
+            Action::Block,
+            "Self-harm must NEVER be blocked, even from a repeat offender"
+        );
+        assert_eq!(action, Action::Warn);
+        assert_eq!(rec.parent_alert, AlertPriority::Urgent);
+        assert!(rec.crisis_resources);
+        assert!(rec.ui_actions.contains(&UiAction::EscalateToGuardian));
+    }
+
+    #[test]
+    fn pii_leakage_never_blocked_by_contact_history() {
+        let (mut action, mut rec) =
+            decide_action_v2(ThreatType::PiiLeakage, 0.95, ProtectionLevel::High);
+
+        escalate_by_contact_history(
+            &mut action,
+            &mut rec,
+            ThreatType::PiiLeakage,
+            &repeat_offender_snapshot(),
+        );
+
+        assert_ne!(action, Action::Block, "PII leakage must NEVER be blocked");
+        assert_eq!(rec.parent_alert, AlertPriority::Urgent);
+    }
+
+    #[test]
+    fn bullying_is_still_blocked_by_contact_history() {
+        let (mut action, mut rec) =
+            decide_action_v2(ThreatType::Bullying, 0.6, ProtectionLevel::High);
+
+        escalate_by_contact_history(
+            &mut action,
+            &mut rec,
+            ThreatType::Bullying,
+            &repeat_offender_snapshot(),
+        );
+
+        assert_eq!(action, Action::Block);
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
     }
 
     #[test]

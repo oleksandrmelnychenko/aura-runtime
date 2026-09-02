@@ -4951,3 +4951,41 @@ fn escalation_bonus_triggers_for_five_recent_events_two_senders() {
 
     assert_eq!(tracker.check_bonus(conv, now), 0.20);
 }
+
+#[test]
+fn integration_repeat_offender_selfharm_stays_warn_with_crisis() {
+    let db = PatternDatabase::default_mvp();
+    let mut analyzer = Analyzer::new(child_config(), &db);
+    let conv = "int_repeat_sh";
+    let min = 60 * 1000u64;
+    let base = 10 * 3600 * 1000u64;
+
+    for i in 0..12u64 {
+        analyzer.analyze_with_context(
+            &child_input("you're worthless, everyone hates you", "bully", conv),
+            base + i * 10 * min,
+        );
+    }
+
+    let r = analyzer.analyze_with_context(
+        &child_input(
+            "I want to die, I'm going to kill myself tonight",
+            "bully",
+            conv,
+        ),
+        base + 13 * 10 * min,
+    );
+
+    assert_eq!(r.threat_type, ThreatType::SelfHarm);
+    assert_ne!(
+        r.action,
+        Action::Block,
+        "a self-harm disclosure must never be blocked by contact history"
+    );
+    assert!(r.needs_crisis_resources());
+    let rec = r
+        .recommended_action
+        .expect("self-harm carries a recommendation");
+    assert_eq!(rec.parent_alert, AlertPriority::Urgent);
+}
+
