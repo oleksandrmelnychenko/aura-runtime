@@ -262,6 +262,19 @@ impl ConversationTimeline {
         self.compact_if_needed();
     }
 
+    /// Drops events older than `cutoff_ms` while keeping the logical window
+    /// consistent. The hidden prefix is discarded first, so retention can
+    /// never slide `start_idx` past live events or empty a timeline that
+    /// still holds in-window history.
+    pub(crate) fn retain_since(&mut self, cutoff_ms: u64) {
+        if self.start_idx > 0 {
+            let hidden = self.start_idx.min(self.events.len());
+            self.events.drain(0..hidden);
+            self.start_idx = 0;
+        }
+        self.events.retain(|event| event.timestamp_ms >= cutoff_ms);
+    }
+
     fn visible_events(&self) -> &[ContextEvent] {
         let start_idx = self.start_idx.min(self.events.len());
         &self.events[start_idx..]
@@ -679,7 +692,7 @@ impl ConversationTracker {
     pub fn cleanup(&mut self, now_ms: u64) {
         let cutoff = now_ms.saturating_sub(self.config.analysis_window_ms);
         self.timelines.retain(|_, timeline| {
-            timeline.events.retain(|e| e.timestamp_ms >= cutoff);
+            timeline.retain_since(cutoff);
             !timeline.is_empty()
         });
         self.contact_profiler.cleanup(cutoff);
@@ -1491,6 +1504,52 @@ mod tests {
         let timeline = tracker.timeline("conv_1").unwrap();
         assert_eq!(timeline.len(), 1);
         assert_eq!(timeline.all_events()[0].timestamp_ms, 15000);
+    }
+
+    #[test]
+    fn cleanup_preserves_visible_window_when_timeline_has_hidden_prefix() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            max_events_per_conversation: 3,
+            analysis_window_ms: 10_000,
+            ..Default::default()
+        });
+        for ts in [1_000, 2_000, 3_000, 4_000] {
+            tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, ts));
+        }
+
+        // The fourth push leaves a hidden prefix (start_idx > 0). The cutoff
+        // removes the hidden event and the oldest visible one; the two live
+        // events must remain visible instead of sliding behind the head.
+        tracker.cleanup(12_500);
+
+        let timeline = tracker.timeline("conv_1").unwrap();
+        let events = timeline.all_events();
+        assert_eq!(timeline.len(), events.len());
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].timestamp_ms, 3_000);
+        assert_eq!(events[1].timestamp_ms, 4_000);
+    }
+
+    #[test]
+    fn cleanup_does_not_drop_conversation_with_recent_events() {
+        let mut tracker = ConversationTracker::new(TrackerConfig {
+            max_events_per_conversation: 3,
+            analysis_window_ms: 10_000,
+            ..Default::default()
+        });
+        for ts in [1_000, 2_000, 3_000, 4_000] {
+            tracker.record_event(make_event("conv_1", "alice", EventKind::Insult, ts));
+        }
+
+        // Only the newest event survives the cutoff; it must keep the timeline alive.
+        tracker.cleanup(13_500);
+
+        let timeline = tracker
+            .timeline("conv_1")
+            .expect("a recent in-window event keeps the timeline alive");
+        assert_eq!(timeline.len(), 1);
+        assert_eq!(timeline.all_events().len(), 1);
+        assert_eq!(timeline.all_events()[0].timestamp_ms, 4_000);
     }
 
     #[test]
