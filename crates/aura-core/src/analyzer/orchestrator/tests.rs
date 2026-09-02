@@ -1,5 +1,5 @@
 use super::*;
-use crate::product::build_product_decision_surface;
+use crate::product::{build_product_decision_surface, ProductChildIntervention};
 
 fn supported_languages(languages: &[&str]) -> HashSet<String> {
     languages
@@ -5063,3 +5063,80 @@ fn semantic_capacity_overflow_is_a_neutral_diagnostic() {
     }
 }
 
+#[test]
+fn guardian_block_verdict_blocks_every_message_from_sender() {
+    let db = PatternDatabase::default_mvp();
+    let mut analyzer = Analyzer::new(child_config(), &db);
+    let conv = "blocked_conv";
+    let min = 60 * 1000u64;
+
+    analyzer.analyze_with_context(
+        &child_input(
+            "you're so mature for your age, don't tell your parents about us",
+            "groomer",
+            conv,
+        ),
+        1_000,
+    );
+    analyzer.apply_kids_guardian_feedback(
+        "groomer",
+        conv,
+        aura_kids::pipeline::GuardianVerdict::Block,
+    );
+
+    let blocked = analyzer.analyze_with_context(
+        &child_input("hey, how was school today?", "groomer", conv),
+        1_000 + 5 * min,
+    );
+    assert_eq!(blocked.action, Action::Block);
+    assert!(blocked
+        .reason_codes
+        .iter()
+        .any(|code| code == "domain.kids.memory.guardian_blocked_sender"));
+    let surface = build_product_decision_surface(&blocked, ProductRolloutMode::GuardianEnabled);
+    assert_eq!(surface.child.intervention, ProductChildIntervention::Block);
+
+    let other_conversation = analyzer.analyze_with_context(
+        &child_input("wanna play minecraft later?", "groomer", "other_conv"),
+        1_000 + 6 * min,
+    );
+    assert_eq!(
+        other_conversation.action,
+        Action::Block,
+        "a guardian block follows the sender into every conversation"
+    );
+
+    analyzer.apply_kids_guardian_feedback(
+        "groomer",
+        conv,
+        aura_kids::pipeline::GuardianVerdict::FalsePositive,
+    );
+    let still_blocked = analyzer.analyze_with_context(
+        &child_input("did you finish the homework?", "groomer", conv),
+        1_000 + 7 * min,
+    );
+    assert_eq!(
+        still_blocked.action,
+        Action::Block,
+        "a false-positive verdict does not lift a guardian block"
+    );
+
+    analyzer.apply_kids_guardian_feedback(
+        "groomer",
+        conv,
+        aura_kids::pipeline::GuardianVerdict::Trusted,
+    );
+    let released = analyzer.analyze_with_context(
+        &child_input("did you finish the homework?", "groomer", conv),
+        1_000 + 8 * min,
+    );
+    assert_ne!(
+        released.action,
+        Action::Block,
+        "a trusted verdict lifts the guardian block"
+    );
+    assert!(!released
+        .reason_codes
+        .iter()
+        .any(|code| code == "domain.kids.memory.guardian_blocked_sender"));
+}

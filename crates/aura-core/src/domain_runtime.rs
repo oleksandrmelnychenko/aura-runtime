@@ -854,22 +854,29 @@ fn push_active_domain_signal_reason_codes(
             continue;
         }
         found_active_signal = true;
-        let reason_code = &signal.reason_code;
-        if !reason_code.is_empty() {
-            let reason_code = format!("domain.{reason_code}");
-            if !reason_codes.contains(&reason_code) {
-                reason_codes.push(reason_code);
-            }
-        }
-        let threat_key = &signal.threat_key;
-        if !threat_key.is_empty() {
-            let marker = format!("domain.threat.{threat_key}");
-            if !reason_codes.contains(&marker) {
-                reason_codes.push(marker);
-            }
-        }
+        push_domain_signal_reason_codes(reason_codes, signal);
     }
     found_active_signal
+}
+
+fn push_domain_signal_reason_codes(
+    reason_codes: &mut Vec<String>,
+    signal: &aura_domain::DomainSignal,
+) {
+    let reason_code = &signal.reason_code;
+    if !reason_code.is_empty() {
+        let reason_code = format!("domain.{reason_code}");
+        if !reason_codes.contains(&reason_code) {
+            reason_codes.push(reason_code);
+        }
+    }
+    let threat_key = &signal.threat_key;
+    if !threat_key.is_empty() {
+        let marker = format!("domain.threat.{threat_key}");
+        if !reason_codes.contains(&marker) {
+            reason_codes.push(marker);
+        }
+    }
 }
 
 /// Carries in-process domain diagnostics (for example a semantic-capacity
@@ -910,6 +917,17 @@ pub(crate) fn merge_active_confirmed_domain_output_effects(
         &domain_output.derived_signals,
         active_signals,
     );
+    // A guardian block is an account-level decision, not message evidence:
+    // it is enforced on every message from the blocked sender regardless of
+    // whether the message itself carries a confirmed signal.
+    if let Some(block) = domain_output
+        .derived_signals
+        .iter()
+        .find(|signal| signal.action == Some(DomainAction::Block))
+    {
+        push_domain_signal_reason_codes(reason_codes, block);
+        return merge_domain_action_value(reason_codes, current_action, Some(DomainAction::Block));
+    }
     if !confirmed_active && !derived_active {
         return current_action;
     }
@@ -1228,9 +1246,9 @@ mod tests {
         event_kind_from_domain, is_domain_threat, is_link_family_threat, is_propaganda_threat,
         map_domain_threat_to_event_kind, map_ml_signal_to_event_kind, map_pattern_threat_subtype,
         map_rule_or_threat_to_event_kind, map_threat_to_event_kind,
-        merge_active_domain_temporal_output_effects, parse_domain_threat_type,
-        parse_threat_type_label, push_domain_diagnostics, should_skip_pattern_match,
-        should_skip_pattern_rule_override, threat_priority_for_sort,
+        merge_active_confirmed_domain_output_effects, merge_active_domain_temporal_output_effects,
+        parse_domain_threat_type, parse_threat_type_label, push_domain_diagnostics,
+        should_skip_pattern_match, should_skip_pattern_rule_override, threat_priority_for_sort,
     };
 
     use crate::context::events::{
@@ -1592,6 +1610,43 @@ mod tests {
             "domain.propaganda.dehumanization",
         );
         assert_eq!(action, Action::Warn);
+    }
+
+    #[test]
+    fn derived_guardian_block_enforces_block_without_active_signals() {
+        let blocked = DomainSignal {
+            threat_key: "kids_memory_guardian_blocked_sender".to_string(),
+            reason_code: "kids.memory.guardian_blocked_sender".to_string(),
+            score: 1.0,
+            threat_type: Some("guardian_block".to_string()),
+            severity: Some("critical".to_string()),
+            priority: Some(100),
+            action: Some(DomainAction::Block),
+        };
+        let domain_output = aura_domain::DomainConfirmedOutput {
+            confirmed_signals: Vec::new(),
+            derived_signals: vec![blocked],
+            action: Some(DomainAction::Block),
+        };
+
+        let mut reason_codes = Vec::new();
+        let action = merge_active_confirmed_domain_output_effects(
+            &mut reason_codes,
+            Action::Allow,
+            Some(&domain_output),
+            &[],
+        );
+
+        assert_eq!(action, Action::Block);
+        assert!(reason_codes
+            .iter()
+            .any(|code| code == "domain.kids.memory.guardian_blocked_sender"));
+        assert!(reason_codes
+            .iter()
+            .any(|code| code == "domain.threat.kids_memory_guardian_blocked_sender"));
+        assert!(reason_codes
+            .iter()
+            .any(|code| code == "domain.action.block"));
     }
 
     #[test]

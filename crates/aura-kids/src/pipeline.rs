@@ -351,6 +351,9 @@ fn apply_kids_conversation_memory_amplifiers(
     memory_store: &KidsPipelineMemory,
 ) {
     let Some(conversation_id) = input.conversation_id.as_deref() else {
+        // Conversation memory needs an id, but a guardian block is bound to
+        // the sender and must still be enforced.
+        push_guardian_block_if_sender_blocked(input, signals, memory_store);
         return;
     };
 
@@ -644,9 +647,6 @@ fn apply_cross_conversation_sender_amplifier(
     let Some(sender_id) = input.sender_id.as_deref() else {
         return;
     };
-    let Some(conversation_id) = input.conversation_id.as_deref() else {
-        return;
-    };
 
     let sender_has_high_risk = current.has_grooming
         || current.has_manipulation
@@ -655,11 +655,19 @@ fn apply_cross_conversation_sender_amplifier(
     let Ok(mut guard) = sender_memory(memory_store).lock() else {
         return;
     };
+    // A guardian block is enforced on every message from the sender, even
+    // when the message itself is benign or arrives without a conversation id.
+    let guardian_blocked = guard
+        .get(sender_id)
+        .is_some_and(|memory| memory.guardian_blocked);
+    let Some(conversation_id) = input.conversation_id.as_deref() else {
+        if guardian_blocked {
+            push_guardian_blocked_signal(signals);
+        }
+        return;
+    };
     if !sender_has_high_risk {
-        if guard
-            .get(sender_id)
-            .is_some_and(|memory| memory.guardian_blocked)
-        {
+        if guardian_blocked {
             push_guardian_blocked_signal(signals);
         }
         return;
@@ -711,6 +719,25 @@ fn apply_cross_conversation_sender_amplifier(
         });
     }
     if memory.guardian_blocked {
+        push_guardian_blocked_signal(signals);
+    }
+}
+
+fn push_guardian_block_if_sender_blocked(
+    input: &DomainInput,
+    signals: &mut Vec<DomainSignal>,
+    memory_store: &KidsPipelineMemory,
+) {
+    let Some(sender_id) = input.sender_id.as_deref() else {
+        return;
+    };
+    let Ok(guard) = sender_memory(memory_store).lock() else {
+        return;
+    };
+    if guard
+        .get(sender_id)
+        .is_some_and(|memory| memory.guardian_blocked)
+    {
         push_guardian_blocked_signal(signals);
     }
 }
@@ -2667,4 +2694,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn guardian_block_is_enforced_without_conversation_id() {
+        let _guard = test_lock();
+        clear_conversation_memory_for_tests();
+        crate::pipeline::apply_guardian_feedback(
+            "blocked_sender",
+            "conv_test",
+            crate::pipeline::GuardianVerdict::Block,
+        );
+
+        let mut message = input("hello, how are you?");
+        message.sender_id = Some("blocked_sender".to_string());
+        message.conversation_id = None;
+        let output = run_kids_pipeline(&message);
+
+        assert!(has_reason(&output, "kids.memory.guardian_blocked_sender"));
+        assert_eq!(output.action, Some(DomainAction::Block));
+
+        crate::pipeline::apply_guardian_feedback(
+            "blocked_sender",
+            "conv_test",
+            crate::pipeline::GuardianVerdict::Trusted,
+        );
+        let released = run_kids_pipeline(&message);
+        assert!(!has_reason(
+            &released,
+            "kids.memory.guardian_blocked_sender"
+        ));
+    }
 }
