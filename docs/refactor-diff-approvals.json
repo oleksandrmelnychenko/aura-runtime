@@ -1399,13 +1399,6 @@
       "reason": "Phase 2b composition hardening, neutral capacity diagnostic and guardian block enforcement: an event-level diff of all 16 lifecycle worlds against the baseline build shows 31 differing events, every one of them a labeled threat that is now detected with an equal or higher score and an equal or stronger action (mark->warn, warn->block) because the hardened uk lexemes compose grooming/threat/manipulation earlier; the single family change is an unlabeled mentor message ('краще без батьків, вони не зрозуміють') that moved from a false self_harm composition to grooming. No event lost detection, no clean event is flagged (labeled recall 100%, clean FP 0% under --require-clean) and the counters move accordingly. Values are cumulative over the frozen v1 baseline: Phase 1 normalization hardening (commit 182bda6) and Phase 2b commits c6bf21f..3fb5014. Evidence: local rust workspace, release_report --require-pass, pilot_regression, world lifecycle --require-clean (labeled recall 100%, clean FP 0%), world_sim_2k, community surface, microbenchmark, world performance, FFI and client-boundary replay gates all green on commit 3fb5014."
     },
     {
-      "path": "/behavior/world_lifecycle/reports/1/context_store/total_timeline_events",
-      "classification": "approved_safety_improvement",
-      "baseline": 131,
-      "candidate": 132,
-      "reason": "Phase 2b composition hardening, neutral capacity diagnostic and guardian block enforcement: an event-level diff of all 16 lifecycle worlds against the baseline build shows 31 differing events, every one of them a labeled threat that is now detected with an equal or higher score and an equal or stronger action (mark->warn, warn->block) because the hardened uk lexemes compose grooming/threat/manipulation earlier; the single family change is an unlabeled mentor message ('краще без батьків, вони не зрозуміють') that moved from a false self_harm composition to grooming. No event lost detection, no clean event is flagged (labeled recall 100%, clean FP 0% under --require-clean) and the counters move accordingly. Values are cumulative over the frozen v1 baseline: Phase 1 normalization hardening (commit 182bda6) and Phase 2b commits c6bf21f..3fb5014. Evidence: local rust workspace, release_report --require-pass, pilot_regression, world lifecycle --require-clean (labeled recall 100%, clean FP 0%), world_sim_2k, community surface, microbenchmark, world performance, FFI and client-boundary replay gates all green on commit 3fb5014."
-    },
-    {
       "path": "/behavior/world_lifecycle/reports/1/warn_events",
       "classification": "approved_safety_improvement",
       "baseline": 3,
@@ -1700,6 +1693,13 @@
       "baseline": 17,
       "candidate": 16,
       "reason": "Phase 2b: the 10k performance tier replays sofia_13_to_15_dense_2y, whose event counters move with the lifecycle-world changes above; elapsed time and RSS stay under their limits. Values are cumulative over the frozen v1 baseline: Phase 1 normalization hardening (commit 182bda6) and Phase 2b commits c6bf21f..3fb5014. Evidence: local rust workspace, release_report --require-pass, pilot_regression, world lifecycle --require-clean (labeled recall 100%, clean FP 0%), world_sim_2k, community surface, microbenchmark, world performance, FFI and client-boundary replay gates all green on commit 3fb5014."
+    },
+    {
+      "path": "/behavior/world_lifecycle/reports/1/context_store/total_timeline_events",
+      "classification": "approved_safety_improvement",
+      "baseline": 131,
+      "candidate": 133,
+      "reason": "Phase 2b composition hardening, neutral capacity diagnostic and guardian block enforcement: an event-level diff of all 16 lifecycle worlds against the baseline build shows 31 differing events, every one of them a labeled threat that is now detected with an equal or higher score and an equal or stronger action (mark->warn, warn->block) because the hardened uk lexemes compose grooming/threat/manipulation earlier; the single family change is an unlabeled mentor message ('краще без батьків, вони не зрозуміють') that moved from a false self_harm composition to grooming; Phase 2a adds one confirmed manipulation composition event on an already blocked blackmail message in andrii_14_peer_blackmail_recovery_4mo (reversed exposure phrase). No event lost detection, no clean event is flagged (labeled recall 100%, clean FP 0% under --require-clean) and the counters move accordingly. Values are cumulative over the frozen v1 baseline: Phase 1 normalization hardening (commit 182bda6), Phase 2b composition hardening (c6bf21f..3fb5014) and Phase 2a attribution-gated suppression (00e0982). Evidence: local rust workspace, release_report --require-pass, pilot_regression, world lifecycle --require-clean (labeled recall 100%, clean FP 0%), world_sim_2k, community surface, microbenchmark, world performance, FFI and client-boundary replay gates all green on commit 00e0982."
     }
   ]
 }
