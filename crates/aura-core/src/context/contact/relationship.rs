@@ -518,7 +518,9 @@ impl ContactProfile {
 
         if event.supports_propaganda_inference() {
             self.decay_trust(event.effective_severity() * 0.5);
-        } else if event.effective_is_hostile() {
+        } else if event.effective_is_hostile()
+            || (event.kind.is_grooming_indicator() && event.supports_grooming_inference())
+        {
             self.decay_trust(event.effective_severity());
         }
     }

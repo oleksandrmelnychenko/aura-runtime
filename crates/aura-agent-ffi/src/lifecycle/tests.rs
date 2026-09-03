@@ -1261,6 +1261,29 @@ fn persisted_kids_memory_rejects_invalid_nested_ids() {
 }
 
 #[test]
+fn persisted_kids_memory_rejects_non_finite_ml_scores() {
+    let state = proto::KidsMemoryState {
+        conversations: vec![proto::KidsConversationMemoryState {
+            conversation_id: "conversation".to_string(),
+            entries: vec![proto::KidsMessageRiskSnapshot {
+                sender_id: Some("sender".to_string()),
+                ml_grooming: f32::NAN,
+                ..proto::KidsMessageRiskSnapshot::default()
+            }],
+            message_index: 1,
+            last_activity_index: Some(1),
+            last_emitted: Vec::new(),
+        }],
+        senders: Vec::new(),
+        schema_version: aura_runtime::aura_kids::pipeline::KIDS_MEMORY_STATE_VERSION,
+    };
+
+    let error = kids_memory_state_from_proto(&state)
+        .expect_err("non-finite kids memory ML score must fail closed");
+    assert!(error.contains("finite and within 0..=1"), "{error}");
+}
+
+#[test]
 fn version_returns_valid_string() {
     unsafe {
         let version = aura_version();

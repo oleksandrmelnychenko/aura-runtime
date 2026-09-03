@@ -1,6 +1,7 @@
 set shell := ["pwsh", "-NoLogo", "-Command"]
 
 verify:
+    python3 ci/offline_runtime_gate.py
     cargo run --locked --quiet --example release_report -p aura-core -- --require-pass
     cargo run --locked --quiet --example pilot_regression -p aura-core -- --require-pass
     bash ci/temporal_shadow_gate.sh
@@ -37,6 +38,9 @@ client-boundary-replay-gate:
 
 analyzer-microbenchmark-gate:
     bash ci/analyzer_microbenchmark_gate.sh
+
+offline-runtime-gate:
+    python3 ci/offline_runtime_gate.py
 
 temporal-shadow-gate:
     bash ci/temporal_shadow_gate.sh

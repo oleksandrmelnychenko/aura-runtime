@@ -10,8 +10,9 @@ use crate::{
     evaluate_scenario_quality_gates, pre_release_policy_action_gates, run_scenario_cases,
     summarize_policy_actions_with_expectation_names, summarize_scenario_runs, AccountType,
     AuraConfig, ContentType, ConversationType, MessageInput, PolicyActionQualityGates,
-    PolicyActionSummary, ProtectionLevel, ScenarioCase, ScenarioEvaluationSummary,
-    ScenarioGateReport, ScenarioQualityGates, ScenarioRunResult, ScenarioStep, ThreatType,
+    PolicyActionSummary, ProtectionLevel, RelationshipTrustSource, ScenarioCase,
+    ScenarioEvaluationSummary, ScenarioGateReport, ScenarioQualityGates, ScenarioRunResult,
+    ScenarioStep, SenderRelationship, ThreatType,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +21,10 @@ pub struct RealisticChatMetadata {
     pub default_language: String,
     pub age_band: String,
     pub relationship: String,
+    pub sender_relationship: SenderRelationship,
+    pub relationship_trust_source: RelationshipTrustSource,
+    pub source_family: Option<String>,
+    pub review_status: Option<String>,
     pub policy_expectation_case: Option<String>,
 }
 
@@ -94,6 +99,14 @@ struct RealisticChatCaseSpec {
     default_language: String,
     age_band: String,
     relationship: String,
+    #[serde(default)]
+    sender_relationship: SenderRelationship,
+    #[serde(default)]
+    relationship_trust_source: RelationshipTrustSource,
+    #[serde(default)]
+    source_family: Option<String>,
+    #[serde(default)]
+    review_status: Option<String>,
     #[serde(default)]
     conversation_type: ConversationType,
     #[serde(default = "default_realistic_detection_threshold")]
@@ -527,6 +540,26 @@ fn validate_realistic_chat_file(file: &RealisticChatFile) -> Result<(), String> 
                 case.id
             ));
         }
+        if case
+            .source_family
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            return Err(format!(
+                "realistic chat case {} has empty source_family",
+                case.id
+            ));
+        }
+        if case
+            .review_status
+            .as_deref()
+            .is_some_and(|value| !matches!(value, "seed_reviewed" | "gold_reviewed"))
+        {
+            return Err(format!(
+                "realistic chat case {} has unsupported review_status",
+                case.id
+            ));
+        }
         if !(0.0..=1.0).contains(&case.detection_threshold) {
             return Err(format!(
                 "realistic chat case {} has invalid detection_threshold {}",
@@ -625,8 +658,8 @@ fn build_realistic_chat_scenario(spec: &RealisticChatCaseSpec) -> RealisticChatS
                     ConversationType::Group => true,
                 }
                 .then_some(6),
-                sender_relationship: Default::default(),
-                relationship_trust_source: Default::default(),
+                sender_relationship: spec.sender_relationship,
+                relationship_trust_source: spec.relationship_trust_source,
             },
             observed_threats: message.observed_threats.clone(),
         })
@@ -638,6 +671,10 @@ fn build_realistic_chat_scenario(spec: &RealisticChatCaseSpec) -> RealisticChatS
             default_language: spec.default_language.clone(),
             age_band: spec.age_band.clone(),
             relationship: spec.relationship.clone(),
+            sender_relationship: spec.sender_relationship,
+            relationship_trust_source: spec.relationship_trust_source,
+            source_family: spec.source_family.clone(),
+            review_status: spec.review_status.clone(),
             policy_expectation_case: spec.policy_expectation_case.clone(),
         },
         case: ScenarioCase {

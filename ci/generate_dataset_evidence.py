@@ -15,6 +15,24 @@ CHANGELOG_SCHEMA_VERSION = 1
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d[\d\s\-]{6,}\d)(?!\d)")
 SAFE_SENDER_ID_RE = re.compile(r"^[A-Za-z0-9_]+$")
+CODE_SWITCH_PROVENANCE = "repository_owned_synthetic_seed"
+CODE_SWITCH_REVIEW_STATUS = "developer_reviewed_not_independent_gold"
+CODE_SWITCH_LANGUAGES = frozenset({"en", "uk", "ru"})
+CODE_SWITCH_CONTEXT_ROLES = frozenset({"quote_report", "refusal", "crisis_support"})
+CODE_SWITCH_ORIGINS = frozenset({"lexical", "compositional"})
+CODE_SWITCH_EVENT_COMPATIBILITY = {
+    "threat": frozenset({"physical_threat"}),
+    "grooming": frozenset({"photo_request"}),
+    "self_harm": frozenset({"suicidal_ideation"}),
+    "manipulation": frozenset({"emotional_blackmail"}),
+    "bullying": frozenset({"denigration"}),
+    "explicit": frozenset({"sexual_content"}),
+    "nsfw": frozenset({"sexual_content"}),
+    "phishing": frozenset({"personal_info_request"}),
+}
+BENIGN_POLICY_EXPECTATION_CASES = frozenset(
+    {"false_positive_friends", "negative_control_trusted_adult"}
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -205,7 +223,11 @@ def validate_benign_dataset(dataset: dict, changelog_entries: list[dict] | None,
         case_id = case.get("id", "<unknown>")
         ensure(case.get("primary_threat") is None, f"benign case {case_id} must not declare primary_threat", errors)
         ensure(case.get("onset_step") is None, f"benign case {case_id} must not declare onset_step", errors)
-        ensure(case.get("policy_expectation_case") is None, f"benign case {case_id} must not reference a policy expectation case", errors)
+        ensure(
+            case.get("policy_expectation_case") in BENIGN_POLICY_EXPECTATION_CASES,
+            f"benign case {case_id} must reference a supported negative policy expectation case",
+            errors,
+        )
         ensure(bool(case.get("tracked_threats")), f"benign case {case_id} must list tracked_threats", errors)
         for message in case.get("messages", []):
             if isinstance(message, dict) and message.get("observed_threats"):
@@ -292,17 +314,168 @@ def validate_external_dataset(dataset: dict, changelog_entries: list[dict] | Non
     }
 
 
+def validate_code_switch_dataset(
+    dataset: dict, changelog_entries: list[dict] | None, path: Path
+) -> dict:
+    """Validate paired multilingual attribution boundaries used by core tests."""
+    errors: list[str] = []
+    ensure(dataset.get("schema_version") == 1, "code-switch schema_version must be 1", errors)
+    for field in ("dataset_id", "dataset_label", "maintainer"):
+        ensure(bool(dataset.get(field, "").strip()), f"code-switch {field} must not be empty", errors)
+    ensure(
+        dataset.get("created_at_ms", 0) > 0,
+        "code-switch created_at_ms must be non-zero",
+        errors,
+    )
+    ensure(
+        dataset.get("updated_at_ms", 0) >= dataset.get("created_at_ms", 0),
+        "code-switch updated_at_ms must be >= created_at_ms",
+        errors,
+    )
+    ensure(
+        dataset.get("provenance") == CODE_SWITCH_PROVENANCE,
+        f"code-switch provenance must be {CODE_SWITCH_PROVENANCE}",
+        errors,
+    )
+    ensure(
+        dataset.get("review_status") == CODE_SWITCH_REVIEW_STATUS,
+        f"code-switch review_status must be {CODE_SWITCH_REVIEW_STATUS}",
+        errors,
+    )
+
+    pairs = dataset.get("pairs", [])
+    ensure(isinstance(pairs, list) and pairs, "code-switch dataset must contain pairs", errors)
+    pair_objects = [case for case in pairs if isinstance(case, dict)] if isinstance(pairs, list) else []
+    ensure(
+        len(pair_objects) == len(pairs) if isinstance(pairs, list) else False,
+        "code-switch dataset pairs must be objects",
+        errors,
+    )
+    case_ids = [case.get("case_id", "").strip() for case in pair_objects]
+    ensure(all(case_ids), "code-switch case_id must not be empty", errors)
+    ensure(len(case_ids) == len(set(case_ids)), "code-switch dataset contains duplicate case ids", errors)
+
+    privacy_flag_count = 0
+    for case in pair_objects:
+        case_id = case.get("case_id") or "<unknown>"
+        languages = case.get("languages", [])
+        ensure(
+            isinstance(languages, list)
+            and len(languages) == 2
+            and len(set(languages)) == 2
+            and all(language in CODE_SWITCH_LANGUAGES for language in languages),
+            f"code-switch case {case_id} must name two distinct supported languages",
+            errors,
+        )
+        ensure(
+            case.get("context_role") in CODE_SWITCH_CONTEXT_ROLES,
+            f"code-switch case {case_id} has unsupported context_role",
+            errors,
+        )
+        ensure(
+            case.get("detector_origin") in CODE_SWITCH_ORIGINS,
+            f"code-switch case {case_id} has unsupported detector_origin",
+            errors,
+        )
+
+        threat_type = case.get("threat_type")
+        event_kind = case.get("event_kind")
+        ensure(
+            threat_type in CODE_SWITCH_EVENT_COMPATIBILITY,
+            f"code-switch case {case_id} has unsupported threat_type",
+            errors,
+        )
+        if threat_type in CODE_SWITCH_EVENT_COMPATIBILITY:
+            ensure(
+                event_kind in CODE_SWITCH_EVENT_COMPATIBILITY[threat_type],
+                f"code-switch case {case_id} has incompatible threat_type/event_kind",
+                errors,
+            )
+
+        safe_text = case.get("safe_text", "")
+        risky_text = case.get("risky_text", "")
+        ensure(
+            isinstance(safe_text, str) and bool(safe_text.strip()),
+            f"code-switch case {case_id} has empty safe_text",
+            errors,
+        )
+        ensure(
+            isinstance(risky_text, str) and bool(risky_text.strip()),
+            f"code-switch case {case_id} has empty risky_text",
+            errors,
+        )
+        ensure(
+            safe_text != risky_text,
+            f"code-switch case {case_id} must contain distinct safe/risky counterfactuals",
+            errors,
+        )
+        for polarity, text in (("safe", safe_text), ("risky", risky_text)):
+            if not isinstance(text, str):
+                continue
+            for flag in message_text_privacy_flags(text):
+                privacy_flag_count += 1
+                errors.append(f"code-switch case {case_id} {polarity}_text contains {flag}")
+
+    latest = latest_entry(changelog_entries or [])
+    if latest is None:
+        errors.append(f"missing changelog entries for {dataset.get('dataset_id', '<unknown>')}")
+    else:
+        ensure(
+            latest["changed_at_ms"] == dataset.get("updated_at_ms"),
+            f"code-switch latest changelog timestamp {latest['changed_at_ms']} does not match dataset updated_at_ms {dataset.get('updated_at_ms')}",
+            errors,
+        )
+
+    language_pairs = []
+    for case in pair_objects:
+        languages = case.get("languages", [])
+        if isinstance(languages, list) and len(languages) == 2:
+            language_pairs.append("-".join(languages))
+
+    return {
+        "dataset_type": "code_switch_context_boundaries",
+        "status": "pass" if not errors else "fail",
+        "manifest": {
+            "schema_version": dataset.get("schema_version"),
+            "dataset_id": dataset.get("dataset_id"),
+            "dataset_label": dataset.get("dataset_label"),
+            "maintainer": dataset.get("maintainer"),
+            "created_at_ms": dataset.get("created_at_ms"),
+            "updated_at_ms": dataset.get("updated_at_ms"),
+            "provenance": dataset.get("provenance"),
+            "review_status": dataset.get("review_status"),
+        },
+        "files": [file_digest(path)],
+        "coverage": {
+            "pair_count": len(pair_objects),
+            "language_pair": counter_dict(language_pairs),
+            "context_role": counter_dict(case.get("context_role", "") for case in pair_objects),
+            "detector_origin": counter_dict(case.get("detector_origin", "") for case in pair_objects),
+            "threat_type": counter_dict(case.get("threat_type", "") for case in pair_objects),
+            "event_kind": counter_dict(case.get("event_kind", "") for case in pair_objects),
+        },
+        "privacy": {
+            "contains_direct_identifiers": privacy_flag_count > 0,
+            "flag_count": privacy_flag_count,
+        },
+        "latest_changelog_entry": latest,
+        "errors": errors,
+    }
+
+
 def main() -> int:
     args = parse_args()
     workspace_root = Path(__file__).resolve().parents[1]
     realistic_path = workspace_root / "crates/aura-core/data/realistic_chat_cases.json"
     external_path = workspace_root / "crates/aura-core/data/external_curated_chat_cases.json"
     benign_path = workspace_root / "crates/aura-core/data/benign_everyday_chat_cases.json"
+    code_switch_path = workspace_root / "crates/aura-core/data/code_switch_context_cases.json"
     changelog_path = workspace_root / "crates/aura-core/data/dataset_changelog.json"
 
     realistic = load_json(realistic_path)
     external = load_json(external_path)
     benign = load_json(benign_path)
+    code_switch = load_json(code_switch_path)
     changelog = load_json(changelog_path)
 
     changelog_errors: list[str] = []
@@ -323,6 +496,11 @@ def main() -> int:
         changelog_by_dataset.get(benign.get("dataset_id", "")),
         benign_path,
     )
+    code_switch_report = validate_code_switch_dataset(
+        code_switch,
+        changelog_by_dataset.get(code_switch.get("dataset_id", "")),
+        code_switch_path,
+    )
 
     evidence = {
         "schema_version": SCHEMA_VERSION,
@@ -334,7 +512,7 @@ def main() -> int:
             "status": "pass" if not changelog_errors else "fail",
             "errors": changelog_errors,
         },
-        "datasets": [realistic_report, external_report, benign_report],
+        "datasets": [realistic_report, external_report, benign_report, code_switch_report],
     }
 
     if changelog_errors or any(dataset["status"] != "pass" for dataset in evidence["datasets"]):

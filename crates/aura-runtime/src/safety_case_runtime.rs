@@ -1223,7 +1223,9 @@ impl SafetyCaseRuntime {
     ) -> Result<SafetyCasePolicy, SafetyCaseRuntimeError> {
         let applied = self.execution_policies.get(account_key);
         let mut policy = self.config.case_policy.clone();
-        if let Some(applied) = applied {
+        if let Some(applied) =
+            applied.filter(|policy| policy.state == NativeExecutionPolicyState::Enabled)
+        {
             policy = policy
                 .with_max_observations(applied.maximum_case_observations)?
                 .with_max_case_reason_codes(applied.maximum_case_reason_codes)?;
@@ -2402,5 +2404,50 @@ fn map_severity(action: Action, score: f32) -> SafetyCaseSeverity {
         SafetyCaseSeverity::Elevated
     } else {
         SafetyCaseSeverity::Informational
+    }
+}
+
+#[cfg(test)]
+mod policy_capacity_tests {
+    use super::*;
+    use crate::execution_policy::{NativeExecutionMode, NativeExecutionPolicyState};
+
+    fn disabled_policy() -> NativeExecutionPolicy {
+        NativeExecutionPolicy {
+            account_key: "account".to_string(),
+            protected_account_id: [1; 16],
+            authority_lineage_id: "test-authority".to_string(),
+            issuer_key_id: "test-issuer".to_string(),
+            policy_epoch: 2,
+            revoked_through_policy_epoch: 2,
+            state: NativeExecutionPolicyState::Disabled,
+            execution_mode: NativeExecutionMode::Off,
+            policy_wire_digest: [2; 32],
+            signed_policy_digest: [3; 32],
+            runtime_capabilities_digest: [4; 32],
+            model_manifest_digest: [5; 32],
+            execution_policy_trust_keyring_digest: [6; 32],
+            valid_from_ms: 1,
+            valid_until_ms: 10_000,
+            maximum_case_observations: 1,
+            maximum_case_reason_codes: 1,
+            guardian_policy: None,
+            active_for_runtime: false,
+        }
+    }
+
+    #[test]
+    fn disabled_policy_does_not_override_reducer_capacity() {
+        let account_key = SafetyAccountKey::new("account").unwrap();
+        let mut runtime = SafetyCaseRuntime::default();
+        runtime
+            .apply_execution_policy(&account_key, disabled_policy())
+            .unwrap();
+
+        let effective = runtime.effective_case_policy(&account_key).unwrap();
+        let encoded = serde_json::to_value(effective).unwrap();
+
+        assert_eq!(encoded["max_observations"], 256);
+        assert_eq!(encoded["max_case_reason_codes"], 32);
     }
 }

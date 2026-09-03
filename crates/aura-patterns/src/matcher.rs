@@ -19,7 +19,6 @@ pub struct MatchResult {
 pub struct PatternMatcher {
     keyword_matchers: Vec<KeywordMatcher>,
     regex_matchers: Vec<RegexMatcher>,
-    normalizer: TextNormalizer,
     language: String,
 }
 
@@ -268,164 +267,12 @@ impl PatternMatcher {
         Ok(Self {
             keyword_matchers,
             regex_matchers,
-            normalizer,
             language: language.to_string(),
         })
     }
 
     pub fn scan(&self, text: &str) -> Vec<MatchResult> {
-        let mut results = Vec::new();
-        let mut matched_rules: HashSet<String> = HashSet::new();
-        let lower_text = text.to_lowercase();
-
-        self.scan_text(&lower_text, &mut results, &mut matched_rules);
-
-        let light = self.normalizer.normalize_light_obfuscation(text);
-        if light != lower_text {
-            self.scan_text(&light, &mut results, &mut matched_rules);
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&light);
-            if typo_repaired != light && typo_repaired != lower_text {
-                self.scan_text(&typo_repaired, &mut results, &mut matched_rules);
-            }
-
-            let leet_words = self.normalizer.normalize_known_leet_words(&light);
-            if leet_words != light && leet_words != lower_text {
-                self.scan_text(&leet_words, &mut results, &mut matched_rules);
-            }
-        }
-
-        let mixed_script_latin = self.normalizer.normalize_mixed_script_latin_tokens(text);
-        if mixed_script_latin != lower_text && mixed_script_latin != light {
-            self.scan_text(&mixed_script_latin, &mut results, &mut matched_rules);
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&mixed_script_latin);
-            if typo_repaired != mixed_script_latin
-                && typo_repaired != light
-                && typo_repaired != lower_text
-            {
-                self.scan_text(&typo_repaired, &mut results, &mut matched_rules);
-            }
-
-            let leet_words = self
-                .normalizer
-                .normalize_known_leet_words(&mixed_script_latin);
-            if leet_words != mixed_script_latin && leet_words != light && leet_words != lower_text {
-                self.scan_text(&leet_words, &mut results, &mut matched_rules);
-            }
-        }
-
-        let lower_typo_repaired = self.normalizer.normalize_known_typos(&lower_text);
-        if lower_typo_repaired != lower_text {
-            self.scan_text(&lower_typo_repaired, &mut results, &mut matched_rules);
-
-            let leet_words = self
-                .normalizer
-                .normalize_known_leet_words(&lower_typo_repaired);
-            if leet_words != lower_typo_repaired && leet_words != lower_text {
-                self.scan_text(&leet_words, &mut results, &mut matched_rules);
-            }
-        }
-
-        let lower_leet_words = self.normalizer.normalize_known_leet_words(&lower_text);
-        if lower_leet_words != lower_text {
-            self.scan_text(&lower_leet_words, &mut results, &mut matched_rules);
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&lower_leet_words);
-            if typo_repaired != lower_leet_words && typo_repaired != lower_text {
-                self.scan_text(&typo_repaired, &mut results, &mut matched_rules);
-            }
-        }
-
-        let normalized = self.normalizer.normalize(text);
-        if normalized != lower_text {
-            self.scan_text(&normalized, &mut results, &mut matched_rules);
-        }
-
-        let leet_words = self.normalizer.normalize_known_leet_words(&normalized);
-        if leet_words != normalized && leet_words != lower_text {
-            self.scan_text(&leet_words, &mut results, &mut matched_rules);
-        }
-
-        let typo_repaired = self.normalizer.normalize_known_typos(&normalized);
-        if typo_repaired != normalized && typo_repaired != lower_text {
-            self.scan_text(&typo_repaired, &mut results, &mut matched_rules);
-        }
-
-        let typo_repaired_leet_words = self.normalizer.normalize_known_leet_words(&typo_repaired);
-        if typo_repaired_leet_words != typo_repaired
-            && typo_repaired_leet_words != normalized
-            && typo_repaired_leet_words != lower_text
-        {
-            self.scan_text(&typo_repaired_leet_words, &mut results, &mut matched_rules);
-        }
-
-        let doubled = self.normalizer.normalize_repeat_collapse_two(text);
-        if doubled != normalized && doubled != lower_text {
-            self.scan_text(&doubled, &mut results, &mut matched_rules);
-        }
-
-        if contains_cyrillic(text) {
-            let cyrillic_light = self.normalizer.normalize_light_preserving_cyrillic(text);
-            if cyrillic_light != lower_text
-                && cyrillic_light != light
-                && cyrillic_light != mixed_script_latin
-                && cyrillic_light != normalized
-            {
-                self.scan_text(&cyrillic_light, &mut results, &mut matched_rules);
-            }
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&cyrillic_light);
-            if typo_repaired != cyrillic_light
-                && typo_repaired != light
-                && typo_repaired != mixed_script_latin
-                && typo_repaired != normalized
-                && typo_repaired != lower_text
-            {
-                self.scan_text(&typo_repaired, &mut results, &mut matched_rules);
-            }
-
-            let cyrillic_normalized = self.normalizer.normalize_preserving_cyrillic(text);
-            if cyrillic_normalized != lower_text && cyrillic_normalized != normalized {
-                self.scan_text(&cyrillic_normalized, &mut results, &mut matched_rules);
-            }
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&cyrillic_normalized);
-            if typo_repaired != cyrillic_normalized
-                && typo_repaired != normalized
-                && typo_repaired != lower_text
-            {
-                self.scan_text(&typo_repaired, &mut results, &mut matched_rules);
-            }
-
-            for cyrillic_leet in self
-                .normalizer
-                .normalize_cyrillic_leet_variants(text, &self.language)
-            {
-                if cyrillic_leet == lower_text
-                    || cyrillic_leet == light
-                    || cyrillic_leet == mixed_script_latin
-                    || cyrillic_leet == normalized
-                    || cyrillic_leet == cyrillic_light
-                    || cyrillic_leet == cyrillic_normalized
-                {
-                    continue;
-                }
-
-                self.scan_text(&cyrillic_leet, &mut results, &mut matched_rules);
-
-                let typo_repaired = self.normalizer.normalize_known_typos(&cyrillic_leet);
-                if typo_repaired != cyrillic_leet
-                    && typo_repaired != cyrillic_normalized
-                    && typo_repaired != normalized
-                    && typo_repaired != lower_text
-                {
-                    self.scan_text(&typo_repaired, &mut results, &mut matched_rules);
-                }
-            }
-        }
-
-        results
+        self.scan_prepared(&PreparedPatternText::new(text))
     }
 
     /// Scans text whose normalization channels were prepared once by the caller.
@@ -503,151 +350,32 @@ impl PatternMatcher {
     }
 
     pub fn has_threat(&self, text: &str) -> bool {
-        let lower = text.to_lowercase();
+        self.has_threat_prepared(&PreparedPatternText::new(text))
+    }
 
-        if self.has_threat_in(&lower) {
-            return true;
-        }
-
-        let light = self.normalizer.normalize_light_obfuscation(text);
-        if light != lower {
-            if self.has_threat_in(&light) {
-                return true;
-            }
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&light);
-            if typo_repaired != light && self.has_threat_in(&typo_repaired) {
-                return true;
-            }
-
-            let leet_words = self.normalizer.normalize_known_leet_words(&light);
-            if leet_words != light && self.has_threat_in(&leet_words) {
-                return true;
-            }
-        }
-
-        let mixed_script_latin = self.normalizer.normalize_mixed_script_latin_tokens(text);
-        if mixed_script_latin != lower && mixed_script_latin != light {
-            if self.has_threat_in(&mixed_script_latin) {
-                return true;
-            }
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&mixed_script_latin);
-            if typo_repaired != mixed_script_latin && self.has_threat_in(&typo_repaired) {
-                return true;
-            }
-
-            let leet_words = self
-                .normalizer
-                .normalize_known_leet_words(&mixed_script_latin);
-            if leet_words != mixed_script_latin && self.has_threat_in(&leet_words) {
-                return true;
-            }
-        }
-
-        let lower_typo_repaired = self.normalizer.normalize_known_typos(&lower);
-        if lower_typo_repaired != lower {
-            if self.has_threat_in(&lower_typo_repaired) {
-                return true;
-            }
-
-            let leet_words = self
-                .normalizer
-                .normalize_known_leet_words(&lower_typo_repaired);
-            if leet_words != lower_typo_repaired && self.has_threat_in(&leet_words) {
-                return true;
-            }
-        }
-
-        let lower_leet_words = self.normalizer.normalize_known_leet_words(&lower);
-        if lower_leet_words != lower {
-            if self.has_threat_in(&lower_leet_words) {
-                return true;
-            }
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&lower_leet_words);
-            if typo_repaired != lower_leet_words && self.has_threat_in(&typo_repaired) {
-                return true;
-            }
-        }
-
-        let normalized = self.normalizer.normalize(text);
-        if normalized != lower && self.has_threat_in(&normalized) {
-            return true;
-        }
-
-        let leet_words = self.normalizer.normalize_known_leet_words(&normalized);
-        if leet_words != normalized && self.has_threat_in(&leet_words) {
-            return true;
-        }
-
-        let typo_repaired = self.normalizer.normalize_known_typos(&normalized);
-        if typo_repaired != normalized && self.has_threat_in(&typo_repaired) {
-            return true;
-        }
-
-        let typo_repaired_leet_words = self.normalizer.normalize_known_leet_words(&typo_repaired);
-        if typo_repaired_leet_words != typo_repaired
-            && self.has_threat_in(&typo_repaired_leet_words)
+    /// Checks prepared normalization channels and stops on the first match.
+    #[must_use]
+    pub fn has_threat_prepared(&self, text: &PreparedPatternText) -> bool {
+        if text
+            .channels
+            .iter()
+            .any(|channel| self.has_threat_in(channel))
         {
             return true;
         }
 
-        if contains_cyrillic(text) {
-            let cyrillic_light = self.normalizer.normalize_light_preserving_cyrillic(text);
-            if cyrillic_light != lower
-                && cyrillic_light != light
-                && cyrillic_light != mixed_script_latin
-                && cyrillic_light != normalized
-                && self.has_threat_in(&cyrillic_light)
-            {
-                return true;
-            }
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&cyrillic_light);
-            if typo_repaired != cyrillic_light && self.has_threat_in(&typo_repaired) {
-                return true;
-            }
-
-            let cyrillic_normalized = self.normalizer.normalize_preserving_cyrillic(text);
-            if cyrillic_normalized != lower
-                && cyrillic_normalized != normalized
-                && self.has_threat_in(&cyrillic_normalized)
-            {
-                return true;
-            }
-
-            let typo_repaired = self.normalizer.normalize_known_typos(&cyrillic_normalized);
-            if typo_repaired != cyrillic_normalized && self.has_threat_in(&typo_repaired) {
-                return true;
-            }
-
-            for cyrillic_leet in self
-                .normalizer
-                .normalize_cyrillic_leet_variants(text, &self.language)
-            {
-                if cyrillic_leet == lower
-                    || cyrillic_leet == light
-                    || cyrillic_leet == mixed_script_latin
-                    || cyrillic_leet == normalized
-                    || cyrillic_leet == cyrillic_light
-                    || cyrillic_leet == cyrillic_normalized
-                {
-                    continue;
-                }
-
-                if self.has_threat_in(&cyrillic_leet) {
-                    return true;
-                }
-
-                let typo_repaired = self.normalizer.normalize_known_typos(&cyrillic_leet);
-                if typo_repaired != cyrillic_leet && self.has_threat_in(&typo_repaired) {
-                    return true;
-                }
-            }
+        if self.language.eq_ignore_ascii_case("ru") {
+            text.cyrillic_leet_groups
+                .iter()
+                .rev()
+                .flatten()
+                .any(|channel| self.has_threat_in(channel))
+        } else {
+            text.cyrillic_leet_groups
+                .iter()
+                .flatten()
+                .any(|channel| self.has_threat_in(channel))
         }
-
-        false
     }
 
     fn has_threat_in(&self, text: &str) -> bool {
@@ -815,6 +543,35 @@ mod tests {
                     summarize(prepared),
                     summarize(raw),
                     "prepared scan drifted for language={language} text={case}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn threat_probe_uses_the_same_prepared_channels_as_full_scan() {
+        let db = PatternDatabase::default_mvp();
+        let cases = [
+            "I WILL KILL YOU",
+            "i will killl you tomorrow",
+            "send nu\u{FE0F}des now",
+            "н3 к4ж1 б47ьк4м пр0 ц3й с3кр37",
+            "ordinary supportive conversation",
+        ];
+
+        for language in ["en", "uk", "ru"] {
+            let matcher = PatternMatcher::from_database(&db, language);
+            for case in cases {
+                let prepared = PreparedPatternText::new(case);
+                assert_eq!(
+                    matcher.has_threat_prepared(&prepared),
+                    !matcher.scan_prepared(&prepared).is_empty(),
+                    "probe drifted for language={language} text={case}"
+                );
+                assert_eq!(
+                    matcher.has_threat(case),
+                    !matcher.scan(case).is_empty(),
+                    "raw convenience path drifted for language={language} text={case}"
                 );
             }
         }

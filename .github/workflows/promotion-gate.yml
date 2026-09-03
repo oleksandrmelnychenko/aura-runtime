@@ -279,6 +279,8 @@ jobs:
         install -m 600 "$ingested/pilot-review-signoffs.json" "$AURA_PILOT_REVIEW_SIGNOFFS_PATH"
     - name: Build
       run: cargo build --locked --workspace --all-features --all-targets --verbose
+    - name: Enforce Offline Runtime
+      run: python3 ci/offline_runtime_gate.py
     - name: Run tests
       run: cargo test --locked --workspace --all-features --all-targets --verbose
     - name: Run Military Temporal Shadow Gate

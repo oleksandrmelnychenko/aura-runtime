@@ -4,7 +4,7 @@
   "dataset_label": "AURA Benign Everyday Chat Corpus",
   "maintainer": "aura_core_team",
   "created_at_ms": 1788300000000,
-  "updated_at_ms": 1788300000000,
+  "updated_at_ms": 1788378000000,
   "cases": [
     {
       "id": "benign_en_school_01",
@@ -33,7 +33,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_02",
@@ -62,7 +65,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_03",
@@ -91,7 +97,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_04",
@@ -120,7 +129,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_05",
@@ -149,7 +161,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_06",
@@ -178,7 +193,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_07",
@@ -207,7 +225,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_08",
@@ -236,7 +257,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_09",
@@ -265,7 +289,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_school_10",
@@ -294,7 +321,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_01",
@@ -323,7 +353,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_02",
@@ -352,7 +385,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_03",
@@ -382,7 +418,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_04",
@@ -411,7 +450,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_05",
@@ -440,7 +482,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_06",
@@ -470,7 +515,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_07",
@@ -499,7 +547,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_08",
@@ -528,7 +579,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_09",
@@ -558,7 +612,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_gaming_10",
@@ -587,7 +644,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_01",
@@ -616,7 +676,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_02",
@@ -645,7 +708,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_03",
@@ -674,7 +740,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_04",
@@ -703,7 +772,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_05",
@@ -732,7 +804,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_06",
@@ -761,7 +836,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_07",
@@ -790,7 +868,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_08",
@@ -819,7 +900,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_09",
@@ -848,7 +932,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_family_10",
@@ -877,7 +964,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_sports_01",
@@ -906,7 +996,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_sports_02",
@@ -935,7 +1028,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_sports_03",
@@ -964,7 +1060,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_sports_04",
@@ -993,7 +1092,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "negative_control_trusted_adult"
     },
     {
       "id": "benign_en_sports_05",
@@ -1022,7 +1124,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_sports_06",
@@ -1051,7 +1156,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_sports_07",
@@ -1080,7 +1188,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_sports_08",
@@ -1109,7 +1220,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "negative_control_trusted_adult"
     },
     {
       "id": "benign_en_misc_01",
@@ -1138,7 +1252,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_02",
@@ -1167,7 +1284,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_03",
@@ -1197,7 +1317,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_04",
@@ -1226,7 +1349,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_05",
@@ -1255,7 +1381,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_06",
@@ -1285,7 +1414,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_07",
@@ -1314,7 +1446,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_08",
@@ -1343,7 +1478,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_09",
@@ -1373,7 +1511,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_misc_10",
@@ -1402,7 +1543,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_01",
@@ -1431,7 +1575,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_02",
@@ -1460,7 +1607,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_03",
@@ -1489,7 +1639,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_04",
@@ -1518,7 +1671,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_05",
@@ -1547,7 +1703,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_06",
@@ -1576,7 +1735,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_07",
@@ -1605,7 +1767,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_08",
@@ -1634,7 +1799,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_09",
@@ -1663,7 +1831,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_tech_10",
@@ -1692,7 +1863,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_01",
@@ -1721,7 +1895,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_02",
@@ -1750,7 +1927,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_03",
@@ -1779,7 +1959,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_04",
@@ -1808,7 +1991,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_05",
@@ -1837,7 +2023,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_06",
@@ -1866,7 +2055,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_07",
@@ -1895,7 +2087,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_08",
@@ -1924,7 +2119,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_09",
@@ -1953,7 +2151,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_emotion_10",
@@ -1982,13 +2183,18 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_01",
       "default_language": "en",
       "age_band": "child",
       "relationship": "peer",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory",
       "step_interval_ms": 3600000,
       "messages": [
         {
@@ -2011,7 +2217,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_02",
@@ -2040,7 +2249,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_03",
@@ -2069,7 +2281,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_04",
@@ -2098,7 +2313,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_05",
@@ -2127,7 +2345,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_06",
@@ -2156,7 +2377,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_07",
@@ -2185,7 +2409,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_08",
@@ -2214,7 +2441,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_09",
@@ -2243,7 +2473,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_10",
@@ -2272,7 +2505,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_11",
@@ -2301,7 +2537,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_en_plans_12",
@@ -2330,7 +2569,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_01",
@@ -2359,7 +2601,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_02",
@@ -2388,7 +2633,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_03",
@@ -2417,7 +2665,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_04",
@@ -2446,7 +2697,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_05",
@@ -2475,7 +2729,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_06",
@@ -2504,7 +2761,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_07",
@@ -2533,7 +2793,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_08",
@@ -2562,7 +2825,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_09",
@@ -2591,7 +2857,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_school_10",
@@ -2620,7 +2889,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_01",
@@ -2649,7 +2921,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_02",
@@ -2678,7 +2953,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_03",
@@ -2708,7 +2986,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_04",
@@ -2737,7 +3018,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_05",
@@ -2766,7 +3050,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_06",
@@ -2796,7 +3083,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_07",
@@ -2825,7 +3115,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_08",
@@ -2854,7 +3147,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_09",
@@ -2884,7 +3180,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_gaming_10",
@@ -2913,7 +3212,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_01",
@@ -2942,7 +3244,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_02",
@@ -2971,7 +3276,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_03",
@@ -3000,7 +3308,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_04",
@@ -3029,7 +3340,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_05",
@@ -3058,7 +3372,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_06",
@@ -3087,7 +3404,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_07",
@@ -3116,7 +3436,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_08",
@@ -3145,7 +3468,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_09",
@@ -3174,7 +3500,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_family_10",
@@ -3203,7 +3532,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_sports_01",
@@ -3232,7 +3564,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_sports_02",
@@ -3261,7 +3596,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_sports_03",
@@ -3290,7 +3628,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_sports_04",
@@ -3319,7 +3660,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "negative_control_trusted_adult"
     },
     {
       "id": "benign_uk_sports_05",
@@ -3348,7 +3692,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_sports_06",
@@ -3377,7 +3724,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_sports_07",
@@ -3406,7 +3756,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_sports_08",
@@ -3435,7 +3788,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "negative_control_trusted_adult"
     },
     {
       "id": "benign_uk_misc_01",
@@ -3464,7 +3820,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_02",
@@ -3493,7 +3852,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_03",
@@ -3523,7 +3885,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_04",
@@ -3552,7 +3917,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_05",
@@ -3581,7 +3949,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_06",
@@ -3611,7 +3982,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_07",
@@ -3640,7 +4014,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_08",
@@ -3669,7 +4046,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_09",
@@ -3699,7 +4079,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_misc_10",
@@ -3728,7 +4111,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_01",
@@ -3757,7 +4143,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_02",
@@ -3786,7 +4175,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_03",
@@ -3815,7 +4207,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_04",
@@ -3844,7 +4239,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_05",
@@ -3873,7 +4271,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_06",
@@ -3902,7 +4303,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_07",
@@ -3931,7 +4335,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_08",
@@ -3960,7 +4367,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_09",
@@ -3989,7 +4399,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_tech_10",
@@ -4018,7 +4431,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_01",
@@ -4047,7 +4463,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_02",
@@ -4076,7 +4495,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_03",
@@ -4105,7 +4527,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_04",
@@ -4134,7 +4559,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_05",
@@ -4163,7 +4591,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_06",
@@ -4192,7 +4623,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_07",
@@ -4221,7 +4655,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_08",
@@ -4250,7 +4687,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_09",
@@ -4279,7 +4719,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_emotion_10",
@@ -4308,13 +4751,18 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_01",
       "default_language": "uk",
       "age_band": "child",
       "relationship": "peer",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory",
       "step_interval_ms": 3600000,
       "messages": [
         {
@@ -4337,7 +4785,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_02",
@@ -4366,7 +4817,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_03",
@@ -4395,7 +4849,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_04",
@@ -4424,7 +4881,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_05",
@@ -4453,7 +4913,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_06",
@@ -4482,7 +4945,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_07",
@@ -4511,7 +4977,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_08",
@@ -4540,7 +5009,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_09",
@@ -4569,7 +5041,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_10",
@@ -4598,7 +5073,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_11",
@@ -4627,7 +5105,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_uk_plans_12",
@@ -4656,7 +5137,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_01",
@@ -4685,7 +5169,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_02",
@@ -4714,7 +5201,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_03",
@@ -4743,7 +5233,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_04",
@@ -4772,7 +5265,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_05",
@@ -4801,7 +5297,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_06",
@@ -4830,7 +5329,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_07",
@@ -4859,7 +5361,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_08",
@@ -4888,7 +5393,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_09",
@@ -4917,7 +5425,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_school_10",
@@ -4946,7 +5457,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_01",
@@ -4975,7 +5489,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_02",
@@ -5004,7 +5521,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_03",
@@ -5034,7 +5554,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_04",
@@ -5063,7 +5586,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_05",
@@ -5092,7 +5618,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_06",
@@ -5122,7 +5651,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_07",
@@ -5151,7 +5683,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_08",
@@ -5180,7 +5715,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_09",
@@ -5210,7 +5748,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_gaming_10",
@@ -5239,7 +5780,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_01",
@@ -5268,7 +5812,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_02",
@@ -5297,7 +5844,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_03",
@@ -5326,7 +5876,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_04",
@@ -5355,7 +5908,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_05",
@@ -5384,7 +5940,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_06",
@@ -5413,7 +5972,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_07",
@@ -5442,7 +6004,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_08",
@@ -5471,7 +6036,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_09",
@@ -5500,7 +6068,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_family_10",
@@ -5529,7 +6100,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_sports_01",
@@ -5558,7 +6132,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_sports_02",
@@ -5587,7 +6164,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_sports_03",
@@ -5616,7 +6196,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_sports_04",
@@ -5645,7 +6228,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "negative_control_trusted_adult"
     },
     {
       "id": "benign_ru_sports_05",
@@ -5674,7 +6260,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_sports_06",
@@ -5703,7 +6292,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_sports_07",
@@ -5732,7 +6324,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_sports_08",
@@ -5761,7 +6356,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "negative_control_trusted_adult"
     },
     {
       "id": "benign_ru_misc_01",
@@ -5790,7 +6388,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_02",
@@ -5819,7 +6420,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_03",
@@ -5849,7 +6453,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_04",
@@ -5878,7 +6485,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_05",
@@ -5907,7 +6517,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_06",
@@ -5937,7 +6550,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_07",
@@ -5966,7 +6582,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_08",
@@ -5995,7 +6614,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_09",
@@ -6025,7 +6647,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_misc_10",
@@ -6054,7 +6679,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_01",
@@ -6083,7 +6711,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_02",
@@ -6112,7 +6743,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_03",
@@ -6141,7 +6775,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_04",
@@ -6170,7 +6807,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_05",
@@ -6199,7 +6839,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_06",
@@ -6228,7 +6871,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_07",
@@ -6257,7 +6903,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_08",
@@ -6286,7 +6935,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_09",
@@ -6315,7 +6967,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_tech_10",
@@ -6344,7 +6999,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_01",
@@ -6373,7 +7031,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_02",
@@ -6402,7 +7063,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_03",
@@ -6431,7 +7095,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_04",
@@ -6460,7 +7127,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_05",
@@ -6489,7 +7159,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_06",
@@ -6518,7 +7191,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_07",
@@ -6547,7 +7223,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_08",
@@ -6576,7 +7255,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_09",
@@ -6605,7 +7287,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_emotion_10",
@@ -6634,13 +7319,18 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_01",
       "default_language": "ru",
       "age_band": "child",
       "relationship": "peer",
+      "sender_relationship": "peer",
+      "relationship_trust_source": "school_directory",
       "step_interval_ms": 3600000,
       "messages": [
         {
@@ -6663,7 +7353,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_02",
@@ -6692,7 +7385,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_03",
@@ -6721,7 +7417,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_04",
@@ -6750,7 +7449,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_05",
@@ -6779,7 +7481,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_06",
@@ -6808,7 +7513,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_07",
@@ -6837,7 +7545,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_08",
@@ -6866,7 +7577,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_09",
@@ -6895,7 +7609,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_10",
@@ -6924,7 +7641,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_11",
@@ -6953,7 +7673,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     },
     {
       "id": "benign_ru_plans_12",
@@ -6982,7 +7705,10 @@
         "scam",
         "spam"
       ],
-      "detection_threshold": 0.55
+      "detection_threshold": 0.55,
+      "source_family": "aura_core_team_synthetic",
+      "review_status": "seed_reviewed",
+      "policy_expectation_case": "false_positive_friends"
     }
   ]
 }

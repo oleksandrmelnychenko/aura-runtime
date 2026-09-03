@@ -168,6 +168,16 @@ def display_path(path: Path, repo_root: Path) -> str:
         return path.as_posix()
 
 
+def resolve_cargo_target_dir(repo_root: Path, configured_target: str | None) -> Path:
+    """Resolve Cargo's target directory exactly as the build invocation does."""
+    if not configured_target:
+        return repo_root / "target"
+    target_dir = Path(configured_target)
+    if target_dir.is_absolute():
+        return target_dir
+    return repo_root / target_dir
+
+
 def check_report(tier: PerfTier, report: dict, timing: dict) -> list[str]:
     failures: list[str] = []
     context = report.get("context_store") or {}
@@ -222,7 +232,8 @@ def main() -> int:
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     input_path = os.environ.get("AURA_PERF_INPUT", DEFAULT_INPUT)
-    binary = repo_root / "target/release/examples/world_sim"
+    target_dir = resolve_cargo_target_dir(repo_root, os.environ.get("CARGO_TARGET_DIR"))
+    binary = target_dir / "release/examples/world_sim"
 
     if os.environ.get("AURA_PERF_SKIP_BUILD") != "1":
         build_rc = run_command(
@@ -295,6 +306,7 @@ def main() -> int:
     summary = {
         "schema_version": "aura_world_performance_gate.v1",
         "input": input_path,
+        "binary": display_path(binary, repo_root),
         "status": "fail" if failures else "pass",
         "failures": failures,
         "tiers": results,

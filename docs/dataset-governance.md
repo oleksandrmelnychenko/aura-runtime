@@ -1,6 +1,6 @@
 # Dataset Governance
 
-Status: reviewed on March 23, 2026.
+Status: reviewed on September 3, 2026.
 
 ## Purpose
 
@@ -18,6 +18,7 @@ Current data artifacts include:
 - [`crates/aura-core/data/realistic_chat_cases.json`](../crates/aura-core/data/realistic_chat_cases.json)
 - [`crates/aura-core/data/external_curated_chat_cases.json`](../crates/aura-core/data/external_curated_chat_cases.json)
 - [`crates/aura-core/data/benign_everyday_chat_cases.json`](../crates/aura-core/data/benign_everyday_chat_cases.json)
+- [`crates/aura-core/data/code_switch_context_cases.json`](../crates/aura-core/data/code_switch_context_cases.json)
 - [`crates/aura-core/data/dataset_changelog.json`](../crates/aura-core/data/dataset_changelog.json)
 
 ## Governance Principles
@@ -118,9 +119,30 @@ wave1 safe-cohort false-positive budget.
   - `group_peer=18`
   - `peer=216`
   - `trusted_adult=6`
+- source family: `aura_core_team_synthetic=240`
+- review status: `seed_reviewed=240`
+- policy expectation linkage:
+  - `false_positive_friends=234`
+  - `negative_control_trusted_adult=6`
 - gates: `max_negative_false_positive_rate <= 0.01` (threshold-based) and
   `max_action_false_positive_rate <= 0.01` (any non-`Allow` action or threat
   type on any step)
+
+### Code-Switch Context Boundary Corpus
+
+Snapshot date: September 3, 2026. The corpus contains eight paired safe/risky
+counterfactuals over `en-uk`, `en-ru`, `uk-ru`, and `ru-en`. Together they
+exercise quote/report, refusal, crisis support, lexical provenance, and
+compositional provenance through the same interpreter path used at runtime.
+The covered detector families are threat, grooming, self-harm, manipulation,
+bullying, explicit, NSFW, and phishing. The paired form verifies both sides of
+the boundary: attributed or protective content must be suppressed, while a
+new author-attributable harmful clause must reactivate the signal and event.
+
+This is repository-owned synthetic engineering evidence. It is explicitly
+marked `developer_reviewed_not_independent_gold`: it may block regressions in
+implemented semantics, but it does not satisfy native-speaker adjudication or
+held-out production promotion requirements.
 
 ## Release-Critical Slices Brought To Hard-Gating Support
 
@@ -214,5 +236,13 @@ behavioral realism is valuable; private identifying content is not.
 - make mixed-vs-gold comparison part of corpus promotion review
 - keep a lightweight dataset changelog for external curated updates
 - emit dataset evidence for the exact corpus files used by CI and promotion gates
+- validate code-switch language pairs, threat-to-event compatibility,
+  counterfactual polarity, provenance, changelog linkage, and privacy as part
+  of that machine-readable evidence
 - keep the benign everyday-chat corpus negatives-only and fail the release
   report when its false-positive gates regress
+- require relationship-sensitive cases to declare `sender_relationship` and
+  `relationship_trust_source` explicitly; descriptive slice labels must not be
+  treated as trusted analyzer input
+- require each governed code-switch pair to contain both a safe attributed
+  form and a minimally changed risky author-attributable form

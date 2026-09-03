@@ -4,7 +4,8 @@ use crate::context::events::{
     ContextEvent, EventContextFrame, EventDirectionality, EventKind, EventSpeechAct, EventStance,
 };
 use crate::context::observation::{
-    materialize_event_hints, split_observations, RawEventHint, RawObservation,
+    materialize_event_hints, split_observations, DetectorEvidenceOrigin, RawEventHint,
+    RawObservation, RawSignal,
 };
 use crate::context::rules::{
     builtin_context_rule_packs, ContextRuleError, ContextRulePacks, EventSelector,
@@ -21,8 +22,8 @@ use crate::types::{
 use aura_patterns::{PatternDatabase, PatternMatcher, TextNormalizer};
 
 use super::attribution::{
-    attribution_permits, signal_origin, targeted_families, ActiveRiskProbe, AttributionAnalysis,
-    FamilySet, PatternRiskProbe, SignalOrigin,
+    attribution_permits, targeted_families, ActiveRiskProbe, AttributionAnalysis, FamilySet,
+    PatternRiskProbe,
 };
 
 /// Interpreter-approved event that may be persisted by the conversation tracker.
@@ -368,16 +369,16 @@ impl ContextInterpreter {
     }
 
     #[cfg(test)]
-    pub(crate) fn apply_downstream_signal_semantics(
+    pub(crate) fn interpret_derived_signals(
         &self,
         input: &MessageInput,
         text: &str,
         timestamp_ms: u64,
         timeline: Option<&ConversationTimeline>,
         snapshot: Option<&ContactSnapshot>,
-        signals: &mut Vec<DetectionSignal>,
-    ) {
-        self.apply_downstream_signal_semantics_with_probe(
+        signals: Vec<DetectionSignal>,
+    ) -> Vec<DetectionSignal> {
+        self.interpret_derived_signals_with_probe(
             input,
             text,
             timestamp_ms,
@@ -385,30 +386,31 @@ impl ContextInterpreter {
             snapshot,
             signals,
             &default_risk_probe(),
-        );
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn apply_downstream_signal_semantics_with_probe(
+    pub(crate) fn interpret_derived_signals_with_probe(
         &self,
         input: &MessageInput,
         text: &str,
         timestamp_ms: u64,
         timeline: Option<&ConversationTimeline>,
         snapshot: Option<&ContactSnapshot>,
-        signals: &mut Vec<DetectionSignal>,
+        mut signals: Vec<DetectionSignal>,
         probe: &dyn ActiveRiskProbe,
-    ) {
-        apply_downstream_context_signal_filters(
+    ) -> Vec<DetectionSignal> {
+        interpret_derived_context_signals(
             input,
             text,
             timestamp_ms,
             timeline,
             snapshot,
             self.rules.interpretation_rules(),
-            signals,
+            &mut signals,
             probe,
         );
+        signals
     }
 
     pub(crate) fn apply_relationship_metadata(
@@ -427,7 +429,7 @@ impl ContextInterpreter {
         text: Option<&str>,
         timestamp_ms: Option<u64>,
         timeline: Option<&ConversationTimeline>,
-        signals: Vec<DetectionSignal>,
+        signals: Vec<RawSignal>,
         event_hints: Vec<RawEventHint>,
         snapshot: Option<&ContactSnapshot>,
         probe: &dyn ActiveRiskProbe,
@@ -449,7 +451,7 @@ impl ContextInterpreter {
                 materialize_confirmed_events(event_hints, timestamp_ms, input, &frame);
             return ContextInterpretation {
                 frame,
-                adjusted_signals: signals,
+                adjusted_signals: signals.into_iter().map(|raw| raw.signal).collect(),
                 confirmed_events,
                 suppressed_reason_codes: Vec::new(),
                 signal_adjustments,
@@ -458,15 +460,24 @@ impl ContextInterpreter {
 
         let mut adjusted_signals = Vec::with_capacity(signals.len());
         let mut suppressed_reason_codes = Vec::new();
-        for mut signal in signals {
-            if self.should_suppress_signal(input, &frame, &signal, &semantics) {
+        for raw_signal in signals {
+            let mut signal = raw_signal.signal;
+            if self.should_suppress_signal(
+                input,
+                &frame,
+                &signal,
+                raw_signal.evidence_origin,
+                &semantics,
+            ) {
                 if !signal.reason_code.is_empty() {
                     suppressed_reason_codes.push(signal.reason_code.clone());
                 }
                 continue;
             }
 
-            if let Some(multiplier) = self.signal_multiplier(&frame, &signal, &semantics.lower) {
+            if let Some(multiplier) =
+                self.signal_multiplier(&frame, &signal, raw_signal.evidence_origin, &semantics)
+            {
                 signal.score = (signal.score * multiplier).clamp(0.0, 1.0);
                 signal.confidence = confidence_from_score(signal.score);
             }
@@ -476,7 +487,7 @@ impl ContextInterpreter {
 
         let mut confirmed_event_hints = Vec::with_capacity(event_hints.len());
         for event_hint in event_hints {
-            if self.should_suppress_event_kind(input, &frame, &event_hint.kind, &semantics) {
+            if self.should_suppress_event_hint(input, &frame, &event_hint, &semantics) {
                 continue;
             }
             confirmed_event_hints.push(event_hint);
@@ -500,7 +511,7 @@ impl ContextInterpreter {
         semantics: Option<&MessageSemantics>,
         timestamp_ms: Option<u64>,
         timeline: Option<&ConversationTimeline>,
-        signals: &[DetectionSignal],
+        signals: &[RawSignal],
         event_hints: &[RawEventHint],
         snapshot: Option<&ContactSnapshot>,
     ) -> ThreatContextFrame {
@@ -522,9 +533,10 @@ impl ContextInterpreter {
             semantics.is_some_and(|value| value.attribution.stance.is_protective());
         let frame_attributed =
             active.is_empty() && ((attribution_ok && protective_stance) || !has_risk);
-        let is_support =
-            looks_like_support_context(cue_lower) && !active.intersects(targeted_families());
-        let is_counter = looks_like_counter_context(cue_lower);
+        let is_support = looks_like_support_context(cue_lower)
+            && frame_attributed
+            && !active.intersects(targeted_families());
+        let is_counter = looks_like_counter_context(cue_lower) && frame_attributed;
         let is_quote = looks_like_quote_context(cue_lower) && frame_attributed;
         let is_report = (looks_like_report_context(cue_lower) && frame_attributed)
             || looks_like_opsec_warning(cue_lower);
@@ -555,8 +567,7 @@ impl ContextInterpreter {
             Stance::Ambiguous
         };
 
-        let author_self_distress = semantics.is_some_and(|value| value.author_self_distress)
-            || is_self_referential_distress(cue_lower);
+        let author_self_distress = semantics.is_some_and(|value| value.author_self_distress);
         let directionality = if author_self_distress {
             Directionality::SelfReferential
         } else if is_quote || is_report {
@@ -628,6 +639,7 @@ impl ContextInterpreter {
         input: &MessageInput,
         frame: &ThreatContextFrame,
         signal: &DetectionSignal,
+        evidence_origin: DetectorEvidenceOrigin,
         semantics: &MessageSemantics,
     ) -> bool {
         let lower = semantics.lower.as_str();
@@ -676,7 +688,7 @@ impl ContextInterpreter {
 
         if matches!(frame.speech_act, SpeechAct::Support)
             && signal.threat_type == ThreatType::SelfHarm
-            && !attribution.active_semantic.contains(ThreatType::SelfHarm)
+            && attribution_permits(attribution, signal.threat_type, evidence_origin)
         {
             return true;
         }
@@ -696,6 +708,7 @@ impl ContextInterpreter {
                     | ThreatType::MilitarySocialEng
             )
             && !looks_like_direct_military_social_eng_pretext(signal, lower)
+            && attribution_permits(attribution, signal.threat_type, evidence_origin)
         {
             return true;
         }
@@ -703,11 +716,7 @@ impl ContextInterpreter {
         if protective_report
             && is_protective_report_suppressible_threat(signal.threat_type)
             && !looks_like_direct_military_social_eng_pretext(signal, lower)
-            && attribution_permits(
-                attribution,
-                signal.threat_type,
-                signal_origin(&signal.reason_code),
-            )
+            && attribution_permits(attribution, signal.threat_type, evidence_origin)
         {
             return true;
         }
@@ -717,7 +726,7 @@ impl ContextInterpreter {
                 signal.threat_type,
                 ThreatType::SelfHarm | ThreatType::Manipulation
             )
-            && !attribution.active_semantic.contains(signal.threat_type)
+            && attribution_permits(attribution, signal.threat_type, evidence_origin)
         {
             return true;
         }
@@ -729,14 +738,17 @@ impl ContextInterpreter {
         &self,
         frame: &ThreatContextFrame,
         signal: &DetectionSignal,
-        lower: &str,
+        evidence_origin: DetectorEvidenceOrigin,
+        semantics: &MessageSemantics,
     ) -> Option<f32> {
+        let lower = semantics.lower.as_str();
         let mut multiplier = 1.0_f32;
 
         if matches!(frame.speech_act, SpeechAct::Support)
             && signal.layer == DetectionLayer::ContextAnalysis
             && signal.threat_type == ThreatType::Manipulation
             && looks_like_support_context(lower)
+            && attribution_permits(&semantics.attribution, signal.threat_type, evidence_origin)
         {
             multiplier = multiplier.min(0.35);
         }
@@ -823,18 +835,22 @@ impl ContextInterpreter {
         }
     }
 
-    fn should_suppress_event_kind(
+    fn should_suppress_event_hint(
         &self,
         input: &MessageInput,
         frame: &ThreatContextFrame,
-        kind: &EventKind,
+        event_hint: &RawEventHint,
         semantics: &MessageSemantics,
     ) -> bool {
+        let kind = &event_hint.kind;
+        let evidence_origin = event_hint.evidence_origin;
         let lower = semantics.lower.as_str();
         let protective_report = semantics.protective_report;
         let crisis_support = semantics.crisis_support;
         let attribution = &semantics.attribution;
-        let family = event_kind_family(kind);
+        let family = event_hint
+            .source_threat_type
+            .or_else(|| event_kind_family(kind));
         if *kind == EventKind::MeetingRequest
             && is_verified_peer_school_meeting(input, frame, lower)
         {
@@ -877,7 +893,7 @@ impl ContextInterpreter {
                 kind,
                 EventKind::SuicidalIdeation | EventKind::Hopelessness | EventKind::FarewellMessage
             )
-            && !attribution.active_semantic.contains(ThreatType::SelfHarm)
+            && attribution_permits(attribution, ThreatType::SelfHarm, evidence_origin)
         {
             return true;
         }
@@ -891,6 +907,8 @@ impl ContextInterpreter {
                     | EventKind::HateSpeech
                     | EventKind::PsyopsPattern
             )
+            && family
+                .is_some_and(|family| attribution_permits(attribution, family, evidence_origin))
         {
             return true;
         }
@@ -898,7 +916,7 @@ impl ContextInterpreter {
         if protective_report {
             if let Some(family) = family {
                 if is_protective_report_suppressible_threat(family)
-                    && attribution_permits(attribution, family, SignalOrigin::Other)
+                    && attribution_permits(attribution, family, evidence_origin)
                 {
                     return true;
                 }
@@ -916,7 +934,8 @@ impl ContextInterpreter {
                     | EventKind::EmotionalBlackmail
                     | EventKind::SuicideCoercion
             )
-            && family.is_some_and(|family| !attribution.active_semantic.contains(family))
+            && family
+                .is_some_and(|family| attribution_permits(attribution, family, evidence_origin))
         {
             return true;
         }
@@ -1228,7 +1247,7 @@ fn policy_condition_matches(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn apply_downstream_context_signal_filters(
+fn interpret_derived_context_signals(
     input: &MessageInput,
     text: &str,
     timestamp_ms: u64,
@@ -1245,7 +1264,7 @@ fn apply_downstream_context_signal_filters(
                 && attribution_permits(
                     &semantics.attribution,
                     signal.threat_type,
-                    signal_origin(&signal.reason_code),
+                    DetectorEvidenceOrigin::Derived,
                 ))
         });
     }
@@ -1254,10 +1273,11 @@ fn apply_downstream_context_signal_filters(
             !matches!(
                 signal.threat_type,
                 ThreatType::SelfHarm | ThreatType::Manipulation
-            ) || semantics
-                .attribution
-                .active_semantic
-                .contains(signal.threat_type)
+            ) || !attribution_permits(
+                &semantics.attribution,
+                signal.threat_type,
+                DetectorEvidenceOrigin::Derived,
+            )
         });
     }
 
@@ -3109,7 +3129,7 @@ fn derive_trajectory(
     input: &MessageInput,
     timestamp_ms: Option<u64>,
     timeline: Option<&ConversationTimeline>,
-    signals: &[DetectionSignal],
+    signals: &[RawSignal],
     event_hints: &[RawEventHint],
     snapshot: Option<&ContactSnapshot>,
 ) -> TrajectoryContext {
@@ -3164,13 +3184,16 @@ fn derive_trajectory(
     }
 }
 
-fn has_current_harmful_signal(signals: &[DetectionSignal]) -> bool {
-    signals.iter().any(is_trajectory_relevant_signal)
+fn has_current_harmful_signal(signals: &[RawSignal]) -> bool {
+    signals
+        .iter()
+        .any(|raw| is_trajectory_relevant_signal(&raw.signal))
 }
 
-fn current_relevant_threat_diversity(signals: &[DetectionSignal]) -> usize {
+fn current_relevant_threat_diversity(signals: &[RawSignal]) -> usize {
     let mut threats = Vec::new();
-    for signal in signals {
+    for raw in signals {
+        let signal = &raw.signal;
         if is_trajectory_relevant_signal(signal) && !threats.contains(&signal.threat_type) {
             threats.push(signal.threat_type);
         }
@@ -3268,7 +3291,7 @@ fn is_high_risk_grooming_reason(reason_code: &str) -> bool {
 mod tests {
     use super::*;
     use crate::context::events::EventSpeechAct;
-    use crate::context::observation::RawObservation;
+    use crate::context::observation::{DetectorEvidenceOrigin, RawObservation};
     use crate::ids::{ConversationId, SenderId};
     use crate::types::{ContentType, ConversationType, DetectionSignal, ThreatType};
 
@@ -3420,7 +3443,7 @@ mod tests {
     }
 
     #[test]
-    fn counter_speech_suppresses_propaganda_signal_and_event() {
+    fn unbound_counter_words_cannot_suppress_propaganda_signal_and_event() {
         let interpreter = ContextInterpreter::new();
         let result = interpreter.interpret_observations(
             &input("This is fake news, don't believe this propaganda."),
@@ -3437,12 +3460,12 @@ mod tests {
             None,
         );
 
-        assert!(result.adjusted_signals.is_empty());
-        assert!(result.confirmed_events.is_empty());
+        assert_eq!(result.adjusted_signals.len(), 1, "{result:?}");
+        assert_eq!(result.confirmed_events.len(), 1, "{result:?}");
     }
 
     #[test]
-    fn support_context_suppresses_selfharm_signal_and_event() {
+    fn unbound_support_words_cannot_suppress_selfharm_signal_and_event() {
         let interpreter = ContextInterpreter::new();
         let text = "I'm here with you. Let's tell your parents together and get help tonight.";
         let result = interpreter.interpret_observations(
@@ -3460,8 +3483,8 @@ mod tests {
             None,
         );
 
-        assert!(result.adjusted_signals.is_empty());
-        assert!(result.confirmed_events.is_empty());
+        assert_eq!(result.adjusted_signals.len(), 1, "{result:?}");
+        assert_eq!(result.confirmed_events.len(), 1, "{result:?}");
     }
 
     #[test]
@@ -3868,66 +3891,60 @@ mod tests {
     }
 
     #[test]
-    fn downstream_educational_self_harm_signal_is_suppressed() {
+    fn derived_educational_self_harm_signal_is_suppressed() {
         let interpreter = ContextInterpreter::new();
         let text = "The safety lesson says phrases like 'this is my last message' and 'goodbye forever' require immediate support.";
-        let mut signals = vec![signal(
-            ThreatType::SelfHarm,
-            "pattern.selfharm_education_test",
-            0.90,
-        )];
-
-        interpreter.apply_downstream_signal_semantics(
+        let signals = interpreter.interpret_derived_signals(
             &input(text),
             text,
             1_000,
             None,
             None,
-            &mut signals,
+            vec![signal(
+                ThreatType::SelfHarm,
+                "pattern.selfharm_education_test",
+                0.90,
+            )],
         );
 
         assert!(signals.is_empty(), "{signals:?}");
     }
 
     #[test]
-    fn downstream_crisis_support_does_not_inherit_manipulation_signal() {
+    fn derived_reported_crisis_cannot_suppress_unrelated_manipulation_signal() {
         let interpreter = ContextInterpreter::new();
-        let text = "Мені шкода, що тобі здається, ніби немає сенсу жити; залишайся зі мною, ми знайдемо допомогу.";
-        let mut signals = vec![signal(
-            ThreatType::Manipulation,
-            "pattern.manipulation_gaslighting_uk",
-            0.65,
-        )];
-
-        interpreter.apply_downstream_signal_semantics(
+        let text = "Моя подруга написала я хочу померти. Мені шкода; залишайся зі мною, ми знайдемо допомогу.";
+        let signals = interpreter.interpret_derived_signals(
             &input(text),
             text,
             1_000,
             None,
             None,
-            &mut signals,
+            vec![signal(
+                ThreatType::Manipulation,
+                "pattern.manipulation_gaslighting_uk",
+                0.65,
+            )],
         );
 
-        assert!(signals.is_empty(), "{signals:?}");
+        assert_eq!(signals.len(), 1, "{signals:?}");
     }
 
     #[test]
-    fn downstream_self_referential_crisis_fails_closed_despite_support_words() {
+    fn derived_self_referential_crisis_fails_closed_despite_support_words() {
         let interpreter = ContextInterpreter::new();
         let text = "I want to die. Stay with me and contact crisis support.";
-        let mut signals = vec![signal(
-            ThreatType::SelfHarm,
-            "pattern.selfharm_direct_test",
-            0.90,
-        )];
-
-        interpreter.apply_downstream_signal_semantics(
+        let signals = interpreter.interpret_derived_signals(
             &input(text),
             text,
             1_000,
             None,
             None,
-            &mut signals,
+            vec![signal(
+                ThreatType::SelfHarm,
+                "pattern.selfharm_direct_test",
+                0.90,
+            )],
         );
 
         assert_eq!(signals.len(), 1, "{signals:?}");
@@ -4154,7 +4171,7 @@ mod tests {
     }
 
     #[test]
-    fn raw_observation_counter_speech_suppresses_before_materialization() {
+    fn raw_observation_counter_words_fail_closed_without_attribution() {
         let interpreter = ContextInterpreter::new();
         let text = "This is fake news, don't believe this propaganda.";
         let result = interpreter.interpret_observations(
@@ -4172,8 +4189,8 @@ mod tests {
             None,
         );
 
-        assert!(result.adjusted_signals.is_empty(), "{result:?}");
-        assert!(result.confirmed_events.is_empty(), "{result:?}");
+        assert_eq!(result.adjusted_signals.len(), 1, "{result:?}");
+        assert_eq!(result.confirmed_events.len(), 1, "{result:?}");
     }
 
     #[test]
@@ -4250,6 +4267,21 @@ mod tests {
             0.8,
             None,
             None,
+        )]
+    }
+
+    fn observe_composition(
+        threat_type: ThreatType,
+        reason_code: &str,
+        kind: EventKind,
+    ) -> Vec<RawObservation> {
+        vec![RawObservation::signal_with_event_origin(
+            signal(threat_type, reason_code, 0.90),
+            kind,
+            0.8,
+            None,
+            None,
+            DetectorEvidenceOrigin::Compositional,
         )]
     }
 
@@ -4536,8 +4568,152 @@ mod tests {
         ] {
             let result = interpret(text, observe(ThreatType::SelfHarm, "ml.safety.selfharm", EventKind::Hopelessness));
             assert_suppressed(&result, text);
-            assert_eq!(result.frame.speech_act, SpeechAct::Support, "{text}: {result:?}");
         }
+    }
+
+    #[derive(serde::Deserialize)]
+    struct CodeSwitchCorpus {
+        schema_version: u8,
+        dataset_id: String,
+        provenance: String,
+        review_status: String,
+        pairs: Vec<CodeSwitchPair>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct CodeSwitchPair {
+        case_id: String,
+        languages: Vec<String>,
+        context_role: String,
+        detector_origin: String,
+        threat_type: String,
+        event_kind: String,
+        safe_text: String,
+        risky_text: String,
+    }
+
+    fn code_switch_threat(label: &str) -> ThreatType {
+        match label {
+            "threat" => ThreatType::Threat,
+            "grooming" => ThreatType::Grooming,
+            "self_harm" => ThreatType::SelfHarm,
+            "manipulation" => ThreatType::Manipulation,
+            "bullying" => ThreatType::Bullying,
+            "explicit" => ThreatType::Explicit,
+            "nsfw" => ThreatType::Nsfw,
+            "phishing" => ThreatType::Phishing,
+            other => panic!("unsupported code-switch threat type: {other}"),
+        }
+    }
+
+    fn code_switch_event(label: &str) -> EventKind {
+        match label {
+            "physical_threat" => EventKind::PhysicalThreat,
+            "photo_request" => EventKind::PhotoRequest,
+            "suicidal_ideation" => EventKind::SuicidalIdeation,
+            "emotional_blackmail" => EventKind::EmotionalBlackmail,
+            "denigration" => EventKind::Denigration,
+            "sexual_content" => EventKind::SexualContent,
+            "personal_info_request" => EventKind::PersonalInfoRequest,
+            other => panic!("unsupported code-switch event kind: {other}"),
+        }
+    }
+
+    #[test]
+    fn code_switch_boundaries_preserve_attribution_and_fail_closed_on_author_risk() {
+        let corpus: CodeSwitchCorpus =
+            serde_json::from_str(include_str!("../../data/code_switch_context_cases.json"))
+                .expect("valid governed code-switch context corpus");
+        assert_eq!(corpus.schema_version, 1);
+        assert_eq!(corpus.dataset_id, "aura_code_switch_context_boundaries");
+        assert_eq!(corpus.provenance, "repository_owned_synthetic_seed");
+        assert_eq!(
+            corpus.review_status,
+            "developer_reviewed_not_independent_gold"
+        );
+        assert_eq!(corpus.pairs.len(), 8);
+
+        let covered_pairs: std::collections::BTreeSet<_> = corpus
+            .pairs
+            .iter()
+            .map(|case| case.languages.join("-"))
+            .collect();
+        assert_eq!(
+            covered_pairs,
+            ["en-ru", "en-uk", "ru-en", "uk-ru"]
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        );
+        let covered_threats: std::collections::BTreeSet<_> = corpus
+            .pairs
+            .iter()
+            .map(|case| case.threat_type.as_str())
+            .collect();
+        assert_eq!(
+            covered_threats,
+            [
+                "bullying",
+                "explicit",
+                "grooming",
+                "manipulation",
+                "nsfw",
+                "phishing",
+                "self_harm",
+                "threat",
+            ]
+            .into_iter()
+            .collect()
+        );
+
+        for case in corpus.pairs {
+            assert_eq!(case.languages.len(), 2, "{}: language pair", case.case_id);
+            assert_ne!(
+                case.safe_text, case.risky_text,
+                "{}: counterfactuals must differ",
+                case.case_id
+            );
+            assert!(
+                matches!(
+                    case.context_role.as_str(),
+                    "quote_report" | "refusal" | "crisis_support"
+                ),
+                "{}: unsupported context role",
+                case.case_id
+            );
+            let threat_type = code_switch_threat(&case.threat_type);
+            let event_kind = code_switch_event(&case.event_kind);
+            let observations = || {
+                if case.detector_origin == "compositional" {
+                    observe_composition(threat_type, "opaque.semantic.detector", event_kind.clone())
+                } else {
+                    assert_eq!(case.detector_origin, "lexical");
+                    observe(threat_type, "opaque.lexical.detector", event_kind.clone())
+                }
+            };
+
+            let safe_result = interpret(&case.safe_text, observations());
+            assert_suppressed(&safe_result, &case.case_id);
+
+            let risky_result = interpret(&case.risky_text, observations());
+            assert_active(&risky_result, &case.case_id);
+
+            for safe_variant in quote_delimiter_variants(&case.safe_text) {
+                let safe_result = interpret(&safe_variant, observations());
+                assert_suppressed(&safe_result, &format!("{}: {safe_variant}", case.case_id));
+            }
+            for risky_variant in quote_delimiter_variants(&case.risky_text) {
+                let risky_result = interpret(&risky_variant, observations());
+                assert_active(&risky_result, &format!("{}: {risky_variant}", case.case_id));
+            }
+        }
+    }
+
+    fn quote_delimiter_variants(text: &str) -> [String; 2] {
+        [
+            text.replace(['«', '»'], "\""),
+            text.replace('«', "“").replace('»', "”"),
+        ]
     }
 
     #[test]

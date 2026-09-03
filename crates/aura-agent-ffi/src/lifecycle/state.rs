@@ -425,10 +425,22 @@ pub(super) fn kids_memory_state_from_proto(
                             has_bullying: snap.has_bullying,
                             has_self_harm: snap.has_self_harm,
                             has_blackmail_or_sextortion: snap.has_blackmail_or_sextortion,
-                            ml_grooming: snap.ml_grooming,
-                            ml_bullying: snap.ml_bullying,
-                            ml_self_harm: snap.ml_self_harm,
-                            ml_manipulation: snap.ml_manipulation,
+                            ml_grooming: validate_kids_memory_score(
+                                "ml_grooming",
+                                snap.ml_grooming,
+                            )?,
+                            ml_bullying: validate_kids_memory_score(
+                                "ml_bullying",
+                                snap.ml_bullying,
+                            )?,
+                            ml_self_harm: validate_kids_memory_score(
+                                "ml_self_harm",
+                                snap.ml_self_harm,
+                            )?,
+                            ml_manipulation: validate_kids_memory_score(
+                                "ml_manipulation",
+                                snap.ml_manipulation,
+                            )?,
                         })
                     })
                     .collect::<Result<Vec<_>, String>>()?;
@@ -483,6 +495,15 @@ pub(super) fn kids_memory_state_from_proto(
             })
             .collect::<Result<Vec<_>, String>>()?,
     })
+}
+
+fn validate_kids_memory_score(field: &str, score: f32) -> Result<f32, String> {
+    if !score.is_finite() || !(0.0..=1.0).contains(&score) {
+        return Err(format!(
+            "kids memory {field} must be finite and within 0..=1"
+        ));
+    }
+    Ok(score)
 }
 
 pub(super) fn conversation_timeline_state_to_proto(

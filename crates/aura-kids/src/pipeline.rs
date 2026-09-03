@@ -7,8 +7,8 @@ use std::sync::OnceLock;
 
 use aura_domain::{
     promote_action_to_warn, DomainAction, DomainCandidate, DomainConfirmedOutput,
-    DomainConversationType, DomainInput, DomainOutput, DomainRiskProfile, DomainSignal,
-    LanguageEvidence, PreparedLexicalText,
+    DomainConversationType, DomainEvidenceOrigin, DomainInput, DomainOutput, DomainRiskProfile,
+    DomainSignal, LanguageEvidence, PreparedLexicalText,
 };
 
 use crate::composition;
@@ -37,7 +37,13 @@ pub fn run_kids_pipeline_with_memory(
         .filter_map(|(signal_index, signal)| {
             detected
                 .event_kind_for_signal(signal_index)
-                .map(|kind| DomainCandidate::new(signal.clone(), kind))
+                .zip(detected.evidence_origin_for_signal(signal_index))
+                .map(|(kind, origin)| match origin {
+                    DomainEvidenceOrigin::Lexical => DomainCandidate::lexical(signal.clone(), kind),
+                    DomainEvidenceOrigin::Compositional => {
+                        DomainCandidate::compositional(signal.clone(), kind)
+                    }
+                })
         })
         .collect::<Vec<_>>();
     let mut unrouted_signals = Vec::new();
@@ -115,7 +121,8 @@ pub fn detect_kids_pipeline(input: &DomainInput) -> DomainOutput {
 }
 
 fn legacy_candidate(signal: DomainSignal) -> Option<DomainCandidate> {
-    crate::routing::event_kind_for_signal(&signal).map(|kind| DomainCandidate::new(signal, kind))
+    crate::routing::event_kind_for_signal(&signal)
+        .map(|kind| DomainCandidate::lexical(signal, kind))
 }
 
 fn sort_candidates(candidates: &mut [DomainCandidate]) {
@@ -1075,7 +1082,9 @@ pub fn import_kids_memory_into(
     memory_store: &KidsPipelineMemory,
     state: &ExportedKidsMemoryState,
 ) -> bool {
-    if !is_supported_kids_memory_state_version(state.schema_version) {
+    if !is_supported_kids_memory_state_version(state.schema_version)
+        || !has_valid_imported_ml_scores(state)
+    {
         return false;
     }
 
@@ -1101,6 +1110,21 @@ pub fn import_kids_memory_into(
         .activity_counter
         .fetch_max(max_activity_index, Ordering::Relaxed);
     true
+}
+
+fn has_valid_imported_ml_scores(state: &ExportedKidsMemoryState) -> bool {
+    state.conversations.iter().all(|conversation| {
+        conversation.entries.iter().all(|snapshot| {
+            [
+                snapshot.ml_grooming,
+                snapshot.ml_bullying,
+                snapshot.ml_self_harm,
+                snapshot.ml_manipulation,
+            ]
+            .into_iter()
+            .all(|score| score.is_finite() && (0.0..=1.0).contains(&score))
+        })
+    })
 }
 
 /// Returns whether the runtime can import a nested kids-memory schema version.
@@ -2669,6 +2693,43 @@ mod tests {
             (rejected, exported.conversations[0].conversation_id.as_str()),
             (true, "conv_existing")
         );
+    }
+
+    #[test]
+    fn invalid_imported_ml_scores_are_rejected_without_mutation() {
+        let memory = super::KidsPipelineMemory::new();
+        let current = super::ExportedKidsMemoryState {
+            schema_version: super::KIDS_MEMORY_STATE_VERSION,
+            conversations: vec![exported_conversation("conv_existing", 3, 3)],
+            senders: Vec::new(),
+        };
+        assert!(super::import_kids_memory_into(&memory, &current));
+
+        for invalid_score in [f32::NAN, f32::INFINITY, -0.01, 1.01] {
+            let mut conversation = exported_conversation("conv_invalid", 4, 4);
+            conversation.entries.push(super::ExportedMessageSnapshot {
+                sender_id: Some("sender_invalid".to_string()),
+                has_grooming: false,
+                has_manipulation: false,
+                has_bullying: false,
+                has_self_harm: false,
+                has_blackmail_or_sextortion: false,
+                ml_grooming: invalid_score,
+                ml_bullying: 0.0,
+                ml_self_harm: 0.0,
+                ml_manipulation: 0.0,
+            });
+            let invalid = super::ExportedKidsMemoryState {
+                schema_version: super::KIDS_MEMORY_STATE_VERSION,
+                conversations: vec![conversation],
+                senders: Vec::new(),
+            };
+
+            assert!(!super::import_kids_memory_into(&memory, &invalid));
+            let exported = super::export_kids_memory_from(&memory);
+            assert_eq!(exported.conversations.len(), 1);
+            assert_eq!(exported.conversations[0].conversation_id, "conv_existing");
+        }
     }
 
     #[test]

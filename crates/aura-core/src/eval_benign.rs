@@ -119,9 +119,25 @@ fn validate_benign_bundle(bundle: &RealisticChatBundle) -> Result<(), String> {
                 "benign case {name} must not declare observed_threats"
             ));
         }
-        if scenario.metadata.policy_expectation_case.is_some() {
+        if scenario
+            .metadata
+            .source_family
+            .as_deref()
+            .is_none_or(str::is_empty)
+        {
+            return Err(format!("benign case {name} must record a source_family"));
+        }
+        if !matches!(
+            scenario.metadata.review_status.as_deref(),
+            Some("seed_reviewed" | "gold_reviewed")
+        ) {
             return Err(format!(
-                "benign case {name} must not reference a policy expectation case"
+                "benign case {name} must record a supported review_status"
+            ));
+        }
+        if scenario.metadata.policy_expectation_case.is_none() {
+            return Err(format!(
+                "benign case {name} must reference a policy expectation case"
             ));
         }
     }
@@ -260,6 +276,15 @@ mod tests {
         let mut per_language = BTreeMap::<String, usize>::new();
         for scenario in &bundle.scenarios {
             assert!(scenario.case.primary_threat.is_none());
+            assert_eq!(
+                scenario.metadata.source_family.as_deref(),
+                Some("aura_core_team_synthetic")
+            );
+            assert_eq!(
+                scenario.metadata.review_status.as_deref(),
+                Some("seed_reviewed")
+            );
+            assert!(scenario.metadata.policy_expectation_case.is_some());
             *per_language
                 .entry(scenario.metadata.default_language.clone())
                 .or_default() += 1;
@@ -307,5 +332,37 @@ mod tests {
         assert!(!report.passed);
         assert_eq!(report.checks.len(), 1);
         assert_eq!(report.checks[0].name, BENIGN_CHAT_ACTION_GATE_NAME);
+    }
+
+    #[test]
+    fn verified_school_peer_meetings_stay_benign_across_languages() {
+        let database = PatternDatabase::default_mvp();
+        let scenarios = benign_everyday_chat_scenarios();
+        let school_meetings = scenarios
+            .iter()
+            .filter(|scenario| scenario.metadata.scenario_name.ends_with("_plans_01"))
+            .collect::<Vec<_>>();
+        assert_eq!(school_meetings.len(), 3);
+
+        for scenario in &school_meetings {
+            assert_eq!(
+                scenario.metadata.sender_relationship,
+                crate::SenderRelationship::Peer
+            );
+            assert_eq!(
+                scenario.metadata.relationship_trust_source,
+                crate::RelationshipTrustSource::SchoolDirectory
+            );
+        }
+
+        let runs = run_scenario_cases(
+            &database,
+            school_meetings.iter().map(|scenario| &scenario.case),
+        );
+        assert!(
+            runs.runs.iter().all(|run| !scenario_is_action_flagged(run)),
+            "verified school-peer logistics must remain benign: {:#?}",
+            runs.runs
+        );
     }
 }

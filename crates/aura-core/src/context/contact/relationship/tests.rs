@@ -809,6 +809,40 @@ fn trust_decays_on_hostile_events() {
 }
 
 #[test]
+fn trust_decays_on_live_grooming_but_not_attributed_grooming() {
+    let mut profiler = ContactProfiler::new();
+    profiler.record_event(&make_event(
+        "friend",
+        "conv_1",
+        EventKind::NormalConversation,
+        1_000,
+    ));
+    profiler.mark_trusted("friend");
+
+    profiler.record_event(&make_event(
+        "friend",
+        "conv_1",
+        EventKind::SecrecyRequest,
+        2_000,
+    ));
+    let after_live = profiler.profile("friend").unwrap().trust_level;
+    assert!(after_live < 1.0, "live grooming must decay trust");
+
+    let mut attributed = make_event("friend", "conv_1", EventKind::SecrecyRequest, 3_000);
+    attributed.context.speech_act = EventSpeechAct::Report;
+    attributed.context.directionality = EventDirectionality::ThirdParty;
+    attributed.context.stance = EventStance::Oppose;
+    attributed.context.confidence = 0.9;
+    profiler.record_event(&attributed);
+
+    assert_eq!(
+        profiler.profile("friend").unwrap().trust_level,
+        after_live,
+        "reported third-party grooming must not decay the reporter's trust"
+    );
+}
+
+#[test]
 fn trust_decay_removes_trusted_flag() {
     let mut profiler = ContactProfiler::new();
     profiler.record_event(&make_event(
@@ -1605,10 +1639,11 @@ fn scenario_trusted_adult_starts_grooming() {
         profile.rating
     );
     assert!(
-        profile.trust_level >= 0.9,
-        "Trust should remain high during grooming-only: {}",
+        profile.trust_level < 0.7,
+        "Repeated live grooming should revoke inherited trust: {}",
         profile.trust_level
     );
+    assert!(!profile.is_trusted);
 }
 
 #[test]

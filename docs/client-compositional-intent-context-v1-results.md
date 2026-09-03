@@ -1,8 +1,54 @@
-# Client compositional intent/context v1 results
+# Client compositional intent/context results
 
-Status: developer regression passed; release validation remains blocked.
+Status: client-runtime engineering gates passed; independent release validation remains blocked.
 
-Date: 2026-09-01.
+Date: 2026-09-03.
+
+## Final client-runtime hardening evidence
+
+This phase is limited to the offline client runtime. It does not add a network
+transport, HTTP client, server integration, Apple artifact, or application UI.
+
+- detector outputs now carry typed lexical, compositional, or derived origin;
+- attribution and protective-context suppression use the source threat family,
+  including shared event kinds such as explicit and NSFW sexual content;
+- compositional predicates are represented by a typed, allocation-free rule
+  matrix with explicit route priority and score overrides;
+- the rule matrix is differential-tested against the prior formulas for the
+  empty set, all singletons, all pairs, all triples, and 200,000 deterministic
+  sparse masks;
+- the governed code-switch suite contains eight safe/risky counterfactual
+  pairs covering all eight client families, four EN/UK/RU language directions,
+  lexical and compositional origins, and report, refusal, and crisis-support
+  contexts; each pair is also exercised with straight and curly quotes;
+- dataset evidence passes for realistic, external-curated, 240-case benign,
+  and code-switch corpora, with changelog, provenance, privacy, and exact hash
+  validation;
+- the all-features Cargo graph has no HTTP/TLS client dependency and the source
+  has no socket transport; ONNX Runtime uses the local dynamic-loader feature
+  without its build-time downloader;
+- no new `unsafe` block, protobuf wire change, C ABI change, or persisted-state
+  format change was introduced.
+
+The full offline workspace test command passed across all targets and features.
+Strict Clippy passed with warnings denied, and all 445 CI Python tests passed.
+Both FFI world fixtures and both periodic export/import client-boundary fixtures
+passed for the six-month and dense two-year scenarios.
+
+The refactor differential gate passed with 326 reviewed changes: 314 approved
+safety improvements, 12 structural-only changes, zero regressions, and zero
+invalid approvals. Its lifecycle suite processed 20,347 events with 100% recall,
+100% precision, zero clean false positives, and no findings.
+
+Release performance was measured from the exact configured Cargo target:
+
+| Tier | Events | Elapsed | Peak RSS | Recall | Clean FP rate |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 10k | 13,647 | 31.98 s | 386.8 MiB | 100% | 0% |
+| 50k | 54,495 | 133.39 s | 899.4 MiB | 100% | 0% |
+| 100k | 102,151 | 246.83 s | 1519.5 MiB | 100% | 0% |
+
+These are local engineering measurements, not physical-device certification.
 
 ## Evidence boundary
 
@@ -61,10 +107,9 @@ hardening work for later independent corpora.
 - runtime backend: `rules_fallback`.
 
 The new attribution removes Analyzer initialization from steady-state turn
-latency and proves conversation-state reset between independent cases. It does
-not establish the required no-more-than-5% semantic regression because a full
-cached pre-composition baseline was not captured before integration. Exact
-release builds on supported iPhones remain mandatory.
+latency and proves conversation-state reset between independent cases. The
+refactor gate now provides a frozen 10k comparative envelope for the current
+runtime, while exact release builds on supported iPhones remain mandatory.
 
 ## Implemented mechanism
 
@@ -89,9 +134,10 @@ release builds on supported iPhones remain mandatory.
 
 1. Run the separately authored internal blinded holdout without further tuning.
 2. Complete double native-speaker review and adjudication.
-3. Capture a comparable pre/post semantic performance baseline and profile the
-   exact release artifact on every supported iPhone class.
-4. Rust full-workspace tests and warning-free Clippy are green. Run the
-   Swift/XCFramework, device, artifact-pin, and human safety signoff gates.
+3. Profile the exact release artifact on every supported iPhone class; local
+   10k/50k/100k measurements do not replace device evidence.
+4. Rust full-workspace tests, warning-free Clippy, offline dependency checks,
+   replay gates, and the refactor baseline are green. Run the Swift/XCFramework,
+   device, artifact-pin, and human safety signoff gates separately.
 5. Treat external independent validation as separate evidence; never relabel
    this developer-authored pass as certification.

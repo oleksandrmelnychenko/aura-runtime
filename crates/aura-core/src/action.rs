@@ -1,6 +1,7 @@
 use crate::types::{
-    Action, ActionRecommendation, AlertPriority, AnalysisContextSummary, FollowUpAction,
-    InferenceSummary, LatentStateKind, ProtectionLevel, RiskHorizon, ThreatType, UiAction,
+    Action, ActionRecommendation, AlertPriority, AnalysisContextSummary, ContextDirectionality,
+    FollowUpAction, InferenceSummary, LatentStateKind, ProtectionLevel, RiskHorizon, ThreatType,
+    UiAction,
 };
 
 /// Determines the appropriate action based on a threat score and protection level.
@@ -727,6 +728,27 @@ pub fn escalate_by_contact_history(
     threat_type: ThreatType,
     snapshot: &crate::types::ContactSnapshot,
 ) {
+    escalate_by_contact_history_for_context_summary(
+        action,
+        recommendation,
+        threat_type,
+        snapshot,
+        &AnalysisContextSummary::default(),
+    );
+}
+
+/// Escalates contact enforcement using the interpreter's typed directionality.
+///
+/// A self-harm family can describe either the protected account's own crisis
+/// or coercion directed at them. The family alone cannot safely decide whether
+/// blocking the sender is appropriate.
+pub fn escalate_by_contact_history_for_context_summary(
+    action: &mut Action,
+    recommendation: &mut ActionRecommendation,
+    threat_type: ThreatType,
+    snapshot: &crate::types::ContactSnapshot,
+    context_summary: &AnalysisContextSummary,
+) {
     if snapshot.is_trusted {
         return;
     }
@@ -739,7 +761,7 @@ pub fn escalate_by_contact_history(
     };
     // Contact history may raise alerts for self-directed threats, but it must
     // never turn the affected person's own message into a warn/block.
-    let escalates_action = !is_self_directed_threat(threat_type);
+    let escalates_action = contact_history_may_escalate_action(threat_type, context_summary);
 
     // Tier 1: 3+ events from same contact → suggest block + escalate alert
     if relevant_count >= 3 {
@@ -815,11 +837,22 @@ pub fn escalate_by_contact_history(
     recommendation.ui_actions.dedup();
 }
 
-/// Threat types where the protected account is the subject rather than the
-/// aggressor. A self-harm disclosure or a child's own PII slip must surface
-/// support and guardian attention, never a block of the person's message.
-fn is_self_directed_threat(threat_type: ThreatType) -> bool {
-    matches!(threat_type, ThreatType::SelfHarm | ThreatType::PiiLeakage)
+/// Returns whether accumulated contact history may harden the current action.
+/// Unknown directionality preserves the legacy protective boundary for
+/// self-harm and PII; an explicit typed direction takes precedence.
+fn contact_history_may_escalate_action(
+    threat_type: ThreatType,
+    context_summary: &AnalysisContextSummary,
+) -> bool {
+    match context_summary.directionality {
+        ContextDirectionality::SelfReferential => false,
+        ContextDirectionality::DirectedAtUser
+        | ContextDirectionality::ThirdParty
+        | ContextDirectionality::Broadcast => true,
+        ContextDirectionality::Unknown => {
+            !matches!(threat_type, ThreatType::SelfHarm | ThreatType::PiiLeakage)
+        }
+    }
 }
 
 fn is_reportable_reason_code(reason_code: &str) -> bool {
@@ -1088,6 +1121,48 @@ mod tests {
         assert_eq!(rec.parent_alert, AlertPriority::Urgent);
         assert!(rec.crisis_resources);
         assert!(rec.ui_actions.contains(&UiAction::EscalateToGuardian));
+    }
+
+    #[test]
+    fn directed_selfharm_coercion_can_block_repeat_sender() {
+        let (mut action, mut rec) =
+            decide_action_v2(ThreatType::SelfHarm, 0.95, ProtectionLevel::High);
+        let context = AnalysisContextSummary {
+            directionality: ContextDirectionality::DirectedAtUser,
+            ..AnalysisContextSummary::default()
+        };
+
+        escalate_by_contact_history_for_context_summary(
+            &mut action,
+            &mut rec,
+            ThreatType::SelfHarm,
+            &repeat_offender_snapshot(),
+            &context,
+        );
+
+        assert_eq!(action, Action::Block);
+        assert!(rec.ui_actions.contains(&UiAction::SuggestReport));
+    }
+
+    #[test]
+    fn self_referential_crisis_never_blocks_repeat_sender() {
+        let (mut action, mut rec) =
+            decide_action_v2(ThreatType::SelfHarm, 0.95, ProtectionLevel::High);
+        let context = AnalysisContextSummary {
+            directionality: ContextDirectionality::SelfReferential,
+            ..AnalysisContextSummary::default()
+        };
+
+        escalate_by_contact_history_for_context_summary(
+            &mut action,
+            &mut rec,
+            ThreatType::SelfHarm,
+            &repeat_offender_snapshot(),
+            &context,
+        );
+
+        assert_eq!(action, Action::Warn);
+        assert!(rec.crisis_resources);
     }
 
     #[test]

@@ -117,6 +117,81 @@
           ],
           "support_impact": "increase",
           "review_ticket": "core-hardening-phase2b"
+        },
+        {
+          "change_id": "2026-09-02-benign-governance-metadata",
+          "changed_at_ms": 1788374782000,
+          "author": "aura_core_team",
+          "change_kind": "metadata_correction",
+          "summary": "Recorded synthetic provenance, seed review status, and canonical negative policy-expectation linkage for every release-blocking benign case; no labels or message text changed.",
+          "affected_slices": [
+            "tone:benign",
+            "source_family:aura_core_team_synthetic",
+            "review_status:seed_reviewed"
+          ],
+          "support_impact": "rebalance",
+          "review_ticket": "core-hardening-phase3"
+        },
+        {
+          "change_id": "2026-09-02-benign-relationship-provenance",
+          "changed_at_ms": 1788378000000,
+          "author": "aura_core_team",
+          "change_kind": "metadata_correction",
+          "summary": "Added explicit school-directory peer provenance to the three multilingual school-meeting logistics cases so the experiment exercises the verified relationship path without weakening unknown-contact grooming protection; no labels or message text changed.",
+          "affected_slices": [
+            "language:en",
+            "language:uk",
+            "language:ru",
+            "relationship:peer",
+            "relationship_trust_source:school_directory"
+          ],
+          "support_impact": "rebalance",
+          "review_ticket": "core-hardening-phase3"
+        }
+      ]
+    },
+    {
+      "dataset_id": "aura_code_switch_context_boundaries",
+      "entries": [
+        {
+          "change_id": "2026-09-02-code-switch-context-boundaries",
+          "changed_at_ms": 1788382800000,
+          "author": "aura_core_team",
+          "change_kind": "coverage_expansion",
+          "summary": "Added paired safe/risky EN-UK, EN-RU, and UK-RU context cases covering quote/report, refusal, crisis support, lexical evidence, and compositional evidence without treating repository-owned examples as independent gold.",
+          "affected_slices": [
+            "code_switch:en-uk",
+            "code_switch:en-ru",
+            "code_switch:uk-ru",
+            "context:quote_report",
+            "context:refusal",
+            "context:crisis_support",
+            "polarity:counterfactual_pair"
+          ],
+          "support_impact": "increase",
+          "review_ticket": "core-hardening-phase3"
+        },
+        {
+          "change_id": "2026-09-03-code-switch-family-matrix",
+          "changed_at_ms": 1788458400000,
+          "author": "aura_core_team",
+          "change_kind": "coverage_expansion",
+          "summary": "Expanded the paired safe/risky multilingual boundary corpus from three to eight cases, adding manipulation, bullying, explicit, NSFW, and phishing coverage and a typed source-family regression for event suppression.",
+          "affected_slices": [
+            "code_switch:en-uk",
+            "code_switch:uk-ru",
+            "code_switch:ru-en",
+            "context:quote_report",
+            "context:refusal",
+            "family:manipulation",
+            "family:bullying",
+            "family:explicit",
+            "family:nsfw",
+            "family:phishing",
+            "polarity:counterfactual_pair"
+          ],
+          "support_impact": "increase",
+          "review_ticket": "core-hardening-compositional-intent"
         }
       ]
     }

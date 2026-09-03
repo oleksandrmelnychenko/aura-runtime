@@ -62,5 +62,32 @@ class DisplayPathTests(unittest.TestCase):
         self.assertEqual(displayed, path.as_posix())
 
 
+class CargoTargetDirectoryTests(unittest.TestCase):
+    def test_defaults_to_repository_target_directory(self):
+        repo_root = Path("/repo")
+
+        resolved = world_performance_gate.resolve_cargo_target_dir(repo_root, None)
+
+        self.assertEqual(resolved, Path("/repo/target"))
+
+    def test_resolves_relative_target_from_repository_root(self):
+        repo_root = Path("/repo")
+
+        resolved = world_performance_gate.resolve_cargo_target_dir(
+            repo_root, "artifacts/cargo-target"
+        )
+
+        self.assertEqual(resolved, Path("/repo/artifacts/cargo-target"))
+
+    def test_preserves_absolute_target_directory(self):
+        repo_root = Path("/repo")
+
+        resolved = world_performance_gate.resolve_cargo_target_dir(
+            repo_root, "/tmp/aura-target"
+        )
+
+        self.assertEqual(resolved, Path("/tmp/aura-target"))
+
+
 if __name__ == "__main__":
     unittest.main()

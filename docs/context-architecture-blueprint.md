@@ -4,8 +4,12 @@
 
 This document freezes the target architecture for AURA's context-aware messenger pipeline.
 
-For the higher-level deployment split between on-device and remote runtime, see
-[`agent-relay-split-blueprint.md`](./agent-relay-split-blueprint.md).
+This document covers the offline client runtime only. Context detection,
+interpretation, memory, inference and policy execute in-process; this pipeline
+does not own HTTP, endpoints, transport or server synchronization.
+The `offline-runtime-gate` also rejects HTTP/TLS client packages and socket
+transport APIs from the resolved all-features client graph. ONNX support loads
+a locally supplied dynamic runtime and does not enable `ort` binary downloads.
 
 The system is no longer missing context entirely. The repo already has:
 
@@ -16,7 +20,10 @@ The system is no longer missing context entirely. The repo already has:
 - product surfaces in [`product.rs`](../crates/aura-core/src/product.rs)
 - social-context eval and release gates in [`eval_social_context.rs`](../crates/aura-core/src/eval_social_context.rs), [`eval_release.rs`](../crates/aura-core/src/eval_release.rs), and [`pilot_gate.rs`](../crates/aura-core/src/pilot_gate.rs)
 
-The remaining problem is architectural: semantics are still split across typed context, string markers, and a few post-interpretation patches.
+The current hardening branch has one typed interpretation boundary. Legacy
+string markers remain only as derived explainability and compatibility output;
+new tracker-derived signals are routed back through the interpreter before
+they join the final signal set.
 
 The goal of this blueprint is to make one layer authoritative for each decision.
 
@@ -30,9 +37,12 @@ That is already directionally correct.
 
 The main gaps are:
 
-- raw detections still become `ContextEvent`s too early in several places
-- post-interpretation logic still mutates semantics in analyzer/policy using string `context_markers`
-- some threat families still carry local heuristics that should eventually become interpretation or policy-table logic
+- a few compatibility APIs still accept `context_markers`, then immediately
+  convert them into `AnalysisContextSummary`
+- some threat families still carry local precision heuristics that should
+  eventually become interpretation or policy-table logic
+- multilingual held-out and native-speaker validation remains a release gate,
+  distinct from the repository-owned engineering corpus
 
 ## Canonical Pipeline
 
@@ -63,6 +73,7 @@ Target properties:
 - `threat_type`
 - `subtype`
 - `source_layer`
+- typed `evidence_origin` (`lexical`, `compositional`, or `derived`)
 - `score/confidence`
 - `reason_code`
 - optional payload such as content hash or detector metadata
@@ -124,8 +135,9 @@ when:
 
 1. the family is not active in the unattributed text, and
 2. for pattern and composition signals, the same detector finds the family
-   inside the attributed content; for ML, legacy and memory signals a
-   substantive attributed span (at least three tokens) is enough.
+   inside the attributed content; derived/ML evidence also requires
+   same-family evidence from the independent attribution probe. A substantive
+   span by itself is never sufficient to suppress a family.
 
 Support and crisis-support suppression use the intent-bearing subset of the
 author's activity (composition and phrase floor) so a supporter may repeat a
@@ -231,16 +243,12 @@ These should remain true even as new threat families are added.
 
 These are the places where the architecture is still mixed.
 
-### 1. Early `ContextEvent` creation before interpretation
+### 1. Detector-to-event boundary
 
-In [`analyzer/stages.rs`](../crates/aura-core/src/analyzer/stages.rs), pattern, ML, enricher, and domain flows still materialize `ContextEvent`s before the interpreter runs.
+Status: resolved on the current hardening branch.
 
-That is workable, but not ideal.
-
-Target:
-
-- detector layers emit `RawObservation`
-- a single adapter converts `RawObservation -> ConfirmedEvent` only inside interpretation
+Pattern, ML, enricher and domain adapters emit `RawObservation`. Event hints
+become tracker-eligible `ConfirmedEvent`s only inside interpretation.
 
 ### 2. Stringly-typed `context_markers`
 
@@ -250,31 +258,21 @@ Target:
 - [`audit.rs`](../crates/aura-core/src/audit.rs)
 - [`pilot.rs`](../crates/aura-core/src/pilot.rs)
 
-But today they also drive behavior in:
+Typed `AnalysisContextSummary` is canonical. Compatibility entry points in
+[`action.rs`](../crates/aura-core/src/action.rs) may accept markers, but they
+convert once at the boundary; production orchestration and product policy use
+the typed summary directly.
 
-- [`action.rs`](../crates/aura-core/src/action.rs)
-- [`product.rs`](../crates/aura-core/src/product.rs)
-- parts of [`analyzer.rs`](../crates/aura-core/src/analyzer.rs)
-- post-interpretation filters in [`analyzer/stages.rs`](../crates/aura-core/src/analyzer/stages.rs)
+### 3. Derived-signal interpretation
 
-Target:
+Status: resolved on the current hardening branch.
 
-- typed context becomes canonical
-- `context_markers` are derived from typed context for explainability only
-
-### 3. Post-interpretation semantic mutation in analyzer
-
-[`analyzer/stages.rs`](../crates/aura-core/src/analyzer/stages.rs) still contains:
-
-- `apply_context_marker_signal_filters(...)`
-- `apply_contextual_corroboration_boost(...)`
-
-These are currently useful regression guards, but architecturally they are semantic logic after the interpreter.
-
-Target:
-
-- either move them into the interpreter
-- or replace them with data-driven policy tables evaluated from typed context
+The tracker and temporal detectors necessarily run after confirmed events are
+recorded. Their newly derived signals are interpreted as one separate typed
+batch by `interpret_derived_signals_with_probe` before they are combined with
+the already-interpreted detector signals. Existing signals are not re-mutated,
+and derived provenance is explicit rather than reconstructed from reason-code
+text.
 
 ### 4. Threat-local heuristics
 
@@ -313,13 +311,13 @@ Exit criteria:
 
 Status:
 
-- not done
+- implemented
 
 Actions:
 
-- add a dedicated internal observation type and batch container
-- stop constructing normal/hostile/supportive `ContextEvent`s in detector adapters
-- move detector-to-event mapping into interpretation
+- dedicated observations carry typed signal/event provenance
+- detector adapters no longer construct tracker-ready events
+- detector-to-event confirmation is owned by interpretation
 
 Primary file targets:
 
@@ -336,7 +334,8 @@ Exit criteria:
 
 Status:
 
-- partially done
+- implemented for the production orchestration and policy path; legacy marker
+  adapters remain for source compatibility
 
 Actions:
 
@@ -360,7 +359,8 @@ Exit criteria:
 
 Status:
 
-- not done
+- implemented for the governed interpretation, memory and policy rule packs;
+  local detector precision predicates remain code-owned
 
 Actions:
 
@@ -383,7 +383,8 @@ Exit criteria:
 
 Status:
 
-- partially done
+- engineering coverage implemented; independent held-out/native-speaker review
+  remains external evidence
 
 Actions:
 
@@ -410,13 +411,13 @@ These shortcuts will recreate the original problem.
 
 ## Immediate Next Work
 
-If work starts now, the highest-value sequence is:
+The highest-value continuation is:
 
-1. Add explicit `RawObservation` and route detector outputs through it.
-2. Add a typed context summary to `AnalysisResult`.
-3. Refactor `action.rs`, `product.rs`, and inference softening to use typed context instead of marker strings.
-4. Move post-interpretation analyzer patches into interpreter or rule tables.
-5. Only then expand coverage into more threat families.
+1. Keep expanding risky/safe multilingual and code-switch counterfactuals.
+2. Add independently adjudicated held-out conversations per language pair.
+3. Profile only after correctness gates are frozen; accept no safety regression
+   in exchange for latency.
+4. Onboard another language only through the complete governed language matrix.
 
 ## Decision Rule
 

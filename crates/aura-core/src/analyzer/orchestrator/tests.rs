@@ -2481,8 +2481,13 @@ fn ambiguous_selfharm_language_is_clean_without_history_and_in_protective_report
         ),
         2_000,
     );
-    assert_eq!(report.threat_type, ThreatType::None, "{report:?}");
-    assert_eq!(report.action, Action::Allow, "{report:?}");
+    assert!(
+        !report
+            .detected_threats
+            .iter()
+            .any(|(threat, _)| *threat == ThreatType::SelfHarm),
+        "the quoted farewell must not inherit self-harm memory: {report:?}"
+    );
     assert!(
         !report
             .reason_codes

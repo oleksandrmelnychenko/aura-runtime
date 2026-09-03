@@ -114,6 +114,19 @@ evidence, then compares it with
 stale approvals, and performance envelope violations fail the command. See
 `docs/refactor-baseline.md` for the exact approval contract.
 
+## Offline Client Runtime Gate
+
+```bash
+python3 ci/offline_runtime_gate.py
+```
+
+This resolves the locked all-features Cargo graph without network access and
+rejects HTTP/TLS client packages. It also rejects runtime socket/client APIs in
+the workspace source. Address value types such as `Ipv4Addr` and `Ipv6Addr`
+remain permitted because they do not create a transport. The ONNX feature uses
+the local dynamic-loader path and does not enable the dependency's model
+downloader.
+
 ## Focused Gate Smoke Tests
 
 ```bash

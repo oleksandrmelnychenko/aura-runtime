@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "dataset_id": "aura_code_switch_context_boundaries",
+  "dataset_label": "Multilingual attribution and author-intent counterfactuals",
+  "maintainer": "aura_core_team",
+  "created_at_ms": 1788382800000,
+  "updated_at_ms": 1788458400000,
+  "provenance": "repository_owned_synthetic_seed",
+  "review_status": "developer_reviewed_not_independent_gold",
+  "pairs": [
+    {
+      "case_id": "en_uk_quote_report_threat",
+      "languages": ["en", "uk"],
+      "context_role": "quote_report",
+      "detector_origin": "lexical",
+      "threat_type": "threat",
+      "event_kind": "physical_threat",
+      "safe_text": "He wrote «після школи тебе поб'ємо». I'm reporting this and saved the evidence.",
+      "risky_text": "He wrote «після школи тебе поб'ємо». I'm reporting this, але я тебе поб'ю завтра."
+    },
+    {
+      "case_id": "en_ru_refusal_grooming",
+      "languages": ["en", "ru"],
+      "context_role": "refusal",
+      "detector_origin": "compositional",
+      "threat_type": "grooming",
+      "event_kind": "photo_request",
+      "safe_text": "If anyone says «пришли мне фото и никому не говори», I refuse and will tell a trusted adult.",
+      "risky_text": "If anyone says «пришли мне фото и никому не говори», I refuse, but send me your photo and don't tell your parents."
+    },
+    {
+      "case_id": "uk_ru_support_self_harm",
+      "languages": ["uk", "ru"],
+      "context_role": "crisis_support",
+      "detector_origin": "compositional",
+      "threat_type": "self_harm",
+      "event_kind": "suicidal_ideation",
+      "safe_text": "Моя подруга написала «я хочу померти». Я рядом, давай скажем родителям.",
+      "risky_text": "Моя подруга написала «я хочу померти». Я рядом, але я хочу умереть."
+    },
+    {
+      "case_id": "en_uk_quote_report_manipulation",
+      "languages": ["en", "uk"],
+      "context_role": "quote_report",
+      "detector_origin": "compositional",
+      "threat_type": "manipulation",
+      "event_kind": "emotional_blackmail",
+      "safe_text": "She wrote «якщо не надішлеш фото, я покажу всім». I'm reporting this and saved the evidence.",
+      "risky_text": "She wrote «якщо не надішлеш фото, я покажу всім». I'm reporting this, але якщо не надішлеш мені фото, я покажу всім."
+    },
+    {
+      "case_id": "uk_ru_quote_report_bullying",
+      "languages": ["uk", "ru"],
+      "context_role": "quote_report",
+      "detector_origin": "lexical",
+      "threat_type": "bullying",
+      "event_kind": "denigration",
+      "safe_text": "Він написав «ты никому не нужен». Це булінг, я зберегла доказ і повідомлю вчителю.",
+      "risky_text": "Він написав «ты никому не нужен». Це булінг, але ты никому не нужен."
+    },
+    {
+      "case_id": "en_uk_refusal_explicit",
+      "languages": ["en", "uk"],
+      "context_role": "refusal",
+      "detector_origin": "compositional",
+      "threat_type": "explicit",
+      "event_kind": "sexual_content",
+      "safe_text": "If anyone says «надішли оголене фото», I refuse and will tell a trusted adult.",
+      "risky_text": "If anyone says «надішли оголене фото», I refuse, but send me a nude photo now."
+    },
+    {
+      "case_id": "uk_ru_refusal_nsfw",
+      "languages": ["uk", "ru"],
+      "context_role": "refusal",
+      "detector_origin": "compositional",
+      "threat_type": "nsfw",
+      "event_kind": "sexual_content",
+      "safe_text": "Якщо хтось каже «скинь порно в наш канал», я отказываюсь і повідомлю дорослому.",
+      "risky_text": "Якщо хтось каже «скинь порно в наш канал», я отказываюсь, але скинь порно в канал зараз."
+    },
+    {
+      "case_id": "ru_en_quote_report_phishing",
+      "languages": ["ru", "en"],
+      "context_role": "quote_report",
+      "detector_origin": "compositional",
+      "threat_type": "phishing",
+      "event_kind": "personal_info_request",
+      "safe_text": "Он написал «send me your password through this link». Я сообщаю об этом вредном сообщении, а не соглашаюсь с ним.",
+      "risky_text": "Он написал «send me your password through this link». Я сообщаю об этом вредном сообщении, а не соглашаюсь с ним, but send me your password through this link now."
+    }
+  ]
+}

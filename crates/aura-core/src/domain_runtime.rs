@@ -2,11 +2,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use aura_domain::{
-    DomainAction, DomainConfirmedOutput, DomainConversationType, DomainEventKind, DomainInput,
-    DomainModuleEvidence, DomainModuleId, DomainOutput, DomainRegistry, DomainRiskProfile,
-    DomainSignal, DomainTemporalActorRole, DomainTemporalContext, DomainTemporalDirectionality,
-    DomainTemporalEvent, DomainTemporalInput, DomainTemporalOutput, DomainTemporalSpeechAct,
-    DomainTemporalStance, MlSafetyHint,
+    DomainAction, DomainConfirmedOutput, DomainConversationType, DomainEventKind,
+    DomainEvidenceOrigin, DomainInput, DomainModuleEvidence, DomainModuleId, DomainOutput,
+    DomainRegistry, DomainRiskProfile, DomainSignal, DomainTemporalActorRole,
+    DomainTemporalContext, DomainTemporalDirectionality, DomainTemporalEvent, DomainTemporalInput,
+    DomainTemporalOutput, DomainTemporalSpeechAct, DomainTemporalStance, MlSafetyHint,
 };
 use aura_kids::KidsModule;
 use aura_military::MilitaryModule;
@@ -14,7 +14,7 @@ use aura_patterns::{validate_ukraine_coordinates, BlockedUrlMatch};
 
 use crate::action::{decide_action_v2, propaganda_action_for_subtype};
 use crate::context::events::{EventDirectionality, EventKind, EventSpeechAct, EventStance};
-use crate::context::observation::RawObservation;
+use crate::context::observation::{DetectorEvidenceOrigin, RawObservation};
 use crate::context::propaganda::NarrativeId;
 use crate::context::propaganda::PropagandaDetector;
 use crate::context::tracker::ConversationTimeline;
@@ -1003,19 +1003,31 @@ pub fn build_domain_observations(
         .with_threat_subtype(domain_signal.threat_key.clone());
         let subtype = (!signal.threat_subtype.is_empty()).then(|| signal.threat_subtype.clone());
 
+        let evidence_origin = domain_output
+            .evidence_origin_for_signal(signal_index)
+            .map(core_evidence_origin_from_domain)
+            .unwrap_or(DetectorEvidenceOrigin::Derived);
         let observation = match domain_output.event_kind_for_signal(signal_index) {
-            Some(kind) => RawObservation::signal_with_event(
+            Some(kind) => RawObservation::signal_with_event_origin(
                 signal,
                 event_kind_from_domain(kind),
                 domain_signal.score,
                 subtype,
                 content_hash,
+                evidence_origin,
             ),
-            None => RawObservation::signal(signal),
+            None => RawObservation::signal_with_origin(signal, evidence_origin),
         };
         observations.push(observation);
     }
     observations
+}
+
+const fn core_evidence_origin_from_domain(origin: DomainEvidenceOrigin) -> DetectorEvidenceOrigin {
+    match origin {
+        DomainEvidenceOrigin::Lexical => DetectorEvidenceOrigin::Lexical,
+        DomainEvidenceOrigin::Compositional => DetectorEvidenceOrigin::Compositional,
+    }
 }
 
 pub fn build_domain_temporal_signals(
@@ -1255,6 +1267,7 @@ mod tests {
         ContextEvent, EventContextFrame, EventDirectionality, EventKind, EventSpeechAct,
         EventStance,
     };
+    use crate::context::observation::DetectorEvidenceOrigin;
     use crate::context::tracker::{ConversationTracker, TrackerConfig};
     use crate::ids::{ConversationId, SenderId};
     use crate::types::{
@@ -1263,8 +1276,8 @@ mod tests {
     };
     use crate::{AuraConfig, AuraDomainRuntime, DomainMode, MessageInput};
     use aura_domain::{
-        DomainAction, DomainConfirmedOutput, DomainEventKind, DomainOutput, DomainSignal,
-        DomainTemporalOutput,
+        DomainAction, DomainCandidate, DomainConfirmedOutput, DomainEventKind, DomainOutput,
+        DomainSignal, DomainTemporalOutput,
     };
     use aura_patterns::BlockedUrlMatch;
     use std::collections::HashSet;
@@ -1475,6 +1488,38 @@ mod tests {
         assert_eq!(
             event_kind_from_domain(DomainEventKind::ScreenshotThreat),
             EventKind::ScreenshotThreat
+        );
+    }
+
+    #[test]
+    fn domain_bridge_preserves_compositional_provenance() {
+        let output = DomainOutput::from_candidates(
+            vec![DomainCandidate::compositional(
+                DomainSignal {
+                    threat_key: "opaque".to_string(),
+                    reason_code: "not-a-routing-key".to_string(),
+                    score: 0.9,
+                    threat_type: Some("grooming".to_string()),
+                    ..DomainSignal::default()
+                },
+                DomainEventKind::SecrecyRequest,
+            )],
+            None,
+        );
+
+        let observations = build_domain_observations(Some(&output), None);
+        assert_eq!(observations.len(), 1);
+        let (signals, _) = crate::context::observation::split_observations(observations.clone());
+        assert_eq!(
+            signals.first().map(|raw| raw.evidence_origin),
+            Some(DetectorEvidenceOrigin::Compositional)
+        );
+        assert_eq!(
+            observations[0]
+                .event_hint
+                .as_ref()
+                .map(|hint| hint.evidence_origin),
+            Some(DetectorEvidenceOrigin::Compositional)
         );
     }
 

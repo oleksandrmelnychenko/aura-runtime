@@ -48,6 +48,8 @@ jobs:
       run: python3 ci/lint_lexicons.py
     - name: Run CI Helper Tests
       run: python3 -m unittest discover -s ci -p 'test_*.py'
+    - name: Enforce Offline Runtime
+      run: python3 ci/offline_runtime_gate.py
     - name: Audit Dependencies
       run: |
         cargo install cargo-audit --version 0.22.1 --locked --quiet

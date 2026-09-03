@@ -178,6 +178,8 @@ impl StanceCues {
             || self.refusal
             || self.protective_action
             || self.negation
+            || self.counter
+            || self.support
             || self.structured
     }
 }
@@ -186,8 +188,13 @@ impl StanceCues {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct ProbeResult {
     pub(crate) families: FamilySet,
-    /// Families found by the semantic composition layer only.
+    /// Families found by the semantic composition layer and attributable to
+    /// the author in this fragment.
     pub(crate) semantic_families: FamilySet,
+    /// Every family observed by the semantic composition layer, including
+    /// third-party self-harm wording. This is evidence about quoted/reported
+    /// content, never evidence that the author is personally at risk.
+    pub(crate) observed_semantic_families: FamilySet,
     pub(crate) compliance_directive: bool,
     pub(crate) capacity_failed: bool,
 }
@@ -261,6 +268,7 @@ fn composition_probe(text: &str) -> ProbeResult {
             for clause in clauses {
                 for family in clause.families {
                     let family = parse_threat_type_label(family);
+                    result.observed_semantic_families.insert(family);
                     // Composition self-harm is only the author's own risk when
                     // the clause speaks in the first person about itself.
                     if family == ThreatType::SelfHarm
@@ -483,13 +491,17 @@ impl AttributionAnalysis {
             return Self::fail_closed(cue_lower, true);
         }
 
+        let attributed_floor = attributed_phrase_families(&attributed_content);
         let mut attributed_families = attributed_probe
             .families
-            .union(phrase_floor_families(&attributed_content));
+            .union(attributed_probe.observed_semantic_families)
+            .union(attributed_floor);
         for span in &spans {
             attributed_families = attributed_families.union(span.families);
         }
-        let attributed_semantic = attributed_probe.semantic_families;
+        let attributed_semantic = attributed_probe
+            .observed_semantic_families
+            .union(attributed_floor);
         let floor = phrase_floor_families(&unattributed);
         let floor_self_directed = self_directed_distress_floor(&unattributed);
         let floor_coercion = coercion_floor(&unattributed);
@@ -559,45 +571,31 @@ impl AttributionAnalysis {
     }
 }
 
-/// Where a signal came from, which decides how strict attribution must be.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SignalOrigin {
-    Pattern,
-    Composition,
-    Other,
-}
-
-pub(crate) fn signal_origin(reason_code: &str) -> SignalOrigin {
-    if reason_code.starts_with("pattern.") {
-        SignalOrigin::Pattern
-    } else if reason_code.contains("kids.composition.") {
-        SignalOrigin::Composition
-    } else {
-        SignalOrigin::Other
-    }
-}
-
 /// Whether suppression of `family` is permitted by the attribution evidence.
 pub(crate) fn attribution_permits(
     analysis: &AttributionAnalysis,
     family: ThreatType,
-    origin: SignalOrigin,
+    origin: super::observation::DetectorEvidenceOrigin,
 ) -> bool {
     if analysis.active_unattributed.contains(family) {
         return false;
     }
     match origin {
-        SignalOrigin::Pattern => analysis.attributed_families.contains(family),
-        // The kids composition runs over the whole message, so words from a
-        // quotation and from the author's stance can combine into a family
-        // that exists in neither fragment. Such a family is attributable when
-        // the quotation itself composes and the family is not active in the
-        // author's own text.
-        SignalOrigin::Composition => {
+        super::observation::DetectorEvidenceOrigin::Lexical => {
             analysis.attributed_families.contains(family)
-                || !analysis.attributed_semantic.is_empty()
         }
-        SignalOrigin::Other => analysis.has_substantive_attribution(),
+        // Composition may scan the whole message, but only the same family in
+        // the attributed fragment can authorize suppression. Cross-boundary
+        // composition is ambiguous and therefore remains active.
+        super::observation::DetectorEvidenceOrigin::Compositional => {
+            analysis.attributed_semantic.contains(family)
+        }
+        // Non-lexical evidence cannot prove a compositional attribution. Keep
+        // this boundary fail-closed by requiring same-family attributed
+        // evidence from the independent attribution probe.
+        super::observation::DetectorEvidenceOrigin::Derived => {
+            analysis.attributed_families.contains(family)
+        }
     }
 }
 
@@ -1350,6 +1348,45 @@ pub(crate) fn phrase_floor_families(outside: &str) -> FamilySet {
     families
 }
 
+/// Strong crisis phrases that identify the family of attributed content even
+/// when the quoted speaker is implicit ("there is no reason to live") or the
+/// quote is a farewell. These phrases never become author risk on their own;
+/// they are only consulted after a structural attribution span was found.
+fn attributed_phrase_families(content: &str) -> FamilySet {
+    let mut families = phrase_floor_families(content);
+    let hopelessness = contains_any(
+        content,
+        &[
+            "no reason to live",
+            "does not want to live",
+            "doesn't want to live",
+            "немає сенсу жити",
+            "нема сенсу жити",
+            "не хоче жити",
+            "нет смысла жить",
+            "не хочет жить",
+        ],
+    );
+    let farewell_finality = contains_any(
+        content,
+        &["goodbye everyone", "прощавайте всі", "прощайте все"],
+    ) && contains_any(
+        content,
+        &[
+            "this is the end",
+            "це кінець",
+            "це все",
+            "это конец",
+            "это всё",
+            "это все",
+        ],
+    );
+    if hopelessness || farewell_finality {
+        families.insert(ThreatType::SelfHarm);
+    }
+    families
+}
+
 /// Suicide coercion aimed at the reader: self-harm family for policy, but
 /// never the author's own distress.
 fn coercion_floor(outside: &str) -> bool {
@@ -1397,6 +1434,7 @@ fn self_directed_distress_floor(outside: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::observation::DetectorEvidenceOrigin;
 
     struct NoProbe;
 
@@ -1477,6 +1515,35 @@ mod tests {
     }
 
     #[test]
+    fn possessive_reported_speech_cue_attributes_multilingual_crisis_words() {
+        for (text, expected) in [
+            (
+                "Моя подруга написала я хочу померти. Я з тобою, давай скажемо психологу",
+                "я хочу померти",
+            ),
+            (
+                "Мой друг написал я хочу умереть. Мы с тобой, давай скажем родителям",
+                "я хочу умереть",
+            ),
+        ] {
+            let analysis = analyze(text);
+            assert_eq!(
+                span_texts(&analysis, text, SpanKind::ReportedSpeech),
+                vec![expected.to_string()],
+                "{text}: {analysis:?}"
+            );
+            assert!(
+                analysis.attributed_families.contains(ThreatType::SelfHarm),
+                "{text}: {analysis:?}"
+            );
+            assert!(
+                !analysis.active_unattributed.contains(ThreatType::SelfHarm),
+                "{text}: {analysis:?}"
+            );
+        }
+    }
+
+    #[test]
     fn semantic_activity_ignores_pattern_only_hits() {
         // A supportive author may repeat the victim's words; only intent-bearing
         // composition or floor phrases count as the author's own risk here.
@@ -1541,18 +1608,39 @@ mod tests {
     }
 
     #[test]
-    fn cross_boundary_composition_family_is_attributable() {
+    fn reported_crisis_composition_is_attributed_but_not_author_distress() {
+        let analysis = analyze(
+            "My friend said there is no reason to live. I'm here with you, let's tell your parents together and get help tonight.",
+        );
+        assert!(
+            analysis.attributed_semantic.contains(ThreatType::SelfHarm),
+            "{analysis:?}"
+        );
+        assert!(
+            !analysis.active_semantic.contains(ThreatType::SelfHarm),
+            "{analysis:?}"
+        );
+        assert!(!analysis.author_self_distress, "{analysis:?}");
+    }
+
+    #[test]
+    fn composition_attribution_requires_the_same_family() {
         let analysis = analyze("If anyone says 'don't tell your parents and send me a photo', refuse and tell a trusted adult.");
         assert!(!analysis.attributed_semantic.is_empty());
-        assert!(attribution_permits(
+        assert!(!attribution_permits(
             &analysis,
             ThreatType::Nsfw,
-            SignalOrigin::Composition
+            DetectorEvidenceOrigin::Compositional
+        ));
+        assert!(attribution_permits(
+            &analysis,
+            ThreatType::Grooming,
+            DetectorEvidenceOrigin::Compositional
         ));
         assert!(!attribution_permits(
             &analysis,
             ThreatType::Nsfw,
-            SignalOrigin::Pattern
+            DetectorEvidenceOrigin::Lexical
         ));
     }
 
@@ -1586,12 +1674,12 @@ mod tests {
         assert!(!attribution_permits(
             &analysis,
             ThreatType::Grooming,
-            SignalOrigin::Pattern
+            DetectorEvidenceOrigin::Lexical
         ));
         assert!(attribution_permits(
             &analysis,
             ThreatType::Bullying,
-            SignalOrigin::Pattern
+            DetectorEvidenceOrigin::Lexical
         ));
     }
 

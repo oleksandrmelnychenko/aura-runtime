@@ -130,6 +130,20 @@ pub enum DomainEventKind {
     MilitaryDisinfo,
 }
 
+/// Detector mechanism that produced one piece of domain evidence.
+///
+/// Core interpretation uses this typed provenance when deciding whether a
+/// quoted or reported fragment may suppress a signal. It must never be
+/// reconstructed from a detector name or reason-code string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainEvidenceOrigin {
+    /// A lexical rule matched words or phrases in the message.
+    Lexical,
+    /// A bounded semantic composition joined concepts within a clause.
+    Compositional,
+}
+
 /// One normalized detector result owned by a domain module.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DomainSignal {
@@ -159,19 +173,68 @@ pub struct DomainSignal {
 /// layer to recover event semantics from `reason_code` or `threat_key` text.
 /// The pair is in-process only; the stable serialized [`DomainOutput`] shape
 /// remains unchanged.
+///
+/// ```
+/// use aura_domain::{
+///     DomainCandidate, DomainEventKind, DomainEvidenceOrigin, DomainOutput, DomainSignal,
+/// };
+///
+/// let candidate = DomainCandidate::compositional(
+///     DomainSignal {
+///         threat_key: "semantic_grooming".to_string(),
+///         ..DomainSignal::default()
+///     },
+///     DomainEventKind::SecrecyRequest,
+/// );
+/// let output = DomainOutput::from_candidates(vec![candidate], None);
+/// assert_eq!(
+///     output.evidence_origin_for_signal(0),
+///     Some(DomainEvidenceOrigin::Compositional),
+/// );
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct DomainCandidate {
     /// Normalized detector evidence.
     pub signal: DomainSignal,
     /// Typed event meaning assigned by the domain that produced the signal.
     pub event_kind: DomainEventKind,
+    /// Typed detector provenance used by contextual attribution.
+    pub evidence_origin: DomainEvidenceOrigin,
 }
 
 impl DomainCandidate {
-    /// Creates a candidate with an explicit typed event route.
+    /// Creates a lexical candidate with an explicit typed event route.
+    ///
+    /// This compatibility constructor retains the pre-provenance API. New
+    /// detector code should call [`Self::lexical`] or [`Self::compositional`]
+    /// so the mechanism is visible at the call site.
+    #[deprecated(
+        since = "0.2.0",
+        note = "use DomainCandidate::lexical or DomainCandidate::compositional"
+    )]
     #[must_use]
     pub const fn new(signal: DomainSignal, event_kind: DomainEventKind) -> Self {
-        Self { signal, event_kind }
+        Self::lexical(signal, event_kind)
+    }
+
+    /// Creates a lexical candidate with an explicit typed event route.
+    #[must_use]
+    pub const fn lexical(signal: DomainSignal, event_kind: DomainEventKind) -> Self {
+        Self {
+            signal,
+            event_kind,
+            evidence_origin: DomainEvidenceOrigin::Lexical,
+        }
+    }
+
+    /// Creates a compositional candidate with an explicit typed event route.
+    #[must_use]
+    pub const fn compositional(signal: DomainSignal, event_kind: DomainEventKind) -> Self {
+        Self {
+            signal,
+            event_kind,
+            evidence_origin: DomainEvidenceOrigin::Compositional,
+        }
     }
 }
 
@@ -182,6 +245,8 @@ pub struct DomainSignalRoute {
     pub signal_index: usize,
     /// Domain-owned semantic event kind for that signal.
     pub event_kind: DomainEventKind,
+    /// Detector mechanism that produced the routed signal.
+    pub evidence_origin: DomainEvidenceOrigin,
 }
 
 /// Complete result of one message-level domain analysis.
@@ -233,6 +298,7 @@ impl DomainOutput {
             routes.push(DomainSignalRoute {
                 signal_index,
                 event_kind: candidate.event_kind,
+                evidence_origin: candidate.evidence_origin,
             });
         }
         Self {
@@ -257,6 +323,7 @@ impl DomainOutput {
                 classify(signal).map(|event_kind| DomainSignalRoute {
                     signal_index,
                     event_kind,
+                    evidence_origin: DomainEvidenceOrigin::Lexical,
                 })
             })
             .collect();
@@ -277,6 +344,15 @@ impl DomainOutput {
             .map(|route| route.event_kind)
     }
 
+    /// Returns the typed detector provenance for one signal index.
+    #[must_use]
+    pub fn evidence_origin_for_signal(&self, signal_index: usize) -> Option<DomainEvidenceOrigin> {
+        self.routes
+            .iter()
+            .find(|route| route.signal_index == signal_index)
+            .map(|route| route.evidence_origin)
+    }
+
     /// Returns whether every signal has one stable, ordered typed route.
     #[must_use]
     pub fn has_complete_routing(&self) -> bool {
@@ -291,19 +367,21 @@ impl DomainOutput {
 
 #[cfg(test)]
 mod tests {
-    use super::{DomainCandidate, DomainEventKind, DomainOutput, DomainSignal};
+    use super::{
+        DomainCandidate, DomainEventKind, DomainEvidenceOrigin, DomainOutput, DomainSignal,
+    };
 
     #[test]
     fn candidate_output_preserves_explicit_domain_routes() {
         let candidates = vec![
-            DomainCandidate::new(
+            DomainCandidate::compositional(
                 DomainSignal {
                     threat_key: "semantic_self_harm_intent".to_string(),
                     ..DomainSignal::default()
                 },
                 DomainEventKind::SuicidalIdeation,
             ),
-            DomainCandidate::new(
+            DomainCandidate::lexical(
                 DomainSignal {
                     threat_key: "semantic_direct_threat".to_string(),
                     ..DomainSignal::default()
@@ -318,6 +396,14 @@ mod tests {
         assert_eq!(
             output.event_kind_for_signal(1),
             Some(DomainEventKind::PhysicalThreat)
+        );
+        assert_eq!(
+            output.evidence_origin_for_signal(0),
+            Some(DomainEvidenceOrigin::Compositional)
+        );
+        assert_eq!(
+            output.evidence_origin_for_signal(1),
+            Some(DomainEvidenceOrigin::Lexical)
         );
     }
 

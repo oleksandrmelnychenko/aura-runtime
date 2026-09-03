@@ -257,7 +257,7 @@ impl Analyzer {
         self.context_tracker
             .set_conversation_type(&input.conversation_id, input.conversation_type);
 
-        signals.extend(self.context_tracker.record_events(context_events));
+        let mut derived_signals = self.context_tracker.record_events(context_events);
 
         let temporal_domain_output = self.domain_runtime.analyze_temporal_for_mode(
             domain_mode,
@@ -267,7 +267,7 @@ impl Analyzer {
             self.context_tracker.timeline(&input.conversation_id),
             self.config.protected_account_id.as_deref(),
         );
-        signals.extend(build_domain_temporal_signals(
+        derived_signals.extend(build_domain_temporal_signals(
             temporal_domain_output.as_ref(),
         ));
 
@@ -281,7 +281,7 @@ impl Analyzer {
                 is_child,
                 tz_offset,
             );
-            signals.extend(timing_signals);
+            derived_signals.extend(timing_signals);
         }
 
         if let Some(ref raw_text) = input.text {
@@ -290,17 +290,19 @@ impl Analyzer {
                 .contact_profiler()
                 .snapshot(&input.sender_id);
             let timeline = self.context_tracker.timeline(&input.conversation_id);
-            self.context_interpreter
-                .apply_downstream_signal_semantics_with_probe(
+            derived_signals = self
+                .context_interpreter
+                .interpret_derived_signals_with_probe(
                     input,
                     truncate_text(raw_text),
                     timestamp_ms,
                     timeline,
                     contact_snapshot.as_ref(),
-                    &mut signals,
+                    derived_signals,
                     &self.risk_probe(&probe_languages),
                 );
         }
+        signals.extend(derived_signals);
 
         let mut escalation_match_found = false;
         for s in &signals {
@@ -397,11 +399,12 @@ impl Analyzer {
         if let Some(ref snapshot) = result.contact_snapshot {
             if result.threat_type != ThreatType::None {
                 if let Some(recommendation) = result.recommended_action.as_mut() {
-                    crate::action::escalate_by_contact_history(
+                    crate::action::escalate_by_contact_history_for_context_summary(
                         &mut result.action,
                         recommendation,
                         result.threat_type,
                         snapshot,
+                        &result.context_summary,
                     );
                 }
             }

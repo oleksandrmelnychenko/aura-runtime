@@ -962,17 +962,20 @@ fn reduce_report_flush(
         ));
     }
 
-    let matching = policy.execution_policy.as_ref().and_then(|execution| {
-        execution
-            .matching_rule(case, deferred.trigger, at_ms)
-            .filter(|rule| {
-                rule.rule_id == deferred.rule_id
-                    && rule.rule_digest == deferred.rule_digest
-                    && rule.cooldown_ms == deferred.cooldown_ms
-            })
-            .map(|rule| (execution, rule))
-    });
-    let Some((execution_policy, rule)) = matching else {
+    let Some(execution_policy) = policy.execution_policy.as_ref() else {
+        return Ok(unchanged_reduction(
+            case,
+            SafetyCaseDecisionOutcome::NoChange,
+        ));
+    };
+    let matching_rule = execution_policy
+        .matching_rule(case, deferred.trigger, at_ms)
+        .filter(|rule| {
+            rule.rule_id == deferred.rule_id
+                && rule.rule_digest == deferred.rule_digest
+                && rule.cooldown_ms == deferred.cooldown_ms
+        });
+    let Some(rule) = matching_rule else {
         let mut next = case.clone();
         next.revision = next_revision(next.revision)?;
         next.updated_at_ms = next.updated_at_ms.max(at_ms);
@@ -1750,6 +1753,28 @@ mod tests {
 
         assert!(matches!(
             escalated.decision().guardian_report(),
+            GuardianReportDirective::Deferred { .. }
+        ));
+
+        let revision_before_flush = escalated.case().revision();
+        let without_active_policy = SafetyCaseReducer::reduce(
+            escalated.case(),
+            SafetyCaseCommand::FlushDeferredGuardianReport { at_ms: 2_000_000 },
+            &SafetyCasePolicy::default(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            without_active_policy.case().revision(),
+            revision_before_flush,
+            "a missing active policy must not consume deferred report state"
+        );
+        assert!(without_active_policy
+            .case()
+            .deferred_guardian_report()
+            .is_some());
+        assert!(matches!(
+            without_active_policy.decision().guardian_report(),
             GuardianReportDirective::Deferred { .. }
         ));
     }
