@@ -1,8 +1,8 @@
 {
   "schema_version": 5,
-  "source_revision": "8dc23ff771d0041e7db410ab6b6bdd788d4e9bfe",
+  "source_revision": "539b1b4bc1c0ccce78d08a9cd2b1b462876de058",
   "source_tree_dirty": false,
-  "source_tree_sha256": "f9c72f47bf1b33117424de9966428a8964eba3a4e3f89908c6ecd0efe8bab143",
+  "source_tree_sha256": "2c9f97d8a334875fc4a54ce6686a68f3e1eb0848f554bf8bdb7598242f949467",
   "shippable": true,
   "cargo_profile": "release",
   "cargo_locked": true,
@@ -22,15 +22,15 @@
   ],
   "aura_ffi_header_sha256": "d8eee665f7b3d99145df3d8efb641551876550ec56397827385dca28b0a8fc87",
   "runtime_capabilities_sha256": "5bd1c0bfa19ad2791de728943996db646cd4e757b5efccc19cef254c58091c2b",
-  "runtime_artifact_descriptor_sha256": "a016281441e6d5dfda0b9afe6e4548bbd8da9e907abcdb4d097f2c8e3bff9b1a",
-  "runtime_artifact_identities_env_sha256": "ba0dabfdd2c06735d2938339e479e27917e665546445c5e0e26ea75412eeee46",
+  "runtime_artifact_descriptor_sha256": "e220a2e9b9c41d5e1b8e3cf3e76c0a9004091162d2aeb3a4e43d1ca15a277f9c",
+  "runtime_artifact_identities_env_sha256": "04e2ca3eff4292e942f6920d7e07884102a1135306cd244a406d06bd317aefc1",
   "model_manifest_sha256": "36b2c5b7e9925de20b2ad6cd093af4c454bfe7b2cc1da37f3d27a09a7e1029ae",
   "execution_policy_trust_keyring_sha256": "883f5f6b9024e0faa1a7cae7998497d33bb18aa6054ddd06f2af1322e6e048d2",
   "xcframework_info_plist_sha256": "1e336683b41580c0e5addcf8d7f2683ce19278a7e3791794fbed872992edccb3",
   "binary_sha256": {
-    "ios-arm64": "341b62c825d751160bb94d6634de6ef732cf09cbdb0e88e7ba8a8628455ac342",
-    "ios-arm64_x86_64-simulator": "767ae379a90dfbf854b761db06d326774f3294c968dbd6996961437c6e3cf392",
-    "ios-arm64_x86_64-maccatalyst": "0d826e9153e16096c1cc25c8bda4da580f1137cd7fb165c64315c6a437d3dcab"
+    "ios-arm64": "16f7b56b936e5bb7c58bd8c06f4e8e9467e2aa28958b60eab737e99099b62853",
+    "ios-arm64_x86_64-simulator": "fd7f9b4b970d055f2bbb4c81c75339fa2d5e516b55ee3bedcd78848f6fcb7cb3",
+    "ios-arm64_x86_64-maccatalyst": "bc2eea4f9d46c423a475314f6d255d852262d979dd8e4cf59dfe76a594eb7698"
   },
   "model_bundle_included": false
 }
